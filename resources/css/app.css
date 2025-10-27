@@ -1,11 +1,54 @@
-@import 'tailwindcss';
+/* Navigation Bar Styles */
+nav{
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 100%;
+    z-index: 1000;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #333;
+    color: white;
+    padding: 1rem;
+    text-align: center;
+    height: 12vh;
+    transition: height 0.3s;
+}
 
-@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
-@source '../../storage/framework/views/*.php';
-@source '../**/*.blade.php';
-@source '../**/*.js';
+nav.scrolled{
+    height: 8vh;
+    transition: height 0.3s;
+}
 
-@theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+nav.scrolled:hover{
+    height: 12vh;
+    transition: height 0.3s;
+}
+
+nav a{
+    color: white;
+    text-decoration: none;
+    transition: transform 0.3s, color 0.3s;
+}
+
+nav a:hover{
+    color: #007bff;
+}
+
+.btn-login{
+    width: 100px;
+    margin-left: 20px;
+    padding: 6px 14px;
+    background-color: #007bff00;
+    color: #fff;
+    border: 1px solid white;
+    border-radius: 24px;
+    cursor: pointer;
+    transition:  color 0.3s, border 0.3s;
+}
+
+.btn-login:hover{
+    color: #007bff;
+    border: 1px solid #007bff;
 }
