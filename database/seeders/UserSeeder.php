@@ -2,6 +2,9 @@
 
 namespace Database\Seeders;
 
+use App\Models\Contact;
+use App\Models\PersonalData;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -12,153 +15,62 @@ class UserSeeder extends Seeder
      */
     public function run(): void
     {
+        // ===================================
+        // CORE ACCOUNTS (Keep for testing)
+        // ===================================
+
         // Create developer account
-        $contact = \App\Models\Contact::create([
-            'phone_no' => '09170000000',
+        User::create([
+            'user_number' => 'USR000001',
+            'personal_data_id' => PersonalData::factory()->create([
+                'first_name' => 'Leo',
+                'last_name' => 'Magdarag',
+                'birth_date' => '2000-01-01',
+                'title' => 'Member',
+            ])->id,
             'email' => 'developer@example.com',
-        ]);
-        $personalData = \App\Models\PersonalData::create([
-            'first_name' => 'Leo',
-            'last_name' => 'Magdarag',
-            'birth_date' => '2000-01-01',
-            'contact_id' => $contact->contact_id,
-        ]);
-        \App\Models\User::create([
-            'personal_data_id' => $personalData->personal_data_id,
-            'email' => $contact->email,
-            'password' => Hash::make('12345Dev'),
+            'password' => Hash::make('password'),
             'role' => 'developer',
         ]);
 
         // Create an admin user
-        $contact = \App\Models\Contact::create([
-            'phone_no' => '09171234567',
+        User::create([
+            'user_number' => 'USR000002',
+            'personal_data_id' => PersonalData::factory()->create([
+                'first_name' => 'Admin',
+                'last_name' => 'Account',
+                'birth_date' => '1985-01-01',
+                'title' => 'Chairman',
+            ])->id,
             'email' => 'admin@example.com',
-        ]);
-
-        $personalData = \App\Models\PersonalData::create([
-            'first_name' => 'Admin',
-            'last_name' => 'Account',
-            'birth_date' => '2000-01-01',
-            'contact_id' => $contact->contact_id,
-        ]);
-
-        \App\Models\User::create([
-            'personal_data_id' => $personalData->personal_data_id,
-
-            'email' => $contact->email,
-            'password' => Hash::make('12345'),
+            'password' => Hash::make('password'),
             'role' => 'admin',
         ]);
 
-        // Create an officer user
-        $contact = \App\Models\Contact::create([
-            'phone_no' => '09179876543',
-            'email' => 'officer@example.com',
-        ]);
-        $personalData = \App\Models\PersonalData::create([
-            'first_name' => 'Officer',
-            'last_name' => 'Account',
-            'birth_date' => '2000-01-01',
-            'contact_id' => $contact->contact_id,
-        ]);
-        \App\Models\User::create([
-            'personal_data_id' => $personalData->personal_data_id,
-            'email' => $contact->email,
-            'password' => Hash::make('12345'),
-            'role' => 'officer',
-        ]);
+        // Create additional staff accounts
+        $roles = [
+            ['role' => 'treasurer', 'firstName' => 'Maria', 'lastName' => 'Santos', 'title' => 'Treasurer'],
+            ['role' => 'secretary', 'firstName' => 'Ana', 'lastName' => 'Garcia', 'title' => 'Secretary'],
+            ['role' => 'loan', 'firstName' => 'Pedro', 'lastName' => 'Reyes', 'title' => 'Loan Officer'],
+        ];
 
-        // Create an ordinary user
-        $contact = \App\Models\Contact::create([
-            'phone_no' => '09173456789',
-            'email' => 'member@example.com',
-        ]);
-        $personalData = \App\Models\PersonalData::create([
-            'first_name' => 'Member',
-            'last_name' => 'Account',
-            'birth_date' => '2000-01-01',
-            'contact_id' => $contact->contact_id,
-        ]);
+        foreach ($roles as $index => $roleData) {
+            User::create([
+                'user_number' => 'USR' . str_pad($index + 3, 6, '0', STR_PAD_LEFT),
+                'personal_data_id' => PersonalData::factory()->create([
+                    'first_name' => $roleData['firstName'],
+                    'last_name' => $roleData['lastName'],
+                    'title' => $roleData['title'],
+                ])->id,
+                'email' => strtolower($roleData['role']) . '@example.com',
+                'password' => Hash::make('password'),
+                'role' => $roleData['role'],
+            ]);
+        }
 
-        \App\Models\User::create([
-            'personal_data_id' => $personalData->personal_data_id,
-            'email' => $contact->email,
-            'password' => Hash::make('12345'),
-            'role' => 'member',
-        ]);
-
-        // Create an invalid user
-        $contact = \App\Models\Contact::create([
-            'phone_no' => '09170001111',
-            'email' => 'invalid@example.com'
-        ]);
-        $personalData = \App\Models\PersonalData::create([
-            'first_name' => 'Invalid',
-            'last_name' => 'Account',
-            'birth_date' => '2000-01-01',
-            'contact_id' => $contact->contact_id,
-        ]);
-        \App\Models\User::create([
-            'personal_data_id' => $personalData->personal_data_id,
-            'email' => $contact->email,
-            'password' => Hash::make('12345'),
-            'role' => 'inactive',
-        ]);
-
-        // Create additional member users
-        // Member 2: Cris David Jarabejo
-        $contact = \App\Models\Contact::create([
-            'phone_no' => '09181234567',
-            'email' => 'cris.jarabejo@example.com',
-        ]);
-        $personalData = \App\Models\PersonalData::create([
-            'first_name' => 'Cris David',
-            'last_name' => 'Jarabejo',
-            'birth_date' => '1970-05-15',
-            'contact_id' => $contact->contact_id,
-        ]);
-        \App\Models\User::create([
-            'personal_data_id' => $personalData->personal_data_id,
-            'email' => $contact->email,
-            'password' => Hash::make('12345'),
-            'role' => 'member',
-        ]);
-
-        // Member 3: Alyson Penano
-        $contact = \App\Models\Contact::create([
-            'phone_no' => '09192345678',
-            'email' => 'alyson.penano@example.com',
-        ]);
-        $personalData = \App\Models\PersonalData::create([
-            'first_name' => 'Alyson',
-            'last_name' => 'Penano',
-            'birth_date' => '1985-08-22',
-            'contact_id' => $contact->contact_id,
-        ]);
-        \App\Models\User::create([
-            'personal_data_id' => $personalData->personal_data_id,
-            'email' => $contact->email,
-            'password' => Hash::make('12345'),
-            'role' => 'member',
-        ]);
-
-        // Member 4: Glendo Camarines
-        $contact = \App\Models\Contact::create([
-            'phone_no' => '09203456789',
-            'email' => 'glendo.camarines@example.com',
-        ]);
-        $personalData = \App\Models\PersonalData::create([
-            'first_name' => 'Glendo',
-            'last_name' => 'Camarines',
-            'birth_date' => '1992-11-30',
-            'contact_id' => $contact->contact_id,
-        ]);
-        \App\Models\User::create([
-            'personal_data_id' => $personalData->personal_data_id,
-            'email' => $contact->email,
-            'password' => Hash::make('12345'),
-            'role' => 'member',
-        ]);
+        // ===================================
+        // GENERATE 20 MEMBER USERS (Factory)
+        // ===================================
+        User::factory(20)->create(['role' => 'member']);
     }
 }

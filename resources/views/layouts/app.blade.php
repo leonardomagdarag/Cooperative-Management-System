@@ -11,8 +11,9 @@
 
 <body>
     {{-- Navbar --}}
-    @include('partials.topNavbar')
-
+    @include('partials.public.topNavbar')
+    {{-- footer --}}
+    @include('partials.public.footer')
     {{-- Main content --}}
     <main>
         @yield('content')

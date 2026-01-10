@@ -9,60 +9,31 @@ use App\Models\User;
 
 class DepositSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
-        // Get member users
-        $members = User::where('role', 'member')
-            ->whereIn('email', [
-                'cris.jarabejo@example.com',
-                'alyson.penano@example.com',
-                'glendo.camarines@example.com'
-            ])
-            ->get();
+        $accounts = Account::all();
 
-        if ($members->count() < 3) {
-            $this->command->error('Not enough member users found. Please run UserSeeder and AccountSeeder first.');
+        if ($accounts->isEmpty()) {
+            $this->command->error('No accounts found. Please run AccountSeeder first.');
             return;
         }
 
-        // Get admin user for recorded_by
-        $admin = User::where('role', 'admin')->first();
+        $recordedBy = User::where('role', 'admin')->first()->user_id ?? 'USR_0001';
 
-        // Create 2 deposits for each account
-        foreach ($members as $member) {
-            $account = Account::where('user_id', $member->user_id)->first();
+        foreach ($accounts as $account) {
+            $depositCount = rand(2, 5);
 
-            if (!$account) {
-                $this->command->error("No account found for {$member->email}");
-                continue;
+            for ($i = 0; $i < $depositCount; $i++) {
+                Deposit::create([
+                    'account_id' => $account->account_id,
+                    'deposit_amount' => rand(1000, 50000),
+                    'deposit_date' => now()->subDays(rand(1, 365)),
+                    'recorded_by' => $recordedBy,
+                ]);
             }
-
-            // First deposit
-            $deposit1Amount = rand(5000, 15000);
-            Deposit::create([
-                'account_id' => $account->account_id,
-                'deposit_amount' => $deposit1Amount,
-                'deposit_date' => now()->subDays(rand(30, 90)),
-                'recorded_by' => $admin->user_id,
-            ]);
-
-            // Second deposit
-            $deposit2Amount = rand(3000, 10000);
-            Deposit::create([
-                'account_id' => $account->account_id,
-                'deposit_amount' => $deposit2Amount,
-                'deposit_date' => now()->subDays(rand(1, 29)),
-                'recorded_by' => $admin->user_id,
-            ]);
-
-            // Update account balance
-            $account->balance = $deposit1Amount + $deposit2Amount;
-            $account->save();
-
-            $this->command->info("Created 2 deposits for {$member->email} (Total: {$account->balance})");
         }
+
+        $totalDeposits = Deposit::count();
+        $this->command->info("Created {$totalDeposits} deposits.");
     }
 }

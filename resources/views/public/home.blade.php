@@ -1,103 +1,387 @@
 <!DOCTYPE html>
 <html lang="en">
 
-<head>
+<head> 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-    @vite('resources/css/public/home.css')
+    <title>Settlers Credit Cooperative</title>
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 
-<body>
-    @extends('layouts.app')
+<body class="bg-white">
+    @include('partials.public.topNavbar') 
 
-    <div class="hero">
-        <div class="hero-text">
-            <h1>SouthVille 7 Credit Cooperative</h1>
-            <p> <b>Strength</b> in members</p>
-        </div>
-    </div>
-    <div class="about">
-        <h2>About Us</h2>
-        <p>SouthVille 7 Credit Cooperative is dedicated to empowering our members through financial services and
-            community support. Our mission is to provide accessible and affordable financial solutions that help our
-            members achieve their goals.</p>
-        <a href="{{ route('about_page') }}" class="btn-about-us"> About Us</a>
-    </div>
+    <!-- Hero Section -->
+    <section class="relative min-h-screen flex items-center justify-center overflow-hidden pt-20">
 
-    <div class="mission-vision">
-        <div class="mission">
-            <h3>Our Mission</h3>
-            <p>To provide quality financial services that meet the needs of our members while promoting economic growth
-                and community development.</p>
+        <!-- Background Image -->
+        <div class="absolute inset-0 z-0">
+            {{-- Image --}}
+            <img src="{{ asset('images/hero_banner.jpg') }}" alt="Hero background" class="w-full h-full object-cover">
+            <!-- Gradient Mask -->
+            <div class="absolute inset-0 bg-linear-to-b from-emerald-200/75 via-cyan-200/75 to-blue-200/75"></div>
         </div>
-        <div class="vision">
-            <h3>Our Vision</h3>
-            <p>To be the leading credit cooperative recognized for excellence in service, innovation, and member
-                satisfaction.</p>
+
+        <div class="relative z-10 text-center px-4 py-20 max-w-6xl mx-auto">
+            <h1
+                class="text-5xl md:text-7xl font-bold text-gray-900 mb-6 leading-tight animate_animated animate_fadeInUp">
+                <span
+                    class="bg-linear-to-r from-emerald-800 to-cyan-800 bg-clip-text text-transparent">Settlers</span><br>
+                Credit Cooperative
+            </h1> 
+            <p class="text-xl md:text-2xl text-gray-700 mb-12 max-w-3xl mx-auto">
+                {!! config('content.home.hero_subtitle') !!}
+            </p>
+            <x-button-public label="Learn more" icon="fas fa-arrow-down ml-2" href="#about"
+                extraClass="animate_animated animate__bounce" />
         </div>
-    </div>
-    <div class="requirements">
-        <h2>Membership Requirements</h2>
-        <ol>
-            <li>Must be at least 18 years old.</li>
-            <li>Proof of residence in the service area.</li>
-            <li>Valid identification (e.g., driver's license, passport).</li>
-            <li>Initial deposit to open a savings account.</li>
-            <li>Agreement to abide by the cooperative's bylaws and policies.</li>
-        </ol>
-        <button class="btn-requirements">
-            Join Now
-        </button>
-    </div>
-    <div class="stories">
-        <h2>Stories</h2>
-        <div class="stories-container">
-            <button class="btn-stories-card">
-                &#8592;
-            </button>
-            <div class="story-card">
-                <img src="https://placehold.co/300x200" alt="Story 1">
-                <h4>Story Title 1</h4>
-                <p>Brief description of the story.</p>
+    </section>
+
+    <!-- About Preview Section -->
+    <section id="about" class="py-20 px-4 bg-white">
+        <div class="max-w-2xl mx-auto">
+            <div class="text-center">
+                <h2 class="text-4xl md:text-5xl font-bold text-gray-900 mb-4">About Us</h2>
+                <div class="w-24 h-1 bg-linear-to-r from-emerald-500 to-cyan-500 mx-auto rounded-full mb-8"></div>
+                <p class="text-lg text-gray-700 leading-relaxed mb-6 text-justify">
+                    {!! config('content.about.about1') !!}
+                </p>
+                <p class="text-lg text-gray-700 leading-relaxed mb-8 text-justify">
+                    {!! config('content.about.about2') !!}
+                </p>
+
+                <!-- Stats -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mt-16 mb-16">
+                    <div class="bg-linear-to-br from-emerald-50 to-cyan-50 rounded-2xl p-6 shadow-lg">
+                        <div class="text-3xl font-bold text-primary1 mb-2">
+                            {!! config('content.home.active_members') !!}
+                        </div>
+                        <div class="text-sm text-gray-600">Active Members</div>
+                    </div>
+                    <div class="bg-linear-to-br from-cyan-50 to-blue-50 rounded-2xl p-6 shadow-lg">
+                        <div class="text-3xl font-bold text-primary2 mb-2">
+                            {!! config('content.home.total_assets') !!}
+                        </div>
+                        <div class="text-sm text-gray-600">Total Assets</div>
+                    </div>
+                    <div class="bg-linear-to-br from-emerald-50 to-cyan-50 rounded-2xl p-6 shadow-lg">
+                        <div class="text-3xl font-bold text-primary1 mb-2">
+                            {!! config('content.home.years_service') !!}
+                        </div>
+                        <div class="text-sm text-gray-600">Years of Service</div>
+                    </div>
+                    <div class="bg-linear-to-br from-cyan-50 to-blue-50 rounded-2xl p-6 shadow-lg">
+                        <div class="text-3xl font-bold text-primary2 mb-2">
+                            {!! config('content.home.service_done') !!}
+                        </div>
+                        <div class="text-sm text-gray-600">Services Done</div>
+                    </div>
+                </div>
+
+                <x-button-public label="Learn more about us" icon="fas fa-arrow-right ml-2"
+                    href="{{ route('about_page') }}" />
             </div>
-            <div class="story-card">
-                <img src="https://placehold.co/300x200" alt="Story 2">
-                <h4>Story Title 2</h4>
-                <p>Brief description of the story.</p>
-            </div>
-            <div class="story-card">
-                <img src="https://placehold.co/300x200" alt="Story 3">
-                <h4>Story Title 3</h4>
-                <p>Brief description of the story.</p>
-            </div>
-            <button class="btn-stories-card">
-                &#8594;
-            </button>
-        </div>
-
-        <a href="{{ route('events_page') }}" class="btn-stories">View All Stories</a>
-    </div>
-    <div class="contact-location" id="Contact">
-        <div class="contact-form">
-            <h3>Contact Us</h3>
-            <p>Address</p>
-            <p>Mobile Number: 09876543210 | 09123456789</p>
-            <form action="#" method="post">
-                <input type="text" name="name" placeholder="Your Name" required>
-                <input type="email" name="email" placeholder="Your Email" required>
-                <textarea name="message" rows="4" placeholder="Your Message" required></textarea>
-                <button type="submit">Send Message</button>
-            </form>
-        </div>
-        <div class="location-info">
-            <h3>Our Location</h3>
 
         </div>
-    </div>
-    <footer>
-        <p>&copy; 2024 SouthVille 7 Credit Cooperative. All rights reserved.</p>
-    </footer>
+    </section>
+
+    <!-- Mission & Vision Section -->
+    <section class="py-20 px-4 bg-linear-to-br from-emerald-50 to-cyan-50">
+        <div class="max-w-6xl mx-auto">
+            <div class="grid md:grid-cols-2 gap-8">
+                <div
+                    class="bg-white rounded-3xl p-8 shadow-xl hover:shadow-2xl transition-all transform hover:-translate-y-2">
+                    <div
+                        class="w-16 h-16 bg-linear-to-br from-emerald-500 to-primary1 rounded-2xl flex items-center justify-center mb-6">
+                        <i class="fas fa-bullseye text-3xl text-white"></i>
+                    </div>
+                    <h3 class="text-3xl font-bold text-gray-900 mb-4">Our Mission</h3>
+                    <p class="text-gray-700 leading-relaxed">
+                        {!! config('content.about.mission') !!}
+                    </p>
+                </div>
+                <div
+                    class="bg-white rounded-3xl p-8 shadow-xl hover:shadow-2xl transition-all transform hover:-translate-y-2">
+                    <div
+                        class="w-16 h-16 bg-linear-to-br from-cyan-500 to-primary2 rounded-2xl flex items-center justify-center mb-6">
+                        <i class="fas fa-eye text-3xl text-white"></i>
+                    </div>
+                    <h3 class="text-3xl font-bold text-gray-900 mb-4">Our Vision</h3>
+                    <p class="text-gray-700 leading-relaxed">
+                        {!! config('content.about.vision') !!}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Membership Requirements Section -->
+    <section class="py-20 px-4 bg-white">
+        <div class="max-w-4xl mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-4xl md:text-5xl font-bold text-gray-900 mb-4">Membership Requirements</h2>
+                <div class="w-24 h-1 bg-linear-to-r from-emerald-500 to-cyan-500 mx-auto rounded-full mb-6"></div>
+                <p class="text-lg text-gray-600">Join our growing community of members</p>
+            </div>
+            <div class="bg-linear-to-br from-emerald-50 to-cyan-50 rounded-3xl p-8 md:p-12 shadow-xl">
+                <div class="space-y-6">
+                    <div class="flex items-start gap-4">
+                        <div
+                            class="shrink-0 w-10 h-10 bg-emerald-500 text-white rounded-full flex items-center justify-center font-bold">
+                            1</div>
+                        <p class="text-lg text-gray-800 pt-1">Must be at least 18 years old</p>
+                    </div>
+                    <div class="flex items-start gap-4">
+                        <div
+                            class="shrink-0 w-10 h-10 bg-cyan-500 text-white rounded-full flex items-center justify-center font-bold">
+                            2</div>
+                        <p class="text-lg text-gray-800 pt-1">Proof of residence in the service area</p>
+                    </div>
+                    <div class="flex items-start gap-4">
+                        <div
+                            class="shrink-0 w-10 h-10 bg-emerald-500 text-white rounded-full flex items-center justify-center font-bold">
+                            3</div>
+                        <p class="text-lg text-gray-800 pt-1">Valid identification (e.g., driver's license, passport)
+                        </p>
+                    </div>
+                    <div class="flex items-start gap-4">
+                        <div
+                            class="shrink-0 w-10 h-10 bg-cyan-500 text-white rounded-full flex items-center justify-center font-bold">
+                            4</div>
+                        <p class="text-lg text-gray-800 pt-1">Initial deposit to open a savings account</p>
+                    </div>
+                    <div class="flex items-start gap-4">
+                        <div
+                            class="shrink-0 w-10 h-10 bg-emerald-500 text-white rounded-full flex items-center justify-center font-bold">
+                            5</div>
+                        <p class="text-lg text-gray-800 pt-1">Agreement to abide by the cooperative's bylaws and
+                            policies</p>
+                    </div>
+                </div>
+                <div class="mt-10 text-center">
+                    <a href="{{ route('login') }}"
+                        class="inline-flex items-center px-8 py-4 bg-linear-to-r from-emerald-500 to-cyan-500 hover:from-primary1 hover:to-primary2 text-white font-semibold rounded-full shadow-lg hover:shadow-xl transition-all transform hover:scale-105">
+                        Join Now
+                        <i class="fas fa-user-plus ml-2"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- News and Announcements Section -->
+    <section class="py-20 px-4 bg-linear-to-br from-cyan-50 to-emerald-50">
+        <div class="max-w-6x1 mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-4xl md:text-5xl font-bold text-gray-900 mb-4">News & Announcements</h2>
+                <div class="w-24 h-1 bg-linear-to-r from-emerald-500 to-cyan-500 mx-auto rounded-full mb-6"></div>
+            </div>
+
+            <div class="grid-cols-2 gap-10">
+                <div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stories Section -->
+    <section class="py-20 px-4 bg-white">
+        <div class="max-w-6xl mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-4xl md:text-5xl font-bold text-gray-900 mb-4">Member Stories</h2>
+                <div class="w-24 h-1 bg-linear-to-r from-emerald-500 to-cyan-500 mx-auto rounded-full mb-6"></div>
+                <p class="text-lg text-gray-600">Hear from our valued members</p>
+            </div>
+            <div class="grid md:grid-cols-3 gap-8">
+                <div
+                    class="bg-white rounded-3xl overflow-hidden shadow-xl hover:shadow-2xl transition-all transform hover:-translate-y-2">
+                    <img src="https://picsum.photos/seed/picsum/200" alt="Random Pic 1"
+                        class="h-48 w-full object-cover">
+
+                    <div class="p-6">
+                        <h4 class="text-xl font-bold text-gray-900 mb-3">Building Dreams Together</h4>
+                        <p class="text-gray-600 mb-4">How our cooperative helped me achieve my dream of owning a home.
+                        </p>
+                        <a href="{{ route('stories_page') }}"
+                            class="text-primary1 hover:text-emerald-700 font-semibold inline-flex items-center">
+                            Read More <i class="fas fa-arrow-right ml-2 text-sm"></i>
+                        </a>
+                    </div>
+                </div>
+                <div
+                    class="bg-white rounded-3xl overflow-hidden shadow-xl hover:shadow-2xl transition-all transform hover:-translate-y-2">
+                    <img src="https://picsum.photos/seed/picsum/200" alt="Random Pic 2"
+                        class="h-48 w-full object-cover">
+                    <div class="p-6">
+                        <h4 class="text-xl font-bold text-gray-900 mb-3">Growing My Business</h4>
+                        <p class="text-gray-600 mb-4">The support and guidance that helped expand my small business.
+                        </p>
+                        <a href="{{ route('stories_page') }}"
+                            class="text-primary2 hover:text-cyan-700 font-semibold inline-flex items-center">
+                            Read More <i class="fas fa-arrow-right ml-2 text-sm"></i>
+                        </a>
+                    </div>
+                </div>
+                <div
+                    class="bg-white rounded-3xl overflow-hidden shadow-xl hover:shadow-2xl transition-all transform hover:-translate-y-2">
+                    <img src="https://picsum.photos/seed/picsum/200" alt="Random Pic 3"
+                        class="h-48 w-full object-cover">
+
+                    <div class="p-6">
+                        <h4 class="text-xl font-bold text-gray-900 mb-3">Securing My Future</h4>
+                        <p class="text-gray-600 mb-4">Financial planning services that gave me peace of mind.</p>
+                        <a href="{{ route('stories_page') }}"
+                            class="text-primary1 hover:text-emerald-700 font-semibold inline-flex items-center">
+                            Read More <i class="fas fa-arrow-right ml-2 text-sm"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="text-center mt-12">
+                <a href="{{ route('stories_page') }}"
+                    class="inline-flex items-center px-8 py-4 bg-white hover:bg-gray-50 text-primary1 font-semibold rounded-full shadow-lg hover:shadow-xl transition-all border-2 border-emerald-200">
+                    View All Stories
+                    <i class="fas fa-arrow-right ml-2"></i>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Section -->
+    <section id="Contact" class="py-20 px-4 bg-white">
+        <div class="max-w-6xl mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-4xl md:text-5xl font-bold text-gray-900 mb-4">Get In Touch</h2>
+                <div class="w-24 h-1 bg-linear-to-r from-emerald-500 to-cyan-500 mx-auto rounded-full mb-6"></div>
+                <p class="text-lg text-gray-600">We're here to help you achieve your financial goals</p>
+            </div>
+            <div class="grid md:grid-cols-2 gap-12">
+                <!-- Contact Form -->
+                <div class="bg-linear-to-br from-emerald-50 to-cyan-50 rounded-3xl p-8 shadow-xl">
+                    <h3 class="text-3xl text-center font-bold text-gray-900 mb-8">Send us a Message</h3>
+                    <form action="#" method="post" class="space-y-6">
+                        <div>
+                            <label for="name" class="block text-sm font-medium text-gray-700 mb-2">Your
+                                Name</label>
+                            <input type="text" name="name" id="name" required
+                                class="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-400 focus:border-transparent outline-none transition-all">
+                        </div>
+                        <div>
+                            <label for="email" class="block text-sm font-medium text-gray-700 mb-2">Your
+                                Email</label>
+                            <input type="email" name="email" id="email" required
+                                class="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-400 focus:border-transparent outline-none transition-all">
+                        </div>
+                        <div>
+                            <label for="message" class="block text-sm font-medium text-gray-700 mb-2">Your
+                                Message</label>
+                            <textarea name="message" id="message" rows="4" required
+                                class="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-400 focus:border-transparent outline-none transition-all resize-none"></textarea>
+                        </div>
+                        <button type="submit"
+                            class="w-full px-6 py-4 bg-linear-to-r from-emerald-500 to-cyan-500 hover:from-primary1 hover:to-primary2 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all transform active:scale-[0.98]">
+                            Send Message
+                            <i class="fas fa-paper-plane ml-2"></i>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Contact Information -->
+                <div>
+                    <div class="bg-linear-to-br from-cyan-50 to-emerald-50 rounded-3xl p-8 shadow-xl mb-3">
+                        <h3 class="text-2xl font-bold text-center text-gray-900 mb-6">Contact Information</h3>
+                        <div class="space-y-8">
+                            <div class="flex items-center gap-4">
+                                <div
+                                    class="w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center shrink-0">
+                                    <i class="fas fa-map-marker-alt text-white"></i>
+                                </div>
+                                <div>
+                                    <h4 class="font-semibold text-gray-900 mb-1">Address</h4>
+                                    <a href="#googlemaps" class="text-primary1 hover:text-emerald-900">
+                                        {!! config('content.contact.address') !!}
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <div
+                                    class="w-12 h-12 bg-cyan-500 rounded-full flex items-center justify-center shrink-0">
+                                    <i class="fas fa-phone text-white"></i>
+                                </div>
+                                <div>
+                                    <h4 class="font-semibold text-gray-900 mb-1">Phone Numbers</h4>
+                                    <p class="text-gray-600">{!! config('content.contact.phone') !!}</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <div
+                                    class="w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center shrink-0">
+                                    <i class="fas fa-envelope text-white"></i>
+                                </div>
+                                <div>
+                                    <h4 class="font-semibold text-gray-900 mb-1">Email</h4>
+                                    <a href="#gmail" class="text-primary1 hover:text-emerald-900">
+                                        {!! config('content.contact.email') !!}
+                                    </a>
+                                </div>
+                            </div>
+                            {{-- <div class="flex items-center gap-4">
+                                <div
+                                    class="w-12 h-12 bg-cyan-500 rounded-full flex items-center justify-center shrink-0">
+                                    <i class="fas fa-clock text-white"></i>
+                                </div>
+                                <div>
+                                    <h4 class="font-semibold text-gray-900 mb-1">Office Hours</h4>
+                                    <p class="text-gray-600">
+                                        {!! config('content.contact.office_hours') !!}
+                                    </p>
+                                </div>
+                            </div> --}}
+                        </div>
+                    </div>
+
+                    <!-- Map Placeholder -->
+                    <div class="bg-gray-200 rounded-3xl h-64 flex items-center justify-center">
+                        <p class="text-gray-500">Map Location</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    @include('partials.public.footer')
+
+    <style>
+        @keyframes blob {
+
+            0%,
+            100% {
+                transform: translate(0, 0) scale(1);
+            }
+
+            33% {
+                transform: translate(30px, -50px) scale(1.1);
+            }
+
+            66% {
+                transform: translate(-20px, 20px) scale(0.9);
+            }
+        }
+
+        .animate-blob {
+            animation: blob 7s infinite;
+        }
+
+        .animation-delay-2000 {
+            animation-delay: 2s;
+        }
+
+        .animation-delay-4000 {
+            animation-delay: 4s;
+        }
+    </style>
 </body>
 
 </html>

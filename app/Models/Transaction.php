@@ -2,39 +2,83 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Traits\GeneratesCustomId;
 
 class Transaction extends Model
 {
-    protected $primaryKey = 'transaction_id';
-    public $incrementing = false;
-    protected $keyType = 'string';
+    use HasFactory;
 
     protected $fillable = [
-        'transaction_id', 'account_id', 'processed_by',
-        'transaction_type', 'amount'
+        'transaction_number',
+        'transaction_type',
+        'account_id',
+        'loan_id',
+        'amount',
+        'transaction_date',
+        'status',
+        'note',
+        'recorded_by'
     ];
 
-    //creating a custom primary key generator for user_id
-    use GeneratesCustomId;
+    protected $casts = [
+        'amount' => 'decimal:2',
+        'transaction_date' => 'datetime',
+    ];
 
-    // Customize trait settings
-    protected $customIdColumn = 'transaction_id';
-    protected $customIdPrefix = 'TRX_';
-    protected $customIdPadLength = 4;
-
-    // Boot the trait
     protected static function boot()
     {
         parent::boot();
-        static::bootGeneratesCustomId();
+        
+        static::creating(function ($transaction) {
+            if (empty($transaction->transaction_number)) {
+                // Get the latest transaction_number for today
+                $datePrefix = 'TXN' . date('Ymd');
+                $latest = static::where('transaction_number', 'like', $datePrefix . '%')
+                    ->orderByRaw('CAST(SUBSTRING(transaction_number, 12) AS UNSIGNED) DESC')
+                    ->first();
+                
+                if ($latest && preg_match('/' . preg_quote($datePrefix, '/') . '(\d+)/', $latest->transaction_number, $matches)) {
+                    $nextNumber = intval($matches[1]) + 1;
+                } else {
+                    $nextNumber = 1;
+                }
+                
+                $transaction->transaction_number = $datePrefix . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
+            }
+        });
     }
 
     //Eloquent Relationships
 
     public function account()
     {
-        return $this->belongsTo(Account::class, 'account_id', 'account_id');
+        return $this->belongsTo(Account::class);
+    }
+
+    public function loan()
+    {
+        return $this->belongsTo(Loan::class);
+    }
+
+    public function recordedBy()
+    {
+        return $this->belongsTo(User::class, 'recorded_by');
+    }
+
+    // Scopes for filtering by type
+    public function scopeDeposits($query)
+    {
+        return $query->where('transaction_type', 'deposit');
+    }
+
+    public function scopeWithdrawals($query)
+    {
+        return $query->where('transaction_type', 'withdrawal');
+    }
+
+    public function scopeLoanPayments($query)
+    {
+        return $query->where('transaction_type', 'loan_payment');
     }
 }

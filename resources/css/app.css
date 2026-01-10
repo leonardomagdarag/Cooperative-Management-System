@@ -1,54 +1,15 @@
-/* Navigation Bar Styles */
-nav{
-    position: fixed;
-    top: 0;
-    right: 0;
-    width: 100%;
-    z-index: 1000;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background-color: #333;
-    color: white;
-    padding: 1rem;
-    text-align: center;
-    height: 12vh;
-    transition: height 0.3s;
-}
+@import "tailwindcss";
+@import 'animate.css';
 
-nav.scrolled{
-    height: 8vh;
-    transition: height 0.3s;
-}
 
-nav.scrolled:hover{
-    height: 12vh;
-    transition: height 0.3s;
-}
+/* Custom Styles */
 
-nav a{
-    color: white;
-    text-decoration: none;
-    transition: transform 0.3s, color 0.3s;
-}
+@theme {
+    --color-primary1: #009966;
+    --color-primary2: #0092b8;
+    --color-bgLight-1: #FFFFFF;
 
-nav a:hover{
-    color: #007bff;
-}
+    --color-bgLight-2: #F5F7F9;
 
-.btn-login{
-    width: 100px;
-    margin-left: 20px;
-    padding: 6px 14px;
-    background-color: #007bff00;
-    color: #fff;
-    border: 1px solid white;
-    border-radius: 24px;
-    cursor: pointer;
-    transition:  color 0.3s, border 0.3s;
-}
-
-.btn-login:hover{
-    color: #007bff;
-    border: 1px solid #007bff;
+    --color-borderLight: #EEF1F0;
 }

@@ -13,29 +13,51 @@ class AccountSeeder extends Seeder
      */
     public function run(): void
     {
-        // Get member users (excluding the first member which is the test account)
-        $members = User::where('role', 'member')
-            ->whereIn('email', [
-                'cris.jarabejo@example.com',
-                'alyson.penano@example.com',
-                'glendo.camarines@example.com'
-            ])
-            ->get();
+        // Get all member users
+        $members = User::where('role', 'member')->get();
 
-        if ($members->count() < 3) {
-            $this->command->error('Not enough member users found. Please run UserSeeder first.');
+        if ($members->isEmpty()) {
+            $this->command->error('No member users found. Please run UserSeeder first.');
             return;
         }
 
-        // Create 3 savings accounts for the 3 different users
-        foreach ($members as $index => $member) {
-            Account::create([
-                'user_id' => $member->user_id,
-                'account_type' => 'savings',
-                'balance' => 0, // Will be updated by deposits
-            ]);
+        // Create accounts for each member
+        // 70% get savings only, 20% get both, 10% get share-capital only
+        foreach ($members as $member) {
+            $rand = rand(1, 100);
 
-            $this->command->info("Created savings account for {$member->email}");
+            if ($rand <= 70) {
+                // Savings only
+                Account::factory()->create([
+                    'user_id' => $member->id,
+                    'account_type' => 'savings',
+                    'balance' => rand(5000, 100000),
+                ]);
+            } elseif ($rand <= 90) {
+                // Both accounts
+                Account::factory()->create([
+                    'user_id' => $member->id,
+                    'account_type' => 'savings',
+                    'balance' => rand(5000, 100000),
+                ]);
+                Account::factory()->create([
+                    'user_id' => $member->id,
+                    'account_type' => 'share-capital',
+                    'balance' => rand(5000, 50000),
+                ]);
+                Account::create([
+                    'user_id' => $member->user_id,
+                ]);
+            } else {
+                // Share-capital only
+                Account::factory()->create([
+                    'user_id' => $member->id,
+                    'account_type' => 'share-capital',
+                    'balance' => rand(5000, 50000),
+                ]);
+            }
         }
+
+        $this->command->info('Created accounts for ' . $members->count() . ' members.');
     }
 }

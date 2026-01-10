@@ -2,61 +2,72 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Traits\GeneratesCustomId;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Account extends Model
 {
-    protected $primaryKey = 'account_id';
-    public $incrementing = false;
-    protected $keyType = 'string';
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'account_id',
+        'account_number',
         'user_id',
         'account_type',
         'balance'
     ];
 
-    //creating a custom primary key generator for user_id
-    use GeneratesCustomId;
+    protected $casts = [
+        'balance' => 'decimal:2',
+    ];
 
-    // Customize trait settings
-    protected $customIdColumn = 'account_id';
-    protected $customIdPrefix = 'ACNT_';
-    protected $customIdPadLength = 4;
-
-    // Boot the trait
     protected static function boot()
     {
         parent::boot();
-        static::bootGeneratesCustomId();
+        
+        static::creating(function ($account) {
+            if (empty($account->account_number)) {
+                // Get the latest account_number including soft deleted records
+                $latest = static::withTrashed()
+                    ->orderByRaw('CAST(SUBSTRING(account_number, 5) AS UNSIGNED) DESC')
+                    ->first();
+                
+                if ($latest && preg_match('/ACNT(\d+)/', $latest->account_number, $matches)) {
+                    $nextNumber = intval($matches[1]) + 1;
+                } else {
+                    $nextNumber = 1;
+                }
+                
+                $account->account_number = 'ACNT' . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
+            }
+        });
     }
 
     //Eloquent Relationships
 
     public function user()
     {
-        return $this->belongsTo(User::class, 'user_id', 'user_id');
-    }
-
-    public function loans()
-    {
-        return $this->hasMany(Loan::class, 'account_id', 'account_id');
-    }
-
-    public function deposits()
-    {
-        return $this->hasMany(Deposit::class, 'account_id', 'account_id');
-    }
-
-    public function withdrawals()
-    {
-        return $this->hasMany(Withdrawal::class, 'account_id', 'account_id');
+        return $this->belongsTo(User::class);
     }
 
     public function transactions()
     {
-        return $this->hasMany(Transaction::class, 'account_id', 'account_id');
+        return $this->hasMany(Transaction::class);
+    }
+
+    // Convenience methods using Transaction scopes
+    public function deposits()
+    {
+        return $this->transactions()->deposits();
+    }
+
+    public function withdrawals()
+    {
+        return $this->transactions()->withdrawals();
+    }
+
+    public function loanPayments()
+    {
+        return $this->transactions()->loanPayments();
     }
 }

@@ -23,7 +23,7 @@ class RoleMiddleware
         if (!$user) {
             return redirect('/login');
         }
-        
+
         //check if account is inactive or terminated
         if (in_array($user->role, ['inactive', 'terminated'])) {
             Auth::logout();
@@ -32,7 +32,7 @@ class RoleMiddleware
 
         // If user doesn't have an allowed role
         if (!in_array($user->role, $roles)) {
-            abort(403, 'Unauthorized access.');
+            return redirect('/')->with('error', 'unauthorized access');
         }
 
         return $next($request);

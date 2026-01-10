@@ -2,39 +2,56 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Traits\GeneratesCustomId;
 
 class Deposit extends Model
 {
-    protected $primaryKey = 'deposit_id';
-    public $incrementing = false;
-    protected $keyType = 'string';
+    use HasFactory;
 
     protected $fillable = [
-        'deposit_id', 'account_id', 'deposit_amount',
-        'deposit_date', 'recorded_by'
+        'deposit_number',
+        'account_id',
+        'deposit_amount',
+        'deposit_date',
+        'recorded_by'
     ];
 
-    //creating a custom primary key generator for user_id
-    use GeneratesCustomId;
+    protected $casts = [
+        'deposit_amount' => 'decimal:2',
+        'deposit_date' => 'datetime',
+    ];
 
-    // Customize trait settings
-    protected $customIdColumn = 'deposit_id';
-    protected $customIdPrefix = 'DPT_';
-    protected $customIdPadLength = 4;
-
-    // Boot the trait
     protected static function boot()
     {
         parent::boot();
-        static::bootGeneratesCustomId();
+        
+        static::creating(function ($deposit) {
+            if (empty($deposit->deposit_number)) {
+                // Get the latest deposit_number
+                $latest = static::orderByRaw('CAST(SUBSTRING(deposit_number, 4) AS UNSIGNED) DESC')
+                    ->first();
+                
+                if ($latest && preg_match('/DEP(\d+)/', $latest->deposit_number, $matches)) {
+                    $nextNumber = intval($matches[1]) + 1;
+                } else {
+                    $nextNumber = 1;
+                }
+                
+                $deposit->deposit_number = 'DEP' . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
+            }
+        });
     }
 
     //Eloquent Relationships
 
     public function account()
     {
-        return $this->belongsTo(Account::class, 'account_id', 'account_id');
+        return $this->belongsTo(Account::class);
+    }
+
+    public function recordedBy()
+    {
+        return $this->belongsTo(User::class, 'recorded_by');
     }
 }

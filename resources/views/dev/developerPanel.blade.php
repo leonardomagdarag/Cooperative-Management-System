@@ -294,8 +294,19 @@
                 <h1>Developer Panel</h1>
                 <p style="margin: 0;">ONLY FOR TESTING PURPOSES</p>
             </div>
-            <div class="small muted">Logged in as: {{ auth()->user()->personalData->first_name }}
-                {{ auth()->user()->personalData->last_name }} ({{ auth()->user()->role }})</div>
+            <div style="display:flex; flex-direction: row; justify-content: center; align-items: center;">
+                <div class="small muted">Logged in as: {{ auth()->user()->personalData->first_name }}
+                    {{ auth()->user()->personalData->last_name }} ({{ auth()->user()->role }})
+                </div>
+                <div style="margin-left: 1rem;">
+                    <form method="POST" action="{{ route('logout') }}">
+                        @csrf
+                        <button type="submit">Logout</button>
+                    </form>
+                </div>
+            </div>
+
+
         </div>
         {{-- Notifications --}}
         @if (session('success'))

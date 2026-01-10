@@ -23,11 +23,13 @@ class UserFactory extends Factory
      */
     public function definition(): array
     {
+        $roles = ['developer', 'admin', 'manager', 'member', 'loan', 'treasurer', 'secretary', 'inactive'];
+
         return [
-            'name' => fake()->name(),
+            'personal_data_id' => \App\Models\PersonalData::factory(),
             'email' => fake()->unique()->safeEmail(),
-            'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
+            'role' => fake()->randomElement($roles),
             'remember_token' => Str::random(10),
         ];
     }

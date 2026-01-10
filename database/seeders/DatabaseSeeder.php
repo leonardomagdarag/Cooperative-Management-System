@@ -13,16 +13,14 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
-
         // Seed in correct order due to dependencies
         $this->call([
             UserSeeder::class,
+            BeneficiarySeeder::class,
             AccountSeeder::class,
-            DepositSeeder::class,
-            WithdrawalSeeder::class,
             LoanSeeder::class,
-            LoanPaymentSeeder::class,
+            TransactionSeeder::class, // Handles deposits, withdrawals, and loan payments
+            LogSeeder::class,
         ]);
     }
 }
