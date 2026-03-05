@@ -69,8 +69,37 @@ class UserSeeder extends Seeder
         }
 
         // ===================================
-        // GENERATE 20 MEMBER USERS (Factory)
+        // GENERATE 5 MEMBER USERS
         // ===================================
-        User::factory(20)->create(['role' => 'member']);
+
+        // Create 4 members with specific emails
+        for ($i = 1; $i <= 4; $i++) {
+            User::create([
+                'user_number' => 'USR' . str_pad($i + 5, 6, '0', STR_PAD_LEFT),
+                'personal_data_id' => PersonalData::factory()->create([
+                    'first_name' => 'Member',
+                    'last_name' => 'Test' . $i,
+                    'title' => 'Member',
+                ])->id,
+                'email' => "member{$i}@example.com",
+                'password' => Hash::make('password'),
+                'role' => 'member',
+            ]);
+        }
+
+        // Create Leo Magdarag member account (5th member)
+        User::create([
+            'user_number' => 'USR000010',
+            'personal_data_id' => PersonalData::factory()->create([
+                'first_name' => 'Leo',
+                'last_name' => 'Magdarag',
+                'mid_name' => 'Baluyot',
+                'birth_date' => '1995-06-15',
+                'title' => 'Member',
+            ])->id,
+            'email' => 'leo.baluyot.magdarag039@gmail.com',
+            'password' => Hash::make('password'),
+            'role' => 'member',
+        ]);
     }
 }

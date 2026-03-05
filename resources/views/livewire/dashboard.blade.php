@@ -25,12 +25,16 @@
                 {{-- User Info --}}
                 <div class="flex items-center gap-3 pl-4 border-l border-gray-200">
                     <div class="text-right">
-                        <p class="text-sm font-medium text-gray-900">{{ auth()->user()->name ?? 'User' }}</p>
-                        <p class="text-xs text-gray-500">{{ auth()->user()->role ?? 'Member' }}</p>
+                        <p class="text-sm font-medium text-gray-900">
+                            {{ auth()->user()->personalData ? auth()->user()->personalData->first_name . ' ' . auth()->user()->personalData->last_name : 'User' }}
+                        </p>
+                        <p class="text-xs text-gray-500">
+                            {{ auth()->user()->personalData->title ?? 'Member' }}
+                        </p>
                     </div>
                     <div
                         class="w-10 h-10 rounded-full bg-linear-to-r from-emerald-500 to-cyan-500 flex items-center justify-center text-white font-semibold">
-                        {{ strtoupper(substr(auth()->user()->name ?? 'U', 0, 1)) }}
+                        {{ auth()->user()->personalData ? strtoupper(substr(auth()->user()->personalData->first_name, 0, 1)) : 'U' }}
                     </div>
                 </div>
             </div>

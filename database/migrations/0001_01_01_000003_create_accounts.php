@@ -22,7 +22,7 @@ return new class extends Migration
             $table->id();
             $table->string('loan_number', 20)->unique();
             $table->foreignId('user_id')->nullable()->constrained('users');
-            $table->string('loan_type', 50);
+            $table->enum('loan_type', ['group', 'business', 'special'])->default('business');
             $table->decimal('loan_amount', 15, 2);
             $table->decimal('interest_rate', 5, 2);
             $table->integer('term_months')->nullable();
@@ -32,14 +32,41 @@ return new class extends Migration
             $table->dateTime('approved_at')->nullable();
             $table->foreignId('approved_by')->nullable()->constrained('users');
             $table->date('due_date')->nullable();
+
+            // Business loan fields
+            $table->unsignedBigInteger('employment_id')->nullable();
+            $table->dateTime('interview_schedule')->nullable();
+            $table->enum('interview_status', ['pending', 'scheduled', 'completed', 'cancelled'])->default('pending');
+            $table->unsignedBigInteger('interview_officer_id')->nullable();
+            $table->text('interview_notes')->nullable();
+
+            $table->foreign('employment_id')->references('id')->on('employments')->onDelete('set null');
+            $table->foreign('interview_officer_id')->references('id')->on('users')->onDelete('set null');
+
             $table->timestamps();
             $table->softDeletes();
+        });
+
+        // Group loan members pivot table
+        Schema::create('group_loan_members', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('loan_id');
+            $table->unsignedBigInteger('user_id');
+            $table->boolean('has_approved')->default(false);
+            $table->dateTime('approved_at')->nullable();
+            $table->timestamps();
+
+            $table->foreign('loan_id')->references('id')->on('loans')->onDelete('cascade');
+            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+
+            // Ensure unique combination
+            $table->unique(['loan_id', 'user_id']);
         });
 
         Schema::create('transactions', function (Blueprint $table) {
             $table->id();
             $table->string('transaction_number', 20)->unique();
-            $table->enum('transaction_type', ['deposit', 'withdrawal', 'loan_payment', 'loan_disbursement', 'interest', 'fee'])->default('deposit');
+            $table->enum('transaction_type', ['deposit', 'withdrawal', 'loan_payment', 'loan_disbursement', 'fee'])->default('deposit');
             $table->foreignId('account_id')->nullable()->constrained('accounts');
             $table->foreignId('loan_id')->nullable()->constrained('loans');
             $table->decimal('amount', 15, 2);
@@ -57,6 +84,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('transactions');
+        Schema::dropIfExists('group_loan_members');
         Schema::dropIfExists('loans');
         Schema::dropIfExists('accounts');
     }

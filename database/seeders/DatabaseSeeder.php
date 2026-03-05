@@ -15,12 +15,20 @@ class DatabaseSeeder extends Seeder
     {
         // Seed in correct order due to dependencies
         $this->call([
+            // Core data
             UserSeeder::class,
             BeneficiarySeeder::class,
             AccountSeeder::class,
             LoanSeeder::class,
             TransactionSeeder::class, // Handles deposits, withdrawals, and loan payments
             LogSeeder::class,
+
+            // CMS and settings data
+            SiteContentSeeder::class,
+            BoardMemberSeeder::class,
+            SystemSettingSeeder::class,
+            RolePermissionSeeder::class,
+            AnnouncementSeeder::class,
         ]);
     }
 }

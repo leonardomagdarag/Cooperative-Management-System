@@ -15,22 +15,21 @@ class AccountFactory extends Factory
         return [
             'user_id' => User::factory(),
             'account_type' => fake()->randomElement(['savings', 'share-capital']),
-            'balance' => fake()->randomFloat(2, 1000, 500000),
+            // Balance is calculated from transactions
         ];
     }
 
     public function savings(): static
     {
-        return $this->state(fn (array $attributes) => [
+        return $this->state(fn(array $attributes) => [
             'account_type' => 'savings',
         ]);
     }
 
     public function shareCapital(): static
     {
-        return $this->state(fn (array $attributes) => [
+        return $this->state(fn(array $attributes) => [
             'account_type' => 'share-capital',
-            'balance' => fake()->randomFloat(2, 5000, 50000),
         ]);
     }
 }

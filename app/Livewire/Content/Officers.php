@@ -77,7 +77,7 @@ class Officers extends Component
     public function validateField($field)
     {
         $rules = $this->getValidationRules();
-        
+
         if (isset($rules[$field])) {
             $this->validateOnly($field, $rules, $this->getCustomMessages());
             $this->updateTabErrors();
@@ -93,7 +93,7 @@ class Officers extends Component
             'form.first_name' => ['required', 'string', 'max:100', 'regex:/^[a-zA-Z\s\-\'.]+$/'],
             'form.last_name' => ['required', 'string', 'max:100', 'regex:/^[a-zA-Z\s\-\'.]+$/'],
             'form.mid_name' => ['nullable', 'string', 'max:100', 'regex:/^[a-zA-Z\s\-\'.]+$/'],
-            'form.email' => 'required|email|unique:users,email'.($this->isEdit && $this->selectedOfficer ? ','.$this->selectedOfficer->id.',id' : ''),
+            'form.email' => 'required|email|unique:users,email' . ($this->isEdit && $this->selectedOfficer ? ',' . $this->selectedOfficer->id . ',id' : ''),
             'form.phone_number' => 'nullable|string|max:11',
             'form.birth_date' => 'required|date|before:today',
             'form.gender' => 'required|in:male,female,other',
@@ -139,15 +139,29 @@ class Officers extends Component
     private function updateTabErrors()
     {
         $errors = $this->getErrorBag();
-        
-        $personalFields = ['form.first_name', 'form.last_name', 'form.mid_name', 
-                          'form.birth_date', 'form.gender', 'form.civil_status', 'form.title', 'form.role'];
+
+        $personalFields = [
+            'form.first_name',
+            'form.last_name',
+            'form.mid_name',
+            'form.birth_date',
+            'form.gender',
+            'form.civil_status',
+            'form.title',
+            'form.role'
+        ];
         $this->tabErrors['personal'] = collect($personalFields)->some(fn($field) => $errors->has($field));
-        
-        $contactFields = ['form.email', 'form.phone_number', 'form.street', 
-                         'form.barangay', 'form.city', 'form.postal_code'];
+
+        $contactFields = [
+            'form.email',
+            'form.phone_number',
+            'form.street',
+            'form.barangay',
+            'form.city',
+            'form.postal_code'
+        ];
         $this->tabErrors['contact'] = collect($contactFields)->some(fn($field) => $errors->has($field));
-        
+
         $loginFields = ['form.password', 'form.password_confirmation'];
         $this->tabErrors['login'] = collect($loginFields)->some(fn($field) => $errors->has($field));
     }
@@ -157,19 +171,19 @@ class Officers extends Component
      */
     public function getIsFormValidProperty()
     {
-        $requiredFilled = !empty($this->form['first_name']) && 
-                         !empty($this->form['last_name']) && 
-                         !empty($this->form['email']) &&
-                         !empty($this->form['role']);
-        
+        $requiredFilled = !empty($this->form['first_name']) &&
+            !empty($this->form['last_name']) &&
+            !empty($this->form['email']) &&
+            !empty($this->form['role']);
+
         if (!$this->isEdit) {
-            $requiredFilled = $requiredFilled && 
-                            !empty($this->form['password']) && 
-                            !empty($this->form['password_confirmation']);
+            $requiredFilled = $requiredFilled &&
+                !empty($this->form['password']) &&
+                !empty($this->form['password_confirmation']);
         }
-        
+
         $noErrors = $this->getErrorBag()->isEmpty();
-        
+
         return $requiredFilled && $noErrors;
     }
 
@@ -186,8 +200,8 @@ class Officers extends Component
     public function viewProfile($userId)
     {
         $this->selectedOfficer = User::with([
-            'personalData.address', 
-            'personalData.contact', 
+            'personalData.address',
+            'personalData.contact',
             'personalData.employment',
             'personalData.memberId'
         ])->find($userId);
@@ -195,7 +209,7 @@ class Officers extends Component
         $this->profileModalKey = now()->timestamp . rand(1000, 9999);
         $this->showModal = true;
     }
-    
+
     /**
      * Change active tab in profile modal
      */
@@ -404,7 +418,7 @@ class Officers extends Component
         } catch (\Exception $e) {
             DB::rollBack();
             \Log::error('Officer save error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-            $this->dispatch('toast', ['message' => 'An error occurred: '.$e->getMessage(), 'type' => 'error']);
+            $this->dispatch('toast', ['message' => 'An error occurred: ' . $e->getMessage(), 'type' => 'error']);
         }
     }
 
@@ -423,6 +437,12 @@ class Officers extends Component
      */
     public function confirmDelete($userId)
     {
+        // Prevent officers from deleting their own account
+        if (Auth::id() == $userId) {
+            $this->dispatch('toast', ['message' => 'You cannot delete your own account.', 'type' => 'error']);
+            return;
+        }
+
         $this->officerToDelete = $userId;
         $this->confirmingDelete = true;
     }
@@ -450,7 +470,7 @@ class Officers extends Component
 
         try {
             $officer = User::find($this->officerToDelete);
-            
+
             if (!$officer) {
                 $this->dispatch('toast', ['message' => 'Officer not found.', 'type' => 'error']);
                 return;
@@ -458,7 +478,7 @@ class Officers extends Component
 
             // Soft delete the user (cascades via model events if needed)
             $officer->delete();
-            
+
             // Optionally soft delete personal data as well
             if ($officer->personalData) {
                 $officer->personalData->delete();
@@ -467,7 +487,7 @@ class Officers extends Component
             $this->dispatch('toast', ['message' => 'Officer deleted successfully!', 'type' => 'success']);
             $this->confirmingDelete = false;
             $this->officerToDelete = null;
-            
+
             // Close modal if viewing deleted officer
             if ($this->selectedOfficer && $this->selectedOfficer->id === $officer->id) {
                 $this->closeModal();
@@ -497,17 +517,17 @@ class Officers extends Component
             ->when($this->search, function ($query) {
                 // Search by name OR role
                 $query->whereHas('personalData', function ($q) {
-                    $q->where('first_name', 'like', '%'.$this->search.'%')
-                        ->orWhere('last_name', 'like', '%'.$this->search.'%')
-                        ->orWhere('mid_name', 'like', '%'.$this->search.'%');
+                    $q->where('first_name', 'like', '%' . $this->search . '%')
+                        ->orWhere('last_name', 'like', '%' . $this->search . '%')
+                        ->orWhere('mid_name', 'like', '%' . $this->search . '%');
                 })
-                    ->orWhere('role', 'like', '%'.$this->search.'%');
+                    ->orWhere('role', 'like', '%' . $this->search . '%');
             });
 
         // Special handling: JOIN required to sort by personal_data fields
         if (in_array($this->sortField, ['first_name', 'last_name', 'mid_name'])) {
             $query->join('personal_data', 'users.personal_data_id', '=', 'personal_data.id')
-                ->orderBy('personal_data.'.$this->sortField, $this->sortDirection)
+                ->orderBy('personal_data.' . $this->sortField, $this->sortDirection)
                 ->select('users.*');  // Avoid column ambiguity
         } else {
             $query->orderBy($this->sortField, $this->sortDirection);

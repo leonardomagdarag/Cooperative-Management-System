@@ -38,7 +38,7 @@
             @if ($maxlength) maxlength="{{ $maxlength }}" @endif
             @if ($required) required @endif
             class="block w-full px-3 py-2 pr-10 text-sm border rounded-lg transition-all duration-200 focus:outline-none focus:ring-2
-                @if ($hasError || $isEmpty) border-red-500 text-red-900 placeholder-red-300 focus:ring-red-500 focus:border-red-500
+                @if ($hasError) border-red-500 text-red-900 placeholder-red-300 focus:ring-red-500 focus:border-red-500
                 @else
                     border-gray-300 text-gray-900 focus:ring-cyan-500 focus:border-cyan-500 @endif
                 @if ($disabled) bg-gray-100 cursor-not-allowed @else bg-white @endif">

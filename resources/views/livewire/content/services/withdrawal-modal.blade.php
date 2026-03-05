@@ -1,14 +1,24 @@
 @if ($activeService === 'withdraw')
-    <div class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+    <div x-data="{ show: false }" x-init="$nextTick(() => show = true)" x-show="show"
+        x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0"
+        x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150"
+        x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
+        class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
         style="position: fixed; top: 0; left: 0; right: 0; bottom: 0;">
         {{-- Backdrop --}}
-        <div class="absolute inset-0 bg-black opacity-25 transition-opacity" wire:click="closeService"></div>
+        <div class="absolute inset-0 bg-black opacity-25"
+            @click="show = false; setTimeout(() => $wire.closeService(), 150)"></div>
 
-        <div class="z-10 bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div class="z-10 bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto"
+            x-transition:enter="transition ease-out duration-200 delay-100"
+            x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+            x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100"
+            x-transition:leave-end="opacity-0 scale-95">
             <div class="bg-gradient-to-r from-orange-500 to-red-600 p-6 text-white">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-2xl font-bold">Withdraw Money</h3>
-                    <button wire:click="closeService" class="text-white hover:text-gray-200">
+                    <button @click="show = false; setTimeout(() => $wire.closeService(), 150)"
+                        class="text-white hover:text-gray-200">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M6 18L18 6M6 6l12 12" />
@@ -157,7 +167,8 @@
                     <div class="bg-gray-50 rounded-lg p-4 space-y-3">
                         <div class="flex justify-between">
                             <span class="text-gray-600">Amount:</span>
-                            <span class="font-semibold text-gray-900">₱{{ number_format($withdrawalAmount, 2) }}</span>
+                            <span
+                                class="font-semibold text-gray-900">₱{{ number_format($withdrawalAmount, 2) }}</span>
                         </div>
                         <div class="flex justify-between">
                             <span class="text-gray-600">Reason:</span>

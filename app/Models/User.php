@@ -24,6 +24,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'special_loan_eligible',
     ];
 
     /**
@@ -46,6 +47,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'special_loan_eligible' => 'boolean',
         ];
     }
 
@@ -59,14 +61,14 @@ class User extends Authenticatable
                 $latest = static::withTrashed()
                     ->orderByRaw('CAST(SUBSTRING(user_number, 4) AS UNSIGNED) DESC')
                     ->first();
-                
+
                 if ($latest && preg_match('/USR(\d+)/', $latest->user_number, $matches)) {
                     $nextNumber = intval($matches[1]) + 1;
                 } else {
                     $nextNumber = 1;
                 }
-                
-                $user->user_number = 'USR'.str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
+
+                $user->user_number = 'USR' . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
             }
         });
     }
@@ -126,5 +128,10 @@ class User extends Authenticatable
     public function beneficiaries()
     {
         return $this->hasMany(Beneficiary::class);
+    }
+
+    public function notifications()
+    {
+        return $this->hasMany(Notification::class);
     }
 }

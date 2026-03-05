@@ -1,12 +1,20 @@
 @props(['member', 'canEdit', 'activeTab'])
 
-<div class="fixed inset-0 z-50 flex items-center justify-center overflow-x-hidden overflow-y-auto outline-none focus:outline-none"
+<div x-data="{ show: false }" x-init="setTimeout(() => show = true, 10)" x-show="show" x-transition:enter="transition ease-out duration-200"
+    x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
+    x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100"
+    x-transition:leave-end="opacity-0"
+    class="fixed inset-0 z-50 flex items-center justify-center overflow-x-hidden overflow-y-auto outline-none focus:outline-none"
     aria-labelledby="modal-title" role="dialog" aria-modal="true">
     {{-- Backdrop --}}
-    <div class="absolute inset-0 bg-gray-900 opacity-50 transition-opacity" wire:click="closeModal"></div>
+    <div class="absolute inset-0 bg-gray-900 opacity-50"
+        @click="show = false; setTimeout(() => $wire.closeModal(), 150)"></div>
 
     {{-- Modal content --}}
-    <div class="relative w-full max-w-6xl max-h-[90vh] mx-auto my-6 z-10">
+    <div class="relative w-full max-w-6xl max-h-[90vh] mx-auto my-6 z-10"
+        x-transition:enter="transition ease-out duration-200 delay-100" x-transition:enter-start="opacity-0 scale-95"
+        x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150"
+        x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95">
         <div class="relative bg-white rounded-lg shadow overflow-hidden">
             {{-- Modal header --}}
             <div
@@ -14,7 +22,7 @@
                 <h3 class="text-xl font-semibold text-white">
                     Member Profile
                 </h3>
-                <button type="button" wire:click="closeModal"
+                <button type="button" @click="show = false; setTimeout(() => $wire.closeModal(), 150)"
                     class="text-white bg-transparent hover:bg-cyan-800 rounded-lg text-sm p-1.5 ml-auto inline-flex items-center transition-colors">
                     <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd"
@@ -595,35 +603,55 @@
             </div>
 
             {{-- Modal footer --}}
-            <div class="flex items-center justify-end p-4 space-x-2 border-t border-gray-200 bg-gray-50">
-                @if ($canEdit)
-                    <button type="button" wire:click="editMember('{{ $member->id }}')"
-                        wire:loading.attr="disabled"
-                        class="inline-flex items-center text-white bg-cyan-600 hover:bg-cyan-700 focus:ring-4 focus:outline-none focus:ring-cyan-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                        <svg wire:loading.remove wire:target="editMember" class="w-4 h-4 mr-2" fill="currentColor"
-                            viewBox="0 0 20 20">
-                            <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z">
-                            </path>
-                            <path fill-rule="evenodd"
-                                d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
-                                clip-rule="evenodd"></path>
-                        </svg>
-                        <svg wire:loading wire:target="editMember" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                            xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
-                                stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor"
-                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
-                            </path>
-                        </svg>
-                        <span wire:loading.remove wire:target="editMember">Edit Member</span>
-                        <span wire:loading wire:target="editMember">Loading...</span>
-                        
-                    </button>
-                @endif
-                <button type="button" wire:click="closeModal" wire:loading.attr="disabled"
-                    wire:loading.class="opacity-50 cursor-not-allowed"
-                    class="text-gray-500 bg-white hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-200 rounded-lg border border-gray-200 text-sm font-medium px-5 py-2.5 hover:text-gray-900 focus:z-10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                    <span wire:loading.remove wire:target="closeModal, editMember">Close</span>
-                    <span wire:loading wire:target="closeModal">Closing...</span>
-                    <span wire:loading wire:target="editMember">Please wait...</span>
+            <div class="flex items-center justify-between p-4 space-x-2 border-t border-gray-200 bg-gray-50">
+                {{-- Left side: Special Loan Toggle (Manager/Admin only) --}}
+                <div class="flex items-center">
+                    @if (in_array(Auth::user()->role, ['admin', 'manager']))
+                        <label class="inline-flex items-center cursor-pointer">
+                            <input type="checkbox" wire:model.live="member.special_loan_eligible"
+                                wire:change="toggleSpecialLoanEligibility('{{ $member->id }}')"
+                                class="sr-only peer">
+                            <div
+                                class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-cyan-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600">
+                            </div>
+                            <span class="ms-3 text-sm font-medium text-gray-700">
+                                Special Loan Eligible
+                            </span>
+                        </label>
+                    @endif
+                </div>
+
+                {{-- Right side: Action Buttons --}}
+                <div class="flex items-center space-x-2">
+                    @if ($canEdit)
+                        <button type="button" wire:click="editMember('{{ $member->id }}')"
+                            wire:loading.attr="disabled"
+                            class="inline-flex items-center text-white bg-cyan-600 hover:bg-cyan-700 focus:ring-4 focus:outline-none focus:ring-cyan-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                            <svg wire:loading.remove wire:target="editMember" class="w-4 h-4 mr-2"
+                                fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z">
+                                </path>
+                                <path fill-rule="evenodd"
+                                    d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                                    clip-rule="evenodd"></path>
+                            </svg>
+                            <svg wire:loading wire:target="editMember"
+                                class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg"
+                                fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10"
+                                    stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                </path>
+                            </svg>
+                            <span wire:loading.remove wire:target="editMember">Edit Member</span>
+                            <span wire:loading wire:target="editMember">Loading...</span>
+
+                        </button>
+                    @endif
+                    <button type="button" @click="show = false; setTimeout(() => $wire.closeModal(), 150)"
+                        wire:loading.attr="disabled" wire:loading.class="opacity-50 cursor-not-allowed"
+                        class="text-gray-500 bg-white hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-200 rounded-lg border border-gray-200 text-sm font-medium px-5 py-2.5 hover:text-gray-900 focus:z-10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span wire:loading.remove wire:target="closeModal, editMember">Close</span>
+                        <span wire:loading wire:target="closeModal">Closing...</span>
+                        <span wire:loading wire:target="editMember">Please wait...</span>
