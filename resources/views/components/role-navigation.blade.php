@@ -25,13 +25,8 @@
 <div class="flex-1 overflow-y-auto px-4 py-2 space-y-2">
     {{-- use for-each to create the navigation link buttons --}}
     @foreach ($sections as $section)
-        @if (isset($sectionConfig[$section]))
-            <x-nav-link 
-                :section="$section" 
-                :icon="$sectionConfig[$section]['icon']" 
-                :label="$sectionConfig[$section]['label']" 
-                :active="$currentSection === $section" 
-            />
+        @if (isset($sectionConfig[$section]) && config("sidebar.{$section}", true))
+            <x-nav-link :section="$section" :icon="$sectionConfig[$section]['icon']" :label="$sectionConfig[$section]['label']" :active="$currentSection === $section" />
         @endif
     @endforeach
 </div>

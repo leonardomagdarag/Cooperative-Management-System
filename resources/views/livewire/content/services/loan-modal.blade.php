@@ -1,16 +1,26 @@
 @if ($activeService === 'loan')
-    <div class="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+    <div x-data="{ show: false }" x-init="$nextTick(() => show = true)" x-show="show"
+        x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0"
+        x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150"
+        x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
+        class="fixed inset-0 z-[9999] flex items-center justify-center p-4">
         {{-- Backdrop --}}
-        <div class="absolute inset-0 bg-black opacity-25" wire:click="closeService"></div>
+        <div class="absolute inset-0 bg-black opacity-25"
+            @click="show = false; setTimeout(() => $wire.closeService(), 150)"></div>
 
-        <div class="z-10 bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="z-10 bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+            x-transition:enter="transition ease-out duration-200 delay-100"
+            x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+            x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100"
+            x-transition:leave-end="opacity-0 scale-95">
             <div class="bg-gradient-to-r from-purple-500 to-pink-600 p-6 text-white">
                 <div class="flex items-center justify-between">
                     <div>
                         <h3 class="text-2xl font-bold">Apply for Loan</h3>
                         <p class="text-purple-100 text-sm mt-1">Step {{ $loanStep }} of 4</p>
                     </div>
-                    <button wire:click="closeService" class="text-white hover:text-gray-200">
+                    <button @click="show = false; setTimeout(() => $wire.closeService(), 150)"
+                        class="text-white hover:text-gray-200">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M6 18L18 6M6 6l12 12" />
@@ -50,11 +60,18 @@
                                                 <span>Max: ₱{{ number_format($type['max_amount']) }}</span>
                                                 <span>Up to {{ $type['max_term'] }} months</span>
                                             </div>
-                                            
+
                                             {{-- Show warning for business loan if no share capital --}}
-                                            @if($key === 'business' && !$hasRequiredShareCapital)
+                                            @if ($key === 'business' && !$hasRequiredShareCapital)
                                                 <div class="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded">
                                                     ⚠️ Requires ₱4,000 share capital
+                                                </div>
+                                            @endif
+
+                                            {{-- Show warning for special loan if not eligible --}}
+                                            @if ($key === 'special' && !$isSpecialLoanEligible)
+                                                <div class="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded">
+                                                    ⚠️ Manager approval required
                                                 </div>
                                             @endif
                                         </div>
@@ -121,7 +138,8 @@
                         @if ($loanType === 'group')
                             <div class="border-t pt-6">
                                 <h5 class="font-bold text-gray-900 mb-2">Group Members (Co-makers)</h5>
-                                <p class="text-sm text-gray-600 mb-4">Select 4 members to form your loan group. Each member must approve the loan.</p>
+                                <p class="text-sm text-gray-600 mb-4">Select 4 members to form your loan group. Each
+                                    member must approve the loan.</p>
 
                                 {{-- Search members --}}
                                 <div class="mb-4">
@@ -133,10 +151,23 @@
                                         @php
                                             $searchResults = \App\Models\User::where('role', 'member')
                                                 ->whereHas('personalData', function ($q) {
-                                                    $q->where('first_name', 'like', '%' . $this->memberSearch . '%')
-                                                        ->orWhere('last_name', 'like', '%' . $this->memberSearch . '%');
+                                                    $q->where(
+                                                        'first_name',
+                                                        'like',
+                                                        '%' . $this->memberSearch . '%',
+                                                    )->orWhere('last_name', 'like', '%' . $this->memberSearch . '%');
                                                 })
-                                                ->whereNotIn('id', array_merge([$this->isTreasurerMode && $this->selectedMemberId ? $this->selectedMemberId : Auth::id()], $this->groupMembers))
+                                                ->whereNotIn(
+                                                    'id',
+                                                    array_merge(
+                                                        [
+                                                            $this->isTreasurerMode && $this->selectedMemberId
+                                                                ? $this->selectedMemberId
+                                                                : Auth::id(),
+                                                        ],
+                                                        $this->groupMembers,
+                                                    ),
+                                                )
                                                 ->with('personalData')
                                                 ->limit(5)
                                                 ->get();
@@ -167,8 +198,7 @@
                                         @php
                                             $member = \App\Models\User::with('personalData')->find($memberId);
                                         @endphp
-                                        <div
-                                            class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+                                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
                                             <div>
                                                 <div class="font-medium text-gray-900">
                                                     {{ $member->personalData->first_name }}
@@ -194,7 +224,8 @@
                                     @endforelse
                                 </div>
 
-                                <div class="mt-2 text-sm {{ count($groupMembers) === 4 ? 'text-green-600' : 'text-gray-600' }}">
+                                <div
+                                    class="mt-2 text-sm {{ count($groupMembers) === 4 ? 'text-green-600' : 'text-gray-600' }}">
                                     {{ count($groupMembers) }} / 4 members added
                                 </div>
                             </div>
@@ -204,7 +235,8 @@
                         @if ($loanType === 'business')
                             <div class="border-t pt-6">
                                 <h5 class="font-bold text-gray-900 mb-2">Business Verification</h5>
-                                <p class="text-sm text-gray-600 mb-4">Schedule an interview with a loan officer for business verification.</p>
+                                <p class="text-sm text-gray-600 mb-4">Schedule an interview with a loan officer for
+                                    business verification.</p>
 
                                 @php
                                     $employment = Auth::user()->personalData?->employment;
@@ -212,29 +244,35 @@
 
                                 @if ($employment)
                                     <div class="bg-blue-50 p-4 rounded-lg mb-4">
-                                        <h6 class="font-semibold text-gray-900 mb-2">Your Business/Employment Info:</h6>
+                                        <h6 class="font-semibold text-gray-900 mb-2">Your Business/Employment Info:
+                                        </h6>
                                         <div class="text-sm space-y-1">
-                                            <p><strong>Type:</strong> {{ ucfirst($employment->employment_type ?? 'N/A') }}</p>
+                                            <p><strong>Type:</strong>
+                                                {{ ucfirst($employment->employment_type ?? 'N/A') }}</p>
                                             <p><strong>Company:</strong> {{ $employment->employer_name ?? 'N/A' }}</p>
                                             <p><strong>Position:</strong> {{ $employment->position ?? 'N/A' }}</p>
-                                            <p><strong>Monthly Income:</strong> ₱{{ number_format($employment->monthly_income ?? 0, 2) }}</p>
+                                            <p><strong>Monthly Income:</strong>
+                                                ₱{{ number_format($employment->monthly_income ?? 0, 2) }}</p>
                                         </div>
                                     </div>
                                 @else
                                     <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
                                         <p class="text-sm text-yellow-700">
-                                            ⚠️ No employment information found. Please update your profile with business/employment details before applying.
+                                            ⚠️ No employment information found. Please update your profile with
+                                            business/employment details before applying.
                                         </p>
                                     </div>
                                 @endif
 
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Interview Schedule *</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Interview Schedule
+                                        *</label>
                                     <input type="datetime-local" wire:model="interviewSchedule"
                                         min="{{ now()->addDay()->format('Y-m-d\TH:i') }}"
                                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
                                         required>
-                                    <p class="text-xs text-gray-500 mt-1">Select a date and time for your interview (must be at least 24 hours from now)</p>
+                                    <p class="text-xs text-gray-500 mt-1">Select a date and time for your interview
+                                        (must be at least 24 hours from now)</p>
                                     @error('interviewSchedule')
                                         <span class="text-red-500 text-xs">{{ $message }}</span>
                                     @enderror
@@ -310,7 +348,8 @@
                             </div>
                             <div>
                                 <p class="text-sm text-gray-600">Interest Rate</p>
-                                <p class="font-semibold text-gray-900">{{ $loanTypes[$loanType]['interest_rate'] }}%</p>
+                                <p class="font-semibold text-gray-900">{{ $loanTypes[$loanType]['interest_rate'] }}%
+                                </p>
                             </div>
                             <div>
                                 <p class="text-sm text-gray-600">Purpose</p>
@@ -319,7 +358,8 @@
 
                             @if ($loanType === 'group')
                                 <div>
-                                    <p class="text-sm text-gray-600 mb-2">Group Members ({{ count($groupMembers) }})</p>
+                                    <p class="text-sm text-gray-600 mb-2">Group Members ({{ count($groupMembers) }})
+                                    </p>
                                     @foreach ($groupMembers as $memberId)
                                         @php
                                             $member = \App\Models\User::with('personalData')->find($memberId);
@@ -344,11 +384,13 @@
 
                         <div class="bg-blue-50 border-l-4 border-blue-400 p-4">
                             <p class="text-sm text-blue-700">
-                                <strong>Important:</strong> 
-                                @if($loanType === 'group')
-                                    After submission, all group members must approve this loan. Once approved by all members, the application will be reviewed by loan officers.
+                                <strong>Important:</strong>
+                                @if ($loanType === 'group')
+                                    After submission, all group members must approve this loan. Once approved by all
+                                    members, the application will be reviewed by loan officers.
                                 @else
-                                    After submission, you must attend the scheduled interview. Your application will be reviewed after the interview is completed.
+                                    After submission, you must attend the scheduled interview. Your application will be
+                                    reviewed after the interview is completed.
                                 @endif
                             </p>
                         </div>

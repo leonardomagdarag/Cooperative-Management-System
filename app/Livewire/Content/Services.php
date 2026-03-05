@@ -86,10 +86,13 @@ class Services extends Component
 
     // Group loan members
     public $groupMembers = [];
-    
+
     // Business loan fields
     public $interviewSchedule = '';
     public $hasRequiredShareCapital = false;
+
+    // Special loan eligibility
+    public $isSpecialLoanEligible = false;
 
     public $loanTypes = [
         'group' => [
@@ -110,6 +113,14 @@ class Services extends Component
             'icon' => 'briefcase',
             'required_share_capital' => 4000,
         ],
+        'special' => [
+            'name' => 'Special Loan',
+            'description' => 'Emergency or special purpose loans with flexible terms',
+            'interest_rate' => 2.0,
+            'max_amount' => 30000,
+            'max_term' => 12,
+            'icon' => 'star',
+        ],
     ];
 
     public function mount()
@@ -124,10 +135,13 @@ class Services extends Component
             if ($savingsAccount) {
                 $this->withdrawalAccountId = $savingsAccount->id;
             }
-            
+
             // Check if user has required share capital for business loan
-            $shareCapitalAccount = Auth::user()->accounts()->where('account_type', 'share_capital')->first();
+            $shareCapitalAccount = Auth::user()->accounts()->where('account_type', 'share-capital')->first();
             $this->hasRequiredShareCapital = $shareCapitalAccount && $shareCapitalAccount->balance >= 4000;
+
+            // Check if user is eligible for special loan
+            $this->isSpecialLoanEligible = Auth::user()->special_loan_eligible ?? false;
         }
     }
 
@@ -143,10 +157,13 @@ class Services extends Component
             if ($savingsAccount) {
                 $this->withdrawalAccountId = $savingsAccount->id;
             }
-            
+
             // Update share capital check for selected member (treasurer mode)
-            $shareCapitalAccount = $member->accounts()->where('account_type', 'share_capital')->first();
+            $shareCapitalAccount = $member->accounts()->where('account_type', 'share-capital')->first();
             $this->hasRequiredShareCapital = $shareCapitalAccount && $shareCapitalAccount->balance >= 4000;
+
+            // Update special loan eligibility for selected member (treasurer mode)
+            $this->isSpecialLoanEligible = $member->special_loan_eligible ?? false;
         }
     }
 
@@ -190,7 +207,7 @@ class Services extends Component
 
             // Update status to completed
             $transaction->status = 'completed';
-            $transaction->note = ($transaction->note ? $transaction->note.' | ' : '').'Approved by '.Auth::user()->personalData->first_name.' '.Auth::user()->personalData->last_name;
+            $transaction->note = ($transaction->note ? $transaction->note . ' | ' : '') . 'Approved by ' . Auth::user()->personalData->first_name . ' ' . Auth::user()->personalData->last_name;
             $transaction->save();
 
             // Update account balance
@@ -202,11 +219,11 @@ class Services extends Component
                 // Check if loan is now fully paid
                 $loan = $transaction->loan;
                 $loan->refresh(); // Refresh to get updated balance after this payment
-                
+
                 // remainingBalance() now calculates based on completed payments
                 // But since we just marked this as completed, we need to check
                 $remainingBalance = $loan->loan_amount - $loan->completedPayments()->sum('amount');
-                
+
                 if ($remainingBalance <= 0) {
                     $loan->update(['loan_status' => 'paid']);
                 }
@@ -219,7 +236,7 @@ class Services extends Component
             $this->approvalAction = '';
         } catch (\Exception $e) {
             DB::rollBack();
-            $this->dispatch('error', message: 'Failed to approve transaction: '.$e->getMessage());
+            $this->dispatch('error', message: 'Failed to approve transaction: ' . $e->getMessage());
         }
     }
 
@@ -250,7 +267,7 @@ class Services extends Component
             // Reverse the transaction if money was already deducted/added (completed status)
             if ($transaction->status === 'completed') {
                 $account = $transaction->account;
-                
+
                 if ($transaction->transaction_type === 'deposit') {
                     // Reverse deposit - remove the money
                     $account->balance -= $transaction->amount;
@@ -264,7 +281,7 @@ class Services extends Component
 
             // Update status to rejected
             $transaction->status = 'rejected';
-            $transaction->note = ($transaction->note ? $transaction->note.' | ' : '').'REJECTED: '.$this->rejectionReason.' (by '.Auth::user()->personalData->first_name.' '.Auth::user()->personalData->last_name.')';
+            $transaction->note = ($transaction->note ? $transaction->note . ' | ' : '') . 'REJECTED: ' . $this->rejectionReason . ' (by ' . Auth::user()->personalData->first_name . ' ' . Auth::user()->personalData->last_name . ')';
             $transaction->save();
 
             DB::commit();
@@ -274,7 +291,7 @@ class Services extends Component
             $this->rejectionReason = '';
         } catch (\Exception $e) {
             DB::rollBack();
-            $this->dispatch('error', message: 'Failed to reject transaction: '.$e->getMessage());
+            $this->dispatch('error', message: 'Failed to reject transaction: ' . $e->getMessage());
         }
     }
 
@@ -309,11 +326,31 @@ class Services extends Component
     public function resetForm()
     {
         $this->reset([
-            'depositStep', 'depositAmount', 'depositTransactionMode', 'depositProof', 'depositNote', 'completedDepositTransaction',
-            'withdrawalStep', 'withdrawalAmount', 'withdrawalReason', 'withdrawalTransactionMode', 'completedWithdrawalTransaction',
-            'paymentStep', 'loanStep', 'loanType', 'loanAmount', 'loanTerm', 'loanPurpose', 'loanPaymentFrequency',
-            'paymentLoanId', 'paymentAmount', 'paymentNote', 'paymentTransactionMode', 'completedPaymentTransaction',
-            'groupMembers', 'interviewSchedule',
+            'depositStep',
+            'depositAmount',
+            'depositTransactionMode',
+            'depositProof',
+            'depositNote',
+            'completedDepositTransaction',
+            'withdrawalStep',
+            'withdrawalAmount',
+            'withdrawalReason',
+            'withdrawalTransactionMode',
+            'completedWithdrawalTransaction',
+            'paymentStep',
+            'loanStep',
+            'loanType',
+            'loanAmount',
+            'loanTerm',
+            'loanPurpose',
+            'loanPaymentFrequency',
+            'paymentLoanId',
+            'paymentAmount',
+            'paymentNote',
+            'paymentTransactionMode',
+            'completedPaymentTransaction',
+            'groupMembers',
+            'interviewSchedule',
         ]);
     }
 
@@ -373,8 +410,8 @@ class Services extends Component
 
             // Create transaction
             $note = ($this->isTreasurerMode ? 'Processed by treasurer - ' : '')
-                .($this->depositTransactionMode === 'counter' ? 'Over the counter' : 'Online payment')
-                .($this->depositNote ? ' | '.$this->depositNote : '');
+                . ($this->depositTransactionMode === 'counter' ? 'Over the counter' : 'Online payment')
+                . ($this->depositNote ? ' | ' . $this->depositNote : '');
 
             $transaction = Transaction::create([
                 'account_id' => $account->id,
@@ -404,7 +441,7 @@ class Services extends Component
             }
         } catch (\Exception $e) {
             DB::rollBack();
-            $this->dispatch('error', message: 'Failed to submit deposit request: '.$e->getMessage());
+            $this->dispatch('error', message: 'Failed to submit deposit request: ' . $e->getMessage());
         }
     }
 
@@ -425,12 +462,12 @@ class Services extends Component
             ->where('transaction_type', 'withdrawal')
             ->where('status', 'pending')
             ->sum('amount');
-        
+
         $availableBalance = $account ? ($account->balance - $pendingWithdrawals) : 0;
 
         if ($this->withdrawalStep === 1) {
             $this->validate([
-                'withdrawalAmount' => 'required|numeric|min:100|max:'.$availableBalance,
+                'withdrawalAmount' => 'required|numeric|min:100|max:' . $availableBalance,
                 'withdrawalReason' => 'required|string|max:255',
             ]);
         } elseif ($this->withdrawalStep === 2) {
@@ -458,11 +495,11 @@ class Services extends Component
             ->where('transaction_type', 'withdrawal')
             ->where('status', 'pending')
             ->sum('amount');
-        
+
         $availableBalance = $account->balance - $pendingWithdrawals;
 
         $this->validate([
-            'withdrawalAmount' => 'required|numeric|min:100|max:'.$availableBalance,
+            'withdrawalAmount' => 'required|numeric|min:100|max:' . $availableBalance,
             'withdrawalReason' => 'required|string|max:255',
             'withdrawalTransactionMode' => 'required|in:counter,online',
         ]);
@@ -475,8 +512,8 @@ class Services extends Component
             $isAutoApprove = $this->withdrawalTransactionMode === 'online';
 
             $note = ($this->isTreasurerMode ? 'Processed by treasurer - ' : '')
-                .$this->withdrawalReason.' | '
-                .($this->withdrawalTransactionMode === 'counter' ? 'Over the counter' : 'Online payment');
+                . $this->withdrawalReason . ' | '
+                . ($this->withdrawalTransactionMode === 'counter' ? 'Over the counter' : 'Online payment');
 
             $transaction = Transaction::create([
                 'account_id' => $this->withdrawalAccountId,
@@ -504,7 +541,7 @@ class Services extends Component
             }
         } catch (\Exception $e) {
             DB::rollBack();
-            $this->dispatch('error', message: 'Failed to submit withdrawal: '.$e->getMessage());
+            $this->dispatch('error', message: 'Failed to submit withdrawal: ' . $e->getMessage());
         }
     }
 
@@ -547,51 +584,57 @@ class Services extends Component
     public function selectLoanType($type)
     {
         $this->loanType = $type;
-        
+
         // Reset group members when selecting group loan
         if ($type === 'group') {
             $this->groupMembers = [];
         }
-        
+
         // Check share capital for business loan
         if ($type === 'business' && !$this->hasRequiredShareCapital) {
-            $this->dispatch('warning', message: 'Business loan requires ₱4,000 share capital. You currently do not meet this requirement.');
+            $this->dispatch('toast', ['message' => 'Business loan requires ₱4,000 share capital. You currently do not meet this requirement.', 'type' => 'warning']);
             return;
         }
-        
+
+        // Check eligibility for special loan
+        if ($type === 'special' && !$this->isSpecialLoanEligible) {
+            $this->dispatch('toast', ['message' => 'You are not currently eligible for special loans. Please contact a manager.', 'type' => 'warning']);
+            return;
+        }
+
         $this->loanStep = 2;
     }
-    
+
     public function addGroupMember($userId)
     {
         if (count($this->groupMembers) >= 4) {
             $this->dispatch('error', message: 'Maximum 4 co-makers allowed (5 total including you)');
             return;
         }
-        
+
         if (in_array($userId, $this->groupMembers)) {
             $this->dispatch('warning', message: 'Member already added to group');
             return;
         }
-        
+
         // Don't allow adding yourself
-        $currentUserId = $this->isTreasurerMode && $this->selectedMemberId 
-            ? $this->selectedMemberId 
+        $currentUserId = $this->isTreasurerMode && $this->selectedMemberId
+            ? $this->selectedMemberId
             : Auth::id();
-            
+
         if ($userId == $currentUserId) {
             $this->dispatch('warning', message: 'Cannot add yourself as a co-maker');
             return;
         }
-        
+
         $this->groupMembers[] = $userId;
         $this->memberSearch = '';
         $this->dispatch('success', message: 'Member added to group');
     }
-    
+
     public function removeGroupMember($userId)
     {
-        $this->groupMembers = array_values(array_filter($this->groupMembers, function($id) use ($userId) {
+        $this->groupMembers = array_values(array_filter($this->groupMembers, function ($id) use ($userId) {
             return $id != $userId;
         }));
     }
@@ -601,11 +644,11 @@ class Services extends Component
         if ($this->loanStep === 2) {
             // Amount and term validation
             $rules = [
-                'loanAmount' => 'required|numeric|min:100|max:'.$this->loanTypes[$this->loanType]['max_amount'],
-                'loanTerm' => 'required|integer|min:1|max:'.$this->loanTypes[$this->loanType]['max_term'],
+                'loanAmount' => 'required|numeric|min:100|max:' . $this->loanTypes[$this->loanType]['max_amount'],
+                'loanTerm' => 'required|integer|min:1|max:' . $this->loanTypes[$this->loanType]['max_term'],
                 'loanPaymentFrequency' => 'required|in:weekly,monthly',
             ];
-            
+
             // Group loan specific validation
             if ($this->loanType === 'group') {
                 if (count($this->groupMembers) !== 4) {
@@ -613,12 +656,12 @@ class Services extends Component
                     return;
                 }
             }
-            
+
             // Business loan specific validation
             if ($this->loanType === 'business') {
                 $rules['interviewSchedule'] = 'required|date|after:now';
             }
-            
+
             $this->validate($rules);
         } elseif ($this->loanStep === 3) {
             $this->validate([
@@ -641,8 +684,8 @@ class Services extends Component
         // Validate loan data before submission
         $this->validate([
             'loanType' => 'required|in:group,business',
-            'loanAmount' => 'required|numeric|min:100|max:'.$this->loanTypes[$this->loanType]['max_amount'],
-            'loanTerm' => 'required|integer|min:1|max:'.$this->loanTypes[$this->loanType]['max_term'],
+            'loanAmount' => 'required|numeric|min:100|max:' . $this->loanTypes[$this->loanType]['max_amount'],
+            'loanTerm' => 'required|integer|min:1|max:' . $this->loanTypes[$this->loanType]['max_term'],
             'loanPaymentFrequency' => 'required|in:weekly,monthly',
             'loanPurpose' => 'required|string|min:10|max:500',
         ]);
@@ -671,7 +714,7 @@ class Services extends Component
             $targetUser = $this->isTreasurerMode && $this->selectedMemberId
                 ? \App\Models\User::find($this->selectedMemberId)
                 : Auth::user();
-                
+
             $targetUserId = $targetUser->id;
 
             // Get employment info for business loan
@@ -690,7 +733,7 @@ class Services extends Component
                 'loan_status' => 'pending',
                 'applied_at' => now(),
             ];
-            
+
             // Add business loan specific fields
             if ($this->loanType === 'business') {
                 $loanData['employment_id'] = $employmentId;
@@ -699,7 +742,7 @@ class Services extends Component
             }
 
             $loan = Loan::create($loanData);
-            
+
             // Add group members if group loan
             if ($this->loanType === 'group' && count($this->groupMembers) > 0) {
                 foreach ($this->groupMembers as $memberId) {
@@ -713,16 +756,16 @@ class Services extends Component
 
             DB::commit();
 
-            $message = 'Loan application submitted successfully! Reference: '.$loan->loan_number;
+            $message = 'Loan application submitted successfully! Reference: ' . $loan->loan_number;
             if ($this->loanType === 'business') {
-                $message .= ' | Interview scheduled for: '.date('M d, Y h:i A', strtotime($this->interviewSchedule));
+                $message .= ' | Interview scheduled for: ' . date('M d, Y h:i A', strtotime($this->interviewSchedule));
             }
-            
+
             $this->dispatch('success', message: $message);
             $this->closeService();
         } catch (\Exception $e) {
             DB::rollBack();
-            $this->dispatch('error', message: 'Failed to submit loan application: '.$e->getMessage());
+            $this->dispatch('error', message: 'Failed to submit loan application: ' . $e->getMessage());
         }
     }
 
@@ -765,9 +808,9 @@ class Services extends Component
             $isAutoApprove = $this->paymentTransactionMode === 'online';
 
             $note = ($this->isTreasurerMode ? 'Processed by treasurer - ' : '')
-                .'Loan payment for '.$loan->loan_number
-                .' | '.($this->paymentTransactionMode === 'counter' ? 'Over the counter' : 'Online payment')
-                .($this->paymentNote ? ' | '.$this->paymentNote : '');
+                . 'Loan payment for ' . $loan->loan_number
+                . ' | ' . ($this->paymentTransactionMode === 'counter' ? 'Over the counter' : 'Online payment')
+                . ($this->paymentNote ? ' | ' . $this->paymentNote : '');
 
             $transaction = Transaction::create([
                 'account_id' => $account->id,
@@ -799,7 +842,7 @@ class Services extends Component
             }
         } catch (\Exception $e) {
             DB::rollBack();
-            $this->dispatch('error', message: 'Failed to submit payment: '.$e->getMessage());
+            $this->dispatch('error', message: 'Failed to submit payment: ' . $e->getMessage());
         }
     }
 
@@ -857,7 +900,7 @@ class Services extends Component
             : Auth::user();
 
         $savingsAccount = $targetUser?->accounts()->where('account_type', 'savings')->first();
-        $shareCapitalAccount = $targetUser?->accounts()->where('account_type', 'share_capital')->first();
+        $shareCapitalAccount = $targetUser?->accounts()->where('account_type', 'share-capital')->first();
         $activeLoans = $targetUser?->loans()->whereIn('loan_status', ['approved', 'active'])->get() ?? collect();
 
         // For members: only count their own pending requests
@@ -866,7 +909,7 @@ class Services extends Component
             $pendingRequests = Transaction::whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_payment'])
                 ->where('status', 'pending')
                 ->count();
-            
+
             // Get all pending transactions for approval view
             $pendingTransactions = Transaction::with(['account.user.personalData', 'loan'])
                 ->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_payment'])
@@ -878,7 +921,7 @@ class Services extends Component
                 ->whereIn('transaction_type', ['deposit', 'withdrawal'])
                 ->where('status', 'pending')
                 ->count() : 0;
-            
+
             $pendingTransactions = collect();
         }
 
@@ -889,8 +932,8 @@ class Services extends Component
                 ->with('personalData')
                 ->when($this->memberSearch, function ($query) {
                     $query->whereHas('personalData', function ($q) {
-                        $q->where('first_name', 'like', '%'.$this->memberSearch.'%')
-                            ->orWhere('last_name', 'like', '%'.$this->memberSearch.'%');
+                        $q->where('first_name', 'like', '%' . $this->memberSearch . '%')
+                            ->orWhere('last_name', 'like', '%' . $this->memberSearch . '%');
                     });
                 })
                 ->limit(10)

@@ -1,6 +1,10 @@
 @props(['transaction'])
 
-<div class="fixed inset-0 z-50 flex items-center justify-center overflow-x-hidden overflow-y-auto outline-none focus:outline-none"
+<div x-data="{ show: false }" x-init="setTimeout(() => show = true, 10)" x-show="show" x-transition:enter="transition ease-out duration-200"
+    x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+    x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100"
+    x-transition:leave-end="opacity-0 scale-95"
+    class="fixed inset-0 z-50 flex items-center justify-center overflow-x-hidden overflow-y-auto outline-none focus:outline-none"
     aria-labelledby="modal-title" role="dialog" aria-modal="true">
     {{-- Backdrop --}}
     <div class="absolute inset-0 bg-black opacity-25 transition-opacity" wire:click="closeEditModal"></div>
@@ -39,12 +43,11 @@
                                         'withdrawal' => 'Withdrawal',
                                         'loan_payment' => 'Loan Payment',
                                         'loan_disbursement' => 'Loan Disbursement',
-                                        'interest' => 'Interest',
                                         'fee' => 'Fee',
                                     ]" />
                             </div>
 
-                            @if (in_array($transaction['transaction_type'] ?? '', ['deposit', 'withdrawal', 'interest', 'fee']))
+                            @if (in_array($transaction['transaction_type'] ?? '', ['deposit', 'withdrawal', 'fee']))
                                 <div class="col-span-2">
                                     <x-forms.text-input name="account_id" label="Account ID" model="editForm.account_id"
                                         :required="true" placeholder="Enter Account ID" />
@@ -78,6 +81,19 @@
                     Cancel
                 </button>
                 <button type="button" wire:click="saveTransaction"
+                    @if (!$transaction['id']) @if (in_array($transaction['transaction_type'] ?? '', ['deposit', 'withdrawal', 'fee']))
+                            :disabled="!$wire.editForm.amount || !$wire.editForm.account_id"
+                        @elseif (in_array($transaction['transaction_type'] ?? '', ['loan_payment', 'loan_disbursement']))
+                            :disabled="!$wire.editForm.amount || !$wire.editForm.loan_id"
+                        @else
+                            :disabled="!$wire.editForm.amount" @endif
+                    @endif
+                    :class="{
+                        'opacity-50 cursor-not-allowed': @if (!$transaction['id']) (@if (in_array($transaction['transaction_type'] ?? '', ['deposit', 'withdrawal', 'fee'])) (!$wire.editForm.amount || !$wire.editForm.account_id) @elseif (in_array($transaction['transaction_type'] ?? '', ['loan_payment', 'loan_disbursement'])) (!$wire.editForm.amount || !$wire.editForm.loan_id) @else !$wire.editForm.amount @endif
+                        )
+                    @else
+                    false @endif
+                    }"
                     class="text-white bg-gradient-to-r from-cyan-500 to-blue-500 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-cyan-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center">
                     <span wire:loading.remove wire:target="saveTransaction">
                         {{ $transaction['id'] ? 'Update Transaction' : 'Record Transaction' }}

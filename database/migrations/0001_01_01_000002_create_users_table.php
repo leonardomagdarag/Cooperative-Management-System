@@ -26,9 +26,8 @@ return new class extends Migration
                 'loan',
                 'treasurer',
                 'secretary',
-                'inactive',
-                'terminated',
-            ])->default('inactive');
+                'terminated'
+            ])->default('member');
             $table->timestamps();
             $table->softDeletes();
         });
@@ -48,7 +47,7 @@ return new class extends Migration
             $table->integer('last_activity')->index();
         });
 
-        Schema::create('beneficiaries', function(Blueprint $table) {
+        Schema::create('beneficiaries', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->nullable()->constrained('users');
             $table->string('first_name', 100);

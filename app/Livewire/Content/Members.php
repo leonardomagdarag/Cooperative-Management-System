@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Content;
 
+use App\Models\Account;
 use App\Models\Address;
 use App\Models\Beneficiary;
 use App\Models\Contact;
@@ -15,6 +16,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Livewire\Component;
 use Livewire\WithPagination;
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
 
 /**
  * Members Component
@@ -140,7 +143,7 @@ class Members extends Component
             'form.street' => 'nullable|string|max:255',
             'form.postal_code' => 'nullable|string|max:20',
             // Contact Information
-            'form.email' => 'required|email|unique:users,email'.($this->isEdit ? ','.$this->form['id'].',id' : ''),
+            'form.email' => 'required|email|unique:users,email' . ($this->isEdit ? ',' . $this->form['id'] . ',id' : ''),
             'form.phone_number' => 'required|string|max:11',
             'form.mobile_number' => 'nullable|string|max:11',
             'form.facebook_link' => 'nullable|url|max:255',
@@ -171,33 +174,60 @@ class Members extends Component
         $errors = $this->getErrorBag();
 
         // Personal tab fields
-        $personalFields = ['form.first_name', 'form.last_name', 'form.mid_name', 'form.suffix',
-            'form.birth_date', 'form.birthplace', 'form.gender', 'form.civil_status',
-            'form.religion', 'form.title'];
-        $this->tabErrors['personal'] = collect($personalFields)->some(fn ($field) => $errors->has($field));
+        $personalFields = [
+            'form.first_name',
+            'form.last_name',
+            'form.mid_name',
+            'form.suffix',
+            'form.birth_date',
+            'form.birthplace',
+            'form.gender',
+            'form.civil_status',
+            'form.religion',
+            'form.title'
+        ];
+        $this->tabErrors['personal'] = collect($personalFields)->some(fn($field) => $errors->has($field));
 
         // Address tab fields
-        $addressFields = ['form.country', 'form.region', 'form.province', 'form.city',
-            'form.barangay', 'form.street', 'form.postal_code'];
-        $this->tabErrors['address'] = collect($addressFields)->some(fn ($field) => $errors->has($field));
+        $addressFields = [
+            'form.country',
+            'form.region',
+            'form.province',
+            'form.city',
+            'form.barangay',
+            'form.street',
+            'form.postal_code'
+        ];
+        $this->tabErrors['address'] = collect($addressFields)->some(fn($field) => $errors->has($field));
 
         // Contact tab fields
-        $contactFields = ['form.email', 'form.phone_number', 'form.mobile_number',
-            'form.emergency_contact', 'form.facebook_link'];
-        $this->tabErrors['contact'] = collect($contactFields)->some(fn ($field) => $errors->has($field));
+        $contactFields = [
+            'form.email',
+            'form.phone_number',
+            'form.mobile_number',
+            'form.emergency_contact',
+            'form.facebook_link'
+        ];
+        $this->tabErrors['contact'] = collect($contactFields)->some(fn($field) => $errors->has($field));
 
         // IDs tab fields
         $idsFields = ['form.national_id', 'form.tin', 'form.sss', 'form.philhealth', 'form.barangay_id'];
-        $this->tabErrors['ids'] = collect($idsFields)->some(fn ($field) => $errors->has($field));
+        $this->tabErrors['ids'] = collect($idsFields)->some(fn($field) => $errors->has($field));
 
         // Employment tab fields
-        $employmentFields = ['form.employment_type', 'form.employer_name', 'form.position',
-            'form.monthly_income', 'form.other_income_source', 'form.other_income_amount'];
-        $this->tabErrors['employment'] = collect($employmentFields)->some(fn ($field) => $errors->has($field));
+        $employmentFields = [
+            'form.employment_type',
+            'form.employer_name',
+            'form.position',
+            'form.monthly_income',
+            'form.other_income_source',
+            'form.other_income_amount'
+        ];
+        $this->tabErrors['employment'] = collect($employmentFields)->some(fn($field) => $errors->has($field));
 
         // Login tab fields
         $loginFields = ['form.password', 'form.password_confirmation', 'form.current_password'];
-        $this->tabErrors['login'] = collect($loginFields)->some(fn ($field) => $errors->has($field));
+        $this->tabErrors['login'] = collect($loginFields)->some(fn($field) => $errors->has($field));
     }
 
     /**
@@ -207,18 +237,18 @@ class Members extends Component
     {
         // Check required fields with proper trimming
         $requiredFilled = ! empty(trim($this->form['first_name'] ?? '')) &&
-                         ! empty(trim($this->form['last_name'] ?? '')) &&
-                         ! empty(trim($this->form['email'] ?? '')) &&
-                         ! empty($this->form['birth_date'] ?? '') &&
-                         ! empty($this->form['gender'] ?? '') &&
-                         ! empty($this->form['civil_status'] ?? '') &&
-                         ! empty(trim($this->form['phone_number'] ?? ''));
+            ! empty(trim($this->form['last_name'] ?? '')) &&
+            ! empty(trim($this->form['email'] ?? '')) &&
+            ! empty($this->form['birth_date'] ?? '') &&
+            ! empty($this->form['gender'] ?? '') &&
+            ! empty($this->form['civil_status'] ?? '') &&
+            ! empty(trim($this->form['phone_number'] ?? ''));
 
         if (! $this->isEdit) {
             $requiredFilled = $requiredFilled &&
-                            ! empty($this->form['password'] ?? '') &&
-                            ! empty($this->form['password_confirmation'] ?? '') &&
-                            ($this->form['password'] ?? '') === ($this->form['password_confirmation'] ?? '');
+                ! empty($this->form['password'] ?? '') &&
+                ! empty($this->form['password_confirmation'] ?? '') &&
+                ($this->form['password'] ?? '') === ($this->form['password_confirmation'] ?? '');
         }
 
         // Check no validation errors
@@ -233,31 +263,31 @@ class Members extends Component
     public function getTabRequiredErrorsProperty()
     {
         $errors = [];
-        
+
         // Personal tab required fields
         $errors['personal'] = empty(trim($this->form['first_name'] ?? '')) ||
-                             empty(trim($this->form['last_name'] ?? '')) ||
-                             empty($this->form['birth_date'] ?? '') ||
-                             empty($this->form['gender'] ?? '') ||
-                             empty($this->form['civil_status'] ?? '');
-        
+            empty(trim($this->form['last_name'] ?? '')) ||
+            empty($this->form['birth_date'] ?? '') ||
+            empty($this->form['gender'] ?? '') ||
+            empty($this->form['civil_status'] ?? '');
+
         // Contact tab required fields  
         $errors['contact'] = empty(trim($this->form['email'] ?? '')) ||
-                            empty(trim($this->form['phone_number'] ?? ''));
-        
+            empty(trim($this->form['phone_number'] ?? ''));
+
         // Login tab required fields (only when not editing)
         if (!$this->isEdit) {
             $errors['login'] = empty($this->form['password'] ?? '') ||
-                              empty($this->form['password_confirmation'] ?? '');
+                empty($this->form['password_confirmation'] ?? '');
         } else {
             $errors['login'] = false;
         }
-        
+
         // Other tabs have no required fields
         $errors['address'] = false;
         $errors['ids'] = false;
         $errors['employment'] = false;
-        
+
         return $errors;
     }
 
@@ -297,7 +327,7 @@ class Members extends Component
             'beneficiaries',
         ])->find($userId);
         $this->activeTab = 'overview';
-        $this->profileModalKey = now()->timestamp.rand(1000, 9999); // Generate unique key for fresh modal
+        $this->profileModalKey = now()->timestamp . rand(1000, 9999); // Generate unique key for fresh modal
         $this->showModal = true;
     }
 
@@ -373,7 +403,7 @@ class Members extends Component
             'password' => '',
             'password_confirmation' => '',
         ];
-        $this->modalKey = now()->timestamp.rand(1000, 9999); // Generate truly unique key using timestamp
+        $this->modalKey = now()->timestamp . rand(1000, 9999); // Generate truly unique key using timestamp
         $this->showEditModal = true;
     }
 
@@ -393,7 +423,7 @@ class Members extends Component
         $this->resetValidation();
         $this->isEdit = true;
         $this->editingMemberId = $userId;
-        $this->modalKey = now()->timestamp.rand(1000, 9999); // Generate truly unique key using timestamp
+        $this->modalKey = now()->timestamp . rand(1000, 9999); // Generate truly unique key using timestamp
         $this->showModal = false; // Close profile modal first
         $this->selectedMember = null; // Clear selected member to fully close profile modal
         $member = User::with([
@@ -774,6 +804,30 @@ class Members extends Component
                     }
                 }
 
+                // Step 8: Automatically create savings and share capital accounts
+                Account::create([
+                    'user_id' => $user->id,
+                    'account_type' => 'savings',
+                    'balance' => 0.00,
+                ]);
+
+                Account::create([
+                    'user_id' => $user->id,
+                    'account_type' => 'share-capital',
+                    'balance' => 0.00,
+                ]);
+
+                // Send welcome email to new member
+                try {
+                    $this->sendWelcomeEmail($user, $this->form['password']);
+                } catch (\Exception $e) {
+                    Log::error('Failed to send welcome email', [
+                        'user_id' => $user->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                    // Continue even if email fails
+                }
+
                 // Dispatch toast notification
                 $this->dispatch('toast', ['message' => 'Member created successfully!', 'type' => 'success']);
             }
@@ -795,7 +849,7 @@ class Members extends Component
                 'formId' => $this->form['id'] ?? 'new',
             ]);
 
-            $this->dispatch('toast', ['message' => 'An error occurred: '.$e->getMessage(), 'type' => 'error']);
+            $this->dispatch('toast', ['message' => 'An error occurred: ' . $e->getMessage(), 'type' => 'error']);
         }
     }
 
@@ -840,27 +894,27 @@ class Members extends Component
             ->when($this->search, function ($query) {
                 $query->where(function ($q) {
                     // Search by user fields
-                    $q->where('user_number', 'like', '%'.$this->search.'%')
-                        ->orWhere('email', 'like', '%'.$this->search.'%')
+                    $q->where('user_number', 'like', '%' . $this->search . '%')
+                        ->orWhere('email', 'like', '%' . $this->search . '%')
                         // Search by personal data
                         ->orWhereHas('personalData', function ($subQ) {
-                            $subQ->where('first_name', 'like', '%'.$this->search.'%')
-                                ->orWhere('last_name', 'like', '%'.$this->search.'%')
-                                ->orWhere('mid_name', 'like', '%'.$this->search.'%')
+                            $subQ->where('first_name', 'like', '%' . $this->search . '%')
+                                ->orWhere('last_name', 'like', '%' . $this->search . '%')
+                                ->orWhere('mid_name', 'like', '%' . $this->search . '%')
                                 // Search by contact
                                 ->orWhereHas('contact', function ($contactQ) {
-                                    $contactQ->where('phone_no', 'like', '%'.$this->search.'%')
-                                        ->orWhere('email', 'like', '%'.$this->search.'%')
-                                        ->orWhere('facebook', 'like', '%'.$this->search.'%');
+                                    $contactQ->where('phone_no', 'like', '%' . $this->search . '%')
+                                        ->orWhere('email', 'like', '%' . $this->search . '%')
+                                        ->orWhere('facebook', 'like', '%' . $this->search . '%');
                                 })
                                 // Search by address
                                 ->orWhereHas('address', function ($addressQ) {
-                                    $addressQ->where('street', 'like', '%'.$this->search.'%')
-                                        ->orWhere('barangay', 'like', '%'.$this->search.'%')
-                                        ->orWhere('city_municipality', 'like', '%'.$this->search.'%')
-                                        ->orWhere('province', 'like', '%'.$this->search.'%')
-                                        ->orWhere('region', 'like', '%'.$this->search.'%')
-                                        ->orWhere('zip_code', 'like', '%'.$this->search.'%');
+                                    $addressQ->where('street', 'like', '%' . $this->search . '%')
+                                        ->orWhere('barangay', 'like', '%' . $this->search . '%')
+                                        ->orWhere('city_municipality', 'like', '%' . $this->search . '%')
+                                        ->orWhere('province', 'like', '%' . $this->search . '%')
+                                        ->orWhere('region', 'like', '%' . $this->search . '%')
+                                        ->orWhere('zip_code', 'like', '%' . $this->search . '%');
                                 });
                         });
                 });
@@ -869,11 +923,11 @@ class Members extends Component
         // Special handling: JOIN required to sort by personal_data fields
         if (in_array($this->sortField, ['first_name', 'last_name', 'mid_name'])) {
             $query->join('personal_data', 'users.personal_data_id', '=', 'personal_data.id')
-                ->orderBy('personal_data.'.$this->sortField, $this->sortDirection)
+                ->orderBy('personal_data.' . $this->sortField, $this->sortDirection)
                 ->select('users.*');  // Select only users columns to avoid conflicts
         } elseif ($this->sortField === 'user_number') {
             // Sort user_number as numeric
-            $query->orderByRaw('CAST(user_number AS UNSIGNED) '.$this->sortDirection);
+            $query->orderByRaw('CAST(user_number AS UNSIGNED) ' . $this->sortDirection);
         } else {
             $query->orderBy($this->sortField, $this->sortDirection);
         }
@@ -894,5 +948,114 @@ class Members extends Component
     public function previousPage()
     {
         $this->setPage(max(1, $this->getPage() - 1));
+    }
+
+    /**
+     * Toggle special loan eligibility for a member (Manager/Admin only)
+     */
+    public function toggleSpecialLoanEligibility($memberId)
+    {
+        // Only admins and managers can toggle special loan eligibility
+        if (!in_array(Auth::user()->role, ['admin', 'manager'])) {
+            $this->dispatch('toast', ['message' => 'Unauthorized action.', 'type' => 'error']);
+            return;
+        }
+
+        try {
+            $member = User::findOrFail($memberId);
+            $member->special_loan_eligible = !$member->special_loan_eligible;
+            $member->save();
+
+            $status = $member->special_loan_eligible ? 'enabled' : 'disabled';
+            $this->dispatch('toast', [
+                'message' => "Special loan eligibility {$status} for {$member->personalData->first_name} {$member->personalData->last_name}.",
+                'type' => 'success'
+            ]);
+
+            // Refresh the selected member data
+            if ($this->selectedMember && $this->selectedMember->id === $memberId) {
+                $this->selectedMember = User::with(['personalData', 'accounts', 'loans'])->find($memberId);
+            }
+        } catch (\Exception $e) {
+            $this->dispatch('toast', ['message' => 'Failed to update eligibility.', 'type' => 'error']);
+        }
+    }
+
+    /**
+     * Send welcome email to new member
+     */
+    private function sendWelcomeEmail($user, $plainPassword)
+    {
+        $mail = new PHPMailer(true);
+
+        // Server settings
+        $mail->isSMTP();
+        $mail->Host       = env('MAIL_HOST');
+        $mail->SMTPAuth   = true;
+        $mail->Username   = env('MAIL_USERNAME');
+        $mail->Password   = env('MAIL_PASSWORD');
+        $mail->SMTPSecure = env('MAIL_ENCRYPTION', 'tls');
+        $mail->Port       = env('MAIL_PORT', 587);
+
+        // Recipients
+        $mail->setFrom(env('MAIL_FROM_ADDRESS'), env('MAIL_FROM_NAME'));
+        $mail->addAddress($user->email, $user->personalData->first_name . ' ' . $user->personalData->last_name);
+
+        // Content
+        $mail->isHTML(true);
+        $mail->Subject = 'Welcome to the Cooperative!';
+
+        $mail->Body = "
+            <html>
+            <head>
+                <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                    .header { background: linear-gradient(135deg, #0891b2 0%, #10b981 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+                    .content { background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; }
+                    .welcome-box { background: #dbeafe; border-left: 4px solid #0891b2; padding: 15px; margin: 20px 0; }
+                    .credentials { background: white; border: 1px solid #e5e7eb; padding: 15px; margin: 20px 0; border-radius: 5px; }
+                    .footer { background: #e5e7eb; padding: 20px; text-align: center; font-size: 12px; color: #6b7280; border-radius: 0 0 10px 10px; }
+                    .button { display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #0891b2 0%, #10b981 100%); color: white; text-decoration: none; border-radius: 5px; margin: 15px 0; }
+                </style>
+            </head>
+            <body>
+                <div class='container'>
+                    <div class='header'>
+                        <h1>🎉 Welcome to the Cooperative!</h1>
+                    </div>
+                    <div class='content'>
+                        <p>Hello <strong>{$user->personalData->first_name} {$user->personalData->last_name}</strong>,</p>
+                        
+                        <div class='welcome-box'>
+                            <strong>Welcome!</strong> Your member account has been successfully created.
+                        </div>
+                        
+                        <p>We're excited to have you as part of our cooperative family. Your membership gives you access to various benefits and services.</p>
+                        
+                        <div class='credentials'>
+                            <p><strong>Your Login Credentials:</strong></p>
+                            <p><strong>Email:</strong> {$user->email}</p>
+                            <p><strong>Password:</strong> {$plainPassword}</p>
+                            <p style='color: #dc2626; font-size: 14px;'><em>⚠️ Please change your password after your first login for security.</em></p>
+                        </div>
+                        
+                        <p>You can now log in to access your account and explore our services.</p>
+                        
+                        <center>
+                            <a href='" . url('/login') . "' class='button'>Login to Your Account</a>
+                        </center>
+                        
+                        <p>If you have any questions or need assistance, please don't hesitate to contact us.</p>
+                    </div>
+                    <div class='footer'>
+                        <p>&copy; " . date('Y') . " Cooperative Management System. All rights reserved.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        ";
+
+        $mail->send();
     }
 }

@@ -1,12 +1,20 @@
 @props(['officer' => null, 'isEdit' => false, 'tabErrors' => []])
 
-<div class="fixed inset-0 z-50 flex items-center justify-center overflow-x-hidden overflow-y-auto outline-none focus:outline-none"
+<div x-data="{ show: false }" x-init="$nextTick(() => show = true)" x-show="show" x-transition:enter="transition ease-out duration-200"
+    x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
+    x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100"
+    x-transition:leave-end="opacity-0"
+    class="fixed inset-0 z-50 flex items-center justify-center overflow-x-hidden overflow-y-auto outline-none focus:outline-none"
     aria-labelledby="modal-title" role="dialog" aria-modal="true">
     {{-- Backdrop --}}
-    <div class="absolute inset-0 bg-black opacity-25 transition-opacity" wire:click="closeEditModal"></div>
+    <div class="absolute inset-0 bg-black opacity-25"
+        @click="show = false; setTimeout(() => $wire.closeEditModal(), 150)"></div>
 
     {{-- Modal content --}}
-    <div class="relative w-full max-w-4xl max-h-full mx-auto my-6 z-10">
+    <div class="relative w-full max-w-4xl max-h-full mx-auto my-6 z-10"
+        x-transition:enter="transition ease-out duration-200 delay-100" x-transition:enter-start="opacity-0 scale-95"
+        x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150"
+        x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95">
         <div class="relative bg-white rounded-lg shadow-xl max-h-[90vh] flex flex-col">
             {{-- Modal header --}}
             <div
@@ -19,7 +27,7 @@
                         {{ $isEdit ? 'Update officer information' : 'Create a new officer account' }}
                     </p>
                 </div>
-                <button type="button" wire:click="closeEditModal"
+                <button type="button" @click="show = false; setTimeout(() => $wire.closeEditModal(), 150)"
                     class="text-white hover:text-cyan-100 hover:bg-white/10 rounded-lg text-sm p-2 transition-colors">
                     <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd"
@@ -68,21 +76,13 @@
                         </div>
                     </div>
 
-                    {{-- Contact & Address --}}
+                    {{-- Contact Information --}}
                     <div class="mb-8">
-                        <h4 class="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Contact & Address</h4>
+                        <h4 class="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Contact Information</h4>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <x-forms.text-input name="email" label="Email Address" model="form.email" type="email"
                                 :required="true" />
                             <x-forms.text-input name="phone_number" label="Phone Number" model="form.phone_number" />
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                            <x-forms.text-input name="street" label="Street Address" model="form.street" />
-                            <x-forms.text-input name="barangay" label="Barangay" model="form.barangay" />
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                            <x-forms.text-input name="city" label="City/Municipality" model="form.city" />
-                            <x-forms.text-input name="postal_code" label="Postal Code" model="form.postal_code" />
                         </div>
                     </div>
 
@@ -108,7 +108,7 @@
 
                     {{-- Footer --}}
                     <div class="flex items-center justify-end space-x-2 pt-6 border-t border-gray-200">
-                        <button type="button" wire:click="closeEditModal"
+                        <button type="button" @click="show = false; setTimeout(() => $wire.closeEditModal(), 150)"
                             class="text-gray-500 bg-white hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-blue-300 rounded-lg border border-gray-200 text-sm font-medium px-5 py-2.5 hover:text-gray-900 focus:z-10">
                             Cancel
                         </button>

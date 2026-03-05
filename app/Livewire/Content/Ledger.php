@@ -42,7 +42,6 @@ class Ledger extends Component
         'withdrawal' => 'Withdrawals',
         'loan_payment' => 'Loan Payments',
         'loan_disbursement' => 'Loan Disbursements',
-        'interest' => 'Interest',
         'fee' => 'Fees',
     ];
 
@@ -131,7 +130,7 @@ class Ledger extends Component
     public function saveTransaction()
     {
         $rules = [
-            'editForm.transaction_type' => 'required|in:deposit,withdrawal,loan_payment,loan_disbursement,interest,fee',
+            'editForm.transaction_type' => 'required|in:deposit,withdrawal,loan_payment,loan_disbursement,fee',
             'editForm.amount' => 'required|numeric|min:0.01',
             'editForm.note' => 'nullable|string|max:500',
         ];
@@ -171,7 +170,7 @@ class Ledger extends Component
 
             $this->closeEditModal();
         } catch (\Exception $e) {
-            session()->flash('error', 'An error occurred: '.$e->getMessage());
+            session()->flash('error', 'An error occurred: ' . $e->getMessage());
         }
     }
 
@@ -179,6 +178,41 @@ class Ledger extends Component
     {
         $this->showEditModal = false;
         $this->editForm = [];
+    }
+
+    /**
+     * Validate a specific field on blur
+     */
+    public function validateField($field)
+    {
+        // Remove 'editForm.' prefix if present for validation
+        $fieldName = str_replace('editForm.', '', $field);
+        $validationField = 'editForm.' . $fieldName;
+
+        $rules = [];
+
+        // Define validation rules based on field
+        switch ($fieldName) {
+            case 'transaction_type':
+                $rules[$validationField] = 'required|in:deposit,withdrawal,loan_payment,loan_disbursement,fee';
+                break;
+            case 'amount':
+                $rules[$validationField] = 'required|numeric|min:0.01';
+                break;
+            case 'account_id':
+                $rules[$validationField] = 'required|exists:accounts,id';
+                break;
+            case 'loan_id':
+                $rules[$validationField] = 'required|exists:loans,id';
+                break;
+            case 'note':
+                $rules[$validationField] = 'nullable|string|max:500';
+                break;
+        }
+
+        if (!empty($rules)) {
+            $this->validate($rules);
+        }
     }
 
     /**
@@ -204,32 +238,32 @@ class Ledger extends Component
         if ($this->search) {
             $query->where(function ($q) {
                 // Search by transaction number
-                $q->where('transaction_number', 'like', '%'.$this->search.'%')
+                $q->where('transaction_number', 'like', '%' . $this->search . '%')
                     // Search by amount
-                    ->orWhere('amount', 'like', '%'.$this->search.'%')
+                    ->orWhere('amount', 'like', '%' . $this->search . '%')
                     // Search by status
-                    ->orWhere('status', 'like', '%'.$this->search.'%')
+                    ->orWhere('status', 'like', '%' . $this->search . '%')
                     // Search by transaction type
-                    ->orWhere('transaction_type', 'like', '%'.$this->search.'%')
+                    ->orWhere('transaction_type', 'like', '%' . $this->search . '%')
                     // Search by note
-                    ->orWhere('note', 'like', '%'.$this->search.'%')
+                    ->orWhere('note', 'like', '%' . $this->search . '%')
                     // Search by account holder's name
                     ->orWhereHas('account.user.personalData', function ($subQ) {
-                        $subQ->where('first_name', 'like', '%'.$this->search.'%')
-                            ->orWhere('last_name', 'like', '%'.$this->search.'%');
+                        $subQ->where('first_name', 'like', '%' . $this->search . '%')
+                            ->orWhere('last_name', 'like', '%' . $this->search . '%');
                     })
                     // Search by account user number
                     ->orWhereHas('account.user', function ($subQ) {
-                        $subQ->where('user_number', 'like', '%'.$this->search.'%');
+                        $subQ->where('user_number', 'like', '%' . $this->search . '%');
                     })
                     // Search by loan holder's name
                     ->orWhereHas('loan.user.personalData', function ($subQ) {
-                        $subQ->where('first_name', 'like', '%'.$this->search.'%')
-                            ->orWhere('last_name', 'like', '%'.$this->search.'%');
+                        $subQ->where('first_name', 'like', '%' . $this->search . '%')
+                            ->orWhere('last_name', 'like', '%' . $this->search . '%');
                     })
                     // Search by loan number
                     ->orWhereHas('loan', function ($subQ) {
-                        $subQ->where('loan_number', 'like', '%'.$this->search.'%');
+                        $subQ->where('loan_number', 'like', '%' . $this->search . '%');
                     });
             });
         }
@@ -241,7 +275,7 @@ class Ledger extends Component
         $perPage = 10;
         $transactions = $query->paginate($perPage);
 
-        logger('Successfully rendered with '.$transactions->total().' transactions');
+        logger('Successfully rendered with ' . $transactions->total() . ' transactions');
 
         return view('livewire.content.ledger', [
             'transactions' => $transactions,
@@ -261,7 +295,7 @@ class Ledger extends Component
                 session()->flash('message', 'Transaction deleted successfully.');
             }
         } catch (\Exception $e) {
-            session()->flash('error', 'An error occurred: '.$e->getMessage());
+            session()->flash('error', 'An error occurred: ' . $e->getMessage());
         }
     }
 }

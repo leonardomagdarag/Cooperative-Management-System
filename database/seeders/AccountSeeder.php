@@ -22,42 +22,23 @@ class AccountSeeder extends Seeder
         }
 
         // Create accounts for each member
-        // 70% get savings only, 20% get both, 10% get share-capital only
+        // All members get both savings and share capital accounts
         foreach ($members as $member) {
-            $rand = rand(1, 100);
+            // Create savings account
+            Account::factory()->create([
+                'user_id' => $member->id,
+                'account_type' => 'savings',
+                'balance' => rand(1000, 25000),
+            ]);
 
-            if ($rand <= 70) {
-                // Savings only
-                Account::factory()->create([
-                    'user_id' => $member->id,
-                    'account_type' => 'savings',
-                    'balance' => rand(5000, 100000),
-                ]);
-            } elseif ($rand <= 90) {
-                // Both accounts
-                Account::factory()->create([
-                    'user_id' => $member->id,
-                    'account_type' => 'savings',
-                    'balance' => rand(5000, 100000),
-                ]);
-                Account::factory()->create([
-                    'user_id' => $member->id,
-                    'account_type' => 'share-capital',
-                    'balance' => rand(5000, 50000),
-                ]);
-                Account::create([
-                    'user_id' => $member->user_id,
-                ]);
-            } else {
-                // Share-capital only
-                Account::factory()->create([
-                    'user_id' => $member->id,
-                    'account_type' => 'share-capital',
-                    'balance' => rand(5000, 50000),
-                ]);
-            }
+            // Create share capital account
+            Account::factory()->create([
+                'user_id' => $member->id,
+                'account_type' => 'share-capital',
+                'balance' => rand(500, 5000),
+            ]);
         }
 
-        $this->command->info('Created accounts for ' . $members->count() . ' members.');
+        $this->command->info('Created savings and share capital accounts for ' . $members->count() . ' members.');
     }
 }

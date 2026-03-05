@@ -1,14 +1,20 @@
 @props(['isEdit' => false, 'tabErrors' => []])
 
-<div class="fixed inset-0 z-50 flex items-center justify-center overflow-x-hidden overflow-y-auto outline-none focus:outline-none"
+<div x-data="{ show: false, formTab: 'personal' }" x-init="$nextTick(() => show = true)" x-show="show" x-transition:enter="transition ease-out duration-200"
+    x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
+    x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100"
+    x-transition:leave-end="opacity-0"
+    class="fixed inset-0 z-50 flex items-center justify-center overflow-x-hidden overflow-y-auto outline-none focus:outline-none"
     aria-labelledby="modal-title" role="dialog" aria-modal="true">
     {{-- Backdrop --}}
-    <div class="absolute inset-0 bg-black opacity-25 transition-opacity" wire:click="closeEditModal"></div>
+    <div class="absolute inset-0 bg-black opacity-25" @click="show = false; $wire.closeEditModal()"></div>
 
     {{-- Modal content --}}
-    <div class="relative w-full max-w-5xl max-h-full mx-auto my-6 z-10">
-        <div class="relative bg-white rounded-lg shadow-xl max-h-[90vh] flex flex-col" x-data="{ formTab: 'personal' }"
-            x-init="formTab = 'personal'">
+    <div class="relative w-full max-w-5xl max-h-full mx-auto my-6 z-10"
+        x-transition:enter="transition ease-out duration-200 delay-100" x-transition:enter-start="opacity-0 scale-95"
+        x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150"
+        x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95">
+        <div class="relative bg-white rounded-lg shadow-xl max-h-[90vh] flex flex-col">
             {{-- Modal header with gradient --}}
             <div
                 class="flex items-start justify-between p-6 border-b border-gray-200 rounded-t bg-gradient-to-r from-cyan-500 to-emerald-500">
@@ -19,7 +25,7 @@
                     <p class="text-sm text-cyan-50 mt-1">
                         {{ $isEdit ? 'Update member information' : 'Complete all required fields' }}</p>
                 </div>
-                <button type="button" wire:click="closeEditModal"
+                <button type="button" @click="show = false; setTimeout(() => $wire.closeEditModal(), 150)"
                     class="text-white hover:text-cyan-100 hover:bg-white/10 rounded-lg text-sm p-2 transition-colors">
                     <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd"
@@ -27,6 +33,18 @@
                             clip-rule="evenodd"></path>
                     </svg>
                 </button>
+            </div>
+
+            {{-- Required Fields Notice --}}
+            <div class="px-6 py-3 bg-blue-50 border-b border-blue-100">
+                <p class="text-sm text-blue-700">
+                    <svg class="inline-block w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                            clip-rule="evenodd" />
+                    </svg>
+                    Fields marked with <span class="text-red-500 font-semibold">*</span> are required
+                </p>
             </div>
 
             {{-- Tab Navigation --}}
@@ -120,15 +138,6 @@
                                 ]" />
                             <x-forms.text-input name="religion" label="Religion" model="form.religion"
                                 placeholder="Enter religion" />
-                            <x-forms.select-input name="title" label="Member Title" model="form.title"
-                                :options="[
-                                    'Member' => 'Member',
-                                    'Chairman' => 'Chairman',
-                                    'Vice Chairman' => 'Vice Chairman',
-                                    'Secretary' => 'Secretary',
-                                    'Treasurer' => 'Treasurer',
-                                    'Loan Officer' => 'Loan Officer',
-                                ]" />
                         </div>
                     </div>
 
@@ -282,8 +291,8 @@
                     </button>
                 </div>
                 <div class="flex gap-2">
-                    <button type="button" wire:click="closeEditModal" wire:loading.attr="disabled"
-                        wire:loading.class="opacity-50 cursor-not-allowed"
+                    <button type="button" @click="show = false; setTimeout(() => $wire.closeEditModal(), 150)"
+                        wire:loading.attr="disabled" wire:loading.class="opacity-50 cursor-not-allowed"
                         class="px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                         <span wire:loading.remove wire:target="closeEditModal, saveMember">Cancel</span>
                         <span wire:loading wire:target="closeEditModal">Closing...</span>

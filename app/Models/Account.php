@@ -24,20 +24,20 @@ class Account extends Model
     protected static function boot()
     {
         parent::boot();
-        
+
         static::creating(function ($account) {
             if (empty($account->account_number)) {
                 // Get the latest account_number including soft deleted records
                 $latest = static::withTrashed()
                     ->orderByRaw('CAST(SUBSTRING(account_number, 5) AS UNSIGNED) DESC')
                     ->first();
-                
+
                 if ($latest && preg_match('/ACNT(\d+)/', $latest->account_number, $matches)) {
                     $nextNumber = intval($matches[1]) + 1;
                 } else {
                     $nextNumber = 1;
                 }
-                
+
                 $account->account_number = 'ACNT' . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
             }
         });

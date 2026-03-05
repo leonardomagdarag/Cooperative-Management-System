@@ -192,11 +192,6 @@
                                                     Disbursement</span>
                                             @break
 
-                                            @case('interest')
-                                                <span
-                                                    class="bg-yellow-100 text-yellow-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded">Interest</span>
-                                            @break
-
                                             @case('fee')
                                                 <span
                                                     class="bg-red-100 text-red-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded">Fee</span>
@@ -386,5 +381,21 @@
         {{-- Edit Transaction Modal --}}
         @if ($showEditModal)
             <x-modals.transaction-edit wire:key="transaction-edit-{{ $editForm['id'] ?? 'new' }}" :transaction="$editForm" />
+        @endif
+
+        {{-- Handle session flash messages --}}
+        @if (session()->has('message'))
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    window.toast.success('{{ session('message') }}');
+                });
+            </script>
+        @endif
+        @if (session()->has('error'))
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    window.toast.error('{{ session('error') }}');
+                });
+            </script>
         @endif
     </div>
