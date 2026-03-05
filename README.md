@@ -1,11 +1,29 @@
-My Capstone project!
+# 🏦 My Capstone Project
 
-It's a web-based system for officers and members of Settlers Credit Cooperative to help them track, manage and access different services offered by the cooperative... that's it.
+## 📌 About the Project
+This is my capstone project!
 
+It is a **web-based system** designed for the officers and members of **Settlers Credit Cooperative**.  
+The system helps them:
 
-Credits to: 
-- Copilot (Claude Sonnet 4.5) for doing 75% of the design and checking, testing and fixing my code.
-- Github for providing me the pro version for free using educational account.
+- Track cooperative activities  
+- Manage records and services  
+- Access different services offered by the cooperative  
 
+Simple. Functional. Built with effort (and a little bit of chaos).
 
-Btw... How did you get here?!
+---
+
+## 🙏 Credits
+
+- **Copilot (Claude Sonnet 4.5)** – For doing 75% of the design, checking, testing, and fixing my code.
+- **GitHub** – For providing me the Pro version through an educational account.
+- **ChatGPT** – For ideas, suggestions, and answering my dumb questions.
+
+---
+
+## 👀 Extra Message
+
+If you're reading this...
+
+How did you even get here?! 🤨
