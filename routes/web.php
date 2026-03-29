@@ -21,11 +21,11 @@ Route::prefix('/')->group(function () {
         'about',
     ])->name('about_page');
 
-    // Events Page
-    Route::get('/events', [
+    // News Page
+    Route::get('/news', [
         PageController::class,
-        'events',
-    ])->name('events_page');
+        'news',
+    ])->name('news_page');
 
     // Stories Page
     Route::get('/stories', [
@@ -38,12 +38,20 @@ Route::prefix('/')->group(function () {
         PageController::class,
         'login',
     ])->name('login_page');
+
+    // Registration Page
+    Route::get('/register', [
+        PageController::class,
+        'register',
+    ])->name('register_page');
 });
 
 // === Authentication Routes ===
 
 // Handle Login Submission
 Route::post('/login', [LoginController::class, 'login'])->name('login');
+// Handle Registration Submission
+Route::post('/register', [LoginController::class, 'register'])->name('register');
 // Handle Logout
 Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 
@@ -51,6 +59,7 @@ Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 Route::get('/forgot-password', [PasswordResetController::class, 'showForgotPasswordForm'])->name('password.request');
 Route::post('/forgot-password', [PasswordResetController::class, 'sendResetLink'])->name('password.email');
 Route::get('/reset-password', [PasswordResetController::class, 'showResetForm'])->name('password.reset.form');
+Route::post('/verify-token', [PasswordResetController::class, 'verifyToken'])->name('password.verify');
 Route::post('/reset-password', [PasswordResetController::class, 'reset'])->name('password.update');
 
 // === API Routes for Notifications (Protected) ===

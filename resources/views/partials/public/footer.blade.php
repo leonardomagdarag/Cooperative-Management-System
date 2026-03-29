@@ -21,35 +21,35 @@
 
             <!-- Quick Links -->
             <div>
-                <h4 class="font-semibold mb-6 text-emerald-400 text-lg">Quick Links</h4>
+                <h4 class="font-semibold mb-6 text-gray-300 text-lg">Quick Links</h4>
                 <ul class="space-y-3 text-gray-400">
                     <li>
                         <a href="{{ route('home_page') }}"
-                            class="hover:text-emerald-400 transition-colors inline-flex items-center gap-2">
+                            class="hover:text-gray-200 transition-colors inline-flex items-center gap-2">
                             <i class="fas fa-chevron-right text-xs"></i> Home
                         </a>
                     </li>
                     <li>
                         <a href="{{ route('about_page') }}"
-                            class="hover:text-emerald-400 transition-colors inline-flex items-center gap-2">
+                            class="hover:text-gray-200 transition-colors inline-flex items-center gap-2">
                             <i class="fas fa-chevron-right text-xs"></i> About Us
                         </a>
                     </li>
                     <li>
-                        <a href="{{ route('events_page') }}"
-                            class="hover:text-emerald-400 transition-colors inline-flex items-center gap-2">
-                            <i class="fas fa-chevron-right text-xs"></i> Events
+                        <a href="{{ route('news_page') }}"
+                            class="hover:text-gray-200 transition-colors inline-flex items-center gap-2">
+                            <i class="fas fa-chevron-right text-xs"></i> News
                         </a>
                     </li>
                     <li>
                         <a href="{{ route('home_page') }}#Contact"
-                            class="hover:text-emerald-400 transition-colors inline-flex items-center gap-2">
+                            class="hover:text-gray-200 transition-colors inline-flex items-center gap-2">
                             <i class="fas fa-chevron-right text-xs"></i> Contact
                         </a>
                     </li>
                     <li>
                         <a href="{{ route('login_page') }}"
-                            class="hover:text-emerald-400 transition-colors inline-flex items-center gap-2">
+                            class="hover:text-gray-200 transition-colors inline-flex items-center gap-2">
                             <i class="fas fa-chevron-right text-xs"></i> Login
                         </a>
                     </li>
@@ -58,22 +58,22 @@
 
             <!-- Connect With Us -->
             <div>
-                <h4 class="font-semibold mb-6 text-cyan-400 text-lg">Connect With Us</h4>
+                <h4 class="font-semibold mb-6 text-gray-300 text-lg">Connect With Us</h4>
                 <div class="flex gap-3 mb-6">
                     <a href="#facebook_link" aria-label="Facebook"
-                        class="w-11 h-11 bg-gray-800 hover:bg-emerald-500 rounded-full flex items-center justify-center transition-all hover:scale-110">
+                        class="w-11 h-11 bg-gray-800 hover:bg-gray-700 rounded-full flex items-center justify-center transition-all hover:scale-105">
                         <i class="fab fa-facebook text-lg"></i>
                     </a>
                     <a href="#gmail" aria-label="Gmail"
-                        class="w-11 h-11 bg-gray-800 hover:bg-cyan-500 rounded-full flex items-center justify-center transition-all hover:scale-110">
+                        class="w-11 h-11 bg-gray-800 hover:bg-gray-700 rounded-full flex items-center justify-center transition-all hover:scale-105">
                         <i class="fas fa-envelope text-lg"></i>
                     </a>
                     <a href="#google_map" aria-label="GooglMap"
-                        class="w-11 h-11 bg-gray-800 hover:bg-emerald-500 rounded-full flex items-center justify-center transition-all hover:scale-110">
+                        class="w-11 h-11 bg-gray-800 hover:bg-gray-700 rounded-full flex items-center justify-center transition-all hover:scale-105">
                         <i class="fas fa-map text-lg"></i>
                     </a>
                 </div>
-                <a href="#gmail_link" class=" text-sm text-primary1 hover:text-emerald-900">
+                <a href="#gmail_link" class=" text-sm text-gray-400 hover:text-gray-200">
                     <i class="fas fa-envelope mr-2"></i>
                     {!! config('content.contact.email') !!}
                 </a>

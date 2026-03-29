@@ -85,6 +85,47 @@
         </div>
     </div>
 
+    {{-- Daily Summary Strip (counts) --}}
+    <div class="p-4 bg-white border-b border-gray-200">
+        <div class="flex items-center justify-between">
+            <div>
+                <h2 class="text-sm font-semibold text-gray-900">{{ $dailySummary['range_label'] ?? 'Today' }} Summary
+                </h2>
+                <p class="text-xs text-gray-500">Completed only</p>
+            </div>
+
+            <div class="flex items-center space-x-2">
+                <label for="ledger-range" class="text-xs font-medium text-gray-500">Range</label>
+                <select id="ledger-range" wire:model.live="range"
+                    class="bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2">
+                    <option value="today">Today</option>
+                    <option value="week">This Week</option>
+                    <option value="month">This Month</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 gap-3 mt-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="p-3 border border-gray-200 rounded-lg">
+                <div class="text-xs font-medium text-gray-500">Deposits</div>
+                <div class="mt-1 text-lg font-semibold text-gray-900">{{ $dailySummary['deposit_count'] ?? 0 }}</div>
+            </div>
+            <div class="p-3 border border-gray-200 rounded-lg">
+                <div class="text-xs font-medium text-gray-500">Withdrawals</div>
+                <div class="mt-1 text-lg font-semibold text-gray-900">{{ $dailySummary['withdrawal_count'] ?? 0 }}</div>
+            </div>
+            <div class="p-3 border border-gray-200 rounded-lg">
+                <div class="text-xs font-medium text-gray-500">Loan Payments</div>
+                <div class="mt-1 text-lg font-semibold text-gray-900">{{ $dailySummary['loan_payment_count'] ?? 0 }}
+                </div>
+            </div>
+            <div class="p-3 border border-gray-200 rounded-lg">
+                <div class="text-xs font-medium text-gray-500">Loans</div>
+                <div class="mt-1 text-lg font-semibold text-gray-900">{{ $dailySummary['loan_count'] ?? 0 }}</div>
+            </div>
+        </div>
+    </div>
+
     <div class="flex flex-col">
         <div class="overflow-x-auto">
             <div class="inline-block min-w-full align-middle">

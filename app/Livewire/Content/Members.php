@@ -61,6 +61,60 @@ class Members extends Component
 
     public $profileModalKey = 0;
 
+    /**
+     * Per-tab validation field map for the member form.
+     */
+    private const TAB_FIELDS = [
+        'personal' => [
+            'form.first_name',
+            'form.mid_name',
+            'form.last_name',
+            'form.suffix',
+            'form.birth_date',
+            'form.birthplace',
+            'form.gender',
+            'form.civil_status',
+            'form.religion',
+            'form.title',
+        ],
+        'address' => [
+            'form.country',
+            'form.region',
+            'form.province',
+            'form.city',
+            'form.barangay',
+            'form.street',
+            'form.postal_code',
+        ],
+        'contact' => [
+            'form.email',
+            'form.phone_number',
+            'form.mobile_number',
+            'form.emergency_contact',
+            'form.facebook_link',
+        ],
+        'ids' => [
+            'form.national_id',
+            'form.tin',
+            'form.sss',
+            'form.philhealth',
+            'form.barangay_id',
+        ],
+        'employment' => [
+            'form.employment_type',
+            'form.employer_name',
+            'form.position',
+            'form.monthly_income',
+            'form.other_income_source',
+            'form.other_income_amount',
+        ],
+        'login' => [
+            'form.current_password',
+            'form.password',
+            'form.password_confirmation',
+        ],
+    ];
+
     // Track tab validation errors
     public $tabErrors = [
         'personal' => false,
@@ -90,6 +144,44 @@ class Members extends Component
             $this->validateOnly($field, $rules, $this->getCustomMessages());
             $this->updateTabErrors();
         }
+    }
+
+    /**
+     * Validate only the fields relevant to a specific tab.
+     * Used by the multi-tab member modal to avoid per-field blur validation.
+     */
+    public function validateTab($tab)
+    {
+        $tab = (string) $tab;
+        if (! isset(self::TAB_FIELDS[$tab])) {
+            return;
+        }
+
+        $rules = $this->getValidationRules();
+
+        // Add conditional current_password rule (matches saveMember behavior)
+        if ($this->isEdit && ! empty($this->form['password']) && ! in_array(Auth::user()->role, ['admin', 'manager'])) {
+            $rules['form.current_password'] = 'required|current_password';
+        }
+
+        $fields = self::TAB_FIELDS[$tab];
+        $subsetRules = [];
+        foreach ($fields as $field) {
+            if (isset($rules[$field])) {
+                $subsetRules[$field] = $rules[$field];
+            }
+        }
+
+        // Login tab: if editing and password is blank, skip validating password fields
+        if ($tab === 'login' && $this->isEdit && empty($this->form['password'])) {
+            unset($subsetRules['form.password'], $subsetRules['form.password_confirmation'], $subsetRules['form.current_password']);
+        }
+
+        if (! empty($subsetRules)) {
+            $this->validate($subsetRules, $this->getCustomMessages());
+        }
+
+        $this->updateTabErrors();
     }
 
     /**
@@ -888,8 +980,8 @@ class Members extends Component
         $userRole = Auth::user()->role;
         $canEdit = in_array($userRole, ['admin', 'manager', 'secretary']);
 
-        // Build query with eager loading for performance
-        $query = User::with(['personalData.address', 'personalData.contact', 'accounts'])
+        // Build query with only what the table needs (keeps re-renders cheaper, including modal open)
+        $query = User::with(['personalData'])
             ->where('role', 'member')
             ->when($this->search, function ($query) {
                 $query->where(function ($q) {

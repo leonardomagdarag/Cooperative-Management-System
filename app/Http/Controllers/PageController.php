@@ -17,7 +17,7 @@ class PageController extends Controller
         return view('public/about');
     }
 
-    public function events()
+    public function news()
     {
         return view('public/events');
     }
@@ -30,5 +30,10 @@ class PageController extends Controller
     public function login()
     {
         return view('public/login');
+    }
+
+    public function register()
+    {
+        return view('public/register');
     }
 }

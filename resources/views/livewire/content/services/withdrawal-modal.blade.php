@@ -186,14 +186,16 @@
                         <div class="bg-blue-50 border-l-4 border-blue-400 p-4">
                             <p class="text-sm text-blue-700">
                                 <i class="fas fa-info-circle mr-2"></i>
-                                Please visit our office with valid ID to collect your withdrawal.
+                                Your withdrawal request will be reviewed and approved by authorized personnel. You will
+                                receive a notification once approved.
                             </p>
                         </div>
                     @else
-                        <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4">
-                            <p class="text-sm text-yellow-700">
+                        <div class="bg-blue-50 border-l-4 border-blue-400 p-4">
+                            <p class="text-sm text-blue-700">
                                 <i class="fas fa-info-circle mr-2"></i>
-                                Bank transfers may take 1-2 business days to process.
+                                Your withdrawal request will be reviewed and approved by authorized personnel. Bank
+                                transfers may take 1-2 business days after approval.
                             </p>
                         </div>
                     @endif
@@ -247,15 +249,12 @@
             @if ($withdrawalStep === 99)
                 <div class="p-6 text-center">
                     <div class="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <i class="fas fa-check text-orange-600 text-4xl"></i>
+                        <i class="fas fa-clock text-orange-600 text-4xl"></i>
                     </div>
-                    <h4 class="text-xl font-bold text-gray-900 mb-2">Request Submitted!</h4>
+                    <h4 class="text-xl font-bold text-gray-900 mb-2">Withdrawal Request Submitted!</h4>
                     <p class="text-gray-600 mb-6">
-                        @if ($isTreasurerMode && $withdrawalTransactionMode === 'counter')
-                            The withdrawal has been processed successfully and the account balance has been updated.
-                        @else
-                            Please visit our office with valid ID to collect your withdrawal.
-                        @endif
+                        Your withdrawal request has been submitted for approval. You will receive a notification once it
+                        has been reviewed by authorized personnel.
                     </p>
 
                     @if ($completedWithdrawalTransaction)
@@ -266,6 +265,18 @@
                             </p>
                         </div>
                     @endif
+
+                    <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+                        <p class="text-sm text-blue-700">
+                            <i class="fas fa-info-circle mr-2"></i>
+                            @if ($withdrawalTransactionMode === 'counter')
+                                Once approved, you can visit our office with valid ID to collect your withdrawal.
+                            @else
+                                Once approved, funds will be transferred to your registered bank account within 1-2
+                                business days.
+                            @endif
+                        </p>
+                    </div>
 
                     <button type="button" wire:click="closeService"
                         class="w-full px-4 py-3 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-700">

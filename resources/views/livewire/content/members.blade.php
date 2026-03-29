@@ -1,7 +1,10 @@
 {{-- Single root element required by Livewire --}}
 <div>
-    {{-- Auto-refresh every 20 seconds, but only when modals are closed --}}
-    <div @if (!$showModal && !$showEditModal) wire:poll.20s @endif>
+    {{-- Auto-refresh every 20 seconds; paused while modals are open --}}
+    <div x-data="{ showModal: @entangle('showModal'), showEditModal: @entangle('showEditModal') }" x-show="!showModal && !showEditModal" wire:poll.visible.20s aria-hidden="true"
+        class="w-px h-px opacity-0 pointer-events-none"></div>
+
+    <div>
         <div class="p-4 bg-white block sm:flex items-center justify-between border-b border-gray-200 lg:mt-1.5">
             <div class="w-full mb-1">
                 <div class="mb-4">
@@ -86,7 +89,8 @@
                                         </div>
                                     </th>
                                     @if (in_array(Auth::user()->role, ['admin', 'manager']))
-                                        <th scope="col" wire:click="sortBy('user_number')"
+                                        <th scope="col" wire:click.debounce.250ms="sortBy('user_number')"
+                                            wire:loading.class="opacity-60 cursor-not-allowed" wire:target="sortBy"
                                             class="p-4 text-xs font-medium text-left text-gray-500 uppercase cursor-pointer hover:bg-gray-200">
                                             Member ID
                                             @if ($sortField === 'user_number')
@@ -94,7 +98,8 @@
                                             @endif
                                         </th>
                                     @endif
-                                    <th scope="col" wire:click="sortBy('first_name')"
+                                    <th scope="col" wire:click.debounce.250ms="sortBy('first_name')"
+                                        wire:loading.class="opacity-60 cursor-not-allowed" wire:target="sortBy"
                                         class="p-4 text-xs font-medium text-left text-gray-500 uppercase cursor-pointer hover:bg-gray-200">
                                         Name
                                         @if ($sortField === 'first_name')
@@ -105,7 +110,8 @@
                                         class="p-4 text-xs font-medium text-left text-gray-500 uppercase">
                                         Status
                                     </th>
-                                    <th scope="col" wire:click="sortBy('created_at')"
+                                    <th scope="col" wire:click.debounce.250ms="sortBy('created_at')"
+                                        wire:loading.class="opacity-60 cursor-not-allowed" wire:target="sortBy"
                                         class="p-4 text-xs font-medium text-left text-gray-500 uppercase cursor-pointer hover:bg-gray-200">
                                         Join Date
                                         @if ($sortField === 'created_at')
@@ -214,9 +220,7 @@
                 :canEdit="$canEdit" :activeTab="$activeTab" />
         @endif
 
-        {{-- Edit/Add Member Modal --}}
-        @if ($showEditModal)
-            <x-modals.member-form wire:key="member-form-{{ $modalKey }}" :isEdit="$isEdit" :tabErrors="$tabErrors" />
-        @endif
+        {{-- Edit/Add Member Modal (always rendered; visibility controlled via entangled showEditModal for snappier open/close) --}}
+        <x-modals.member-form wire:key="member-form-{{ $modalKey }}" :isEdit="$isEdit" :tabErrors="$tabErrors" />
     </div>
 </div>

@@ -1,9 +1,21 @@
 @props(['isEdit' => false, 'tabErrors' => []])
 
-<div x-data="{ show: false, formTab: 'personal' }" x-init="$nextTick(() => show = true)" x-show="show" x-transition:enter="transition ease-out duration-200"
-    x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
-    x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100"
-    x-transition:leave-end="opacity-0"
+<div {{ $attributes }} x-data="{
+    show: @entangle('showEditModal'),
+    formTab: 'personal',
+    async goToTab(nextTab) {
+        // Validate current tab before allowing navigation
+        try {
+            await $wire.validateTab(this.formTab);
+            this.formTab = nextTab;
+        } catch (e) {
+            // Stay on current tab if validation fails
+        }
+    },
+}" x-effect="if (show) { formTab = 'personal' }" x-show="show" x-cloak
+    x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150"
+    x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
     class="fixed inset-0 z-50 flex items-center justify-center overflow-x-hidden overflow-y-auto outline-none focus:outline-none"
     aria-labelledby="modal-title" role="dialog" aria-modal="true">
     {{-- Backdrop --}}
@@ -49,7 +61,7 @@
 
             {{-- Tab Navigation --}}
             <div class="flex border-b border-gray-200 bg-gray-50 px-6 overflow-x-auto">
-                <button @click="formTab = 'personal'"
+                <button @click="goToTab('personal')"
                     :class="formTab === 'personal' ? 'border-cyan-500 text-cyan-600' :
                         'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                     class="py-4 px-6 border-b-2 font-medium text-sm whitespace-nowrap transition-colors relative">
@@ -58,7 +70,7 @@
                         <span class="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
                     @endif
                 </button>
-                <button @click="formTab = 'address'"
+                <button @click="goToTab('address')"
                     :class="formTab === 'address' ? 'border-cyan-500 text-cyan-600' :
                         'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                     class="py-4 px-6 border-b-2 font-medium text-sm whitespace-nowrap transition-colors relative">
@@ -67,7 +79,7 @@
                         <span class="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
                     @endif
                 </button>
-                <button @click="formTab = 'contact'"
+                <button @click="goToTab('contact')"
                     :class="formTab === 'contact' ? 'border-cyan-500 text-cyan-600' :
                         'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                     class="py-4 px-6 border-b-2 font-medium text-sm whitespace-nowrap transition-colors relative">
@@ -76,7 +88,7 @@
                         <span class="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
                     @endif
                 </button>
-                <button @click="formTab = 'ids'"
+                <button @click="goToTab('ids')"
                     :class="formTab === 'ids' ? 'border-cyan-500 text-cyan-600' :
                         'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                     class="py-4 px-6 border-b-2 font-medium text-sm whitespace-nowrap transition-colors relative">
@@ -85,7 +97,7 @@
                         <span class="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
                     @endif
                 </button>
-                <button @click="formTab = 'employment'"
+                <button @click="goToTab('employment')"
                     :class="formTab === 'employment' ? 'border-cyan-500 text-cyan-600' :
                         'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                     class="py-4 px-6 border-b-2 font-medium text-sm whitespace-nowrap transition-colors relative">
@@ -95,7 +107,7 @@
                     @endif
                 </button>
                 @if (!$isEdit || in_array(Auth::user()->role, ['admin', 'manager']))
-                    <button @click="formTab = 'login'"
+                    <button @click="goToTab('login')"
                         :class="formTab === 'login' ? 'border-cyan-500 text-cyan-600' :
                             'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                         class="py-4 px-6 border-b-2 font-medium text-sm whitespace-nowrap transition-colors relative">
@@ -116,28 +128,29 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <x-forms.text-input name="first_name" label="First Name" model="form.first_name"
                                 :required="true" placeholder="Enter first name"
-                                helperText="Legal first name as it appears on ID" />
+                                helperText="Legal first name as it appears on ID" :validateOnBlur="false" :defer="true" />
                             <x-forms.text-input name="mid_name" label="Middle Name" model="form.mid_name"
-                                placeholder="Enter middle name" />
+                                placeholder="Enter middle name" :validateOnBlur="false" :defer="true" />
                             <x-forms.text-input name="last_name" label="Last Name" model="form.last_name"
-                                :required="true" placeholder="Enter last name" />
+                                :required="true" placeholder="Enter last name" :validateOnBlur="false" :defer="true" />
                             <x-forms.text-input name="suffix" label="Suffix" model="form.suffix"
-                                placeholder="Jr., Sr., III, etc." maxlength="50" />
+                                placeholder="Jr., Sr., III, etc." maxlength="50" :validateOnBlur="false" :defer="true" />
                             <x-forms.text-input name="birth_date" label="Date of Birth" model="form.birth_date"
-                                :required="true" type="date" helperText="Must be 18 years or older" />
+                                :required="true" type="date" helperText="Must be 18 years or older"
+                                :validateOnBlur="false" :defer="true" />
                             <x-forms.text-input name="birthplace" label="Place of Birth" model="form.birthplace"
-                                placeholder="City, Province" />
+                                placeholder="City, Province" :validateOnBlur="false" :defer="true" />
                             <x-forms.select-input name="gender" label="Gender" model="form.gender" :required="true"
-                                :options="['male' => 'Male', 'female' => 'Female', 'other' => 'Other']" />
+                                :options="['male' => 'Male', 'female' => 'Female', 'other' => 'Other']" :validateOnBlur="false" :defer="true" />
                             <x-forms.select-input name="civil_status" label="Civil Status" model="form.civil_status"
                                 :required="true" :options="[
                                     'single' => 'Single',
                                     'married' => 'Married',
                                     'widowed' => 'Widowed',
                                     'separated' => 'Separated',
-                                ]" />
+                                ]" :validateOnBlur="false" :defer="true" />
                             <x-forms.text-input name="religion" label="Religion" model="form.religion"
-                                placeholder="Enter religion" />
+                                placeholder="Enter religion" :validateOnBlur="false" :defer="true" />
                         </div>
                     </div>
 
@@ -145,19 +158,20 @@
                     <div x-show="formTab === 'address'" x-transition class="space-y-6">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <x-forms.text-input name="street" label="Street Address" model="form.street"
-                                placeholder="House No., Street Name" />
+                                placeholder="House No., Street Name" :validateOnBlur="false" :defer="true" />
                             <x-forms.text-input name="barangay" label="Barangay" model="form.barangay"
-                                placeholder="Enter barangay" />
+                                placeholder="Enter barangay" :validateOnBlur="false" :defer="true" />
                             <x-forms.text-input name="city" label="City/Municipality" model="form.city"
-                                placeholder="Enter city or municipality" />
+                                placeholder="Enter city or municipality" :validateOnBlur="false" :defer="true" />
                             <x-forms.text-input name="province" label="Province" model="form.province"
-                                placeholder="Enter province" />
+                                placeholder="Enter province" :validateOnBlur="false" :defer="true" />
                             <x-forms.text-input name="region" label="Region" model="form.region"
-                                placeholder="e.g., Region IV-A" />
+                                placeholder="e.g., Region IV-A" :validateOnBlur="false" :defer="true" />
                             <x-forms.text-input name="postal_code" label="Postal/ZIP Code" model="form.postal_code"
-                                placeholder="Enter postal code" maxlength="20" />
+                                placeholder="Enter postal code" maxlength="20" :validateOnBlur="false"
+                                :defer="true" />
                             <x-forms.text-input name="country" label="Country" model="form.country"
-                                placeholder="Philippines" />
+                                placeholder="Philippines" :validateOnBlur="false" :defer="true" />
                         </div>
                     </div>
 
@@ -166,20 +180,22 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <x-forms.text-input name="email" label="Email Address" model="form.email"
                                 type="email" :required="true" placeholder="email@example.com"
-                                helperText="Primary contact email" />
+                                helperText="Primary contact email" :validateOnBlur="false" :defer="true" />
                             <x-forms.text-input name="phone_number" label="Phone Number" model="form.phone_number"
                                 :required="true" type="tel" placeholder="09XX XXX XXXX" maxlength="11"
-                                helperText="11-digit mobile number" />
+                                helperText="11-digit mobile number" :validateOnBlur="false" :defer="true" />
                             <x-forms.text-input name="mobile_number" label="Alternate Mobile"
-                                model="form.mobile_number" type="tel" placeholder="09XX XXX XXXX"
-                                maxlength="11" />
+                                model="form.mobile_number" type="tel" placeholder="09XX XXX XXXX" maxlength="11"
+                                :validateOnBlur="false" :defer="true" />
                             <x-forms.text-input name="emergency_contact" label="Emergency Contact"
-                                model="form.emergency_contact" placeholder="Name and number" />
+                                model="form.emergency_contact" placeholder="Name and number" :validateOnBlur="false"
+                                :defer="true" />
                             <div class="md:col-span-2">
                                 <x-forms.text-input name="facebook_link" label="Facebook Profile"
                                     model="form.facebook_link" type="url"
                                     placeholder="https://facebook.com/username"
-                                    helperText="Optional: Your Facebook profile URL" />
+                                    helperText="Optional: Your Facebook profile URL" :validateOnBlur="false"
+                                    :defer="true" />
                             </div>
                         </div>
                     </div>
@@ -188,15 +204,18 @@
                     <div x-show="formTab === 'ids'" x-transition class="space-y-6">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <x-forms.text-input name="national_id" label="National ID (PhilSys)"
-                                model="form.national_id" placeholder="XXXX-XXXX-XXXX-XXXX" maxlength="64" />
+                                model="form.national_id" placeholder="XXXX-XXXX-XXXX-XXXX" maxlength="64"
+                                :validateOnBlur="false" :defer="true" />
                             <x-forms.text-input name="tin" label="TIN (Tax Identification Number)"
-                                model="form.tin" placeholder="XXX-XXX-XXX-XXX" maxlength="64" />
+                                model="form.tin" placeholder="XXX-XXX-XXX-XXX" maxlength="64" :validateOnBlur="false"
+                                :defer="true" />
                             <x-forms.text-input name="sss" label="SSS Number" model="form.sss"
-                                placeholder="XX-XXXXXXX-X" maxlength="64" />
+                                placeholder="XX-XXXXXXX-X" maxlength="64" :validateOnBlur="false" :defer="true" />
                             <x-forms.text-input name="philhealth" label="PhilHealth Number" model="form.philhealth"
-                                placeholder="XX-XXXXXXXXX-X" maxlength="64" />
+                                placeholder="XX-XXXXXXXXX-X" maxlength="64" :validateOnBlur="false" :defer="true" />
                             <x-forms.text-input name="barangay_id" label="Barangay ID" model="form.barangay_id"
-                                placeholder="Enter barangay ID" maxlength="64" />
+                                placeholder="Enter barangay ID" maxlength="64" :validateOnBlur="false"
+                                :defer="true" />
                         </div>
                     </div>
 
@@ -216,18 +235,22 @@
                                     'unemployed' => 'Unemployed',
                                     'student' => 'Student',
                                     'homemaker' => 'Homemaker',
-                                ]" />
+                                ]" :validateOnBlur="false"
+                                :defer="true" />
                             <x-forms.text-input name="employer_name" label="Company/Employer Name"
-                                model="form.employer_name" placeholder="Enter company name" />
+                                model="form.employer_name" placeholder="Enter company name" :validateOnBlur="false"
+                                :defer="true" />
                             <x-forms.text-input name="position" label="Position/Job Title" model="form.position"
-                                placeholder="Enter position" />
+                                placeholder="Enter position" :validateOnBlur="false" :defer="true" />
                             <x-forms.text-input name="monthly_income" label="Monthly Income"
                                 model="form.monthly_income" type="number" placeholder="0.00"
-                                helperText="Enter amount in PHP" />
+                                helperText="Enter amount in PHP" :validateOnBlur="false" :defer="true" />
                             <x-forms.text-input name="other_income_source" label="Other Income Source"
-                                model="form.other_income_source" placeholder="e.g., Business, Investments" />
+                                model="form.other_income_source" placeholder="e.g., Business, Investments"
+                                :validateOnBlur="false" :defer="true" />
                             <x-forms.text-input name="other_income_amount" label="Other Income Amount"
-                                model="form.other_income_amount" type="number" placeholder="0.00" />
+                                model="form.other_income_amount" type="number" placeholder="0.00" :validateOnBlur="false"
+                                :defer="true" />
                         </div>
                     </div>
 
@@ -240,15 +263,16 @@
                                         <x-forms.text-input name="current_password" label="Current Password"
                                             model="form.current_password" type="password" :required="!empty($form['password'])"
                                             placeholder="Enter current password"
-                                            helperText="Required to change password" />
+                                            helperText="Required to change password" :validateOnBlur="false"
+                                            :defer="true" />
                                     </div>
                                 @endif
                                 <x-forms.text-input name="password" label="Password" model="form.password"
                                     type="password" :required="!$isEdit" placeholder="Enter password"
-                                    helperText="Minimum 6 characters" />
+                                    helperText="Minimum 6 characters" :validateOnBlur="false" :defer="true" />
                                 <x-forms.text-input name="password_confirmation" label="Confirm Password"
                                     model="form.password_confirmation" type="password" :required="!$isEdit"
-                                    placeholder="Re-enter password" />
+                                    placeholder="Re-enter password" :validateOnBlur="false" :defer="true" />
                             </div>
 
                             @if (!$isEdit)
@@ -313,3 +337,17 @@
                             wire:target="saveMember">{{ $isEdit ? 'Update Member' : 'Create Member' }}</span>
                         <span wire:loading
                             wire:target="saveMember">{{ $isEdit ? 'Updating...' : 'Creating...' }}</span>
+
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<style>
+    [x-cloak] {
+        display: none !important;
+    }
+</style>

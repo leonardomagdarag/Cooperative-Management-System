@@ -2,7 +2,9 @@
 
 namespace App\Livewire\Content;
 
+use App\Models\Loan;
 use App\Models\Transaction;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -19,6 +21,10 @@ class Ledger extends Component
     public $sortField = 'created_at';
 
     public $sortDirection = 'desc';
+
+    // Summary range hook (future Reports/Summaries reuse)
+    // For now UI defaults to today; other ranges can be wired later.
+    public $range = 'today';
 
     // Row selection
     public $selectedRows = [];
@@ -277,10 +283,121 @@ class Ledger extends Component
 
         logger('Successfully rendered with ' . $transactions->total() . ' transactions');
 
+        $dailySummary = $this->dailySummary;
+
         return view('livewire.content.ledger', [
             'transactions' => $transactions,
             'canEdit' => $canEdit,
+            'dailySummary' => $dailySummary,
         ]);
+    }
+
+    /**
+     * Total transactions
+     */
+    public function getDailySummaryProperty(): array
+    {
+        $range = $this->range ?: 'today';
+
+        $transactionCounts = $this->applyRangeToTransactionsQuery(
+            Transaction::query()->where('status', 'completed'),
+            $range
+        )
+            ->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_payment'])
+            ->selectRaw('transaction_type, COUNT(*) as count')
+            ->groupBy('transaction_type')
+            ->pluck('count', 'transaction_type');
+
+        $loanCount = $this->applyRangeToLoansQuery(Loan::query(), $range)->count();
+
+        return [
+            'range' => $range,
+            'range_label' => $this->getRangeLabel($range),
+            'deposit_count' => (int) ($transactionCounts['deposit'] ?? 0),
+            'withdrawal_count' => (int) ($transactionCounts['withdrawal'] ?? 0),
+            'loan_payment_count' => (int) ($transactionCounts['loan_payment'] ?? 0),
+            'loan_count' => (int) $loanCount,
+        ];
+    }
+
+    private function applyRangeToTransactionsQuery($query, string $range)
+    {
+        // Prefer transaction_date; include legacy rows with null transaction_date using created_at.
+        return match ($range) {
+            'today' => $query->where(function ($q) {
+                $q->whereDate('transaction_date', Carbon::today())
+                    ->orWhere(function ($q2) {
+                        $q2->whereNull('transaction_date')
+                            ->whereDate('created_at', Carbon::today());
+                    });
+            }),
+            'week' => $query->where(function ($q) {
+                $start = Carbon::now()->startOfWeek();
+                $end = Carbon::now()->endOfWeek();
+
+                $q->whereBetween('transaction_date', [$start, $end])
+                    ->orWhere(function ($q2) use ($start, $end) {
+                        $q2->whereNull('transaction_date')
+                            ->whereBetween('created_at', [$start, $end]);
+                    });
+            }),
+            'month' => $query->where(function ($q) {
+                $start = Carbon::now()->startOfMonth();
+                $end = Carbon::now()->endOfMonth();
+
+                $q->whereBetween('transaction_date', [$start, $end])
+                    ->orWhere(function ($q2) use ($start, $end) {
+                        $q2->whereNull('transaction_date')
+                            ->whereBetween('created_at', [$start, $end]);
+                    });
+            }),
+            default => $query,
+        };
+    }
+
+    private function applyRangeToLoansQuery($query, string $range)
+    {
+        // Loans have applied_at; use it when present, otherwise fall back to created_at.
+        return match ($range) {
+            'today' => $query->where(function ($q) {
+                $q->whereDate('applied_at', Carbon::today())
+                    ->orWhere(function ($q2) {
+                        $q2->whereNull('applied_at')
+                            ->whereDate('created_at', Carbon::today());
+                    });
+            }),
+            'week' => $query->where(function ($q) {
+                $start = Carbon::now()->startOfWeek();
+                $end = Carbon::now()->endOfWeek();
+
+                $q->whereBetween('applied_at', [$start, $end])
+                    ->orWhere(function ($q2) use ($start, $end) {
+                        $q2->whereNull('applied_at')
+                            ->whereBetween('created_at', [$start, $end]);
+                    });
+            }),
+            'month' => $query->where(function ($q) {
+                $start = Carbon::now()->startOfMonth();
+                $end = Carbon::now()->endOfMonth();
+
+                $q->whereBetween('applied_at', [$start, $end])
+                    ->orWhere(function ($q2) use ($start, $end) {
+                        $q2->whereNull('applied_at')
+                            ->whereBetween('created_at', [$start, $end]);
+                    });
+            }),
+            default => $query,
+        };
+    }
+
+    private function getRangeLabel(string $range): string
+    {
+        return match ($range) {
+            'today' => 'Today',
+            'week' => 'This Week',
+            'month' => 'This Month',
+            default => ucfirst(str_replace('_', ' ', $range)),
+        };
     }
 
     /**
