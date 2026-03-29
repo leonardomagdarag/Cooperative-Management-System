@@ -1,3 +1,35 @@
 @import "tailwindcss";
+@import '@fortawesome/fontawesome-free/css/all.min.css';
 @import 'animate.css';
 
+@layer utilities {
+    @keyframes shrink {
+        from {
+            width: 100%;
+        }
+
+        to {
+            width: 0%;
+        }
+    }
+
+    .animate-shrink {
+        animation: shrink 5s linear;
+    }
+}
+
+/* Professional Monochromatic Color Scheme */
+:root {
+    --color-primary: rgb(51 65 85);
+    /* slate-700 */
+    --color-primary-dark: rgb(30 41 59);
+    /* slate-800 */
+    --color-primary-darker: rgb(15 23 42);
+    /* slate-900 */
+    --color-accent: rgb(4 120 87);
+    /* emerald-700 */
+    --color-accent-hover: rgb(5 150 105);
+    /* emerald-600 */
+    --color-accent-light: rgb(16 185 129);
+    /* emerald-500 */
+}

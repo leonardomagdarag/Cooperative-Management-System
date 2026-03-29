@@ -20,8 +20,11 @@
         "vite": "^7.3.1"
     },
     "dependencies": {
+        "@fontsource-variable/outfit": "^5.2.8",
+        "@fontsource/poppins": "^5.2.7",
         "@fortawesome/fontawesome-free": "^7.2.0",
         "animate.css": "^4.1.1",
+        "chart.js": "^4.5.0",
         "flowbite": "^4.0.1",
         "jquery": "^4.0.0"
     }

@@ -5,6 +5,7 @@ namespace App\Livewire\Content;
 use App\Models\Account;
 use App\Models\Loan;
 use App\Models\Transaction;
+use App\Services\NotificationService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
@@ -13,6 +14,8 @@ use Livewire\WithFileUploads;
 class Services extends Component
 {
     use WithFileUploads;
+
+    protected $notificationService;
 
     // View state
     public $activeService = null; // 'deposit', 'withdraw', 'loan', 'payment', 'approve'
@@ -125,6 +128,8 @@ class Services extends Component
 
     public function mount()
     {
+        $this->notificationService = app(NotificationService::class);
+
         // Check if user is treasurer, admin, or manager
         $userRole = Auth::user()->role;
         $this->isTreasurerMode = in_array($userRole, ['treasurer', 'admin', 'manager']);
@@ -180,14 +185,16 @@ class Services extends Component
 
     public function approveTransaction()
     {
-        if (! $this->isTreasurerMode || ! $this->selectedTransactionId) {
+        // Allow treasurer, manager, and admin to approve
+        $userRole = Auth::user()->role;
+        if (!in_array($userRole, ['treasurer', 'manager', 'admin']) || !$this->selectedTransactionId) {
             return;
         }
 
         try {
             DB::beginTransaction();
 
-            $transaction = Transaction::with(['account', 'loan'])->findOrFail($this->selectedTransactionId);
+            $transaction = Transaction::with(['account', 'loan', 'user'])->findOrFail($this->selectedTransactionId);
 
             // Check if already processed
             if ($transaction->status !== 'pending') {
@@ -215,6 +222,11 @@ class Services extends Component
                 $transaction->account->increment('balance', $transaction->amount);
             } elseif ($transaction->transaction_type === 'withdrawal') {
                 $transaction->account->decrement('balance', $transaction->amount);
+
+                // Send withdrawal approval notification
+                if ($transaction->user) {
+                    $this->notificationService->notifyWithdrawalApproved($transaction);
+                }
             } elseif ($transaction->transaction_type === 'loan_payment' && $transaction->loan) {
                 // Check if loan is now fully paid
                 $loan = $transaction->loan;
@@ -246,14 +258,16 @@ class Services extends Component
             'rejectionReason' => 'required|string|min:5',
         ]);
 
-        if (! $this->isTreasurerMode || ! $this->selectedTransactionId) {
+        // Allow treasurer, manager, and admin to reject
+        $userRole = Auth::user()->role;
+        if (!in_array($userRole, ['treasurer', 'manager', 'admin']) || !$this->selectedTransactionId) {
             return;
         }
 
         try {
             DB::beginTransaction();
 
-            $transaction = Transaction::with('account')->findOrFail($this->selectedTransactionId);
+            $transaction = Transaction::with(['account', 'user'])->findOrFail($this->selectedTransactionId);
 
             // Check if already processed
             if ($transaction->status !== 'pending' && $transaction->status !== 'completed') {
@@ -283,6 +297,11 @@ class Services extends Component
             $transaction->status = 'rejected';
             $transaction->note = ($transaction->note ? $transaction->note . ' | ' : '') . 'REJECTED: ' . $this->rejectionReason . ' (by ' . Auth::user()->personalData->first_name . ' ' . Auth::user()->personalData->last_name . ')';
             $transaction->save();
+
+            // Send withdrawal rejection notification
+            if ($transaction->transaction_type === 'withdrawal' && $transaction->user) {
+                $this->notificationService->notifyWithdrawalRejected($transaction, $this->rejectionReason);
+            }
 
             DB::commit();
 
@@ -490,7 +509,7 @@ class Services extends Component
     {
         $account = Account::find($this->withdrawalAccountId);
 
-        // Calculate available balance (current balance minus pending withdrawals)
+        // Calculate available balance (current balance minus ALL pending withdrawals)
         $pendingWithdrawals = Transaction::where('account_id', $this->withdrawalAccountId)
             ->where('transaction_type', 'withdrawal')
             ->where('status', 'pending')
@@ -507,10 +526,7 @@ class Services extends Component
         try {
             DB::beginTransaction();
 
-            // Only online/digital wallet transactions are auto-approved
-            // Counter transactions need treasurer approval
-            $isAutoApprove = $this->withdrawalTransactionMode === 'online';
-
+            // ALL withdrawals now require approval (no auto-approve)
             $note = ($this->isTreasurerMode ? 'Processed by treasurer - ' : '')
                 . $this->withdrawalReason . ' | '
                 . ($this->withdrawalTransactionMode === 'counter' ? 'Over the counter' : 'Online payment');
@@ -520,25 +536,21 @@ class Services extends Component
                 'transaction_type' => 'withdrawal',
                 'amount' => $this->withdrawalAmount,
                 'transaction_date' => now(),
-                'status' => $isAutoApprove ? 'completed' : 'pending',
+                'status' => 'pending', // ALL withdrawals start as pending
                 'note' => $note,
                 'recorded_by' => Auth::id(),
             ]);
 
-            // Update account balance only if auto-approved (online)
-            if ($isAutoApprove) {
-                $account->decrement('balance', $this->withdrawalAmount);
-            }
+            // Do NOT update account balance - wait for approval
 
             DB::commit();
 
             $this->completedWithdrawalTransaction = $transaction->fresh();
 
-            if ($this->withdrawalTransactionMode === 'online') {
-                $this->withdrawalStep++;
-            } else {
-                $this->withdrawalStep = 99;
-            }
+            // Always go to pending confirmation step
+            $this->withdrawalStep = 99;
+
+            $this->dispatch('success', message: 'Withdrawal request submitted for approval.');
         } catch (\Exception $e) {
             DB::rollBack();
             $this->dispatch('error', message: 'Failed to submit withdrawal: ' . $e->getMessage());
@@ -890,6 +902,30 @@ class Services extends Component
             ->sum('amount');
 
         return max(0, $savingsAccount->balance - $pendingWithdrawals);
+    }
+
+    /**
+     * Get pending withdrawal requests for the current user
+     */
+    public function getPendingWithdrawalsProperty()
+    {
+        if ($this->isTreasurerMode && $this->selectedMemberId) {
+            $user = \App\Models\User::find($this->selectedMemberId);
+        } else {
+            $user = Auth::user();
+        }
+
+        if (!$user) {
+            return collect();
+        }
+
+        $accountIds = $user->accounts()->pluck('id');
+
+        return Transaction::whereIn('account_id', $accountIds)
+            ->where('transaction_type', 'withdrawal')
+            ->where('status', 'pending')
+            ->orderBy('created_at', 'desc')
+            ->get();
     }
 
     public function render()

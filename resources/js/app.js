@@ -1,7 +1,10 @@
 import './bootstrap';
-import '@fortawesome/fontawesome-free/css/all.min.css';
-import $ from 'jquery';
-window.jQuery = window.$ = $;
+import './reports-charts';
+
+import Alpine from 'alpinejs';
+
+window.Alpine = Alpine;
+Alpine.start();
 
 
 const navbar = document.getElementById("top-navbar");

@@ -59,7 +59,10 @@ class PasswordResetController extends Controller
             return redirect()->route('password.reset.form', ['email' => $request->email])
                 ->with('success', 'A 6-digit reset code has been sent to your email address.');
         } catch (\Exception $e) {
-            return back()->with('error', 'Failed to send reset email. Please try again later.');
+            // Log the error for debugging
+            \Log::error('Password reset email failed: ' . $e->getMessage());
+
+            return back()->with('error', 'Failed to send reset email: ' . $e->getMessage());
         }
     }
 
@@ -76,6 +79,51 @@ class PasswordResetController extends Controller
         }
 
         return view('public.reset-password', ['email' => $email]);
+    }
+
+    /**
+     * Verify token only (AJAX endpoint)
+     */
+    public function verifyToken(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'token' => 'required|digits:6',
+        ]);
+
+        // Find the password reset record
+        $resetRecord = DB::table('password_reset_tokens')
+            ->where('email', $request->email)
+            ->first();
+
+        if (!$resetRecord) {
+            return response()->json([
+                'valid' => false,
+                'message' => 'Invalid or expired reset code.'
+            ], 400);
+        }
+
+        // Check if token expired (30 minutes)
+        if (now()->diffInMinutes($resetRecord->created_at) > 30) {
+            DB::table('password_reset_tokens')->where('email', $request->email)->delete();
+            return response()->json([
+                'valid' => false,
+                'message' => 'Reset code has expired. Please request a new one.'
+            ], 400);
+        }
+
+        // Verify token
+        if (!Hash::check($request->token, $resetRecord->token)) {
+            return response()->json([
+                'valid' => false,
+                'message' => 'Invalid reset code. Please check and try again.'
+            ], 400);
+        }
+
+        return response()->json([
+            'valid' => true,
+            'message' => 'Code verified successfully.'
+        ]);
     }
 
     /**
@@ -135,20 +183,41 @@ class PasswordResetController extends Controller
      */
     private function sendResetEmail($user, $token)
     {
+        // Validate email configuration first
+        $fromAddress = config('mail.from.address');
+        $fromName = config('mail.from.name', 'Cooperative System');
+        $mailHost = config('mail.mailers.smtp.host');
+        $mailUsername = config('mail.mailers.smtp.username');
+        $mailPassword = config('mail.mailers.smtp.password');
+
+        if (!$fromAddress || !filter_var($fromAddress, FILTER_VALIDATE_EMAIL)) {
+            throw new \Exception('MAIL_FROM_ADDRESS is not configured properly in .env file. Please set a valid email address.');
+        }
+
+        if (!$mailHost || !$mailUsername || !$mailPassword) {
+            throw new \Exception('Email configuration incomplete. Please check MAIL_HOST, MAIL_USERNAME, and MAIL_PASSWORD in .env file.');
+        }
+
         $mail = new PHPMailer(true);
 
         try {
+            // Debug mode (set to 0 for production)
+            // $mail->SMTPDebug = 2; // Uncomment to see detailed SMTP debug output
+
             // Server settings
             $mail->isSMTP();
-            $mail->Host       = env('MAIL_HOST');
+            $mail->Host       = $mailHost;
             $mail->SMTPAuth   = true;
-            $mail->Username   = env('MAIL_USERNAME');
-            $mail->Password   = env('MAIL_PASSWORD');
-            $mail->SMTPSecure = env('MAIL_ENCRYPTION', 'tls');
-            $mail->Port       = env('MAIL_PORT', 587);
+            $mail->Username   = $mailUsername;
+            $mail->Password   = $mailPassword;
+            $mail->SMTPSecure = config('mail.mailers.smtp.encryption', 'tls');
+            $mail->Port       = config('mail.mailers.smtp.port', 587);
+
+            // Timeout settings
+            $mail->Timeout    = 30;
 
             // Recipients
-            $mail->setFrom(env('MAIL_FROM_ADDRESS'), env('MAIL_FROM_NAME'));
+            $mail->setFrom($fromAddress, $fromName);
             $mail->addAddress($user->email, $user->personalData->first_name . ' ' . $user->personalData->last_name);
 
             // Content
@@ -212,20 +281,28 @@ class PasswordResetController extends Controller
      */
     private function sendPasswordChangedEmail($user)
     {
+        // Validate email configuration first
+        $fromAddress = config('mail.from.address');
+        $fromName = config('mail.from.name', 'Cooperative System');
+
+        if (!$fromAddress || !filter_var($fromAddress, FILTER_VALIDATE_EMAIL)) {
+            throw new \Exception('MAIL_FROM_ADDRESS is not configured properly in .env file.');
+        }
+
         $mail = new PHPMailer(true);
 
         try {
             // Server settings
             $mail->isSMTP();
-            $mail->Host       = env('MAIL_HOST');
+            $mail->Host       = config('mail.mailers.smtp.host');
             $mail->SMTPAuth   = true;
-            $mail->Username   = env('MAIL_USERNAME');
-            $mail->Password   = env('MAIL_PASSWORD');
-            $mail->SMTPSecure = env('MAIL_ENCRYPTION', 'tls');
-            $mail->Port       = env('MAIL_PORT', 587);
+            $mail->Username   = config('mail.mailers.smtp.username');
+            $mail->Password   = config('mail.mailers.smtp.password');
+            $mail->SMTPSecure = config('mail.mailers.smtp.encryption', 'tls');
+            $mail->Port       = config('mail.mailers.smtp.port', 587);
 
             // Recipients
-            $mail->setFrom(env('MAIL_FROM_ADDRESS'), env('MAIL_FROM_NAME'));
+            $mail->setFrom($fromAddress, $fromName);
             $mail->addAddress($user->email, $user->personalData->first_name . ' ' . $user->personalData->last_name);
 
             // Content

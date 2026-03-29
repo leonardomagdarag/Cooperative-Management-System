@@ -21,24 +21,88 @@ return [
 
     'board' => [
         'chairperson' => [
-            'name' => 'Ma. Lourdes P. Cambosa',
+            'name' => 'Ricardo M. Villanueva',
             'title' => 'Chairperson',
-            'motto' => "<i>'Rank 5 Vexana in Calauan'</i>",
         ],
         'vice_chairperson' => [
-            'name' => 'Villamor Z. Corbilla',
+            'name' => 'Elena S. Mercado',
             'title' => 'Vice-Chairperson',
-            'motto' => "<i>'Boku no Pico 10/10. Higly Recommended'</i>",
         ],
         'treasurer' => [
-            'name' => 'Rodalyn Gorioso',
+            'name' => 'Benjamin R. Pascual',
             'title' => 'Treasurer',
-            'motto' => "<i>'Wait palit lang account baka mabawasan star.'</i>",
         ],
         'secretary' => [
-            'name' => 'Celestina Lumpas',
+            'name' => 'Marissa T. Domingo',
             'title' => 'Secretary',
-            'motto' => "<i>'Ako na naman. Nanahimik yung tao.'</i>",
+        ],
+    ],
+
+    'officers' => [
+        'officer1' => [
+            'name' => 'Juan Dela Cruz',
+            'title' => 'General Manager',
+        ],
+        'officer2' => [
+            'name' => 'Maria Santos',
+            'title' => 'Operations Manager',
+        ],
+        'officer3' => [
+            'name' => 'Roberto Gonzales',
+            'title' => 'Finance Officer',
+        ],
+        'officer4' => [
+            'name' => 'Ana Reyes',
+            'title' => 'Member Relations Officer',
+        ],
+    ],
+
+    'member_statements' => [
+        'statement1' => [
+            'name' => 'Pedro Martinez',
+            'member_since' => '2018',
+            'statement' => 'The cooperative has been instrumental in helping me start my small business. The loan process was straightforward, and the interest rates were very reasonable. I am grateful for their support.',
+        ],
+        'statement2' => [
+            'name' => 'Luisa Fernandez',
+            'member_since' => '2019',
+            'statement' => 'Being part of this cooperative has given me financial security. The savings programs have helped me build my emergency fund, and the staff is always helpful and supportive.',
+        ],
+        'statement3' => [
+            'name' => 'Carlos Ramos',
+            'member_since' => '2020',
+            'statement' => 'I appreciate the transparency and integrity of this cooperative. They truly care about their members\' financial well-being and provide excellent services.',
+        ],
+    ],
+
+    'news' => [
+        'hero_description' => 'Stay informed with the latest news, announcements, and upcoming events from Settlers Credit Cooperative.',
+
+        'news_items' => [
+            [
+                'title' => 'New Interest Rates for Savings Accounts',
+                'category' => 'Announcement',
+                'date' => 'March 5, 2026',
+                'description' => 'We\'re excited to announce increased interest rates on all savings accounts starting April 1, 2026. Regular savings accounts will now earn 3.5% annually, while time deposits will earn up to 5.5% depending on the term. This is part of our commitment to providing better returns for our members.',
+            ],
+            [
+                'title' => 'Cooperative Reaches 1,000 Active Members',
+                'category' => 'Achievement',
+                'date' => 'February 28, 2026',
+                'description' => 'We\'re proud to announce that Settlers Credit Cooperative has reached a milestone of 1,000 active members! This achievement reflects our community\'s trust and commitment to cooperative principles. Thank you to all our members for being part of this journey.',
+            ],
+            [
+                'title' => 'Mobile App Update: New Features Available',
+                'category' => 'Update',
+                'date' => 'February 15, 2026',
+                'description' => 'Our mobile banking app has been updated with new features including instant loan application status tracking, digital receipts, and enhanced security features. Update your app today to enjoy these improvements.',
+            ],
+        ],
+
+        'newsletter' => [
+            'title' => 'Subscribe to Our Newsletter',
+            'description' => 'Stay updated with the latest news, announcements, and upcoming events. Subscribe to our newsletter and never miss important updates from Settlers Credit Cooperative.',
+            'privacy_note' => 'We respect your privacy. Unsubscribe at any time.',
         ],
     ],
 

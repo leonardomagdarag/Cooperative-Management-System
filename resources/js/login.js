@@ -1,8 +1,10 @@
-
-
 window.togglePassword = function togglePassword() {
     const passwordInput = document.getElementById('password');
     const toggleIcon = document.getElementById('toggleIcon');
+
+    if (!passwordInput || !toggleIcon) {
+        return;
+    }
 
     if (passwordInput.type === 'password') {
         passwordInput.type = 'text';
@@ -13,85 +15,105 @@ window.togglePassword = function togglePassword() {
         toggleIcon.classList.remove('fa-eye-slash');
         toggleIcon.classList.add('fa-eye');
     }
-}
+};
 
 function showWarn(text) {
-    var warning = document.getElementById('warn');
-    var warnText = document.getElementById('warnText');
+    const warning = document.getElementById('warn');
+    const warnText = document.getElementById('warnText');
+
+    if (!warning || !warnText) {
+        return;
+    }
+
     warning.classList.remove('hidden');
     warning.classList.add('block');
     warnText.textContent = text;
 
-    //change container padding to accommodate notification
-    var loginContainer = document.getElementById('loginContainer');
-    loginContainer.classList.remove('md:p-16');
-    loginContainer.classList.add('md:px-16', 'md:py-7');
+    const loginContainer = document.getElementById('loginContainer');
+    if (loginContainer) {
+        loginContainer.classList.remove('md:p-16');
+        loginContainer.classList.add('md:px-16', 'md:py-7');
+    }
 }
 
 window.closeWarn = function closeWarn() {
-    var warning = document.getElementById('warn');
-    warning.classList.add('hidden');
-    warning.classList.remove('block');
+    const warning = document.getElementById('warn');
+    if (warning) {
+        warning.classList.add('hidden');
+        warning.classList.remove('block');
+    }
 
-    //restore original padding
-    var loginContainer = document.getElementById('loginContainer');
-    loginContainer.classList.remove('md:px-16', 'md:py-7');
-    loginContainer.classList.add('md:p-16');
-}
+    const loginContainer = document.getElementById('loginContainer');
+    if (loginContainer) {
+        loginContainer.classList.remove('md:px-16', 'md:py-7');
+        loginContainer.classList.add('md:p-16');
+    }
+};
 
-// AJAX stuff.. not too sure about majority of this (as of nov 2025)
-$(document).ready(function () {
-    $('#loginForm').submit(function (e) {
-        e.preventDefault(); // Prevent default form submission... 
+document.addEventListener('DOMContentLoaded', function () {
+    const loginForm = document.getElementById('loginForm');
 
-        var formData = $(this).serialize(); // Serialize form data
-        var url = $(this).attr('action'); // Get the form's action URL
-        var submitButton = $(this).find('button[type="submit"]');
-        var originalButtonText = submitButton.text();
+    if (!loginForm) {
+        return;
+    }
 
+    loginForm.addEventListener('submit', async function (e) {
+        e.preventDefault();
 
-        // Disable submit button to prevent double submission
-        submitButton.prop('disabled', true).text('Signing in...');
+        const submitButton = loginForm.querySelector('button[type="submit"]');
+        const originalButtonText = submitButton ? submitButton.textContent : '';
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        const formData = new FormData(loginForm);
 
-        $.ajax({
-            type: 'POST',
-            url: url,
-            data: formData,
-            dataType: 'json',
-            headers: {
-                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content'),
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            success: function (response) {
-                if (response.success) {
-                    // Show success message before redirect
-                    submitButton.text('Success! Redirecting...');
-                    window.location.href = response.redirect; // Redirect on success
-                } else {
-                    alert(response.message || 'Login failed. Please try again.'); // Display error message
-                    submitButton.prop('disabled', false).text(originalButtonText);
-                }
-            },
-            error: function (xhr, status, error) {
-                console.error('AJAX Error:', xhr.responseText); // Log any AJAX errors
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.textContent = 'Signing in...';
+        }
 
-                var errorMessage = 'An error occurred during login.';
+        try {
+            const response = await fetch(loginForm.action, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken || '',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                },
+                body: formData,
+            });
 
-                // Try to parse error response
-                if (xhr.status === 401) {
-                    showWarn('Invalid Credentials.');
-                } else if (xhr.status === 403) {
-                    showWarn('Your account is not active.');
-                } else if (xhr.status === 419) {
-                    showWarn('Your session has expired. Please refresh the page and try again.');
-                } else {
-                    errorMessage = xhr.responseJSON.message;
-                    alert(errorMessage);
-                }
-
-                //alert(errorMessage);
-                submitButton.prop('disabled', false).text(originalButtonText);
+            let payload = {};
+            try {
+                payload = await response.json();
+            } catch {
+                payload = {};
             }
-        });
+
+            if (response.ok && payload.success) {
+                if (submitButton) {
+                    submitButton.textContent = 'Success! Redirecting...';
+                }
+
+                window.location.href = payload.redirect;
+                return;
+            }
+
+            if (response.status === 401) {
+                showWarn('Invalid Credentials.');
+            } else if (response.status === 403) {
+                showWarn('Your account is not active.');
+            } else if (response.status === 419) {
+                showWarn('Your session has expired. Please refresh the page and try again.');
+            } else {
+                alert(payload.message || 'Login failed. Please try again.');
+            }
+        } catch (error) {
+            console.error('Login request failed:', error);
+            alert('An error occurred during login.');
+        } finally {
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.textContent = originalButtonText;
+            }
+        }
     });
 });

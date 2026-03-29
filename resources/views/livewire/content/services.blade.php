@@ -93,6 +93,61 @@
             </div>
         </div>
 
+        {{-- Pending Withdrawals Section (Member View) --}}
+        @if (!$isTreasurerMode && $this->pendingWithdrawals->count() > 0)
+            <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-orange-500">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold text-gray-900">
+                        <i class="fas fa-clock text-orange-600 mr-2"></i>
+                        Pending Withdrawal Requests
+                    </h3>
+                    <span class="px-3 py-1 bg-orange-100 text-orange-800 text-sm font-semibold rounded-full">
+                        {{ $this->pendingWithdrawals->count() }}
+                        {{ $this->pendingWithdrawals->count() === 1 ? 'Request' : 'Requests' }}
+                    </span>
+                </div>
+
+                <div class="space-y-3">
+                    @foreach ($this->pendingWithdrawals as $withdrawal)
+                        <div
+                            class="flex items-center justify-between p-4 bg-orange-50 rounded-lg border border-orange-200">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span
+                                        class="font-semibold text-gray-900">₱{{ number_format($withdrawal->amount, 2) }}</span>
+                                    <span class="px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs font-medium rounded">
+                                        Awaiting Approval
+                                    </span>
+                                </div>
+                                <p class="text-sm text-gray-600">
+                                    Requested on {{ $withdrawal->created_at->format('M d, Y') }} at
+                                    {{ $withdrawal->created_at->format('h:i A') }}
+                                </p>
+                                @if ($withdrawal->note)
+                                    <p class="text-xs text-gray-500 mt-1">{{ $withdrawal->note }}</p>
+                                @endif
+                            </div>
+                            <div class="text-right">
+                                <span class="text-sm text-gray-500">
+                                    {{ $withdrawal->transaction_mode === 'counter' ? 'Counter' : 'Online' }}
+                                </span>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+
+                <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div class="flex items-start gap-2">
+                        <i class="fas fa-info-circle text-blue-600 mt-0.5"></i>
+                        <p class="text-sm text-blue-800">
+                            Your withdrawal request is being reviewed. You will receive a notification once it has been
+                            approved or if additional information is needed.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        @endif
+
         {{-- Service Cards --}}
         <div class="bg-white rounded-xl shadow-sm p-6">
             <h2 class="text-2xl font-bold text-gray-900 mb-6">Available Services</h2>

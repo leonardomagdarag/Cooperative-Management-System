@@ -5,15 +5,24 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
     plugins: [
         laravel({
-            input: ['resources/css/app.css', 'resources/js/app.js'],
+            input: [
+                'resources/css/app.css',
+                'resources/js/app.js',
+                'resources/js/login.js',
+                'resources/js/officer-dashboard.js',
+            ],
             refresh: true,
         }),
+
         tailwindcss(),
 
     ],
-    resolve: {
-        alias: {
-            '$': 'jQuery', // Add this line
-        },
-    },
+    server: {
+        host: '0.0.0.0',
+        port: 5173,
+        strictPort: true,
+        hmr: {
+            host: '10.232.35.68'
+        }
+    }
 });

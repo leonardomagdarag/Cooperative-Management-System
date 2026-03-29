@@ -1,6 +1,6 @@
 @props(['member', 'canEdit', 'activeTab'])
 
-<div x-data="{ show: false }" x-init="setTimeout(() => show = true, 10)" x-show="show" x-transition:enter="transition ease-out duration-200"
+<div {{ $attributes }} x-data="{ show: false }" x-init="setTimeout(() => show = true, 10)" x-show="show" x-transition:enter="transition ease-out duration-200"
     x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
     x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100"
     x-transition:leave-end="opacity-0"
@@ -655,3 +655,10 @@
                         <span wire:loading.remove wire:target="closeModal, editMember">Close</span>
                         <span wire:loading wire:target="closeModal">Closing...</span>
                         <span wire:loading wire:target="editMember">Please wait...</span>
+
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

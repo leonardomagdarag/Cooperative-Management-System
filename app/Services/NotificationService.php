@@ -6,10 +6,12 @@ use App\Mail\AnnouncementNotification as AnnouncementMail;
 use App\Mail\LoanDueNotification;
 use App\Mail\LoanStatusNotification;
 use App\Mail\SecurityAlert;
+use App\Mail\WithdrawalStatusNotification;
 use App\Models\Notification;
 use App\Models\User;
 use App\Models\Announcement;
 use App\Models\Loan;
+use App\Models\Transaction;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Mail;
 
@@ -200,6 +202,53 @@ class NotificationService
             route('loans.show', $loan->id),
             $loan
         );
+    }
+
+    /**
+     * Create withdrawal approved notification
+     */
+    public function notifyWithdrawalApproved(Transaction $withdrawal, bool $sendEmail = true): void
+    {
+        $this->create(
+            $withdrawal->user,
+            'withdrawal_approved',
+            'Withdrawal Request Approved',
+            "Your withdrawal request for ₱" . number_format($withdrawal->amount, 2) . " has been approved and processed.",
+            'high',
+            route('member.history'),
+            $withdrawal
+        );
+
+        // Send email notification
+        if ($sendEmail && config('mail.default') !== 'log' && $withdrawal->user->email) {
+            Mail::to($withdrawal->user->email)->send(new WithdrawalStatusNotification($withdrawal, 'approved'));
+        }
+    }
+
+    /**
+     * Create withdrawal rejected notification
+     */
+    public function notifyWithdrawalRejected(Transaction $withdrawal, string $reason = '', bool $sendEmail = true): void
+    {
+        $message = "Your withdrawal request for ₱" . number_format($withdrawal->amount, 2) . " has been rejected.";
+        if ($reason) {
+            $message .= " Reason: " . $reason;
+        }
+
+        $this->create(
+            $withdrawal->user,
+            'withdrawal_rejected',
+            'Withdrawal Request Rejected',
+            $message,
+            'high',
+            route('member.services'),
+            $withdrawal
+        );
+
+        // Send email notification
+        if ($sendEmail && config('mail.default') !== 'log' && $withdrawal->user->email) {
+            Mail::to($withdrawal->user->email)->send(new WithdrawalStatusNotification($withdrawal, 'rejected', $reason));
+        }
     }
 
     /**
