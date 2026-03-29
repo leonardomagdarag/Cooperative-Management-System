@@ -14,6 +14,14 @@ Simple. Functional. Built with effort (and a little bit of chaos).
 
 ---
 
+## 📝 Note
+
+When running in a codespace, make sure to run this to fix codespace issues:
+bash setup.sh
+
+
+---
+
 ## 🙏 Credits
 
 - **Copilot (Claude Sonnet 4.5)** – For doing 75% of the design, checking, testing, and fixing my code.
