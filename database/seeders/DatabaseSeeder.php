@@ -15,6 +15,8 @@ class DatabaseSeeder extends Seeder
     {
         // Seed in correct order due to dependencies
         $this->call([
+            SpatieRolePermissionSeeder::class,
+
             // Core data
             UserSeeder::class,
             BeneficiarySeeder::class,
@@ -27,6 +29,7 @@ class DatabaseSeeder extends Seeder
             SiteContentSeeder::class,
             BoardMemberSeeder::class,
             SystemSettingSeeder::class,
+            LoanProductSeeder::class,
             RolePermissionSeeder::class,
             AnnouncementSeeder::class,
         ]);

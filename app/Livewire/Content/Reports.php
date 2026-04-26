@@ -7,8 +7,10 @@ use App\Models\Expense;
 use App\Models\Loan;
 use App\Models\Transaction;
 use App\Models\User;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -67,6 +69,14 @@ class Reports extends Component
 
     public function mount(): void
     {
+        abort_unless(Auth::check() && Auth::user()->can('reports.view'), 403);
+
+        if ($this->canViewBalanceSheet) {
+            $this->reports['balance_sheet'] = 'Balance Sheet';
+        } elseif ($this->selectedReport === 'balance_sheet') {
+            $this->selectedReport = 'financial';
+        }
+
         // Default custom range to current month to avoid empty inputs.
         if (! $this->startDate || ! $this->endDate) {
             $this->startDate = Carbon::now()->startOfMonth()->toDateString();
@@ -74,8 +84,12 @@ class Reports extends Component
         }
     }
 
-    public function updatingSelectedReport(): void
+    public function updatingSelectedReport(string $value): void
     {
+        if ($value === 'balance_sheet' && ! $this->canViewBalanceSheet) {
+            $this->selectedReport = 'financial';
+        }
+
         $this->resetPage();
     }
 
@@ -152,6 +166,13 @@ class Reports extends Component
     private function completedTransactionsQuery(): Builder
     {
         return Transaction::query()->where('status', 'completed');
+    }
+
+    public function getCanViewBalanceSheetProperty(): bool
+    {
+        $user = Auth::user();
+
+        return (bool) $user?->hasRole('admin');
     }
 
     public function getFinancialSummaryProperty(): array
@@ -243,6 +264,107 @@ class Reports extends Component
                 ['key' => 'expense', 'label' => 'Expenses', 'value' => (float) ($summary['total_expenses'] ?? 0)],
             ],
         ];
+    }
+
+    public function getBalanceSheetDataProperty(): array
+    {
+        [$start, $end] = $this->dateWindow;
+
+        $upToEndQuery = $this->completedTransactionsQuery()
+            ->where(function ($q) use ($end) {
+                $q->whereDate('transaction_date', '<=', $end->toDateString())
+                    ->orWhere(function ($q2) use ($end) {
+                        $q2->whereNull('transaction_date')
+                            ->whereDate('created_at', '<=', $end->toDateString());
+                    });
+            });
+
+        $totalsByType = (clone $upToEndQuery)
+            ->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'fee'])
+            ->selectRaw('transaction_type, SUM(amount) as total')
+            ->groupBy('transaction_type')
+            ->pluck('total', 'transaction_type');
+
+        $cashInflows = (float) ($totalsByType['deposit'] ?? 0)
+            + (float) ($totalsByType['loan_payment'] ?? 0)
+            + (float) ($totalsByType['fee'] ?? 0);
+
+        $cashOutflows = (float) ($totalsByType['withdrawal'] ?? 0)
+            + (float) ($totalsByType['loan_disbursement'] ?? 0);
+
+        $totalExpenses = (float) Expense::query()
+            ->whereDate('expense_date', '<=', $end->toDateString())
+            ->sum('amount');
+
+        $cashAndCashEquivalents = $cashInflows - $cashOutflows - $totalExpenses;
+
+        $activeLoanStatuses = ['approved', 'active'];
+        $loanPrincipalActive = (float) Loan::query()
+            ->whereIn('loan_status', $activeLoanStatuses)
+            ->sum('loan_amount');
+
+        $loanPaymentsOnActive = (float) Transaction::query()
+            ->where('transaction_type', 'loan_payment')
+            ->where('status', 'completed')
+            ->whereHas('loan', fn($q) => $q->whereIn('loan_status', $activeLoanStatuses))
+            ->sum('amount');
+
+        $netLoansReceivable = max(0, $loanPrincipalActive - $loanPaymentsOnActive);
+
+        $memberSavingsLiability = (float) Account::query()
+            ->where('account_type', 'savings')
+            ->sum('balance');
+
+        $shareCapital = (float) Account::query()
+            ->whereIn('account_type', ['share-capital', 'share_capital'])
+            ->sum('balance');
+
+        $totalAssets = $cashAndCashEquivalents + $netLoansReceivable;
+        $totalLiabilities = $memberSavingsLiability;
+        $totalEquity = $totalAssets - $totalLiabilities;
+        $retainedEarnings = $totalEquity - $shareCapital;
+
+        return [
+            'start' => $start,
+            'end' => $end,
+            'as_of' => $end,
+            'assets' => [
+                ['label' => 'Cash and Cash Equivalents', 'amount' => $cashAndCashEquivalents],
+                ['label' => 'Loans Receivable (Net)', 'amount' => $netLoansReceivable],
+            ],
+            'liabilities' => [
+                ['label' => 'Member Savings Deposits', 'amount' => $memberSavingsLiability],
+            ],
+            'equity' => [
+                ['label' => 'Share Capital', 'amount' => $shareCapital],
+                ['label' => 'Retained Earnings', 'amount' => $retainedEarnings],
+            ],
+            'totals' => [
+                'assets' => $totalAssets,
+                'liabilities' => $totalLiabilities,
+                'equity' => $totalEquity,
+                'liabilities_and_equity' => $totalLiabilities + $totalEquity,
+            ],
+        ];
+    }
+
+    public function downloadBalanceSheetPdf()
+    {
+        abort_unless($this->canViewBalanceSheet, 403);
+
+        $balanceSheet = $this->balanceSheetData;
+        $pdf = Pdf::loadView('reports.balance-sheet-pdf', [
+            'balanceSheet' => $balanceSheet,
+            'appName' => config('app.name', 'Cooperative Management System'),
+            'generatedAt' => now(),
+            'generatedBy' => Auth::user(),
+        ]);
+
+        $filename = 'balance-sheet-' . $balanceSheet['as_of']->format('Y-m-d') . '.pdf';
+
+        return response()->streamDownload(function () use ($pdf) {
+            echo $pdf->output();
+        }, $filename);
     }
 
     public function getMembersProperty()
@@ -437,6 +559,8 @@ class Reports extends Component
         return view('livewire.content.reports', [
             'financialSummary' => $this->financialSummary,
             'financialCharts' => $financialCharts,
+            'canViewBalanceSheet' => $this->canViewBalanceSheet,
+            'balanceSheetData' => $this->canViewBalanceSheet ? $this->balanceSheetData : null,
             'members' => $this->members,
             'expenseCategories' => $this->expenseCategories,
             'memberSavingsRows' => $this->memberSavingsRows,

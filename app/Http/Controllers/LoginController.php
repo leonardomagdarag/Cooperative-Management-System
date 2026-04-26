@@ -2,6 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\SystemSetting;
+use App\Services\AuditLogService;
+use App\Services\NotificationService;
+use App\Services\SecurityOtpService;
+use App\Services\TurnstileService;
 use App\Models\Account;
 use App\Models\Address;
 use App\Models\Contact;
@@ -11,6 +16,7 @@ use App\Models\PersonalData;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -18,9 +24,26 @@ use Illuminate\Validation\Rules\Password;
 
 class LoginController extends Controller
 {
+    protected AuditLogService $auditLogService;
+
+    protected NotificationService $notificationService;
+    protected SecurityOtpService $securityOtpService;
+
+    public function __construct(
+        NotificationService $notificationService,
+        SecurityOtpService $securityOtpService,
+        AuditLogService $auditLogService
+    ) {
+        $this->notificationService = $notificationService;
+        $this->securityOtpService = $securityOtpService;
+        $this->auditLogService = $auditLogService;
+    }
+
     public function login(Request $request)
     {
         $credentials = $request->only('email', 'password');
+        $email = strtolower(trim((string) $request->input('email')));
+        $ipAddress = (string) ($request->ip() ?? 'unknown');
 
         // Attempt login
         if (Auth::attempt($credentials)) {
@@ -29,7 +52,16 @@ class LoginController extends Controller
             $user = Auth::user();
 
             // Check for inactive/terminated accounts
-            if (in_array($user->role, ['inactive', 'terminated'])) {
+            if (($user->account_status ?? 'active') !== 'active') {
+                $this->auditLogService->log(
+                    'auth.login_blocked',
+                    'Login blocked due to inactive account status.',
+                    'auth',
+                    $user,
+                    $user,
+                    ['account_status' => $user->account_status]
+                );
+
                 Auth::logout();
 
                 // Return JSON for AJAX or redirect for regular form submission
@@ -46,17 +78,73 @@ class LoginController extends Controller
             }
 
             // Role-based redirects
-            $redirectUrl = match ($user->role) {
+            $primaryRole = $user->getRoleNames()->first() ?? $user->role;
+
+            $redirectUrl = match ($primaryRole) {
                 'admin' => '/admin/dashboard',
                 'manager' => '/manager/dashboard',
                 'member' => '/member/dashboard',
                 'secretary' => '/secretary/dashboard',
                 'loan' => '/loan/dashboard',
-                'treasurer' => 'treasurer/dashboard',
+                'treasurer' => '/treasurer/dashboard',
                 //remove if in prod!
                 'developer' => '/dev/home',
-                default => 'member/dashboard'
+                default => '/member/dashboard'
             };
+
+            $fingerprint = $this->securityOtpService->buildDeviceFingerprint($request);
+            if ($this->securityOtpService->shouldEnforceOtpForUser($user) && ! $this->securityOtpService->isTrustedDevice($user, $fingerprint)) {
+                $issued = $this->securityOtpService->issueChallenge(
+                    $user,
+                    $this->securityOtpService->newDevicePurpose(),
+                    ['fingerprint' => $fingerprint]
+                );
+
+                $this->securityOtpService->sendOtpMail(
+                    $user,
+                    $this->securityOtpService->newDevicePurpose(),
+                    $issued['otp_code']
+                );
+
+                $request->session()->put('security.pending_otp', true);
+                $request->session()->put('security.pending_otp_purpose', $this->securityOtpService->newDevicePurpose());
+                $request->session()->put('security.pending_otp_fingerprint', $fingerprint);
+                $request->session()->put('security.intended_url', $redirectUrl);
+
+                if ($request->ajax() || $request->wantsJson()) {
+                    return response()->json([
+                        'success' => true,
+                        'redirect' => route('otp.challenge.show'),
+                        'message' => 'Security verification is required for this device.',
+                    ]);
+                }
+
+                return redirect()->route('otp.challenge.show')->with(
+                    'success',
+                    'We sent a one-time verification code to your email.'
+                );
+            }
+
+            $this->securityOtpService->trustDevice(
+                $user,
+                $fingerprint,
+                $request->userAgent(),
+                $ipAddress
+            );
+
+            $this->handleSuccessfulLoginSignals($user, $ipAddress);
+
+            $this->auditLogService->log(
+                'auth.login_success',
+                'User logged in successfully.',
+                'auth',
+                $user,
+                $user,
+                [
+                    'role' => $primaryRole,
+                    'ip_address' => $ipAddress,
+                ]
+            );
 
             // Return JSON for AJAX or redirect for regular form submission
             if ($request->ajax() || $request->wantsJson()) {
@@ -68,6 +156,8 @@ class LoginController extends Controller
 
             return redirect()->intended($redirectUrl);
         }
+
+        $this->handleFailedLoginSignals($email, $ipAddress);
 
         // Authentication failed
         if ($request->ajax() || $request->wantsJson()) {
@@ -82,8 +172,75 @@ class LoginController extends Controller
         ]);
     }
 
+    private function failedLoginAttemptsKey(User $user): string
+    {
+        return 'security:failed_login_attempts:user:' . $user->id;
+    }
+
+    private function lastLoginIpKey(User $user): string
+    {
+        return 'security:last_login_ip:user:' . $user->id;
+    }
+
+    private function handleFailedLoginSignals(string $email, string $ipAddress): void
+    {
+        if ($email === '') {
+            return;
+        }
+
+        $user = User::where('email', $email)->first();
+        if (! $user) {
+            return;
+        }
+
+        $key = $this->failedLoginAttemptsKey($user);
+        $attempts = (int) Cache::increment($key);
+        Cache::put($key, $attempts, now()->addMinutes(30));
+
+        if ($attempts === 3 || $attempts % 5 === 0) {
+            $this->notificationService->notifyFailedLogins($user, $attempts, $ipAddress);
+        }
+
+        $this->auditLogService->log(
+            'security.failed_login',
+            'Failed login attempt recorded.',
+            'security',
+            $user,
+            $user,
+            [
+                'attempts' => $attempts,
+                'ip_address' => $ipAddress,
+            ]
+        );
+    }
+
+    private function handleSuccessfulLoginSignals(User $user, string $ipAddress): void
+    {
+        Cache::forget($this->failedLoginAttemptsKey($user));
+
+        $lastIpKey = $this->lastLoginIpKey($user);
+        $previousIp = Cache::get($lastIpKey);
+
+        if ($previousIp && $previousIp !== $ipAddress) {
+            $this->notificationService->notifyNewLogin($user, $ipAddress);
+        }
+
+        Cache::put($lastIpKey, $ipAddress, now()->addDays(90));
+    }
+
     public function logout(Request $request)
     {
+        $user = Auth::user();
+        if ($user) {
+            $this->auditLogService->log(
+                'auth.logout',
+                'User logged out.',
+                'auth',
+                $user,
+                $user
+            );
+        }
+
         Auth::logout();
 
         $request->session()->invalidate();
@@ -92,7 +249,7 @@ class LoginController extends Controller
         return redirect('/');
     }
 
-    public function register(Request $request)
+    public function register(Request $request, TurnstileService $turnstileService)
     {
         // Validate the incoming request
         $validated = $request->validate([
@@ -118,6 +275,14 @@ class LoginController extends Controller
             // Account Credentials
             'password' => ['required', 'confirmed', Password::min(8)],
             'terms' => 'required|accepted',
+            'cf-turnstile-response' => [
+                'required',
+                function (string $attribute, mixed $value, \Closure $fail) use ($turnstileService, $request) {
+                    if (!$turnstileService->verify((string) $value, $request->ip())) {
+                        $fail('Captcha verification failed. Please try again.');
+                    }
+                },
+            ],
         ]);
 
         try {
@@ -182,8 +347,10 @@ class LoginController extends Controller
                 'email' => $validated['email'],
                 'password' => Hash::make($validated['password']),
                 'role' => 'member', // Default role for new registrations
+                'account_status' => 'active',
                 'special_loan_eligible' => false,
             ]);
+            $user->assignRole('member');
 
             // 7. Create Initial Savings Account (₱500 initial deposit)
             Account::create([
@@ -201,6 +368,15 @@ class LoginController extends Controller
 
             // Commit the transaction
             DB::commit();
+
+            $this->auditLogService->log(
+                'member.registered',
+                'New member account registered.',
+                'member',
+                $user,
+                $user,
+                ['email' => $user->email]
+            );
 
             // Redirect to login page with success message
             return redirect()->route('login_page')->with(

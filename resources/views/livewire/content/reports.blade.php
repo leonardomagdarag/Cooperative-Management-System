@@ -106,6 +106,13 @@
                 </div>
 
                 <div class="flex items-center gap-2 ml-auto">
+                    @if ($selectedReport === 'balance_sheet' && $canViewBalanceSheet)
+                        <button type="button" wire:click="downloadBalanceSheetPdf"
+                            class="inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-center text-white bg-blue-700 border border-blue-700 rounded-lg hover:bg-blue-800 focus:ring-4 focus:ring-blue-300">
+                            Download PDF
+                        </button>
+                    @endif
+
                     <button type="button" wire:click="$refresh"
                         class="inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-center text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 focus:ring-4 focus:ring-blue-300"
                         title="Refresh data">
@@ -195,6 +202,84 @@
                     </div>
                     <div class="mt-3 h-64">
                         <canvas id="financialTotalsByTypeChart" aria-label="Totals by type chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @elseif ($selectedReport === 'balance_sheet' && $canViewBalanceSheet)
+        <div class="p-4 bg-white border-b border-gray-200">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-sm font-semibold text-gray-900">Balance Sheet</h2>
+                    <p class="text-xs text-gray-500">
+                        As of {{ $balanceSheetData['as_of']->format('M d, Y') }}
+                    </p>
+                </div>
+                <div class="text-right">
+                    <div class="text-xs text-gray-500">Period Basis</div>
+                    <div class="text-sm text-gray-900">
+                        {{ $balanceSheetData['start']->format('M d, Y') }} - {{ $balanceSheetData['end']->format('M d, Y') }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 mt-4 lg:grid-cols-2">
+                <div class="p-4 border border-gray-200 rounded-lg">
+                    <h3 class="text-sm font-semibold text-gray-900">Assets</h3>
+                    <div class="mt-3 space-y-2">
+                        @foreach ($balanceSheetData['assets'] as $line)
+                            <div class="flex items-center justify-between text-sm">
+                                <span class="text-gray-700">{{ $line['label'] }}</span>
+                                <span class="font-medium text-gray-900">₱{{ number_format($line['amount'], 2) }}</span>
+                            </div>
+                        @endforeach
+                    </div>
+                    <div class="pt-2 mt-3 border-t border-gray-200 flex items-center justify-between">
+                        <span class="text-sm font-semibold text-gray-900">Total Assets</span>
+                        <span class="text-sm font-semibold text-gray-900">₱{{ number_format($balanceSheetData['totals']['assets'], 2) }}</span>
+                    </div>
+                </div>
+
+                <div class="p-4 border border-gray-200 rounded-lg">
+                    <h3 class="text-sm font-semibold text-gray-900">Liabilities and Equity</h3>
+
+                    <div class="mt-3">
+                        <div class="text-xs font-semibold tracking-wide text-gray-500 uppercase">Liabilities</div>
+                        <div class="mt-2 space-y-2">
+                            @foreach ($balanceSheetData['liabilities'] as $line)
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-700">{{ $line['label'] }}</span>
+                                    <span class="font-medium text-gray-900">₱{{ number_format($line['amount'], 2) }}</span>
+                                </div>
+                            @endforeach
+                        </div>
+                        <div class="pt-2 mt-3 border-t border-gray-200 flex items-center justify-between">
+                            <span class="text-sm font-semibold text-gray-900">Total Liabilities</span>
+                            <span
+                                class="text-sm font-semibold text-gray-900">₱{{ number_format($balanceSheetData['totals']['liabilities'], 2) }}</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <div class="text-xs font-semibold tracking-wide text-gray-500 uppercase">Equity</div>
+                        <div class="mt-2 space-y-2">
+                            @foreach ($balanceSheetData['equity'] as $line)
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-700">{{ $line['label'] }}</span>
+                                    <span class="font-medium text-gray-900">₱{{ number_format($line['amount'], 2) }}</span>
+                                </div>
+                            @endforeach
+                        </div>
+                        <div class="pt-2 mt-3 border-t border-gray-200 flex items-center justify-between">
+                            <span class="text-sm font-semibold text-gray-900">Total Equity</span>
+                            <span class="text-sm font-semibold text-gray-900">₱{{ number_format($balanceSheetData['totals']['equity'], 2) }}</span>
+                        </div>
+                    </div>
+
+                    <div class="pt-2 mt-4 border-t-2 border-gray-300 flex items-center justify-between">
+                        <span class="text-sm font-semibold text-gray-900">Total Liabilities and Equity</span>
+                        <span
+                            class="text-sm font-semibold text-gray-900">₱{{ number_format($balanceSheetData['totals']['liabilities_and_equity'], 2) }}</span>
                     </div>
                 </div>
             </div>

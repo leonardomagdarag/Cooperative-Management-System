@@ -49,7 +49,7 @@ class AdminOverview extends Component
 
     public function mount(): void
     {
-        abort_unless(Auth::check() && Auth::user()->role === 'admin', 403);
+        abort_unless(Auth::check() && Auth::user()->can('reports.audit'), 403);
 
         $this->pendingTransactions = new Collection();
         $this->recentExpenses = new Collection();

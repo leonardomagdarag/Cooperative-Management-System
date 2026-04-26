@@ -24,14 +24,19 @@ class RoleMiddleware
             return redirect('/login');
         }
 
-        //check if account is inactive or terminated
-        if (in_array($user->role, ['inactive', 'terminated'])) {
+        // Check if account is inactive or terminated
+        if (($user->account_status ?? 'active') !== 'active') {
             Auth::logout();
             return redirect('/login')->with('error', 'Your account is not active.');
         }
 
+        // Route role authorization must be based on Spatie roles only.
+        $hasAllowedRole = method_exists($user, 'hasAnyRole')
+            ? $user->hasAnyRole($roles)
+            : false;
+
         // If user doesn't have an allowed role
-        if (!in_array($user->role, $roles)) {
+        if (! $hasAllowedRole) {
             return redirect('/')->with('error', 'unauthorized access');
         }
 

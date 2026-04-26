@@ -156,6 +156,38 @@ class SystemSettingSeeder extends Seeder
                 'label' => 'Require Strong Password',
                 'description' => 'Require uppercase, numbers, symbols',
             ],
+            [
+                'key' => 'security_otp_expiry_minutes',
+                'value' => '10',
+                'type' => 'number',
+                'group' => 'security',
+                'label' => 'OTP Expiry (minutes)',
+                'description' => 'Validity period of one-time verification codes',
+            ],
+            [
+                'key' => 'security_otp_max_attempts',
+                'value' => '5',
+                'type' => 'number',
+                'group' => 'security',
+                'label' => 'OTP Maximum Attempts',
+                'description' => 'Maximum failed OTP attempts before challenge is invalidated',
+            ],
+            [
+                'key' => 'security_trusted_device_days',
+                'value' => '90',
+                'type' => 'number',
+                'group' => 'security',
+                'label' => 'Trusted Device Duration (days)',
+                'description' => 'How long a verified device remains trusted',
+            ],
+            [
+                'key' => 'security_withdrawal_otp_threshold',
+                'value' => '2000',
+                'type' => 'number',
+                'group' => 'security',
+                'label' => 'Withdrawal OTP Threshold',
+                'description' => 'Require OTP when approving withdrawals at or above this amount',
+            ],
 
             // PAYMENT SETTINGS
             [

@@ -3,6 +3,7 @@
 namespace App\Livewire\Content;
 
 use App\Models\Announcement;
+use App\Services\NotificationService;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -35,8 +36,13 @@ class Announcements extends Component
 
     public function canManageAnnouncements()
     {
-        $userRole = Auth::user()->role;
-        return in_array($userRole, ['admin', 'manager', 'secretary']);
+        $user = Auth::user();
+
+        return $user && (
+            $user->can('announcements.create') ||
+            $user->can('announcements.update') ||
+            $user->can('announcements.delete')
+        );
     }
 
     public function openModal()
@@ -82,11 +88,13 @@ class Announcements extends Component
                 session()->flash('success', 'Announcement updated successfully.');
             }
         } else {
-            Announcement::create([
+            $announcement = Announcement::create([
                 'title' => $this->title,
                 'content' => $this->content,
                 'created_by' => Auth::id(),
             ]);
+
+            app(NotificationService::class)->notifyNewAnnouncement($announcement);
             session()->flash('success', 'Announcement created successfully.');
         }
 

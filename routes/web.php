@@ -2,8 +2,10 @@
 
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\OtpChallengeController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\PasswordResetController;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
 // === Public Routes ===
@@ -52,6 +54,7 @@ Route::prefix('/')->group(function () {
 Route::post('/login', [LoginController::class, 'login'])->name('login');
 // Handle Registration Submission
 Route::post('/register', [LoginController::class, 'register'])->name('register');
+Route::post('/contact', [PageController::class, 'submitContactMessage'])->name('contact.send');
 // Handle Logout
 Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 
@@ -62,8 +65,15 @@ Route::get('/reset-password', [PasswordResetController::class, 'showResetForm'])
 Route::post('/verify-token', [PasswordResetController::class, 'verifyToken'])->name('password.verify');
 Route::post('/reset-password', [PasswordResetController::class, 'reset'])->name('password.update');
 
+// === OTP Verification Routes ===
+Route::middleware('auth')->group(function () {
+    Route::get('/security/verify-otp', [OtpChallengeController::class, 'show'])->name('otp.challenge.show');
+    Route::post('/security/verify-otp', [OtpChallengeController::class, 'verify'])->name('otp.challenge.verify');
+    Route::post('/security/verify-otp/resend', [OtpChallengeController::class, 'resend'])->name('otp.challenge.resend');
+});
+
 // === API Routes for Notifications (Protected) ===
-Route::middleware('auth')->prefix('api')->group(function () {
+Route::middleware(['auth', 'otp.verified'])->prefix('api')->group(function () {
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
     Route::post('/notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
@@ -71,6 +81,22 @@ Route::middleware('auth')->prefix('api')->group(function () {
     Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy']);
     Route::delete('/notifications/read/all', [NotificationController::class, 'deleteAllRead']);
 });
+
+Route::middleware(['auth', 'otp.verified'])->get('/notifications', function () {
+    $user = Auth::user();
+    $primaryRole = $user->getRoleNames()->first() ?? $user->role ?? 'member';
+
+    $routeName = match ($primaryRole) {
+        'admin' => 'admin.dashboard',
+        'manager' => 'manager.dashboard',
+        'secretary' => 'secretary.dashboard',
+        'loan' => 'loan.dashboard',
+        'treasurer' => 'treasurer.dashboard',
+        default => 'member.dashboard',
+    };
+
+    return redirect()->route($routeName, ['section' => 'notifications']);
+})->name('notifications.index');
 
 // === Protected and Role-based Routes ===
 

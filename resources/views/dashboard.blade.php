@@ -12,7 +12,7 @@
 <body>
 
     {{-- Load the dashboard and other stuff --}}
-    <livewire:dashboard />
+    <livewire:dashboard :currentSection="request('section', 'dashboard')" />
 
     @livewireScripts
 </body>

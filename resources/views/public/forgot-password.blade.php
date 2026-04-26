@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     @vite(['resources/css/app.css'])
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <title>Forgot Password - Step 1 - Settlers Credit Cooperative</title>
 </head>
 
@@ -109,6 +110,18 @@
                     @enderror
                 </div>
 
+                <div>
+                    @if (config('services.turnstile.site_key'))
+                        <div class="cf-turnstile" data-sitekey="{{ config('services.turnstile.site_key') }}"
+                            data-theme="light" data-callback="turnstileCallback"></div>
+                    @else
+                        <p class="text-sm text-red-600">Captcha is not configured. Please contact support.</p>
+                    @endif
+                    @error('cf-turnstile-response')
+                        <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+
                 <!-- Info Box -->
                 <div class="p-4 bg-blue-50 rounded-xl border border-blue-100">
                     <div class="flex gap-3">
@@ -125,8 +138,9 @@
                 </div>
 
                 <!-- Submit Button -->
-                <button type="submit"
-                    class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-3 px-6 rounded-lg transition-all shadow-md hover:shadow-lg">
+                <button type="submit" id="forgotPasswordSubmitBtn"
+                    class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-3 px-6 rounded-lg transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled>
                     <span class="flex items-center justify-center gap-2">
                         <i class="fas fa-paper-plane"></i>
                         Send Verification Code
@@ -144,6 +158,21 @@
             </form>
         </div>
     </section>
+
+    <script>
+        // Forgot password form: enable submit button only when Turnstile succeeds
+        document.addEventListener('DOMContentLoaded', function() {
+            const submitBtn = document.getElementById('forgotPasswordSubmitBtn');
+
+            if (submitBtn) {
+                submitBtn.disabled = true;
+
+                window.turnstileCallback = function() {
+                    submitBtn.disabled = false;
+                };
+            }
+        });
+    </script>
 </body>
 
 </html>

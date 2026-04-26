@@ -29,7 +29,34 @@
             <li>Contact our office if you notice any suspicious activity</li>
         </ul>
 
-        <a href="{{ config('app.url') }}/profile/security" class="button">Change Password Now</a>
+        <a href="{{ config('app.url') }}/notifications" class="button">Review Notifications</a>
+    @elseif($alertType === 'new_login')
+        <div class="alert-box alert-warning">
+            <strong>NEW SIGN-IN DETECTED:</strong> A login was detected from a new IP address.
+        </div>
+
+        <p>
+            We detected a new sign-in to your account from the following IP address:
+        </p>
+
+        <p><strong>IP Address:</strong> {{ $data['ip_address'] ?? 'Unknown' }}</p>
+        <p><strong>Time:</strong> {{ now()->format('F d, Y h:i A') }}</p>
+
+        <p>
+            If this was you, no further action is required.
+        </p>
+
+        <p>
+            <strong>If this was not you:</strong>
+        </p>
+
+        <ul>
+            <li>Reset your password immediately</li>
+            <li>Review recent account actions</li>
+            <li>Contact support right away</li>
+        </ul>
+
+        <a href="{{ config('app.url') }}/notifications" class="button">Review Account Activity</a>
     @elseif($alertType === 'password_changed')
         <div class="alert-box alert-warning">
             <strong>PASSWORD CHANGED:</strong> Your account password was recently changed.

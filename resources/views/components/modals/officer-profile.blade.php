@@ -35,6 +35,10 @@
                         class="px-6 py-3 text-sm font-medium transition-colors {{ $activeTab === 'contact' ? 'text-cyan-600 border-b-2 border-cyan-600 bg-white' : 'text-gray-600 hover:text-gray-800' }}">
                         Contact & IDs
                     </button>
+                    <button wire:click="setActiveTab('permissions')"
+                        class="px-6 py-3 text-sm font-medium transition-colors {{ $activeTab === 'permissions' ? 'text-cyan-600 border-b-2 border-cyan-600 bg-white' : 'text-gray-600 hover:text-gray-800' }}">
+                        Permissions
+                    </button>
                     <button wire:click="setActiveTab('documents')"
                         class="px-6 py-3 text-sm font-medium transition-colors {{ $activeTab === 'documents' ? 'text-cyan-600 border-b-2 border-cyan-600 bg-white' : 'text-gray-600 hover:text-gray-800' }}">
                         Documents
@@ -231,6 +235,121 @@
                     </div>
                 @endif
 
+                {{-- Permissions Tab --}}
+                @if ($activeTab === 'permissions')
+                    @php
+                        // Get all roles/permissions data to display
+                        $permissions = $officer->getPermissionNames()->toArray();
+                        $allPermissions = [
+                            'Dashboard' => ['dashboard.view'],
+                            'Members' => [
+                                'members.view',
+                                'members.create',
+                                'members.update',
+                                'members.delete',
+                                'members.view-full-details',
+                            ],
+                            'Services' => ['services.view', 'services.create', 'services.update'],
+                            'Loans' => [
+                                'loans.view',
+                                'loans.create',
+                                'loans.update',
+                                'loans.approve',
+                                'loans.reject',
+                                'loans.disburse',
+                            ],
+                            'Transactions' => [
+                                'transactions.view',
+                                'transactions.create',
+                                'transactions.update',
+                                'transactions.void',
+                                'transactions.export',
+                            ],
+                            'Deposits & Withdrawals' => [
+                                'deposits.view',
+                                'deposits.create',
+                                'deposits.approve',
+                                'deposits.reject',
+                                'withdrawals.view',
+                                'withdrawals.create',
+                                'withdrawals.approve',
+                                'withdrawals.reject',
+                            ],
+                            'Reports' => ['reports.view', 'reports.export', 'reports.financial', 'reports.audit'],
+                            'Settings & Logs' => ['settings.view', 'settings.update', 'logs.view', 'logs.export'],
+                            'Announcements' => [
+                                'announcements.view',
+                                'announcements.create',
+                                'announcements.update',
+                                'announcements.delete',
+                            ],
+                            'Staff Management' => [
+                                'officers.create',
+                                'officers.update',
+                                'officers.delete',
+                                'officers.manage-permissions',
+                            ],
+                            'Notifications & Profile' => [
+                                'notifications.view',
+                                'notifications.manage',
+                                'profile.view',
+                                'profile.update',
+                            ],
+                        ];
+                    @endphp
+                    <div class="space-y-6">
+                        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-100">
+                            <h5 class="text-sm font-semibold text-gray-800 mb-2">Assigned Permissions</h5>
+                            <p class="text-xs text-gray-600 mb-4">
+                                This officer has <strong>{{ count($permissions) }}</strong> individual permissions
+                                assigned.
+                                {{ $canEdit ? 'Click "Manage Permissions" to modify.' : 'Contact an administrator to change permissions.' }}
+                            </p>
+
+                            {{-- Display permissions by group --}}
+                            <div class="space-y-3">
+                                @foreach ($allPermissions as $groupName => $groupPerms)
+                                    @php
+                                        $assignedInGroup = array_filter(
+                                            $groupPerms,
+                                            fn($p) => in_array($p, $permissions),
+                                        );
+                                    @endphp
+                                    @if (count($assignedInGroup) > 0)
+                                        <div>
+                                            <h6 class="text-xs font-semibold text-gray-700 mb-1">{{ $groupName }}
+                                            </h6>
+                                            <div class="flex flex-wrap gap-1">
+                                                @foreach ($assignedInGroup as $perm)
+                                                    @php
+                                                        $parts = explode('.', $perm);
+                                                        $action = match ($parts[1] ?? '') {
+                                                            'view' => 'View',
+                                                            'create' => 'Create',
+                                                            'update' => 'Edit',
+                                                            'delete' => 'Delete',
+                                                            'approve' => 'Approve',
+                                                            'reject' => 'Reject',
+                                                            'disburse' => 'Disburse',
+                                                            'void' => 'Void',
+                                                            'export' => 'Export',
+                                                            'manage-permissions' => 'Manage Permissions',
+                                                            'view-full-details' => 'View Full Details',
+                                                            default => ucfirst($parts[1] ?? ''),
+                                                        };
+                                                    @endphp
+                                                    <span
+                                                        class="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded">{{ $action }}</span>
+                                                @endforeach
+                                            </div>
+                                        </div>
+                                    @endif
+                                @endforeach
+                            </div>
+                        </div>
+                    </div>
+                @endif
+
                 {{-- Documents Tab --}}
                 @if ($activeTab === 'documents')
                     <div class="text-center py-12">
@@ -261,6 +380,15 @@
                 </div>
                 <div class="flex items-center space-x-2">
                     @if ($canEdit)
+                        <button type="button" wire:click="managePermissions('{{ $officer->id }}')"
+                            class="inline-flex items-center text-white bg-purple-600 hover:bg-purple-700 focus:ring-4 focus:outline-none focus:ring-purple-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center transition-colors">
+                            <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                <path
+                                    d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.343a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM15.657 14.657a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM11 17a1 1 0 102 0v-1a1 1 0 10-2 0v1zM5.343 15.657a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414l-.707.707zM4 10a1 1 0 01 1 1H4a1 1 0 110-2h1a1 1 0 011 1zM5.343 5.343a1 1 0 001.414-1.414L6.05 3.222a1 1 0 10-1.414 1.414l.707.707z">
+                                </path>
+                            </svg>
+                            Manage Permissions
+                        </button>
                         <button type="button" wire:click="editOfficer('{{ $officer->id }}')"
                             class="inline-flex items-center text-white bg-cyan-600 hover:bg-cyan-700 focus:ring-4 focus:outline-none focus:ring-cyan-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center transition-colors">
                             <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">

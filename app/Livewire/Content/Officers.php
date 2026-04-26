@@ -50,6 +50,11 @@ class Officers extends Component
 
     public $activeTab = 'overview';
 
+    // Permissions modal
+    public $showPermissionsModal = false;
+
+    public $selectedOfficerForPermissions = null;
+
     // Form data array
     public $form = [];
 
@@ -64,6 +69,11 @@ class Officers extends Component
         'personal' => false,
         'contact' => false,
         'login' => false,
+    ];
+
+    protected $listeners = [
+        'permission-saved' => 'onPermissionSaved',
+        'permission-manager-close' => 'closePermissionsModal',
     ];
 
     public function updatingSearch()
@@ -499,6 +509,51 @@ class Officers extends Component
     }
 
     /**
+     * Open permissions manager for an officer
+     */
+    public function managePermissions($officerId)
+    {
+        $user = Auth::user();
+        if (!$user || !$user->can('officers.manage-permissions')) {
+            $this->dispatch('toast', ['message' => 'You do not have permission to manage officer permissions.', 'type' => 'error']);
+            return;
+        }
+
+        $this->selectedOfficerForPermissions = $officerId;
+        $this->showPermissionsModal = true;
+    }
+
+    /**
+     * Close permissions modal
+     */
+    /**
+     * Handle permission saved event from OfficerPermissionManager
+     */
+    public function onPermissionSaved($message = 'Permissions updated successfully.')
+    {
+        if (is_array($message)) {
+            $message = $message['message'] ?? 'Permissions updated successfully.';
+        }
+
+        $this->dispatch('toast', ['message' => $message, 'type' => 'success']);
+        $this->closePermissionsModal();
+
+        // Refresh the officer profile if viewing
+        if ($this->selectedOfficer) {
+            $this->selectedOfficer = $this->selectedOfficer->fresh();
+        }
+    }
+
+    /**
+     * Close permissions modal
+     */
+    public function closePermissionsModal()
+    {
+        $this->showPermissionsModal = false;
+        $this->selectedOfficerForPermissions = null;
+    }
+
+    /**
      * Render officers list with search, filter, and sort
      *
      * Key differences from Members render:
@@ -508,8 +563,13 @@ class Officers extends Component
      */
     public function render()
     {
-        $userRole = Auth::user()->role;
-        $canEdit = in_array($userRole, ['admin', 'manager']);  // Stricter than members
+        $user = Auth::user();
+        $canEdit = $user && (
+            $user->can('officers.create') ||
+            $user->can('officers.update') ||
+            $user->can('officers.delete') ||
+            $user->can('officers.manage-permissions')
+        );
 
         // Query officers only (excludes 'member' and 'inactive' roles)
         $query = User::with(['personalData.address', 'personalData.contact', 'accounts'])

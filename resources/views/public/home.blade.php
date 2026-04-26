@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Settlers Credit Cooperative</title>
     @vite(['resources/css/app.css'])
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 
 <body class="bg-white">
@@ -319,27 +320,65 @@
                 <!-- Contact Form -->
                 <div class="bg-gray-50 border border-gray-200 rounded-2xl p-8 shadow-sm">
                     <h3 class="text-2xl text-center font-bold text-gray-900 mb-8">Send us a Message</h3>
-                    <form action="#" method="post" class="space-y-6">
+                    @if (session('success'))
+                        <div
+                            class="mb-4 p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-sm">
+                            {{ session('success') }}
+                        </div>
+                    @endif
+
+                    @if (session('error'))
+                        <div class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                            {{ session('error') }}
+                        </div>
+                    @endif
+
+                    <form action="{{ route('contact.send') }}" method="POST" class="space-y-6">
+                        @csrf
                         <div>
                             <label for="name" class="block text-sm font-medium text-gray-700 mb-2">Your
                                 Name</label>
                             <input type="text" name="name" id="name" required
+                                value="{{ old('name') }}"
                                 class="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all">
+                            @error('name')
+                                <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
                         </div>
                         <div>
                             <label for="email" class="block text-sm font-medium text-gray-700 mb-2">Your
                                 Email</label>
                             <input type="email" name="email" id="email" required
+                                value="{{ old('email') }}"
                                 class="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all">
+                            @error('email')
+                                <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
                         </div>
                         <div>
                             <label for="message" class="block text-sm font-medium text-gray-700 mb-2">Your
                                 Message</label>
                             <textarea name="message" id="message" rows="4" required
-                                class="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all resize-none"></textarea>
+                                class="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all resize-none">{{ old('message') }}</textarea>
+                            @error('message')
+                                <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
                         </div>
-                        <button type="submit"
-                            class="w-full px-6 py-3 bg-emerald-700 hover:bg-emerald-600 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all transform active:scale-[0.99]">
+
+                        <div>
+                            @if (config('services.turnstile.site_key'))
+                                <div class="cf-turnstile" data-sitekey="{{ config('services.turnstile.site_key') }}"
+                                    data-theme="light" data-callback="turnstileCallback"></div>
+                            @else
+                                <p class="text-sm text-red-600">Captcha is not configured. Please contact support.</p>
+                            @endif
+                            @error('cf-turnstile-response')
+                                <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+                        <button type="submit" id="contactSubmitBtn"
+                            class="w-full px-6 py-3 bg-emerald-700 hover:bg-emerald-600 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all transform active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled>
                             Send Message
                             <i class="fas fa-paper-plane ml-2"></i>
                         </button>
@@ -411,6 +450,29 @@
 
     <!-- Footer -->
     @include('partials.public.footer')
+
+    <script>
+        // Contact form: enable submit button only when Turnstile succeeds
+        document.addEventListener('DOMContentLoaded', function() {
+            const contactForm = document.querySelector('form[action="{{ route('contact.send') }}"]');
+            const contactBtn = document.getElementById('contactSubmitBtn');
+
+            if (contactForm && contactBtn) {
+                // Disable initially
+                contactBtn.disabled = true;
+
+                // Listen for Turnstile success
+                window.turnstileCallback = function() {
+                    contactBtn.disabled = false;
+                };
+
+                // Re-disable on form reset or error
+                contactForm.addEventListener('submit', function(e) {
+                    // Button stays enabled for submission
+                });
+            }
+        });
+    </script>
 
     <style>
         @keyframes blob {

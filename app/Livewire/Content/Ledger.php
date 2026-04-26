@@ -230,8 +230,7 @@ class Ledger extends Component
     public function render()
     {
         logger('trying to render...');
-        $userRole = Auth::user()->role;
-        $canEdit = in_array($userRole, ['admin', 'manager', 'treasurer']);
+        $canEdit = Auth::user()->can('transactions.update');
 
         $query = Transaction::with(['account.user.personalData', 'loan.user.personalData', 'recordedBy']);
 

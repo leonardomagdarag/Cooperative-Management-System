@@ -5,7 +5,7 @@ use App\Http\Controllers\DashboardController;
 use App\Livewire\Content\Dashboards\MemberLoans;
 
 // Accessible only to member
-Route::prefix('member')->middleware(['auth', 'role:member'])->group(function () {
+Route::prefix('member')->middleware(['auth', 'otp.verified', 'role:member'])->group(function () {
     // member Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('member.dashboard');
 
