@@ -2,6 +2,8 @@ import { defineConfig } from 'vite';
 import laravel from 'laravel-vite-plugin';
 import tailwindcss from '@tailwindcss/vite';
 
+const hmrHost = process.env.VITE_HMR_HOST || 'localhost';
+
 export default defineConfig({
     plugins: [
         laravel({
@@ -22,7 +24,8 @@ export default defineConfig({
         port: 5173,
         strictPort: true,
         hmr: {
-            host: '10.232.35.68'
+            host: hmrHost,
+            clientPort: 5173,
         }
     }
 });

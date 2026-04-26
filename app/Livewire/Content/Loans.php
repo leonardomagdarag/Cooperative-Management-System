@@ -21,11 +21,11 @@ class Loans extends Component
     public $search = '';
     public $sortField = 'created_at';
     public $sortDirection = 'desc';
-    
+
     // Row selection
     public $selectedRows = [];
     public $selectAll = false;
-    
+
     // View details modal
     public $showModal = false;
     public $selectedLoan = null;  // Includes loan with payments relationship
@@ -72,32 +72,31 @@ class Loans extends Component
      */
     public function render()
     {
-        $userRole = Auth::user()->role;
-        $canEdit = in_array($userRole, ['admin', 'manager', 'treasurer', 'loan']);
+        $canEdit = Auth::user()->can('loans.update') || Auth::user()->can('loans.approve');
 
         // Standard Eloquent query with pagination 
         $loans = Loan::with(['account.user.personalData'])
             ->when($this->search, function ($query) {
                 $query->where(function ($q) {
                     // Search by loan number
-                    $q->where('loan_number', 'like', '%'.$this->search.'%')
+                    $q->where('loan_number', 'like', '%' . $this->search . '%')
                         // Search by loan type
-                        ->orWhere('loan_type', 'like', '%'.$this->search.'%')
+                        ->orWhere('loan_type', 'like', '%' . $this->search . '%')
                         // Search by amount
-                        ->orWhere('amount', 'like', '%'.$this->search.'%')
+                        ->orWhere('amount', 'like', '%' . $this->search . '%')
                         // Search by status
-                        ->orWhere('status', 'like', '%'.$this->search.'%')
+                        ->orWhere('status', 'like', '%' . $this->search . '%')
                         // Search by interest rate
-                        ->orWhere('interest_rate', 'like', '%'.$this->search.'%')
+                        ->orWhere('interest_rate', 'like', '%' . $this->search . '%')
                         // Search by borrower name
                         ->orWhereHas('account.user.personalData', function ($subQ) {
-                            $subQ->where('first_name', 'like', '%'.$this->search.'%')
-                                ->orWhere('last_name', 'like', '%'.$this->search.'%')
-                                ->orWhere('mid_name', 'like', '%'.$this->search.'%');
+                            $subQ->where('first_name', 'like', '%' . $this->search . '%')
+                                ->orWhere('last_name', 'like', '%' . $this->search . '%')
+                                ->orWhere('mid_name', 'like', '%' . $this->search . '%');
                         })
                         // Search by user number
                         ->orWhereHas('account.user', function ($subQ) {
-                            $subQ->where('user_number', 'like', '%'.$this->search.'%');
+                            $subQ->where('user_number', 'like', '%' . $this->search . '%');
                         });
                 });
             })

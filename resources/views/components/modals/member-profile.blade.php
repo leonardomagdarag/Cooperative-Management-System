@@ -203,7 +203,7 @@
                             <h5 class="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b-2 border-cyan-100">
                                 Government ID Numbers</h5>
                             @php
-                                $canViewFullId = in_array(Auth::user()->role, ['admin', 'manager', 'secretary']);
+                                $canViewFullId = Auth::user()->can('members.view-full-details');
                                 $memberId = $member->personalData?->memberId;
                             @endphp
 
@@ -606,7 +606,7 @@
             <div class="flex items-center justify-between p-4 space-x-2 border-t border-gray-200 bg-gray-50">
                 {{-- Left side: Special Loan Toggle (Manager/Admin only) --}}
                 <div class="flex items-center">
-                    @if (in_array(Auth::user()->role, ['admin', 'manager']))
+                    @if (Auth::user()->can('members.update'))
                         <label class="inline-flex items-center cursor-pointer">
                             <input type="checkbox" wire:model.live="member.special_loan_eligible"
                                 wire:change="toggleSpecialLoanEligibility('{{ $member->id }}')"

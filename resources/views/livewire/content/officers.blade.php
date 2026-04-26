@@ -60,7 +60,7 @@
                                                 class="w-4 h-4 bg-gray-50 rounded border-gray-300 focus:ring-3 focus:ring-blue-300">
                                         </div>
                                     </th>
-                                    @if (in_array(Auth::user()->role, ['admin', 'manager']))
+                                    @if ($canEdit)
                                         <th scope="col"
                                             class="p-4 text-xs font-medium text-left text-gray-500 uppercase">
                                             Officer ID
@@ -95,7 +95,7 @@
                                                     class="w-4 h-4 bg-gray-50 rounded border-gray-300 focus:ring-3 focus:ring-blue-300">
                                             </div>
                                         </td>
-                                        @if (in_array(Auth::user()->role, ['admin', 'manager']))
+                                        @if ($canEdit)
                                             <td class="p-4 text-sm font-semibold text-gray-900 whitespace-nowrap">
                                                 {{ $officer->user_number }}
                                             </td>
@@ -117,7 +117,7 @@
                                                 class="bg-purple-100 text-purple-800 text-xs font-medium px-2.5 py-0.5 rounded">{{ ucfirst($officer->role) }}</span>
                                         </td>
                                         <td class="p-4 text-base font-normal text-gray-900 whitespace-nowrap">
-                                            @if ($officer->role !== 'inactive')
+                                            @if (($officer->account_status ?? 'active') === 'active')
                                                 <span
                                                     class="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded">Active</span>
                                             @else
@@ -128,7 +128,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="{{ in_array(Auth::user()->role, ['admin', 'manager']) ? '6' : '5' }}"
+                                        <td colspan="{{ $canEdit ? '6' : '5' }}"
                                             class="p-4 text-center">
                                             <div class="flex flex-col items-center justify-center py-12">
                                                 <svg class="w-16 h-16 text-gray-400 mb-4" fill="none"
@@ -225,6 +225,42 @@
                                 class="text-white bg-red-600 hover:bg-red-700 focus:ring-4 focus:outline-none focus:ring-red-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center">
                                 Delete Officer
                             </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        {{-- Permissions Manager Modal --}}
+        @if ($showPermissionsModal && $selectedOfficerForPermissions)
+            <div class="fixed inset-0 z-50 flex items-center justify-center overflow-x-hidden overflow-y-auto outline-none focus:outline-none"
+                aria-labelledby="modal-title" role="dialog" aria-modal="true">
+                {{-- Backdrop --}}
+                <div class="absolute inset-0 bg-gray-900 opacity-50 transition-opacity"
+                    wire:click="closePermissionsModal"></div>
+
+                {{-- Modal content --}}
+                <div class="relative w-full max-w-4xl max-h-[90vh] mx-auto my-6 z-10 overflow-y-auto">
+                    <div class="relative bg-white rounded-lg shadow">
+                        {{-- Modal header --}}
+                        <div
+                            class="flex items-center justify-between p-5 border-b border-gray-200 bg-gradient-to-r from-purple-600 to-indigo-600">
+                            <h3 class="text-xl font-semibold text-white">
+                                Manage Officer Permissions
+                            </h3>
+                            <button type="button" wire:click="closePermissionsModal"
+                                class="text-white bg-transparent hover:bg-purple-800 rounded-lg text-sm p-1.5 ml-auto inline-flex items-center transition-colors">
+                                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd"
+                                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                                        clip-rule="evenodd"></path>
+                                </svg>
+                            </button>
+                        </div>
+
+                        {{-- Modal body --}}
+                        <div class="p-6">
+                            <livewire:content.officer-permission-manager :officerId="$selectedOfficerForPermissions" :key="'officer-permission-manager-' . $selectedOfficerForPermissions" />
                         </div>
                     </div>
                 </div>

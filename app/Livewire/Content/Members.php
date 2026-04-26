@@ -10,6 +10,7 @@ use App\Models\Employment;
 use App\Models\MemberId;
 use App\Models\PersonalData;
 use App\Models\User;
+use App\Services\AuditLogService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -160,7 +161,7 @@ class Members extends Component
         $rules = $this->getValidationRules();
 
         // Add conditional current_password rule (matches saveMember behavior)
-        if ($this->isEdit && ! empty($this->form['password']) && ! in_array(Auth::user()->role, ['admin', 'manager'])) {
+        if ($this->isEdit && ! empty($this->form['password']) && ! Auth::user()->can('members.update')) {
             $rules['form.current_password'] = 'required|current_password';
         }
 
@@ -620,7 +621,7 @@ class Members extends Component
         $rules = $this->getValidationRules();
 
         // Add conditional current_password rule
-        if ($this->isEdit && ! empty($this->form['password']) && ! in_array(Auth::user()->role, ['admin', 'manager'])) {
+        if ($this->isEdit && ! empty($this->form['password']) && ! Auth::user()->can('members.update')) {
             $rules['form.current_password'] = 'required|current_password';
         }
 
@@ -794,6 +795,18 @@ class Members extends Component
                 }
                 $member->update($updateData);
 
+                app(AuditLogService::class)->log(
+                    'member.updated',
+                    'Member profile updated.',
+                    'member',
+                    $member,
+                    Auth::user(),
+                    [
+                        'member_id' => $member->id,
+                        'email' => $member->email,
+                    ]
+                );
+
                 Log::info('=== MEMBER UPDATE COMPLETED ===', [
                     'memberId' => $member->id,
                     'email' => $this->form['email'],
@@ -909,6 +922,22 @@ class Members extends Component
                     'balance' => 0.00,
                 ]);
 
+                // Assign Spatie roles/permissions
+                // All members get the 'member' role
+                $user->assignRole('member');
+
+                app(AuditLogService::class)->log(
+                    'member.created',
+                    'New member created by staff.',
+                    'member',
+                    $user,
+                    Auth::user(),
+                    [
+                        'member_id' => $user->id,
+                        'email' => $user->email,
+                    ]
+                );
+
                 // Send welcome email to new member
                 try {
                     $this->sendWelcomeEmail($user, $this->form['password']);
@@ -977,8 +1006,12 @@ class Members extends Component
      */
     public function render()
     {
-        $userRole = Auth::user()->role;
-        $canEdit = in_array($userRole, ['admin', 'manager', 'secretary']);
+        $user = Auth::user();
+        $canEdit = $user && (
+            $user->can('members.create') ||
+            $user->can('members.update') ||
+            $user->can('members.delete')
+        );
 
         // Build query with only what the table needs (keeps re-renders cheaper, including modal open)
         $query = User::with(['personalData'])
@@ -1047,8 +1080,8 @@ class Members extends Component
      */
     public function toggleSpecialLoanEligibility($memberId)
     {
-        // Only admins and managers can toggle special loan eligibility
-        if (!in_array(Auth::user()->role, ['admin', 'manager'])) {
+        // Require member update permission to toggle special loan eligibility.
+        if (!Auth::user()->can('members.update')) {
             $this->dispatch('toast', ['message' => 'Unauthorized action.', 'type' => 'error']);
             return;
         }
@@ -1057,6 +1090,18 @@ class Members extends Component
             $member = User::findOrFail($memberId);
             $member->special_loan_eligible = !$member->special_loan_eligible;
             $member->save();
+
+            app(AuditLogService::class)->log(
+                'member.special_loan_eligibility_toggled',
+                'Special loan eligibility status changed.',
+                'member',
+                $member,
+                Auth::user(),
+                [
+                    'member_id' => $member->id,
+                    'special_loan_eligible' => (bool) $member->special_loan_eligible,
+                ]
+            );
 
             $status = $member->special_loan_eligible ? 'enabled' : 'disabled';
             $this->dispatch('toast', [

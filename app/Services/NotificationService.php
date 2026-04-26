@@ -14,9 +14,31 @@ use App\Models\Loan;
 use App\Models\Transaction;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Route;
 
 class NotificationService
 {
+    private function resolveUserDashboardUrl(User $user): string
+    {
+        $primaryRole = $user->getRoleNames()->first() ?? $user->role ?? 'member';
+
+        $routeName = match ($primaryRole) {
+            'admin' => 'admin.dashboard',
+            'manager' => 'manager.dashboard',
+            'secretary' => 'secretary.dashboard',
+            'loan' => 'loan.dashboard',
+            'treasurer' => 'treasurer.dashboard',
+            default => 'member.dashboard',
+        };
+
+        return Route::has($routeName) ? route($routeName) : '/member/dashboard';
+    }
+
+    private function routeIfExists(string $routeName, string $fallback, array $parameters = []): string
+    {
+        return Route::has($routeName) ? route($routeName, $parameters) : $fallback;
+    }
+
     /**
      * Create a notification for a user
      */
@@ -79,7 +101,7 @@ class NotificationService
             'New Announcement: ' . $announcement->title,
             substr($announcement->content, 0, 100) . '...',
             'normal',
-            route('announcements.show', $announcement->id),
+            '/news',
             $announcement
         );
 
@@ -87,7 +109,7 @@ class NotificationService
         if ($sendEmail && config('mail.default') !== 'log') {
             foreach ($users as $user) {
                 if ($user->email) {
-                    Mail::to($user->email)->send(new AnnouncementMail($announcement));
+                    Mail::to($user->email)->queue(new AnnouncementMail($announcement));
                 }
             }
         }
@@ -110,13 +132,13 @@ class NotificationService
             'Loan Payment Due Soon',
             "Your loan payment of ₱" . number_format($loan->loan_amount, 2) . " is due in {$daysRemaining} day(s).",
             $priority,
-            route('loans.show', $loan->id),
+            $this->resolveUserDashboardUrl($loan->user),
             $loan
         );
 
         // Send email notification
         if ($sendEmail && config('mail.default') !== 'log' && $loan->user->email) {
-            Mail::to($loan->user->email)->send(new LoanDueNotification($loan, $daysRemaining, false));
+            Mail::to($loan->user->email)->queue(new LoanDueNotification($loan, $daysRemaining, false));
         }
     }
 
@@ -131,13 +153,13 @@ class NotificationService
             'Loan Payment Overdue',
             "Your loan payment is now overdue. Please settle your payment as soon as possible.",
             'urgent',
-            route('loans.show', $loan->id),
+            $this->resolveUserDashboardUrl($loan->user),
             $loan
         );
 
         // Send email notification
         if ($sendEmail && config('mail.default') !== 'log' && $loan->user->email) {
-            Mail::to($loan->user->email)->send(new LoanDueNotification($loan, 0, true));
+            Mail::to($loan->user->email)->queue(new LoanDueNotification($loan, 0, true));
         }
     }
 
@@ -152,13 +174,13 @@ class NotificationService
             'Loan Application Approved',
             "Congratulations! Your loan application for ₱" . number_format($loan->loan_amount, 2) . " has been approved.",
             'high',
-            route('loans.show', $loan->id),
+            $this->resolveUserDashboardUrl($loan->user),
             $loan
         );
 
         // Send email notification
         if ($sendEmail && config('mail.default') !== 'log' && $loan->user->email) {
-            Mail::to($loan->user->email)->send(new LoanStatusNotification($loan, 'approved'));
+            Mail::to($loan->user->email)->queue(new LoanStatusNotification($loan, 'approved'));
         }
     }
 
@@ -178,13 +200,13 @@ class NotificationService
             'Loan Application Rejected',
             $message,
             'high',
-            route('loans.show', $loan->id),
+            $this->resolveUserDashboardUrl($loan->user),
             $loan
         );
 
         // Send email notification
         if ($sendEmail && config('mail.default') !== 'log' && $loan->user->email) {
-            Mail::to($loan->user->email)->send(new LoanStatusNotification($loan, 'rejected', $reason));
+            Mail::to($loan->user->email)->queue(new LoanStatusNotification($loan, 'rejected', $reason));
         }
     }
 
@@ -199,7 +221,7 @@ class NotificationService
             'Payment Received',
             "Your payment of ₱" . number_format($amount, 2) . " has been received.",
             'normal',
-            route('loans.show', $loan->id),
+            $this->resolveUserDashboardUrl($loan->user),
             $loan
         );
     }
@@ -211,17 +233,17 @@ class NotificationService
     {
         $this->create(
             $withdrawal->user,
-            'withdrawal_approved',
+            'general',
             'Withdrawal Request Approved',
             "Your withdrawal request for ₱" . number_format($withdrawal->amount, 2) . " has been approved and processed.",
             'high',
-            route('member.history'),
+            $this->resolveUserDashboardUrl($withdrawal->user),
             $withdrawal
         );
 
         // Send email notification
         if ($sendEmail && config('mail.default') !== 'log' && $withdrawal->user->email) {
-            Mail::to($withdrawal->user->email)->send(new WithdrawalStatusNotification($withdrawal, 'approved'));
+            Mail::to($withdrawal->user->email)->queue(new WithdrawalStatusNotification($withdrawal, 'approved'));
         }
     }
 
@@ -237,17 +259,57 @@ class NotificationService
 
         $this->create(
             $withdrawal->user,
-            'withdrawal_rejected',
+            'general',
             'Withdrawal Request Rejected',
             $message,
             'high',
-            route('member.services'),
+            $this->resolveUserDashboardUrl($withdrawal->user),
             $withdrawal
         );
 
         // Send email notification
         if ($sendEmail && config('mail.default') !== 'log' && $withdrawal->user->email) {
-            Mail::to($withdrawal->user->email)->send(new WithdrawalStatusNotification($withdrawal, 'rejected', $reason));
+            Mail::to($withdrawal->user->email)->queue(new WithdrawalStatusNotification($withdrawal, 'rejected', $reason));
+        }
+    }
+
+    /**
+     * Create an in-app activity notification for account actions.
+     */
+    public function notifyAccountActivity(
+        User $user,
+        string $title,
+        string $message,
+        string $priority = 'normal'
+    ): void {
+        $this->create(
+            $user,
+            'general',
+            $title,
+            $message,
+            $priority,
+            '/notifications'
+        );
+    }
+
+    /**
+     * Create security alert for a new sign-in from an unfamiliar IP.
+     */
+    public function notifyNewLogin(User $user, string $ipAddress, bool $sendEmail = true): void
+    {
+        $this->create(
+            $user,
+            'security_alert',
+            'New Sign-in Detected',
+            "A new login to your account was detected from IP: {$ipAddress}.",
+            'high',
+            '/notifications'
+        );
+
+        if ($sendEmail && config('mail.default') !== 'log' && $user->email) {
+            Mail::to($user->email)->queue(new SecurityAlert($user, 'new_login', [
+                'ip_address' => $ipAddress,
+            ]));
         }
     }
 
@@ -262,12 +324,12 @@ class NotificationService
             'Multiple Failed Login Attempts',
             "We detected {$attempts} failed login attempts from IP: {$ipAddress}. If this wasn't you, please change your password immediately.",
             'urgent',
-            route('profile.security')
+            '/notifications'
         );
 
         // Send email notification
         if ($sendEmail && config('mail.default') !== 'log' && $user->email) {
-            Mail::to($user->email)->send(new SecurityAlert($user, 'failed_login', [
+            Mail::to($user->email)->queue(new SecurityAlert($user, 'failed_login', [
                 'attempts' => $attempts,
                 'ip_address' => $ipAddress,
             ]));
@@ -285,12 +347,12 @@ class NotificationService
             'Password Changed',
             "Your password was recently changed. If you didn't make this change, please contact support immediately.",
             'high',
-            route('profile.security')
+            '/notifications'
         );
 
         // Send email notification
         if ($sendEmail && config('mail.default') !== 'log' && $user->email) {
-            Mail::to($user->email)->send(new SecurityAlert($user, 'password_changed'));
+            Mail::to($user->email)->queue(new SecurityAlert($user, 'password_changed'));
         }
     }
 
@@ -305,12 +367,12 @@ class NotificationService
             'Email Address Changed',
             "Your email address was changed to {$newEmail}. If you didn't make this change, please contact support immediately.",
             'high',
-            route('profile.security')
+            '/notifications'
         );
 
         // Send email notification (to old email for security)
         if ($sendEmail && config('mail.default') !== 'log' && $user->email) {
-            Mail::to($user->email)->send(new SecurityAlert($user, 'email_changed', [
+            Mail::to($user->email)->queue(new SecurityAlert($user, 'email_changed', [
                 'new_email' => $newEmail,
             ]));
         }
@@ -327,7 +389,7 @@ class NotificationService
             'Verify Your Email',
             "Please verify your email address to access all features.",
             'high',
-            route('verification.notice')
+            $this->routeIfExists('verification.notice', '/notifications')
         );
     }
 

@@ -120,6 +120,27 @@
                                             </div>
                                         @endif
 
+                                        @if ($approvalAction === 'approve' && $this->selectedTransactionRequiresOtp)
+                                            <div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                                                <p class="text-sm text-amber-800 mb-3">
+                                                    OTP is required for withdrawals at or above
+                                                    ₱{{ number_format($withdrawalApprovalOtpThreshold, 2) }}.
+                                                </p>
+                                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                                    Approval OTP
+                                                </label>
+                                                <input type="text" wire:model="approvalOtpCode" inputmode="numeric"
+                                                    maxlength="6" placeholder="Enter 6-digit code"
+                                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent">
+                                                <div class="mt-3">
+                                                    <button wire:click="resendApprovalOtp" type="button"
+                                                        class="text-sm text-amber-700 hover:text-amber-800 font-medium">
+                                                        Resend OTP
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        @endif
+
                                         <div class="flex gap-3">
                                             <button wire:click="cancelApproval" type="button"
                                                 class="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50">

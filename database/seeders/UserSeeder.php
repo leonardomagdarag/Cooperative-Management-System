@@ -20,7 +20,7 @@ class UserSeeder extends Seeder
         // ===================================
 
         // Create developer account
-        User::create([
+        $developer = User::create([
             'user_number' => 'USR000001',
             'personal_data_id' => PersonalData::factory()->create([
                 'first_name' => 'Leo',
@@ -32,9 +32,10 @@ class UserSeeder extends Seeder
             'password' => Hash::make('password'),
             'role' => 'developer',
         ]);
+        $developer->assignRole('developer');
 
         // Create an admin user
-        User::create([
+        $admin = User::create([
             'user_number' => 'USR000002',
             'personal_data_id' => PersonalData::factory()->create([
                 'first_name' => 'Admin',
@@ -46,6 +47,7 @@ class UserSeeder extends Seeder
             'password' => Hash::make('password'),
             'role' => 'admin',
         ]);
+        $admin->assignRole('admin');
 
         // Create additional staff accounts
         $roles = [
@@ -55,7 +57,7 @@ class UserSeeder extends Seeder
         ];
 
         foreach ($roles as $index => $roleData) {
-            User::create([
+            $staff = User::create([
                 'user_number' => 'USR' . str_pad($index + 3, 6, '0', STR_PAD_LEFT),
                 'personal_data_id' => PersonalData::factory()->create([
                     'first_name' => $roleData['firstName'],
@@ -66,6 +68,7 @@ class UserSeeder extends Seeder
                 'password' => Hash::make('password'),
                 'role' => $roleData['role'],
             ]);
+            $staff->assignRole($roleData['role']);
         }
 
         // ===================================
@@ -74,7 +77,7 @@ class UserSeeder extends Seeder
 
         // Create 4 members with specific emails
         for ($i = 1; $i <= 4; $i++) {
-            User::create([
+            $member = User::create([
                 'user_number' => 'USR' . str_pad($i + 5, 6, '0', STR_PAD_LEFT),
                 'personal_data_id' => PersonalData::factory()->create([
                     'first_name' => 'Member',
@@ -85,10 +88,11 @@ class UserSeeder extends Seeder
                 'password' => Hash::make('password'),
                 'role' => 'member',
             ]);
+            $member->assignRole('member');
         }
 
         // Create Leo Magdarag member account (5th member)
-        User::create([
+        $fifthMember = User::create([
             'user_number' => 'USR000010',
             'personal_data_id' => PersonalData::factory()->create([
                 'first_name' => 'Leo',
@@ -101,5 +105,6 @@ class UserSeeder extends Seeder
             'password' => Hash::make('password'),
             'role' => 'member',
         ]);
+        $fifthMember->assignRole('member');
     }
 }

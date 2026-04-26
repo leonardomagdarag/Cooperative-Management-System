@@ -4,8 +4,12 @@ namespace App\Livewire\Content;
 
 use App\Models\Account;
 use App\Models\Loan;
+use App\Models\LoanProduct;
+use App\Models\SystemSetting;
 use App\Models\Transaction;
+use App\Services\AuditLogService;
 use App\Services\NotificationService;
+use App\Services\SecurityOtpService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
@@ -16,6 +20,8 @@ class Services extends Component
     use WithFileUploads;
 
     protected $notificationService;
+    protected $securityOtpService;
+    protected $auditLogService;
 
     // View state
     public $activeService = null; // 'deposit', 'withdraw', 'loan', 'payment', 'approve'
@@ -31,6 +37,12 @@ class Services extends Component
     public $approvalAction = ''; // 'approve' or 'reject'
 
     public $rejectionReason = '';
+
+    public $approvalOtpCode = '';
+
+    public $approvalOtpSentForTransactionId = null;
+
+    public $withdrawalApprovalOtpThreshold = 2000;
 
     // Wizard steps
     public $depositStep = 1;
@@ -92,47 +104,24 @@ class Services extends Component
 
     // Business loan fields
     public $interviewSchedule = '';
-    public $hasRequiredShareCapital = false;
+    public $loanTypes = [];
 
-    // Special loan eligibility
-    public $isSpecialLoanEligible = false;
-
-    public $loanTypes = [
-        'group' => [
-            'name' => 'Group Loan',
-            'description' => 'Requires 5 members, each can borrow up to ₱5,000',
-            'interest_rate' => 1.5,
-            'max_amount' => 5000,
-            'max_term' => 6,
-            'icon' => 'users',
-            'required_members' => 5,
-        ],
-        'business' => [
-            'name' => 'Business Loan',
-            'description' => 'Requires ₱4,000 share capital and business verification',
-            'interest_rate' => 3.0,
-            'max_amount' => 50000,
-            'max_term' => 12,
-            'icon' => 'briefcase',
-            'required_share_capital' => 4000,
-        ],
-        'special' => [
-            'name' => 'Special Loan',
-            'description' => 'Emergency or special purpose loans with flexible terms',
-            'interest_rate' => 2.0,
-            'max_amount' => 30000,
-            'max_term' => 12,
-            'icon' => 'star',
-        ],
-    ];
+    public $loanTypeWarnings = [];
 
     public function mount()
     {
         $this->notificationService = app(NotificationService::class);
+        $this->securityOtpService = app(SecurityOtpService::class);
+        $this->auditLogService = app(AuditLogService::class);
+        $this->withdrawalApprovalOtpThreshold = (float) SystemSetting::get('security_withdrawal_otp_threshold', 2000);
+        $this->loadLoanTypes();
 
-        // Check if user is treasurer, admin, or manager
-        $userRole = Auth::user()->role;
-        $this->isTreasurerMode = in_array($userRole, ['treasurer', 'admin', 'manager']);
+        $user = Auth::user();
+        $this->isTreasurerMode = $user && (
+            $user->can('deposits.approve') ||
+            $user->can('withdrawals.approve') ||
+            $user->can('transactions.update')
+        );
 
         // If not treasurer mode, pre-select user's savings account for withdrawal
         if (! $this->isTreasurerMode) {
@@ -140,14 +129,9 @@ class Services extends Component
             if ($savingsAccount) {
                 $this->withdrawalAccountId = $savingsAccount->id;
             }
-
-            // Check if user has required share capital for business loan
-            $shareCapitalAccount = Auth::user()->accounts()->where('account_type', 'share-capital')->first();
-            $this->hasRequiredShareCapital = $shareCapitalAccount && $shareCapitalAccount->balance >= 4000;
-
-            // Check if user is eligible for special loan
-            $this->isSpecialLoanEligible = Auth::user()->special_loan_eligible ?? false;
         }
+
+        $this->refreshLoanTypeWarnings();
     }
 
     public function selectMember($memberId)
@@ -162,32 +146,35 @@ class Services extends Component
             if ($savingsAccount) {
                 $this->withdrawalAccountId = $savingsAccount->id;
             }
-
-            // Update share capital check for selected member (treasurer mode)
-            $shareCapitalAccount = $member->accounts()->where('account_type', 'share-capital')->first();
-            $this->hasRequiredShareCapital = $shareCapitalAccount && $shareCapitalAccount->balance >= 4000;
-
-            // Update special loan eligibility for selected member (treasurer mode)
-            $this->isSpecialLoanEligible = $member->special_loan_eligible ?? false;
         }
+
+        $this->refreshLoanTypeWarnings();
     }
 
     public function clearMemberSelection()
     {
         $this->selectedMemberId = null;
         $this->withdrawalAccountId = '';
+        $this->refreshLoanTypeWarnings();
     }
 
     public function viewTransactionForApproval($transactionId)
     {
         $this->selectedTransactionId = $transactionId;
+        $this->approvalOtpCode = '';
+        $this->approvalOtpSentForTransactionId = null;
     }
 
     public function approveTransaction()
     {
-        // Allow treasurer, manager, and admin to approve
-        $userRole = Auth::user()->role;
-        if (!in_array($userRole, ['treasurer', 'manager', 'admin']) || !$this->selectedTransactionId) {
+        $user = Auth::user();
+        $canApprove = $user && (
+            $user->can('deposits.approve') ||
+            $user->can('withdrawals.approve') ||
+            $user->can('transactions.update')
+        );
+
+        if (!$canApprove || !$this->selectedTransactionId) {
             return;
         }
 
@@ -212,14 +199,41 @@ class Services extends Component
                 }
             }
 
+            if ($this->requiresWithdrawalApprovalOtp($transaction) && ! $this->passesWithdrawalApprovalOtp($transaction)) {
+                DB::rollBack();
+                return;
+            }
+
             // Update status to completed
             $transaction->status = 'completed';
             $transaction->note = ($transaction->note ? $transaction->note . ' | ' : '') . 'Approved by ' . Auth::user()->personalData->first_name . ' ' . Auth::user()->personalData->last_name;
             $transaction->save();
 
+            $this->auditLogService->log(
+                'transaction.approved',
+                'Pending transaction approved.',
+                'transaction',
+                $transaction,
+                $user,
+                [
+                    'transaction_type' => $transaction->transaction_type,
+                    'amount' => (float) $transaction->amount,
+                    'target_user_id' => $transaction->user?->id,
+                ]
+            );
+
             // Update account balance
             if ($transaction->transaction_type === 'deposit') {
                 $transaction->account->increment('balance', $transaction->amount);
+
+                if ($transaction->user) {
+                    $this->notificationService->notifyAccountActivity(
+                        $transaction->user,
+                        'Deposit Approved',
+                        'Your deposit request of ₱' . number_format($transaction->amount, 2) . ' has been approved and credited.',
+                        'normal'
+                    );
+                }
             } elseif ($transaction->transaction_type === 'withdrawal') {
                 $transaction->account->decrement('balance', $transaction->amount);
 
@@ -228,6 +242,10 @@ class Services extends Component
                     $this->notificationService->notifyWithdrawalApproved($transaction);
                 }
             } elseif ($transaction->transaction_type === 'loan_payment' && $transaction->loan) {
+                if ($transaction->user) {
+                    $this->notificationService->notifyLoanPayment($transaction->loan, (float) $transaction->amount);
+                }
+
                 // Check if loan is now fully paid
                 $loan = $transaction->loan;
                 $loan->refresh(); // Refresh to get updated balance after this payment
@@ -246,10 +264,38 @@ class Services extends Component
             $this->dispatch('success', message: 'Transaction approved successfully!');
             $this->selectedTransactionId = null;
             $this->approvalAction = '';
+            $this->approvalOtpCode = '';
+            $this->approvalOtpSentForTransactionId = null;
         } catch (\Exception $e) {
             DB::rollBack();
             $this->dispatch('error', message: 'Failed to approve transaction: ' . $e->getMessage());
         }
+    }
+
+    public function resendApprovalOtp()
+    {
+        if (! $this->selectedTransactionId) {
+            return;
+        }
+
+        $transaction = Transaction::find($this->selectedTransactionId);
+        if (! $transaction || ! $this->requiresWithdrawalApprovalOtp($transaction)) {
+            return;
+        }
+
+        $user = Auth::user();
+        if (! $user) {
+            return;
+        }
+
+        $purpose = $this->securityOtpService->withdrawalApprovalPurpose();
+        $context = ['transaction_id' => $transaction->id];
+
+        $issued = $this->securityOtpService->issueChallenge($user, $purpose, $context);
+        $this->securityOtpService->sendOtpMail($user, $purpose, $issued['otp_code']);
+
+        $this->approvalOtpSentForTransactionId = $transaction->id;
+        $this->dispatch('success', message: 'A new OTP was sent to your email.');
     }
 
     public function rejectTransaction()
@@ -258,9 +304,14 @@ class Services extends Component
             'rejectionReason' => 'required|string|min:5',
         ]);
 
-        // Allow treasurer, manager, and admin to reject
-        $userRole = Auth::user()->role;
-        if (!in_array($userRole, ['treasurer', 'manager', 'admin']) || !$this->selectedTransactionId) {
+        $user = Auth::user();
+        $canReject = $user && (
+            $user->can('deposits.reject') ||
+            $user->can('withdrawals.reject') ||
+            $user->can('transactions.update')
+        );
+
+        if (!$canReject || !$this->selectedTransactionId) {
             return;
         }
 
@@ -298,9 +349,37 @@ class Services extends Component
             $transaction->note = ($transaction->note ? $transaction->note . ' | ' : '') . 'REJECTED: ' . $this->rejectionReason . ' (by ' . Auth::user()->personalData->first_name . ' ' . Auth::user()->personalData->last_name . ')';
             $transaction->save();
 
+            $this->auditLogService->log(
+                'transaction.rejected',
+                'Transaction rejected by approver.',
+                'transaction',
+                $transaction,
+                $user,
+                [
+                    'transaction_type' => $transaction->transaction_type,
+                    'amount' => (float) $transaction->amount,
+                    'reason' => $this->rejectionReason,
+                    'target_user_id' => $transaction->user?->id,
+                ]
+            );
+
             // Send withdrawal rejection notification
             if ($transaction->transaction_type === 'withdrawal' && $transaction->user) {
                 $this->notificationService->notifyWithdrawalRejected($transaction, $this->rejectionReason);
+            } elseif ($transaction->transaction_type === 'deposit' && $transaction->user) {
+                $this->notificationService->notifyAccountActivity(
+                    $transaction->user,
+                    'Deposit Request Rejected',
+                    'Your deposit request of ₱' . number_format($transaction->amount, 2) . ' was rejected. Reason: ' . $this->rejectionReason,
+                    'high'
+                );
+            } elseif ($transaction->transaction_type === 'loan_payment' && $transaction->user) {
+                $this->notificationService->notifyAccountActivity(
+                    $transaction->user,
+                    'Loan Payment Rejected',
+                    'Your loan payment of ₱' . number_format($transaction->amount, 2) . ' was rejected. Reason: ' . $this->rejectionReason,
+                    'high'
+                );
             }
 
             DB::commit();
@@ -319,6 +398,8 @@ class Services extends Component
         $this->selectedTransactionId = null;
         $this->rejectionReason = '';
         $this->approvalAction = '';
+        $this->approvalOtpCode = '';
+        $this->approvalOtpSentForTransactionId = null;
     }
 
     public function openService($service)
@@ -370,7 +451,74 @@ class Services extends Component
             'completedPaymentTransaction',
             'groupMembers',
             'interviewSchedule',
+            'approvalOtpCode',
         ]);
+
+        $this->approvalOtpSentForTransactionId = null;
+    }
+
+    public function getSelectedTransactionRequiresOtpProperty(): bool
+    {
+        if (! $this->selectedTransactionId) {
+            return false;
+        }
+
+        $transaction = Transaction::find($this->selectedTransactionId);
+
+        return $transaction ? $this->requiresWithdrawalApprovalOtp($transaction) : false;
+    }
+
+    private function requiresWithdrawalApprovalOtp(Transaction $transaction): bool
+    {
+        if ($transaction->transaction_type !== 'withdrawal') {
+            return false;
+        }
+
+        $user = Auth::user();
+        if (! $user || ! $this->securityOtpService->shouldEnforceOtpForUser($user)) {
+            return false;
+        }
+
+        return (float) $transaction->amount >= (float) $this->withdrawalApprovalOtpThreshold;
+    }
+
+    private function passesWithdrawalApprovalOtp(Transaction $transaction): bool
+    {
+        $user = Auth::user();
+        if (! $user) {
+            $this->dispatch('error', message: 'Unable to verify user for OTP validation.');
+            return false;
+        }
+
+        $purpose = $this->securityOtpService->withdrawalApprovalPurpose();
+        $context = ['transaction_id' => $transaction->id];
+
+        if ($this->securityOtpService->hasVerifiedChallenge($user, $purpose, $context)) {
+            return true;
+        }
+
+        $otpCode = trim((string) $this->approvalOtpCode);
+        if ($otpCode === '') {
+            if ((int) $this->approvalOtpSentForTransactionId !== (int) $transaction->id) {
+                $issued = $this->securityOtpService->issueChallenge($user, $purpose, $context);
+                $this->securityOtpService->sendOtpMail($user, $purpose, $issued['otp_code']);
+                $this->approvalOtpSentForTransactionId = $transaction->id;
+            }
+
+            $this->dispatch('warning', message: 'OTP required for high-value withdrawal approval. Enter the code sent to your email.');
+            return false;
+        }
+
+        $verified = $this->securityOtpService->verifyChallenge($user, $purpose, $otpCode, $context);
+        if (! $verified) {
+            $this->dispatch('error', message: 'Invalid or expired OTP. Please try again or resend a new code.');
+            return false;
+        }
+
+        $this->approvalOtpCode = '';
+        $this->approvalOtpSentForTransactionId = null;
+
+        return true;
     }
 
     // Deposit wizard methods
@@ -442,9 +590,37 @@ class Services extends Component
                 'recorded_by' => Auth::id(),
             ]);
 
+            $this->auditLogService->log(
+                'transaction.deposit_submitted',
+                $isAutoApprove ? 'Online deposit submitted and auto-completed.' : 'Deposit submitted and awaiting approval.',
+                'transaction',
+                $transaction,
+                Auth::user(),
+                [
+                    'amount' => (float) $this->depositAmount,
+                    'mode' => $this->depositTransactionMode,
+                    'status' => $transaction->status,
+                    'target_user_id' => $targetUser?->id,
+                ]
+            );
+
             // Update account balance only if auto-approved (online)
             if ($isAutoApprove) {
                 $account->increment('balance', $this->depositAmount);
+
+                $this->notificationService->notifyAccountActivity(
+                    $targetUser,
+                    'Deposit Completed',
+                    'Your deposit of ₱' . number_format((float) $this->depositAmount, 2) . ' has been credited to your account.',
+                    'normal'
+                );
+            } else {
+                $this->notificationService->notifyAccountActivity(
+                    $targetUser,
+                    'Deposit Request Submitted',
+                    'Your deposit request of ₱' . number_format((float) $this->depositAmount, 2) . ' is pending approval.',
+                    'normal'
+                );
             }
 
             DB::commit();
@@ -541,7 +717,34 @@ class Services extends Component
                 'recorded_by' => Auth::id(),
             ]);
 
+            $targetUser = $this->isTreasurerMode && $this->selectedMemberId
+                ? \App\Models\User::find($this->selectedMemberId)
+                : Auth::user();
+
+            $this->auditLogService->log(
+                'transaction.withdrawal_submitted',
+                'Withdrawal submitted and queued for approval.',
+                'transaction',
+                $transaction,
+                Auth::user(),
+                [
+                    'amount' => (float) $this->withdrawalAmount,
+                    'mode' => $this->withdrawalTransactionMode,
+                    'reason' => $this->withdrawalReason,
+                    'target_user_id' => $targetUser?->id,
+                ]
+            );
+
             // Do NOT update account balance - wait for approval
+
+            if ($targetUser) {
+                $this->notificationService->notifyAccountActivity(
+                    $targetUser,
+                    'Withdrawal Request Submitted',
+                    'Your withdrawal request of ₱' . number_format((float) $this->withdrawalAmount, 2) . ' has been submitted for approval.',
+                    'high'
+                );
+            }
 
             DB::commit();
 
@@ -595,23 +798,28 @@ class Services extends Component
     // Loan application methods
     public function selectLoanType($type)
     {
+        if (! isset($this->loanTypes[$type])) {
+            $this->dispatch('error', message: 'Selected loan product is unavailable.');
+            return;
+        }
+
         $this->loanType = $type;
 
-        // Reset group members when selecting group loan
-        if ($type === 'group') {
+        $targetUser = $this->resolveLoanTargetUser();
+        if (! $targetUser) {
+            $this->dispatch('error', message: 'Unable to resolve target member for loan application.');
+            return;
+        }
+
+        $eligibilityError = $this->getLoanEligibilityError($targetUser, $this->loanTypes[$type]);
+        if ($eligibilityError !== null) {
+            $this->dispatch('warning', message: $eligibilityError);
+            return;
+        }
+
+        // Reset co-makers when switching between products.
+        if ((int) ($this->loanTypes[$type]['required_co_makers'] ?? 0) > 0) {
             $this->groupMembers = [];
-        }
-
-        // Check share capital for business loan
-        if ($type === 'business' && !$this->hasRequiredShareCapital) {
-            $this->dispatch('toast', ['message' => 'Business loan requires ₱4,000 share capital. You currently do not meet this requirement.', 'type' => 'warning']);
-            return;
-        }
-
-        // Check eligibility for special loan
-        if ($type === 'special' && !$this->isSpecialLoanEligible) {
-            $this->dispatch('toast', ['message' => 'You are not currently eligible for special loans. Please contact a manager.', 'type' => 'warning']);
-            return;
         }
 
         $this->loanStep = 2;
@@ -619,8 +827,14 @@ class Services extends Component
 
     public function addGroupMember($userId)
     {
-        if (count($this->groupMembers) >= 4) {
-            $this->dispatch('error', message: 'Maximum 4 co-makers allowed (5 total including you)');
+        $requiredCoMakers = (int) (($this->loanTypes[$this->loanType]['required_co_makers'] ?? 0));
+        if ($requiredCoMakers <= 0) {
+            $this->dispatch('warning', message: 'This loan product does not require co-makers.');
+            return;
+        }
+
+        if (count($this->groupMembers) >= $requiredCoMakers) {
+            $this->dispatch('error', message: 'Maximum ' . $requiredCoMakers . ' co-makers allowed for this product.');
             return;
         }
 
@@ -653,24 +867,27 @@ class Services extends Component
 
     public function nextLoanStep()
     {
+        $loanConfig = $this->loanTypes[$this->loanType] ?? null;
+        if (! $loanConfig) {
+            $this->dispatch('error', message: 'Loan product configuration is missing.');
+            return;
+        }
+
         if ($this->loanStep === 2) {
             // Amount and term validation
             $rules = [
-                'loanAmount' => 'required|numeric|min:100|max:' . $this->loanTypes[$this->loanType]['max_amount'],
-                'loanTerm' => 'required|integer|min:1|max:' . $this->loanTypes[$this->loanType]['max_term'],
+                'loanAmount' => 'required|numeric|min:100|max:' . $loanConfig['max_amount'],
+                'loanTerm' => 'required|integer|min:1|max:' . $loanConfig['max_term'],
                 'loanPaymentFrequency' => 'required|in:weekly,monthly',
             ];
 
-            // Group loan specific validation
-            if ($this->loanType === 'group') {
-                if (count($this->groupMembers) !== 4) {
-                    $this->dispatch('error', message: 'Group loan requires exactly 4 co-makers (5 members total)');
-                    return;
-                }
+            $requiredCoMakers = (int) ($loanConfig['required_co_makers'] ?? 0);
+            if ($requiredCoMakers > 0 && count($this->groupMembers) !== $requiredCoMakers) {
+                $this->dispatch('error', message: 'This product requires exactly ' . $requiredCoMakers . ' co-makers.');
+                return;
             }
 
-            // Business loan specific validation
-            if ($this->loanType === 'business') {
+            if (! empty($loanConfig['requires_interview'])) {
                 $rules['interviewSchedule'] = 'required|date|after:now';
             }
 
@@ -693,61 +910,69 @@ class Services extends Component
 
     public function submitLoanApplication()
     {
+        $loanConfig = $this->loanTypes[$this->loanType] ?? null;
+        if (! $loanConfig) {
+            $this->dispatch('error', message: 'Loan product configuration is missing.');
+            return;
+        }
+
+        $loanTypeOptions = implode(',', array_keys($this->loanTypes));
+
         // Validate loan data before submission
         $this->validate([
-            'loanType' => 'required|in:group,business',
-            'loanAmount' => 'required|numeric|min:100|max:' . $this->loanTypes[$this->loanType]['max_amount'],
-            'loanTerm' => 'required|integer|min:1|max:' . $this->loanTypes[$this->loanType]['max_term'],
+            'loanType' => 'required|in:' . $loanTypeOptions,
+            'loanAmount' => 'required|numeric|min:100|max:' . $loanConfig['max_amount'],
+            'loanTerm' => 'required|integer|min:1|max:' . $loanConfig['max_term'],
             'loanPaymentFrequency' => 'required|in:weekly,monthly',
             'loanPurpose' => 'required|string|min:10|max:500',
         ]);
 
-        // Additional validations based on loan type
-        if ($this->loanType === 'group' && count($this->groupMembers) !== 4) {
-            $this->dispatch('error', message: 'Group loan requires exactly 4 co-makers (5 members total)');
+        $targetUser = $this->resolveLoanTargetUser();
+        if (! $targetUser) {
+            $this->dispatch('error', message: 'Unable to resolve target member for loan application.');
             return;
         }
 
-        if ($this->loanType === 'business') {
-            if (! $this->hasRequiredShareCapital) {
-                $this->dispatch('error', message: 'Business loan requires at least ₱4,000 share capital');
-                return;
-            }
-            if (empty($this->interviewSchedule)) {
-                $this->dispatch('error', message: 'Interview schedule is required for business loans');
-                return;
-            }
+        $eligibilityError = $this->getLoanEligibilityError($targetUser, $loanConfig);
+        if ($eligibilityError !== null) {
+            $this->dispatch('error', message: $eligibilityError);
+            return;
+        }
+
+        $requiredCoMakers = (int) ($loanConfig['required_co_makers'] ?? 0);
+        if ($requiredCoMakers > 0 && count($this->groupMembers) !== $requiredCoMakers) {
+            $this->dispatch('error', message: 'This product requires exactly ' . $requiredCoMakers . ' co-makers.');
+            return;
+        }
+
+        if (! empty($loanConfig['requires_interview']) && empty($this->interviewSchedule)) {
+            $this->dispatch('error', message: 'Interview schedule is required for this loan product.');
+            return;
         }
 
         try {
             DB::beginTransaction();
 
-            // Get target user
-            $targetUser = $this->isTreasurerMode && $this->selectedMemberId
-                ? \App\Models\User::find($this->selectedMemberId)
-                : Auth::user();
-
             $targetUserId = $targetUser->id;
 
-            // Get employment info for business loan
+            // Get employment info for products that require interviews.
             $employmentId = null;
-            if ($this->loanType === 'business' && $targetUser->personalData && $targetUser->personalData->employment) {
+            if (! empty($loanConfig['requires_interview']) && $targetUser->personalData && $targetUser->personalData->employment) {
                 $employmentId = $targetUser->personalData->employment->id;
             }
 
             $loanData = [
                 'user_id' => $targetUserId,
-                'loan_type' => $this->loanType,
+                'loan_type' => $loanConfig['base_type'],
                 'loan_amount' => $this->loanAmount,
-                'interest_rate' => $this->loanTypes[$this->loanType]['interest_rate'],
+                'interest_rate' => $loanConfig['interest_rate'],
                 'term_months' => $this->loanTerm,
                 'payment_frequency' => $this->loanPaymentFrequency,
                 'loan_status' => 'pending',
                 'applied_at' => now(),
             ];
 
-            // Add business loan specific fields
-            if ($this->loanType === 'business') {
+            if (! empty($loanConfig['requires_interview'])) {
                 $loanData['employment_id'] = $employmentId;
                 $loanData['interview_schedule'] = $this->interviewSchedule;
                 $loanData['interview_status'] = 'scheduled';
@@ -755,8 +980,21 @@ class Services extends Component
 
             $loan = Loan::create($loanData);
 
-            // Add group members if group loan
-            if ($this->loanType === 'group' && count($this->groupMembers) > 0) {
+            $this->auditLogService->log(
+                'loan.application_submitted',
+                'Loan application submitted.',
+                'loan',
+                $loan,
+                Auth::user(),
+                [
+                    'loan_type' => $loan->loan_type,
+                    'loan_amount' => (float) $loan->loan_amount,
+                    'payment_frequency' => $loan->payment_frequency,
+                    'target_user_id' => $targetUserId,
+                ]
+            );
+
+            if ($requiredCoMakers > 0 && count($this->groupMembers) > 0) {
                 foreach ($this->groupMembers as $memberId) {
                     $loan->groupMembers()->attach($memberId, [
                         'has_approved' => false,
@@ -769,7 +1007,7 @@ class Services extends Component
             DB::commit();
 
             $message = 'Loan application submitted successfully! Reference: ' . $loan->loan_number;
-            if ($this->loanType === 'business') {
+            if (! empty($loanConfig['requires_interview'])) {
                 $message .= ' | Interview scheduled for: ' . date('M d, Y h:i A', strtotime($this->interviewSchedule));
             }
 
@@ -835,12 +1073,36 @@ class Services extends Component
                 'recorded_by' => Auth::id(),
             ]);
 
+            $this->auditLogService->log(
+                'transaction.loan_payment_submitted',
+                $isAutoApprove ? 'Loan payment submitted and auto-completed.' : 'Loan payment submitted and awaiting approval.',
+                'transaction',
+                $transaction,
+                Auth::user(),
+                [
+                    'amount' => (float) $this->paymentAmount,
+                    'mode' => $this->paymentTransactionMode,
+                    'status' => $transaction->status,
+                    'loan_id' => $loan->id,
+                    'target_user_id' => $targetUser?->id,
+                ]
+            );
+
             // If auto-approved (online), check if loan is now fully paid
             if ($isAutoApprove) {
+                $this->notificationService->notifyLoanPayment($loan, (float) $this->paymentAmount);
+
                 $newRemainingBalance = $loan->loan_amount - $loan->completedPayments()->sum('amount');
                 if ($newRemainingBalance <= 0) {
                     $loan->update(['loan_status' => 'paid']);
                 }
+            } else {
+                $this->notificationService->notifyAccountActivity(
+                    $targetUser,
+                    'Loan Payment Submitted',
+                    'Your loan payment of ₱' . number_format((float) $this->paymentAmount, 2) . ' is pending approval.',
+                    'normal'
+                );
             }
 
             DB::commit();;
@@ -863,14 +1125,156 @@ class Services extends Component
         $this->paymentStep++;
     }
 
+    private function loadLoanTypes(): void
+    {
+        $products = LoanProduct::query()
+            ->active()
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+
+        if ($products->isEmpty()) {
+            $this->loanTypes = [
+                'group' => [
+                    'id' => null,
+                    'code' => 'group',
+                    'name' => 'Group Loan',
+                    'description' => 'Requires 4 co-makers and no existing active loan.',
+                    'base_type' => 'group',
+                    'icon' => 'users',
+                    'interest_rate' => 1.5,
+                    'max_amount' => 5000,
+                    'max_term' => 6,
+                    'requires_no_existing_loan' => true,
+                    'minimum_share_capital' => 0,
+                    'minimum_membership_years' => 1,
+                    'required_co_makers' => 4,
+                    'requires_interview' => false,
+                    'requires_special_eligibility' => false,
+                ],
+                'business' => [
+                    'id' => null,
+                    'code' => 'business',
+                    'name' => 'Business Loan',
+                    'description' => 'Requires share capital and interview.',
+                    'base_type' => 'business',
+                    'icon' => 'briefcase',
+                    'interest_rate' => 3.0,
+                    'max_amount' => 50000,
+                    'max_term' => 12,
+                    'requires_no_existing_loan' => false,
+                    'minimum_share_capital' => 4000,
+                    'minimum_membership_years' => 1,
+                    'required_co_makers' => 0,
+                    'requires_interview' => true,
+                    'requires_special_eligibility' => false,
+                ],
+            ];
+
+            return;
+        }
+
+        $this->loanTypes = $products
+            ->mapWithKeys(fn(LoanProduct $product) => [
+                $product->code => [
+                    'id' => $product->id,
+                    'code' => $product->code,
+                    'name' => $product->name,
+                    'description' => $product->description,
+                    'base_type' => $product->base_type,
+                    'icon' => $product->icon ?: 'wallet',
+                    'interest_rate' => (float) $product->interest_rate,
+                    'max_amount' => (float) $product->max_amount,
+                    'max_term' => (int) $product->max_term,
+                    'requires_no_existing_loan' => (bool) $product->requires_no_existing_loan,
+                    'minimum_share_capital' => (float) $product->minimum_share_capital,
+                    'minimum_membership_years' => (int) $product->minimum_membership_years,
+                    'required_co_makers' => (int) $product->required_co_makers,
+                    'requires_interview' => (bool) $product->requires_interview,
+                    'requires_special_eligibility' => (bool) $product->requires_special_eligibility,
+                ],
+            ])
+            ->toArray();
+    }
+
+    private function refreshLoanTypeWarnings(): void
+    {
+        $this->loanTypeWarnings = [];
+
+        $targetUser = $this->resolveLoanTargetUser();
+        if (! $targetUser) {
+            return;
+        }
+
+        foreach ($this->loanTypes as $key => $config) {
+            $this->loanTypeWarnings[$key] = $this->getLoanEligibilityError($targetUser, $config);
+        }
+    }
+
+    private function resolveLoanTargetUser()
+    {
+        if ($this->isTreasurerMode && $this->selectedMemberId) {
+            return \App\Models\User::find($this->selectedMemberId);
+        }
+
+        return Auth::user();
+    }
+
+    private function getLoanEligibilityError($user, array $loanConfig): ?string
+    {
+        if (! $user) {
+            return 'Unable to verify applicant details.';
+        }
+
+        if (! empty($loanConfig['requires_no_existing_loan'])) {
+            $activeLoanExists = Loan::query()
+                ->where('user_id', $user->id)
+                ->whereIn('loan_status', ['pending', 'approved', 'active'])
+                ->exists();
+
+            if ($activeLoanExists) {
+                return 'This product requires no existing active or pending loan.';
+            }
+        }
+
+        $requiredShareCapital = (float) ($loanConfig['minimum_share_capital'] ?? 0);
+        if ($requiredShareCapital > 0) {
+            $shareCapitalAccount = $user->accounts()->where('account_type', 'share-capital')->first();
+            $shareCapitalBalance = (float) ($shareCapitalAccount?->balance ?? 0);
+
+            if ($shareCapitalBalance < $requiredShareCapital) {
+                return 'Requires at least P' . number_format($requiredShareCapital, 2) . ' share capital.';
+            }
+        }
+
+        $minimumMembershipYears = (int) ($loanConfig['minimum_membership_years'] ?? 0);
+        if ($minimumMembershipYears > 0) {
+            $memberYears = (int) $user->created_at?->diffInYears(now());
+            if ($memberYears < $minimumMembershipYears) {
+                return 'Requires at least ' . $minimumMembershipYears . ' year(s) of membership.';
+            }
+        }
+
+        if (! empty($loanConfig['requires_special_eligibility']) && ! ($user->special_loan_eligible ?? false)) {
+            return 'This product requires special-loan eligibility approval.';
+        }
+
+        return null;
+    }
+
     public function getMonthlyPaymentProperty()
     {
         if (! $this->loanAmount || ! $this->loanTerm || ! $this->loanType) {
             return 0;
         }
 
+        $loanConfig = $this->loanTypes[$this->loanType] ?? null;
+        if (! $loanConfig) {
+            return 0;
+        }
+
         $principal = $this->loanAmount;
-        $rate = $this->loanTypes[$this->loanType]['interest_rate'] / 100 / 12;
+        $rate = $loanConfig['interest_rate'] / 100 / 12;
         $months = $this->loanTerm;
 
         if ($rate == 0) {

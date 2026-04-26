@@ -30,7 +30,6 @@ class RolePermissionSeeder extends Seeder
             ['role' => 'manager', 'section' => 'members', 'permissions' => ['view', 'create', 'edit', 'delete']],
             ['role' => 'manager', 'section' => 'tickets', 'permissions' => ['view', 'edit', 'close']],
             ['role' => 'manager', 'section' => 'ledger', 'permissions' => ['view', 'export']],
-            ['role' => 'manager', 'section' => 'logs', 'permissions' => ['view', 'export']],
             ['role' => 'manager', 'section' => 'announcements', 'permissions' => ['view', 'create', 'edit', 'delete']],
             ['role' => 'manager', 'section' => 'reports', 'permissions' => ['view', 'export']],
             ['role' => 'manager', 'section' => 'settings', 'permissions' => ['view', 'edit']],

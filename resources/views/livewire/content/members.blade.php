@@ -1,5 +1,8 @@
 {{-- Single root element required by Livewire --}}
 <div>
+    @php
+        $canViewMemberId = Auth::user()->can('members.view-full-details');
+    @endphp
     {{-- Auto-refresh every 20 seconds; paused while modals are open --}}
     <div x-data="{ showModal: @entangle('showModal'), showEditModal: @entangle('showEditModal') }" x-show="!showModal && !showEditModal" wire:poll.visible.20s aria-hidden="true"
         class="w-px h-px opacity-0 pointer-events-none"></div>
@@ -88,7 +91,7 @@
                                             <label class="sr-only">checkbox</label>
                                         </div>
                                     </th>
-                                    @if (in_array(Auth::user()->role, ['admin', 'manager']))
+                                    @if ($canViewMemberId)
                                         <th scope="col" wire:click.debounce.250ms="sortBy('user_number')"
                                             wire:loading.class="opacity-60 cursor-not-allowed" wire:target="sortBy"
                                             class="p-4 text-xs font-medium text-left text-gray-500 uppercase cursor-pointer hover:bg-gray-200">
@@ -132,7 +135,7 @@
                                                 <label class="sr-only">checkbox</label>
                                             </div>
                                         </td>
-                                        @if (in_array(Auth::user()->role, ['admin', 'manager']))
+                                        @if ($canViewMemberId)
                                             <td class="p-4 text-sm font-normal text-gray-900 whitespace-nowrap">
                                                 <div class="text-base font-semibold text-gray-900">
                                                     {{ $member->user_number }}
@@ -144,7 +147,7 @@
                                             {{ $member->personalData->last_name ?? '' }}
                                         </td>
                                         <td class="p-4 text-base font-normal text-gray-900 whitespace-nowrap">
-                                            @if ($member->role !== 'inactive')
+                                            @if (($member->account_status ?? 'active') === 'active')
                                                 <span
                                                     class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded">Active</span>
                                             @else
@@ -158,7 +161,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="{{ in_array(Auth::user()->role, ['admin', 'manager']) ? '5' : '4' }}"
+                                        <td colspan="{{ $canViewMemberId ? '5' : '4' }}"
                                             class="p-4 text-center">
                                             <div class="flex flex-col items-center justify-center py-12">
                                                 <svg class="w-16 h-16 text-gray-400 mb-4" fill="none"

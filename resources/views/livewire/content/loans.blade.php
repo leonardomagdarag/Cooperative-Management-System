@@ -43,7 +43,7 @@
                             <tr>
                                 <th class="p-4"><input wire:model="selectAll" type="checkbox"
                                         class="w-4 h-4 rounded"></th>
-                                @if (in_array(Auth::user()->role, ['admin', 'manager']))
+                                @if ($canEdit)
                                     <th class="p-4 text-xs font-medium text-left text-gray-500 uppercase">Loan ID</th>
                                 @endif
                                 <th class="p-4 text-xs font-medium text-left text-gray-500 uppercase">Member</th>
@@ -88,7 +88,7 @@
                                         <input wire:model="selectedRows" value="{{ $loan->loan_id }}" type="checkbox"
                                             class="w-4 h-4 rounded">
                                     </td>
-                                    @if (in_array(Auth::user()->role, ['admin', 'manager']))
+                                    @if ($canEdit)
                                         <td class="p-4 text-sm font-semibold text-gray-900">{{ $loan->loan_id }}</td>
                                     @endif
                                     <td class="p-4 text-base font-medium text-gray-900">

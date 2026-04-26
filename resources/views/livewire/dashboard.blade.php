@@ -13,14 +13,141 @@
             </div>
 
             {{-- Right side: Notification & User --}}
-            <div class="flex items-center gap-4">
+            <div class="flex items-center gap-4" x-data="{
+                dropdownOpen: false,
+                unreadCount: 0,
+                notifications: [],
+
+                async init() {
+                    await this.fetchNotifications();
+                    setInterval(() => this.fetchNotifications(), 30000);
+                },
+
+                async fetchNotifications() {
+                    try {
+                        const response = await fetch('/api/notifications');
+                        const data = await response.json();
+                        this.notifications = data.notifications ?? [];
+                        this.unreadCount = data.unread_count ?? 0;
+                    } catch (error) {
+                        console.error('Failed to fetch notifications:', error);
+                    }
+                },
+
+                toggleDropdown() {
+                    this.dropdownOpen = !this.dropdownOpen;
+                },
+
+                closeDropdown() {
+                    this.dropdownOpen = false;
+                },
+
+                async markRead(notificationId) {
+                    try {
+                        await fetch(`/api/notifications/${notificationId}/read`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name=\'csrf-token\']').content,
+                            },
+                        });
+
+                        await this.fetchNotifications();
+                    } catch (error) {
+                        console.error('Failed to mark notification as read:', error);
+                    }
+                },
+
+                async openNotification(notification) {
+                    await this.markRead(notification.id);
+
+                    if (notification.action_url) {
+                        window.location.href = notification.action_url;
+                        return;
+                    }
+
+                    this.openInbox();
+                },
+
+                openInbox() {
+                    this.closeDropdown();
+                    window.location.href = '/notifications';
+                },
+
+                async markAllAsRead() {
+                    try {
+                        await fetch('/api/notifications/mark-all-read', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name=\'csrf-token\']').content,
+                            },
+                        });
+
+                        await this.fetchNotifications();
+                    } catch (error) {
+                        console.error('Failed to mark all notifications as read:', error);
+                    }
+                }
+            }" @click.away="closeDropdown()">
                 {{-- Notification Button --}}
-                <button
-                    class="relative p-2 text-gray-600 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors">
-                    <i class="fas fa-bell text-xl"></i>
-                    {{-- Notification badge --}}
-                    <span class="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-                </button>
+                <div class="relative">
+                    <button @click="toggleDropdown()"
+                        class="relative p-2 text-cyan-700 bg-cyan-100 border border-cyan-200 hover:bg-cyan-200 rounded-lg transition-colors"
+                        type="button">
+                        <i class="fas fa-bell text-xl"></i>
+
+                        <span x-show="unreadCount > 0"
+                            class="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] leading-[18px] font-bold text-center"
+                            x-text="unreadCount > 9 ? '9+' : unreadCount"></span>
+                    </button>
+
+                    <div x-show="dropdownOpen" x-transition.opacity.duration.120ms
+                        class="absolute right-0 mt-2 w-[360px] max-w-[90vw] bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden z-40"
+                        style="display:none;">
+                        <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                            <p class="text-sm font-semibold text-gray-900">Latest notifications</p>
+                            <button x-show="unreadCount > 0" @click="markAllAsRead()" type="button"
+                                class="text-xs font-medium text-emerald-700 hover:text-emerald-800">
+                                Mark all read
+                            </button>
+                        </div>
+
+                        <div class="max-h-[340px] overflow-y-auto divide-y divide-gray-100">
+                            <template x-if="notifications.length === 0">
+                                <div class="px-4 py-8 text-center">
+                                    <p class="text-sm font-medium text-gray-500">No new notifications</p>
+                                </div>
+                            </template>
+
+                            <template x-for="notification in notifications.slice(0, 6)" :key="notification.id">
+                                <button @click="openNotification(notification)" type="button"
+                                    class="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors"
+                                    :class="!notification.is_read ? 'bg-blue-50/60' : ''">
+                                    <div class="flex items-start gap-3">
+                                        <div class="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                                            :class="notification.color_class">
+                                            <i class="fas" :class="notification.icon"></i>
+                                        </div>
+
+                                        <div class="min-w-0">
+                                            <p class="text-sm font-semibold text-gray-900 line-clamp-1" x-text="notification.title"></p>
+                                            <p class="text-xs text-gray-600 mt-1 line-clamp-2" x-text="notification.message"></p>
+                                            <p class="text-[11px] text-gray-500 mt-1" x-text="notification.time_ago"></p>
+                                        </div>
+                                    </div>
+                                </button>
+                            </template>
+                        </div>
+
+                        <div class="px-4 py-3 border-t border-gray-200 bg-gray-50">
+                            <button @click="openInbox()" type="button"
+                                class="w-full text-center text-sm font-semibold text-cyan-700 hover:text-cyan-800">
+                                Open notifications inbox
+                            </button>
+                        </div>
+                    </div>
+                </div>
 
                 {{-- User Info --}}
                 <div class="flex items-center gap-3 pl-4 border-l border-gray-200">
@@ -90,7 +217,16 @@
             </div>
         </div>
 
-        @if (View::exists('livewire.content.' . $currentSectionPath))
+        @if (empty($userSections))
+            <div class="flex flex-col items-center justify-center py-16">
+                <i class="fas fa-user-lock text-6xl text-gray-400 mb-4"></i>
+                <h3 class="text-xl font-bold text-gray-900 mb-2">No Assigned Permissions</h3>
+                <p class="text-gray-600 text-center max-w-xl">
+                    Your account currently has no enabled feature permissions. Please contact an administrator to
+                    request access.
+                </p>
+            </div>
+        @elseif (View::exists('livewire.content.' . $currentSectionPath))
             @livewire('content.' . $currentSectionPath, key($currentSection))
         @else
             <div class="flex flex-col items-center justify-center py-12">

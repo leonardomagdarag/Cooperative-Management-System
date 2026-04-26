@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\NotificationService;
+use App\Services\TurnstileService;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
@@ -23,19 +26,27 @@ class PasswordResetController extends Controller
     /**
      * Handle forgot password request and send reset email
      */
-    public function sendResetLink(Request $request)
+    public function sendResetLink(Request $request, TurnstileService $turnstileService)
     {
         $request->validate([
             'email' => 'required|email|exists:users,email',
+            'cf-turnstile-response' => [
+                'required',
+                function (string $attribute, mixed $value, \Closure $fail) use ($turnstileService, $request) {
+                    if (!$turnstileService->verify((string) $value, $request->ip())) {
+                        $fail('Captcha verification failed. Please try again.');
+                    }
+                },
+            ],
         ], [
             'email.exists' => 'We could not find a user with that email address.',
         ]);
 
-        // Check if user is active (role should not be 'terminated')
+        // Check if user is active
         $user = User::where('email', $request->email)->first();
 
-        if ($user->role === 'terminated') {
-            return back()->with('error', 'Your account has been terminated. Please contact the administrator.');
+        if (($user->account_status ?? 'active') !== 'active') {
+            return back()->with('error', 'Your account is not active. Please contact the administrator.');
         }
 
         // Delete any existing tokens for this email
@@ -60,7 +71,7 @@ class PasswordResetController extends Controller
                 ->with('success', 'A 6-digit reset code has been sent to your email address.');
         } catch (\Exception $e) {
             // Log the error for debugging
-            \Log::error('Password reset email failed: ' . $e->getMessage());
+            Log::error('Password reset email failed: ' . $e->getMessage());
 
             return back()->with('error', 'Failed to send reset email: ' . $e->getMessage());
         }
@@ -163,6 +174,8 @@ class PasswordResetController extends Controller
         $user = User::where('email', $request->email)->first();
         $user->password = Hash::make($request->password);
         $user->save();
+
+        app(NotificationService::class)->notifyPasswordChanged($user);
 
         // Delete the reset token
         DB::table('password_reset_tokens')->where('email', $request->email)->delete();

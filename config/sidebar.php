@@ -13,6 +13,7 @@ return [
 
     // Main Dashboard Sections
     'dashboard' => true,           // Always show
+    'notifications' => true,       // Notifications inbox
     'officers' => true,           // Not functional yet
     'members' => true,             // Show this
     'services' => true,            // Show services

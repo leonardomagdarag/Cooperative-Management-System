@@ -29,27 +29,29 @@
             </div>
 
             <!-- Desktop Navigation -->
-            <div class="hidden lg:flex items-center gap-2 ml-auto">
-                <a href="{{ route('home_page') }}"
-                    class="px-4 py-2  rounded-lg font-medium transition-all {{ request()->routeIs('home_page') ? 'text-white bg-slate-700' : 'text-gray-700 hover:text-slate-700 hover:bg-gray-100 rounded-lg' }}">
-                    <i class="fas fa-home mr-2"></i>Home
-                </a>
-                <a href="{{ route('about_page') }}"
-                    class="px-4 py-2  rounded-lg font-medium transition-all {{ request()->routeIs('about_page') ? 'text-white bg-slate-700' : 'text-gray-700 hover:text-slate-700 hover:bg-gray-100 rounded-lg' }}">
-                    <i class="fas fa-info-circle mr-2"></i>About Us
-                </a>
-                <a href="{{ route('news_page') }}"
-                    class="px-4 py-2  rounded-lg font-medium transition-all {{ request()->routeIs('news_page') ? 'text-white bg-slate-700' : 'text-gray-700 hover:text-slate-700 hover:bg-gray-100 rounded-lg' }}">
-                    <i class="fas fa-newspaper mr-2"></i>News
-                </a>
-                {{-- <a href="{{ route('stories_page') }}"
-                    class="px-4 py-2  rounded-lg font-medium transition-all {{ request()->routeIs('stories_page') ? 'text-white bg-emerald-600' : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg' }}">
-                    <i class="fas fa-book-open mr-2"></i>Stories
-                </a> --}}
-                <a href="{{ sectionLink('Contact') }}"
-                    class="px-4 py-2 hover:bg-gray-100 hover:text-slate-700 rounded-lg font-medium transition-all ">
-                    <i class="fas fa-envelope mr-2"></i>Contact
-                </a>
+            <div class="hidden lg:flex items-center ml-auto">
+                <div class="flex items-center gap-1 mr-6">
+                    <a href="{{ route('home_page') }}"
+                        class="relative px-4 py-2 font-semibold transition-all duration-200 {{ request()->routeIs('home_page') ? 'text-emerald-700 after:absolute after:left-4 after:right-4 after:-bottom-1 after:h-0.5 after:rounded-full after:bg-emerald-600' : 'text-gray-700 hover:text-emerald-700 after:absolute after:left-4 after:right-4 after:-bottom-1 after:h-0.5 after:rounded-full after:bg-emerald-500 after:scale-x-0 after:origin-center after:transition-transform after:duration-200 hover:after:scale-x-100' }}">
+                        <i class="fas fa-home mr-2"></i>Home
+                    </a>
+                    <a href="{{ route('about_page') }}"
+                        class="relative px-4 py-2 font-semibold transition-all duration-200 {{ request()->routeIs('about_page') ? 'text-emerald-700 after:absolute after:left-4 after:right-4 after:-bottom-1 after:h-0.5 after:rounded-full after:bg-emerald-600' : 'text-gray-700 hover:text-emerald-700 after:absolute after:left-4 after:right-4 after:-bottom-1 after:h-0.5 after:rounded-full after:bg-emerald-500 after:scale-x-0 after:origin-center after:transition-transform after:duration-200 hover:after:scale-x-100' }}">
+                        <i class="fas fa-info-circle mr-2"></i>About Us
+                    </a>
+                    <a href="{{ route('news_page') }}"
+                        class="relative px-4 py-2 font-semibold transition-all duration-200 {{ request()->routeIs('news_page') ? 'text-emerald-700 after:absolute after:left-4 after:right-4 after:-bottom-1 after:h-0.5 after:rounded-full after:bg-emerald-600' : 'text-gray-700 hover:text-emerald-700 after:absolute after:left-4 after:right-4 after:-bottom-1 after:h-0.5 after:rounded-full after:bg-emerald-500 after:scale-x-0 after:origin-center after:transition-transform after:duration-200 hover:after:scale-x-100' }}">
+                        <i class="fas fa-newspaper mr-2"></i>News
+                    </a>
+                    {{-- <a href="{{ route('stories_page') }}"
+                        class="relative px-4 py-2 font-medium transition-all duration-200 {{ request()->routeIs('stories_page') ? 'text-emerald-700 after:absolute after:left-4 after:right-4 after:-bottom-1 after:h-0.5 after:rounded-full after:bg-emerald-600' : 'text-gray-700 hover:text-emerald-700 after:absolute after:left-4 after:right-4 after:-bottom-1 after:h-0.5 after:rounded-full after:bg-emerald-500 after:scale-x-0 after:origin-center after:transition-transform after:duration-200 hover:after:scale-x-100' }}">
+                        Stories
+                    </a> --}}
+                    <a href="{{ sectionLink('Contact') }}"
+                        class="relative px-4 py-2 font-semibold text-gray-700 transition-all duration-200 hover:text-emerald-700 after:absolute after:left-4 after:right-4 after:-bottom-1 after:h-0.5 after:rounded-full after:bg-emerald-500 after:scale-x-0 after:origin-center after:transition-transform after:duration-200 hover:after:scale-x-100">
+                        <i class="fas fa-envelope mr-2"></i>Contact
+                    </a>
+                </div>
                 <a href="{{ route('login') }}"
                     class="ml-4 px-6 py-2.5 bg-emerald-700 hover:bg-emerald-600 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all transform hover:scale-102">
                     <i class="fas fa-sign-in-alt mr-2"></i>Login
@@ -73,23 +75,23 @@
     <div id="mobile-menu" class="hidden lg:hidden bg-white border-t border-gray-200">
         <div class="px-4 py-4 space-y-2">
             <a href="{{ route('home_page') }}"
-                class="block px-4 py-3 rounded-lg font-medium transition-all {{ request()->routeIs('home_page') ? 'text-white bg-slate-700' : 'text-gray-700 hover:text-slate-700 hover:bg-gray-100' }}">
+                class="block rounded-xl border-l-4 px-4 py-3 font-semibold transition-all {{ request()->routeIs('home_page') ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-transparent text-gray-700 hover:border-emerald-500 hover:bg-emerald-50/70 hover:text-emerald-700' }}">
                 <i class="fas fa-home mr-3"></i>Home
             </a>
             <a href="{{ route('about_page') }}"
-                class="block px-4 py-3 rounded-lg font-medium transition-all {{ request()->routeIs('about_page') ? 'text-white bg-slate-700' : 'text-gray-700 hover:text-slate-700 hover:bg-gray-100' }}">
+                class="block rounded-xl border-l-4 px-4 py-3 font-semibold transition-all {{ request()->routeIs('about_page') ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-transparent text-gray-700 hover:border-emerald-500 hover:bg-emerald-50/70 hover:text-emerald-700' }}">
                 <i class="fas fa-info-circle mr-3"></i>About Us
             </a>
             <a href="{{ route('news_page') }}"
-                class="block px-4 py-3 rounded-lg font-medium transition-all {{ request()->routeIs('news_page') ? 'text-white bg-slate-700' : 'text-gray-700 hover:text-slate-700 hover:bg-gray-100' }}">
+                class="block rounded-xl border-l-4 px-4 py-3 font-semibold transition-all {{ request()->routeIs('news_page') ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-transparent text-gray-700 hover:border-emerald-500 hover:bg-emerald-50/70 hover:text-emerald-700' }}">
                 <i class="fas fa-newspaper mr-3"></i>News
             </a>
             {{-- <a href="{{ route('stories_page') }}"
-                class="block px-4 py-3 rounded-lg font-medium transition-all {{ request()->routeIs('stories_page') ? 'text-white bg-emerald-600' : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50' }}">
-                <i class="fas fa-book-open mr-3"></i>Stories
+                class="block rounded-xl border-l-4 px-4 py-3 font-medium transition-all {{ request()->routeIs('stories_page') ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-transparent text-gray-700 hover:border-emerald-500 hover:bg-emerald-50/70 hover:text-emerald-700' }}">
+                Stories
             </a> --}}
             <a href="{{ sectionLink('Contact') }}"
-                class="block px-4 py-3 text-gray-700 hover:text-slate-700 hover:bg-gray-100 rounded-lg font-medium transition-all">
+                class="block rounded-xl border-l-4 border-transparent px-4 py-3 font-semibold text-gray-700 transition-all hover:border-emerald-500 hover:bg-emerald-50/70 hover:text-emerald-700">
                 <i class="fas fa-envelope mr-3"></i>Contact
             </a>
             <a href="{{ route('login') }}"

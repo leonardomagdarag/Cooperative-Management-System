@@ -7,11 +7,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, SoftDeletes;
+    use HasFactory, Notifiable, SoftDeletes, HasRoles;
 
     /**
      * The attributes that are mass assignable.
@@ -24,6 +25,8 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'account_status',
+        'is_officer',
         'special_loan_eligible',
     ];
 
@@ -37,6 +40,8 @@ class User extends Authenticatable
         'remember_token',
     ];
 
+    protected string $guard_name = 'web';
+
     /**
      * Get the attributes that should be cast.
      *
@@ -47,6 +52,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'account_status' => 'string',
             'special_loan_eligible' => 'boolean',
         ];
     }
@@ -70,16 +76,21 @@ class User extends Authenticatable
 
                 $user->user_number = 'USR' . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
             }
+
+            if (empty($user->account_status)) {
+                $user->account_status = 'active';
+            }
         });
     }
 
-    public function hasRole($role)
+    public function isActive(): bool
     {
-        if (strcmp($this->role, $role) == 0) {
-            return true;
-        }
+        return $this->account_status === 'active';
+    }
 
-        return false;
+    public function isTerminated(): bool
+    {
+        return $this->account_status === 'terminated';
     }
 
     // eloquent relationships
@@ -133,5 +144,15 @@ class User extends Authenticatable
     public function notifications()
     {
         return $this->hasMany(Notification::class);
+    }
+
+    public function otpChallenges()
+    {
+        return $this->hasMany(OtpChallenge::class);
+    }
+
+    public function trustedDevices()
+    {
+        return $this->hasMany(TrustedDevice::class);
     }
 }

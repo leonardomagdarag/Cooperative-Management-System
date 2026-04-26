@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <title>Membership Registration - Settlers Credit Cooperative</title>
 </head>
 
@@ -400,10 +401,23 @@
                     </div>
                 </div>
 
+                <div class="mb-8">
+                    @if (config('services.turnstile.site_key'))
+                        <div class="cf-turnstile" data-sitekey="{{ config('services.turnstile.site_key') }}"
+                            data-theme="light" data-callback="turnstileCallback"></div>
+                    @else
+                        <p class="text-sm text-red-600">Captcha is not configured. Please contact support.</p>
+                    @endif
+                    @error('cf-turnstile-response')
+                        <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
+                    @enderror
+                </div>
+
                 <!-- Submit Button -->
                 <div class="flex flex-col sm:flex-row gap-4">
-                    <button type="submit"
-                        class="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-3.5 px-6 rounded-lg focus:ring-2 focus:ring-emerald-500 transition-all shadow-md hover:shadow-lg">
+                    <button type="submit" id="registerSubmitBtn"
+                        class="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-3.5 px-6 rounded-lg focus:ring-2 focus:ring-emerald-500 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled>
                         <i class="fas fa-user-plus mr-2"></i>
                         Submit Application
                     </button>
@@ -441,6 +455,19 @@
                 }
             }
         }
+
+        // Registration form: enable submit button only when Turnstile succeeds
+        document.addEventListener('DOMContentLoaded', function() {
+            const submitBtn = document.getElementById('registerSubmitBtn');
+
+            if (submitBtn) {
+                submitBtn.disabled = true;
+
+                window.turnstileCallback = function() {
+                    submitBtn.disabled = false;
+                };
+            }
+        });
     </script>
 
 </body>

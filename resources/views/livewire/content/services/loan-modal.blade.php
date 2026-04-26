@@ -61,17 +61,9 @@
                                                 <span>Up to {{ $type['max_term'] }} months</span>
                                             </div>
 
-                                            {{-- Show warning for business loan if no share capital --}}
-                                            @if ($key === 'business' && !$hasRequiredShareCapital)
+                                            @if (!empty($loanTypeWarnings[$key]))
                                                 <div class="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded">
-                                                    ⚠️ Requires ₱4,000 share capital
-                                                </div>
-                                            @endif
-
-                                            {{-- Show warning for special loan if not eligible --}}
-                                            @if ($key === 'special' && !$isSpecialLoanEligible)
-                                                <div class="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded">
-                                                    ⚠️ Manager approval required
+                                                    ⚠️ {{ $loanTypeWarnings[$key] }}
                                                 </div>
                                             @endif
                                         </div>
@@ -134,11 +126,13 @@
                             </div>
                         </div>
 
-                        {{-- GROUP LOAN: Group Members Selection --}}
-                        @if ($loanType === 'group')
+                        {{-- Product co-makers requirement --}}
+                        @if (($loanTypes[$loanType]['required_co_makers'] ?? 0) > 0)
                             <div class="border-t pt-6">
                                 <h5 class="font-bold text-gray-900 mb-2">Group Members (Co-makers)</h5>
-                                <p class="text-sm text-gray-600 mb-4">Select 4 members to form your loan group. Each
+                                <p class="text-sm text-gray-600 mb-4">Select
+                                    {{ $loanTypes[$loanType]['required_co_makers'] }} members to form your loan group.
+                                    Each
                                     member must approve the loan.</p>
 
                                 {{-- Search members --}}
@@ -219,20 +213,22 @@
                                     @empty
                                         <div class="text-center py-8 text-gray-500">
                                             <p>No members added yet</p>
-                                            <p class="text-sm">Add 4 members to continue</p>
+                                            <p class="text-sm">Add {{ $loanTypes[$loanType]['required_co_makers'] }}
+                                                members to continue</p>
                                         </div>
                                     @endforelse
                                 </div>
 
                                 <div
-                                    class="mt-2 text-sm {{ count($groupMembers) === 4 ? 'text-green-600' : 'text-gray-600' }}">
-                                    {{ count($groupMembers) }} / 4 members added
+                                    class="mt-2 text-sm {{ count($groupMembers) === (int) $loanTypes[$loanType]['required_co_makers'] ? 'text-green-600' : 'text-gray-600' }}">
+                                    {{ count($groupMembers) }} / {{ $loanTypes[$loanType]['required_co_makers'] }}
+                                    members added
                                 </div>
                             </div>
                         @endif
 
-                        {{-- BUSINESS LOAN: Interview Schedule --}}
-                        @if ($loanType === 'business')
+                        {{-- Product interview requirement --}}
+                        @if (!empty($loanTypes[$loanType]['requires_interview']))
                             <div class="border-t pt-6">
                                 <h5 class="font-bold text-gray-900 mb-2">Business Verification</h5>
                                 <p class="text-sm text-gray-600 mb-4">Schedule an interview with a loan officer for
@@ -356,7 +352,7 @@
                                 <p class="font-semibold text-gray-900">{{ $loanPurpose }}</p>
                             </div>
 
-                            @if ($loanType === 'group')
+                            @if (($loanTypes[$loanType]['required_co_makers'] ?? 0) > 0)
                                 <div>
                                     <p class="text-sm text-gray-600 mb-2">Group Members ({{ count($groupMembers) }})
                                     </p>
@@ -372,7 +368,7 @@
                                 </div>
                             @endif
 
-                            @if ($loanType === 'business')
+                            @if (!empty($loanTypes[$loanType]['requires_interview']))
                                 <div>
                                     <p class="text-sm text-gray-600">Interview Schedule</p>
                                     <p class="font-semibold text-gray-900">
@@ -385,12 +381,15 @@
                         <div class="bg-blue-50 border-l-4 border-blue-400 p-4">
                             <p class="text-sm text-blue-700">
                                 <strong>Important:</strong>
-                                @if ($loanType === 'group')
+                                @if (($loanTypes[$loanType]['required_co_makers'] ?? 0) > 0)
                                     After submission, all group members must approve this loan. Once approved by all
                                     members, the application will be reviewed by loan officers.
-                                @else
+                                @elseif (!empty($loanTypes[$loanType]['requires_interview']))
                                     After submission, you must attend the scheduled interview. Your application will be
                                     reviewed after the interview is completed.
+                                @else
+                                    After submission, your application will be reviewed by loan officers based on your
+                                    member profile and account standing.
                                 @endif
                             </p>
                         </div>

@@ -1,5 +1,9 @@
 @props(['isEdit' => false, 'tabErrors' => []])
 
+@php
+    $canManageMembers = Auth::user()->can('members.update');
+@endphp
+
 <div {{ $attributes }} x-data="{
     show: @entangle('showEditModal'),
     formTab: 'personal',
@@ -106,7 +110,7 @@
                         <span class="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
                     @endif
                 </button>
-                @if (!$isEdit || in_array(Auth::user()->role, ['admin', 'manager']))
+                @if (!$isEdit || $canManageMembers)
                     <button @click="goToTab('login')"
                         :class="formTab === 'login' ? 'border-cyan-500 text-cyan-600' :
                             'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
@@ -255,10 +259,10 @@
                     </div>
 
                     {{-- Tab 6: Login Information (Only for new members or admin/manager editing) --}}
-                    @if (!$isEdit || in_array(Auth::user()->role, ['admin', 'manager']))
+                    @if (!$isEdit || $canManageMembers)
                         <div x-show="formTab === 'login'" x-transition class="space-y-6">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                @if ($isEdit && !in_array(Auth::user()->role, ['admin', 'manager']))
+                                @if ($isEdit && !$canManageMembers)
                                     <div class="md:col-span-2">
                                         <x-forms.text-input name="current_password" label="Current Password"
                                             model="form.current_password" type="password" :required="!empty($form['password'])"
@@ -309,7 +313,7 @@
                     </button>
                     <button type="button"
                         @click="if(formTab === 'personal') formTab = 'address'; else if(formTab === 'address') formTab = 'contact'; else if(formTab === 'contact') formTab = 'ids'; else if(formTab === 'ids') formTab = 'employment'; else if(formTab === 'employment') formTab = 'login';"
-                        x-show="formTab !== 'login' && formTab !== 'employment' || (formTab === 'employment' && (!{{ $isEdit ? 'true' : 'false' }} || {{ in_array(Auth::user()->role, ['admin', 'manager']) ? 'true' : 'false' }}))"
+                        x-show="formTab !== 'login' && formTab !== 'employment' || (formTab === 'employment' && (!{{ $isEdit ? 'true' : 'false' }} || {{ $canManageMembers ? 'true' : 'false' }}))"
                         class="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-cyan-500 to-emerald-500 rounded-lg hover:from-cyan-600 hover:to-emerald-600 transition-all">
                         Next
                     </button>

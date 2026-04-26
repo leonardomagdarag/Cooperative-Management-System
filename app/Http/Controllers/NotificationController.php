@@ -6,6 +6,7 @@ use App\Models\Notification;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class NotificationController extends Controller
 {
@@ -21,33 +22,58 @@ class NotificationController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $notifications = auth()->user()
+        $query = Auth::user()
             ->notifications()
             ->active()
-            ->orderByPriority()
+            ->orderByPriority();
+
+        $status = $request->string('status')->toString();
+        if ($status === 'unread') {
+            $query->unread();
+        } elseif ($status === 'read') {
+            $query->read();
+        }
+
+        $type = $request->string('type')->toString();
+        if ($type !== '') {
+            $query->where('type', $type);
+        }
+
+        $category = $request->string('category')->toString();
+        if ($category === 'security') {
+            $query->where('type', 'security_alert');
+        } elseif ($category === 'billing') {
+            $query->where('type', 'loan_due');
+        } elseif ($category === 'activity') {
+            $query->whereIn('type', ['general', 'loan_payment']);
+        } elseif ($category === 'announcements') {
+            $query->where('type', 'announcement');
+        }
+
+        $perPage = max(5, min((int) $request->integer('per_page', 20), 50));
+        $paginate = $request->boolean('paginate') || $request->has('page');
+
+        if ($paginate) {
+            $paginator = $query->paginate($perPage);
+
+            return response()->json([
+                'notifications' => $paginator->getCollection()->map(fn($notification) => $this->serializeNotification($notification)),
+                'unread_count' => $this->getUnreadCount(),
+                'pagination' => [
+                    'current_page' => $paginator->currentPage(),
+                    'last_page' => $paginator->lastPage(),
+                    'per_page' => $paginator->perPage(),
+                    'total' => $paginator->total(),
+                ],
+            ]);
+        }
+
+        $notifications = $query
             ->limit(20)
             ->get()
-            ->map(function ($notification) {
-                return [
-                    'id' => $notification->id,
-                    'type' => $notification->type,
-                    'title' => $notification->title,
-                    'message' => $notification->message,
-                    'icon' => $notification->icon,
-                    'color_class' => $notification->color_class,
-                    'priority' => $notification->priority,
-                    'is_read' => $notification->is_read,
-                    'action_url' => $notification->action_url,
-                    'time_ago' => $notification->time_ago,
-                    'created_at' => $notification->created_at->toISOString(),
-                ];
-            });
+            ->map(fn($notification) => $this->serializeNotification($notification));
 
-        $unreadCount = auth()->user()
-            ->notifications()
-            ->unread()
-            ->active()
-            ->count();
+        $unreadCount = $this->getUnreadCount();
 
         return response()->json([
             'notifications' => $notifications,
@@ -60,29 +86,50 @@ class NotificationController extends Controller
      */
     public function unreadCount(): JsonResponse
     {
-        $count = auth()->user()
-            ->notifications()
-            ->unread()
-            ->active()
-            ->count();
+        $count = $this->getUnreadCount();
 
         return response()->json(['count' => $count]);
     }
 
     /**
-     * Mark a notification as read and delete it
+     * Mark a notification as read
      */
     public function markAsRead(Notification $notification): JsonResponse
     {
         // Ensure the notification belongs to the authenticated user
-        if ($notification->user_id !== auth()->id()) {
+        if ($notification->user_id !== Auth::id()) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
         $notification->markAsRead();
-        $notification->delete(); // Delete on click as per requirement
 
         return response()->json(['success' => true]);
+    }
+
+    private function getUnreadCount(): int
+    {
+        return Auth::user()
+            ->notifications()
+            ->unread()
+            ->active()
+            ->count();
+    }
+
+    private function serializeNotification(Notification $notification): array
+    {
+        return [
+            'id' => $notification->id,
+            'type' => $notification->type,
+            'title' => $notification->title,
+            'message' => $notification->message,
+            'icon' => $notification->icon,
+            'color_class' => $notification->color_class,
+            'priority' => $notification->priority,
+            'is_read' => $notification->is_read,
+            'action_url' => $notification->action_url,
+            'time_ago' => $notification->time_ago,
+            'created_at' => $notification->created_at->toISOString(),
+        ];
     }
 
     /**
@@ -90,7 +137,7 @@ class NotificationController extends Controller
      */
     public function markAllAsRead(): JsonResponse
     {
-        auth()->user()
+        Auth::user()
             ->notifications()
             ->unread()
             ->update([
@@ -107,7 +154,7 @@ class NotificationController extends Controller
     public function destroy(Notification $notification): JsonResponse
     {
         // Ensure the notification belongs to the authenticated user
-        if ($notification->user_id !== auth()->id()) {
+        if ($notification->user_id !== Auth::id()) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -121,7 +168,7 @@ class NotificationController extends Controller
      */
     public function deleteAllRead(): JsonResponse
     {
-        auth()->user()
+        Auth::user()
             ->notifications()
             ->read()
             ->delete();

@@ -140,7 +140,7 @@
                                         <label class="sr-only">checkbox</label>
                                     </div>
                                 </th>
-                                @if (in_array(Auth::user()->role, ['admin', 'manager']))
+                                @if ($canEdit)
                                     <th scope="col" wire:click="sortBy('id')"
                                         class="p-4 text-xs font-medium text-left text-gray-500 uppercase cursor-pointer hover:bg-gray-200">
                                         Transaction ID
@@ -191,7 +191,7 @@
                                             <label class="sr-only">checkbox</label>
                                         </div>
                                     </td>
-                                    @if (in_array(Auth::user()->role, ['admin', 'manager']))
+                                    @if ($canEdit)
                                         <td class="p-4 text-sm font-normal text-gray-900 whitespace-nowrap">
                                             <div class="text-base font-semibold text-gray-900">
                                                 {{ $transaction->transaction_number }}
@@ -304,7 +304,12 @@
                         class="font-semibold text-gray-900">{{ $transactions->currentPage() }}</span> of <span
                         class="font-semibold text-gray-900">{{ $transactions->lastPage() }}</span></span>
                 <button wire:click="nextPage" @if ($transactions->hasMorePages()) @else disabled @endif
-                    clip-rule="evenodd"></path>
+                    class="inline-flex items-center justify-center flex-1 px-3 py-2 text-sm font-medium text-center text-white rounded-lg bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Next
+                    <svg class="w-5 h-5 ml-1 -mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd"
+                            d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                            clip-rule="evenodd"></path>
                     </svg>
                 </button>
             </div>
