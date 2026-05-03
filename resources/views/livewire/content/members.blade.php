@@ -224,6 +224,6 @@
         @endif
 
         {{-- Edit/Add Member Modal (always rendered; visibility controlled via entangled showEditModal for snappier open/close) --}}
-        <x-modals.member-form wire:key="member-form-{{ $modalKey }}" :isEdit="$isEdit" :tabErrors="$tabErrors" />
+        <x-modals.member-form wire:key="member-form-{{ $modalKey }}" :isEdit="$isEdit" :tabErrors="$tabErrors" :form="$form" />
     </div>
 </div>

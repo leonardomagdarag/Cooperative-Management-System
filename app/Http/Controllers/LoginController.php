@@ -78,7 +78,7 @@ class LoginController extends Controller
             }
 
             // Role-based redirects
-            $primaryRole = $user->getRoleNames()->first() ?? $user->role;
+            $primaryRole = $user->getRoleNames()->first() ?? 'member';
 
             $redirectUrl = match ($primaryRole) {
                 'admin' => '/admin/dashboard',
@@ -87,8 +87,6 @@ class LoginController extends Controller
                 'secretary' => '/secretary/dashboard',
                 'loan' => '/loan/dashboard',
                 'treasurer' => '/treasurer/dashboard',
-                //remove if in prod!
-                'developer' => '/dev/home',
                 default => '/member/dashboard'
             };
 

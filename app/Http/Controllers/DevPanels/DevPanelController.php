@@ -82,7 +82,7 @@ class DevPanelController extends Controller
         } catch (\Illuminate\Validation\ValidationException $e) {
             LaravelLog::error('Validation failed: ', $e->errors());
 
-            return back()->withErrors($e->errors())->withInput()->with('error', 'Validation failed: '.json_encode($e->errors()));
+            return back()->withErrors($e->errors())->withInput()->with('error', 'Validation failed: ' . json_encode($e->errors()));
         }
 
         DB::beginTransaction();
@@ -99,19 +99,19 @@ class DevPanelController extends Controller
                 'zip_code',
             ]));
             $address->save();
-            LaravelLog::info('Address created: '.$address->address_id);
+            LaravelLog::info('Address created: ' . $address->address_id);
 
             LaravelLog::info('Creating Contact...');
             $contact = new Contact($request->only(['phone_no', 'email']));
             $contact->save();
-            LaravelLog::info('Contact created: '.$contact->contact_id);
+            LaravelLog::info('Contact created: ' . $contact->contact_id);
 
             LaravelLog::info('Creating PersonalData...');
             $personal = new PersonalData($request->only(['first_name', 'last_name', 'mid_name', 'suffix', 'birth_date']));
             $personal->address_id = $address->address_id;
             $personal->contact_id = $contact->contact_id;
             $personal->save();
-            LaravelLog::info('PersonalData created: '.$personal->personal_data_id);
+            LaravelLog::info('PersonalData created: ' . $personal->personal_data_id);
 
             LaravelLog::info('Creating User...');
             $user = new User;
@@ -120,7 +120,11 @@ class DevPanelController extends Controller
             $user->password = bcrypt($request->password);
             $user->role = $request->role;
             $user->save();
-            LaravelLog::info('User created: '.$user->user_id);
+            // Ensure Spatie roles are in sync with the legacy `role` column
+            if (method_exists($user, 'assignRole')) {
+                $user->assignRole($request->role);
+            }
+            LaravelLog::info('User created: ' . $user->user_id);
 
             $this->logActivity("Created new user {$user->user_id} ({$request->email}).");
 
@@ -131,10 +135,10 @@ class DevPanelController extends Controller
         } catch (\Throwable $e) {
             DB::rollBack();
             LaravelLog::error('=== User Creation Failed ===');
-            LaravelLog::error('Error: '.$e->getMessage());
-            LaravelLog::error('Stack trace: '.$e->getTraceAsString());
+            LaravelLog::error('Error: ' . $e->getMessage());
+            LaravelLog::error('Stack trace: ' . $e->getTraceAsString());
 
-            return back()->with('error', 'Creation failed: '.$e->getMessage())->withInput();
+            return back()->with('error', 'Creation failed: ' . $e->getMessage())->withInput();
         }
     }
 
@@ -159,7 +163,7 @@ class DevPanelController extends Controller
             // If address doesn't exist but we have address data, create it
             if (! $address && $personal) {
                 $addressData = $request->only(['country', 'region', 'province', 'city_municipality', 'barangay', 'street', 'zip_code']);
-                $hasAddressData = collect($addressData)->filter(fn ($val) => $val !== '' && $val !== null)->isNotEmpty();
+                $hasAddressData = collect($addressData)->filter(fn($val) => $val !== '' && $val !== null)->isNotEmpty();
 
                 if ($hasAddressData) {
                     $address = new Address;
@@ -185,7 +189,7 @@ class DevPanelController extends Controller
             // If contact doesn't exist but we have contact data, create it
             if (! $contact && $personal) {
                 $contactData = $request->only(['phone_no', 'email']);
-                $hasContactData = collect($contactData)->filter(fn ($val) => $val !== '' && $val !== null)->isNotEmpty();
+                $hasContactData = collect($contactData)->filter(fn($val) => $val !== '' && $val !== null)->isNotEmpty();
 
                 if ($hasContactData) {
                     $contact = new Contact;
@@ -227,6 +231,10 @@ class DevPanelController extends Controller
             }
             $user->role = $request->role;
             $user->save();
+            // Keep Spatie roles in sync with updated legacy `role` column
+            if (method_exists($user, 'syncRoles')) {
+                $user->syncRoles([$request->role]);
+            }
 
             $this->logActivity("Updated user {$user->user_id} ({$user->email}).");
 
@@ -236,7 +244,7 @@ class DevPanelController extends Controller
         } catch (\Throwable $e) {
             DB::rollBack();
 
-            return back()->with('error', 'Update failed: '.$e->getMessage());
+            return back()->with('error', 'Update failed: ' . $e->getMessage());
         }
     }
 
@@ -270,7 +278,7 @@ class DevPanelController extends Controller
         } catch (\Throwable $e) {
             DB::rollBack();
 
-            return back()->with('error', 'Delete failed: '.$e->getMessage());
+            return back()->with('error', 'Delete failed: ' . $e->getMessage());
         }
     }
 
@@ -321,7 +329,7 @@ class DevPanelController extends Controller
         } catch (\Throwable $e) {
             DB::rollBack();
 
-            return back()->with('error', 'Insert failed: '.$e->getMessage());
+            return back()->with('error', 'Insert failed: ' . $e->getMessage());
         }
     }
 
@@ -354,7 +362,7 @@ class DevPanelController extends Controller
 
             return back()->with('success', "Record updated in {$table}.");
         } catch (\Throwable $e) {
-            return back()->with('error', 'Update failed: '.$e->getMessage());
+            return back()->with('error', 'Update failed: ' . $e->getMessage());
         }
     }
 
@@ -379,7 +387,7 @@ class DevPanelController extends Controller
 
             return back()->with('success', "Record deleted from {$table}.");
         } catch (\Throwable $e) {
-            return back()->with('error', 'Delete failed: '.$e->getMessage());
+            return back()->with('error', 'Delete failed: ' . $e->getMessage());
         }
     }
 

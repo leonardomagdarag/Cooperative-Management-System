@@ -84,7 +84,7 @@ Route::middleware(['auth', 'otp.verified'])->prefix('api')->group(function () {
 
 Route::middleware(['auth', 'otp.verified'])->get('/notifications', function () {
     $user = Auth::user();
-    $primaryRole = $user->getRoleNames()->first() ?? $user->role ?? 'member';
+    $primaryRole = $user->getRoleNames()->first() ?? 'member';
 
     $routeName = match ($primaryRole) {
         'admin' => 'admin.dashboard',

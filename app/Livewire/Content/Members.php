@@ -11,6 +11,9 @@ use App\Models\MemberId;
 use App\Models\PersonalData;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Traits\ValidatesPersonForm;
+use Carbon\Carbon;
+use Closure;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -28,7 +31,7 @@ use PHPMailer\PHPMailer\Exception;
  */
 class Members extends Component
 {
-    use WithPagination;
+    use WithPagination, ValidatesPersonForm;
 
     // Search and filtering
     public $search = '';
@@ -135,21 +138,100 @@ class Members extends Component
     }
 
     /**
-     * Validate individual field on blur
+     * Minimum member age from configuration.
      */
-    public function validateField($field)
+    private function minimumAgeRequirement(): int
     {
-        $rules = $this->getValidationRules();
+        return max(0, (int) config('settings.requirement.age', 18));
+    }
 
-        if (isset($rules[$field])) {
-            $this->validateOnly($field, $rules, $this->getCustomMessages());
-            $this->updateTabErrors();
+    /**
+     * Detect obvious passwords that combine a member name with predictable number sequences.
+     */
+    private function passwordLooksTooPredictable(string $password): bool
+    {
+        $normalizedPassword = strtolower(preg_replace('/[^a-z0-9]+/i', '', $password) ?? '');
+
+        if ($normalizedPassword === '') {
+            return false;
+        }
+
+        $nameTokens = collect([
+            $this->form['first_name'] ?? '',
+            $this->form['mid_name'] ?? '',
+            $this->form['last_name'] ?? '',
+        ])
+            ->map(fn($value) => strtolower(preg_replace('/[^a-z]+/i', '', (string) $value) ?? ''))
+            ->filter(fn($value) => strlen($value) >= 3)
+            ->unique()
+            ->values();
+
+        if ($nameTokens->isEmpty()) {
+            return false;
+        }
+
+        return $nameTokens->contains(function (string $token) use ($normalizedPassword) {
+            return str_contains($normalizedPassword, $token) && preg_match('/\d{3,}/', $normalizedPassword);
+        });
+    }
+
+    /**
+     * Sequential step order used by the add-member wizard.
+     * Returns the tab name that follows $currentTab, or null if $currentTab is the last step.
+     */
+    private const WIZARD_STEPS = ['personal', 'address', 'contact', 'ids', 'employment', 'login', 'review'];
+
+    /**
+     * Called by the Next button in add-mode only.
+     * Validates the current tab server-side; on success dispatches the next tab name
+     * to Alpine via a browser event so the client can advance without a full re-render.
+     */
+    public function nextStep(string $currentTab): void
+    {
+        // Validate the current tab — throws validation exception on failure, which Livewire
+        // returns as errors to the browser without dispatching the advance event.
+        if ($currentTab !== 'review') {
+            $this->validateTab($currentTab);
+        }
+
+        $steps = self::WIZARD_STEPS;
+        $idx   = array_search($currentTab, $steps, true);
+        $next  = ($idx !== false && isset($steps[$idx + 1])) ? $steps[$idx + 1] : null;
+
+        if ($next) {
+            $this->dispatch('wizard-advance', tab: $next);
         }
     }
 
     /**
+     * Validate a single member form field when focus leaves the input.
+     */
+    public function validateField(string $field): void
+    {
+        $rules = $this->getValidationRules();
+
+        if ($this->isEdit && ! empty($this->form['password']) && ! Auth::user()->can('members.update')) {
+            $rules['form.current_password'] = 'required|current_password';
+        }
+
+        if (! array_key_exists($field, $rules)) {
+            return;
+        }
+
+        if ($this->isEdit && empty($this->form['password']) && in_array($field, ['form.password', 'form.password_confirmation', 'form.current_password'], true)) {
+            $this->resetValidation(['form.password', 'form.password_confirmation', 'form.current_password']);
+            $this->updateTabErrors();
+
+            return;
+        }
+
+        $this->validateOnly($field, $rules, $this->getCustomMessages());
+        $this->updateTabErrors();
+    }
+
+    /**
      * Validate only the fields relevant to a specific tab.
-     * Used by the multi-tab member modal to avoid per-field blur validation.
+     * Used by the multi-tab member modal before moving between steps.
      */
     public function validateTab($tab)
     {
@@ -186,42 +268,37 @@ class Members extends Component
     }
 
     /**
-     * Get custom validation messages
-     */
-    private function getCustomMessages()
-    {
-        return [
-            'form.first_name.required' => 'First name is required.',
-            'form.first_name.regex' => 'First name can only contain letters, spaces, hyphens, apostrophes, and periods.',
-            'form.last_name.required' => 'Last name is required.',
-            'form.last_name.regex' => 'Last name can only contain letters, spaces, hyphens, apostrophes, and periods.',
-            'form.mid_name.regex' => 'Middle name can only contain letters, spaces, hyphens, apostrophes, and periods.',
-            'form.suffix.regex' => 'Suffix can only contain letters, spaces, hyphens, apostrophes, and periods.',
-            'form.email.required' => 'Email address is required.',
-            'form.email.email' => 'Please enter a valid email address.',
-            'form.email.unique' => 'This email address is already registered.',
-            'form.phone_number.max' => 'Phone number must be 11 digits or less.',
-            'form.mobile_number.max' => 'Mobile number must be 11 digits or less.',
-            'form.birth_date.before' => 'Birth date must be before today.',
-            'form.password.required' => 'Password is required.',
-            'form.password.min' => 'Password must be at least 6 characters.',
-            'form.password.confirmed' => 'Password confirmation does not match.',
-            'form.password_confirmation.required' => 'Please confirm your password.',
-        ];
-    }
-
-    /**
      * Get validation rules
      */
     private function getValidationRules()
     {
+        $minimumAge = $this->minimumAgeRequirement();
+
         return [
             // Personal Information
             'form.first_name' => ['required', 'string', 'max:100', 'regex:/^[a-zA-Z\s\-\'.]+$/'],
             'form.last_name' => ['required', 'string', 'max:100', 'regex:/^[a-zA-Z\s\-\'.]+$/'],
             'form.mid_name' => ['nullable', 'string', 'max:100', 'regex:/^[a-zA-Z\s\-\'.]+$/'],
             'form.suffix' => ['nullable', 'string', 'max:50', 'regex:/^[a-zA-Z\s\-\'.]+$/'],
-            'form.birth_date' => 'required|date|before:today',
+            'form.birth_date' => [
+                'required',
+                'date',
+                function (string $attribute, mixed $value, Closure $fail) use ($minimumAge) {
+                    if (empty($value)) {
+                        return;
+                    }
+
+                    try {
+                        $birthDate = Carbon::parse((string) $value);
+                    } catch (\Throwable) {
+                        return;
+                    }
+
+                    if ($birthDate->greaterThan(now()->subYears($minimumAge))) {
+                        $fail("Members must be at least {$minimumAge} years old.");
+                    }
+                },
+            ],
             'form.birthplace' => 'nullable|string|max:255',
             'form.gender' => 'required|in:male,female,other',
             'form.civil_status' => 'required|in:single,married,widowed,separated',
@@ -254,8 +331,24 @@ class Members extends Component
             'form.other_income_source' => 'nullable|string|max:255',
             'form.other_income_amount' => 'nullable|numeric|min:0',
             // Password
-            'form.password' => $this->isEdit ? 'nullable|min:6' : 'required|min:6|confirmed',
-            'form.password_confirmation' => $this->isEdit ? 'nullable' : 'required',
+            'form.password' => [
+                $this->isEdit ? 'nullable' : 'required',
+                'string',
+                'min:6',
+                'regex:/^(?=.*[A-Za-z])(?=.*\d).+$/',
+                function (string $attribute, mixed $value, Closure $fail) {
+                    if (blank($value)) {
+                        return;
+                    }
+
+                    if ($this->passwordLooksTooPredictable((string) $value)) {
+                        $fail('Avoid passwords that reuse your name with simple number sequences.');
+                    }
+                },
+            ],
+            'form.password_confirmation' => $this->isEdit
+                ? 'nullable|same:form.password'
+                : 'required|same:form.password',
         ];
     }
 
@@ -410,6 +503,8 @@ class Members extends Component
      */
     public function viewProfile($userId)
     {
+        $this->closeEditModal();
+
         $this->selectedMember = User::with([
             'personalData.address',
             'personalData.contact',
@@ -447,6 +542,8 @@ class Members extends Component
      */
     public function addMember()
     {
+        $this->closeModal();
+
         $this->resetValidation();
         $this->isEdit = false;
         // Initialize all form fields with empty values to ensure proper wire:model binding
@@ -959,6 +1056,7 @@ class Members extends Component
                 'memberId' => $this->form['id'] ?? 'new',
             ]);
 
+            $this->dispatch('member-saved');
             $this->closeEditModal();
         } catch (\Exception $e) {
             // Rollback all changes if any error occurs

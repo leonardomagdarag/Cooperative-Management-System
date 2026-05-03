@@ -6,9 +6,13 @@ use App\Models\Address;
 use App\Models\Contact;
 use App\Models\PersonalData;
 use App\Models\User;
+use App\Traits\ValidatesPersonForm;
+use Carbon\Carbon;
+use Closure;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -21,7 +25,40 @@ use Livewire\WithPagination;
  */
 class Officers extends Component
 {
-    use WithPagination;
+    use WithPagination, ValidatesPersonForm;
+
+    private const OFFICER_MANAGEMENT_PERMISSIONS = [
+        'officers.create',
+        'officers.update',
+        'officers.delete',
+        'officers.manage-permissions',
+    ];
+
+    private const TAB_FIELDS = [
+        'personal' => [
+            'form.first_name',
+            'form.mid_name',
+            'form.last_name',
+            'form.birth_date',
+            'form.gender',
+            'form.civil_status',
+            'form.title',
+        ],
+        'contact' => [
+            'form.email',
+            'form.phone_number',
+        ],
+        'role' => [
+            'form.role',
+        ],
+        'login' => [
+            'form.current_password',
+            'form.password',
+            'form.password_confirmation',
+        ],
+    ];
+
+    private const WIZARD_STEPS = ['personal', 'contact', 'role', 'login'];
 
     // Search and filtering
     public $search = '';
@@ -67,13 +104,14 @@ class Officers extends Component
     // Track tab validation errors
     public $tabErrors = [
         'personal' => false,
-        'contact' => false,
-        'login' => false,
+        'contact'  => false,
+        'role'     => false,
+        'login'    => false,
     ];
 
     protected $listeners = [
-        'permission-saved' => 'onPermissionSaved',
-        'permission-manager-close' => 'closePermissionsModal',
+        'permission-override-saved' => 'onPermissionOverrideSaved',
+        'permission-override-close' => 'closePermissionsModal',
     ];
 
     public function updatingSearch()
@@ -81,17 +119,143 @@ class Officers extends Component
         $this->resetPage();
     }
 
+    private function canManageOfficers(): bool
+    {
+        $user = Auth::user();
+
+        return (bool) ($user && $user->canAny(self::OFFICER_MANAGEMENT_PERMISSIONS));
+    }
+
+    private function authorizeOfficerAbility(string $permission): void
+    {
+        abort_unless(Auth::check() && Auth::user()->can($permission), 403);
+    }
+
     /**
-     * Validate individual field on blur
+     * Convert empty strings to null.
      */
-    public function validateField($field)
+    private function emptyToNull($value)
+    {
+        return $value === '' || $value === null ? null : $value;
+    }
+
+    /**
+     * Minimum officer age from configuration.
+     */
+    private function minimumAgeRequirement(): int
+    {
+        return max(0, (int) config('settings.requirement.age', 18));
+    }
+
+    /**
+     * Detect passwords that combine the officer name with simple number sequences.
+     */
+    private function passwordLooksTooPredictable(string $password): bool
+    {
+        $normalizedPassword = strtolower(preg_replace('/[^a-z0-9]+/i', '', $password) ?? '');
+
+        if ($normalizedPassword === '') {
+            return false;
+        }
+
+        $nameTokens = collect([
+            $this->form['first_name'] ?? '',
+            $this->form['mid_name'] ?? '',
+            $this->form['last_name'] ?? '',
+        ])
+            ->map(fn($value) => strtolower(preg_replace('/[^a-z]+/i', '', (string) $value) ?? ''))
+            ->filter(fn($value) => strlen($value) >= 3)
+            ->unique()
+            ->values();
+
+        if ($nameTokens->isEmpty()) {
+            return false;
+        }
+
+        return $nameTokens->contains(function (string $token) use ($normalizedPassword) {
+            return str_contains($normalizedPassword, $token) && preg_match('/\d{3,}/', $normalizedPassword);
+        });
+    }
+
+    /**
+     * Called by the Next button in add-mode only.
+     */
+    public function nextStep(string $currentTab): void
+    {
+        if ($currentTab !== 'review') {
+            $this->validateTab($currentTab);
+        }
+
+        $steps = self::WIZARD_STEPS;
+        $idx = array_search($currentTab, $steps, true);
+        $next = ($idx !== false && isset($steps[$idx + 1])) ? $steps[$idx + 1] : null;
+
+        if ($next) {
+            $this->dispatch('wizard-advance', tab: $next);
+        }
+    }
+
+    /**
+     * Validate a single officer form field on blur.
+     */
+    public function validateField(string $field): void
     {
         $rules = $this->getValidationRules();
 
-        if (isset($rules[$field])) {
-            $this->validateOnly($field, $rules, $this->getCustomMessages());
-            $this->updateTabErrors();
+        if ($this->isEdit && ! empty($this->form['password']) && ! Auth::user()->can('officers.update')) {
+            $rules['form.current_password'] = 'required|current_password';
         }
+
+        if (! array_key_exists($field, $rules)) {
+            return;
+        }
+
+        if ($this->isEdit && empty($this->form['password']) && in_array($field, ['form.password', 'form.password_confirmation', 'form.current_password'], true)) {
+            $this->resetValidation(['form.password', 'form.password_confirmation', 'form.current_password']);
+            $this->updateTabErrors();
+
+            return;
+        }
+
+        $this->validateOnly($field, $rules, $this->getCustomMessages());
+        $this->updateTabErrors();
+    }
+
+    /**
+     * Validate only the fields relevant to a specific tab.
+     */
+    public function validateTab($tab)
+    {
+        $tab = (string) $tab;
+
+        if (! isset(self::TAB_FIELDS[$tab])) {
+            return;
+        }
+
+        $rules = $this->getValidationRules();
+
+        if ($this->isEdit && ! empty($this->form['password']) && ! Auth::user()->can('officers.update')) {
+            $rules['form.current_password'] = 'required|current_password';
+        }
+
+        $fields = self::TAB_FIELDS[$tab];
+        $subsetRules = [];
+
+        foreach ($fields as $field) {
+            if (isset($rules[$field])) {
+                $subsetRules[$field] = $rules[$field];
+            }
+        }
+
+        if ($tab === 'login' && $this->isEdit && empty($this->form['password'])) {
+            unset($subsetRules['form.password'], $subsetRules['form.password_confirmation'], $subsetRules['form.current_password']);
+        }
+
+        if (! empty($subsetRules)) {
+            $this->validate($subsetRules, $this->getCustomMessages());
+        }
+
+        $this->updateTabErrors();
     }
 
     /**
@@ -99,47 +263,56 @@ class Officers extends Component
      */
     private function getValidationRules()
     {
+        $minimumAge = $this->minimumAgeRequirement();
+
         return [
             'form.first_name' => ['required', 'string', 'max:100', 'regex:/^[a-zA-Z\s\-\'.]+$/'],
             'form.last_name' => ['required', 'string', 'max:100', 'regex:/^[a-zA-Z\s\-\'.]+$/'],
             'form.mid_name' => ['nullable', 'string', 'max:100', 'regex:/^[a-zA-Z\s\-\'.]+$/'],
             'form.email' => 'required|email|unique:users,email' . ($this->isEdit && $this->selectedOfficer ? ',' . $this->selectedOfficer->id . ',id' : ''),
-            'form.phone_number' => 'nullable|string|max:11',
-            'form.birth_date' => 'required|date|before:today',
+            'form.phone_number' => 'required|string|max:11',
+            'form.birth_date' => [
+                'required',
+                'date',
+                function (string $attribute, mixed $value, Closure $fail) use ($minimumAge) {
+                    if (empty($value)) {
+                        return;
+                    }
+
+                    try {
+                        $birthDate = Carbon::parse((string) $value);
+                    } catch (\Throwable) {
+                        return;
+                    }
+
+                    if ($birthDate->greaterThan(now()->subYears($minimumAge))) {
+                        $fail("Officers must be at least {$minimumAge} years old.");
+                    }
+                },
+            ],
             'form.gender' => 'required|in:male,female,other',
             'form.civil_status' => 'required|in:single,married,widowed,separated',
             'form.title' => 'required|in:Chairman,Vice Chairman,Secretary,Treasurer,Loan Officer,Member',
             'form.role' => 'required|in:admin,manager,secretary,treasurer,loan',
-            'form.password' => $this->isEdit ? 'nullable|min:6|confirmed' : 'required|min:6|confirmed',
-            'form.password_confirmation' => $this->isEdit ? 'nullable' : 'required',
-        ];
-    }
+            'form.password' => [
+                $this->isEdit ? 'nullable' : 'required',
+                'string',
+                'min:6',
+                'regex:/^(?=.*[A-Za-z])(?=.*\d).+$/',
+                function (string $attribute, mixed $value, Closure $fail) {
+                    if (blank($value)) {
+                        return;
+                    }
 
-    /**
-     * Get custom validation messages
-     */
-    private function getCustomMessages()
-    {
-        return [
-            'form.first_name.required' => 'First name is required.',
-            'form.first_name.regex' => 'First name can only contain letters, spaces, hyphens, apostrophes, and periods.',
-            'form.last_name.required' => 'Last name is required.',
-            'form.last_name.regex' => 'Last name can only contain letters, spaces, hyphens, apostrophes, and periods.',
-            'form.mid_name.regex' => 'Middle name can only contain letters, spaces, hyphens, apostrophes, and periods.',
-            'form.email.required' => 'Email address is required.',
-            'form.email.email' => 'Please enter a valid email address.',
-            'form.email.unique' => 'This email address is already registered.',
-            'form.phone_number.max' => 'Phone number must be 11 digits or less.',
-            'form.birth_date.required' => 'Date of birth is required.',
-            'form.birth_date.before' => 'Birth date must be before today.',
-            'form.gender.required' => 'Gender is required.',
-            'form.civil_status.required' => 'Civil status is required.',
-            'form.title.required' => 'Officer title is required.',
-            'form.role.required' => 'Role is required.',
-            'form.password.required' => 'Password is required.',
-            'form.password.min' => 'Password must be at least 6 characters.',
-            'form.password.confirmed' => 'Password confirmation does not match.',
-            'form.password_confirmation.required' => 'Please confirm your password.',
+                    if ($this->passwordLooksTooPredictable((string) $value)) {
+                        $fail('Avoid passwords that reuse your name with simple number sequences.');
+                    }
+                },
+            ],
+            'form.password_confirmation' => $this->isEdit
+                ? 'nullable|same:form.password'
+                : 'required|same:form.password',
+            'form.current_password' => 'nullable',
         ];
     }
 
@@ -158,21 +331,19 @@ class Officers extends Component
             'form.gender',
             'form.civil_status',
             'form.title',
-            'form.role'
         ];
         $this->tabErrors['personal'] = collect($personalFields)->some(fn($field) => $errors->has($field));
 
         $contactFields = [
             'form.email',
             'form.phone_number',
-            'form.street',
-            'form.barangay',
-            'form.city',
-            'form.postal_code'
         ];
         $this->tabErrors['contact'] = collect($contactFields)->some(fn($field) => $errors->has($field));
 
-        $loginFields = ['form.password', 'form.password_confirmation'];
+        $roleFields = ['form.role'];
+        $this->tabErrors['role'] = collect($roleFields)->some(fn($field) => $errors->has($field));
+
+        $loginFields = ['form.password', 'form.password_confirmation', 'form.current_password'];
         $this->tabErrors['login'] = collect($loginFields)->some(fn($field) => $errors->has($field));
     }
 
@@ -184,17 +355,54 @@ class Officers extends Component
         $requiredFilled = !empty($this->form['first_name']) &&
             !empty($this->form['last_name']) &&
             !empty($this->form['email']) &&
+            !empty($this->form['phone_number']) &&
+            !empty($this->form['birth_date']) &&
+            !empty($this->form['gender']) &&
+            !empty($this->form['civil_status']) &&
+            !empty($this->form['title']) &&
             !empty($this->form['role']);
 
         if (!$this->isEdit) {
             $requiredFilled = $requiredFilled &&
                 !empty($this->form['password']) &&
-                !empty($this->form['password_confirmation']);
+                !empty($this->form['password_confirmation']) &&
+                ($this->form['password'] ?? '') === ($this->form['password_confirmation'] ?? '');
+        } elseif (!empty($this->form['password'])) {
+            $requiredFilled = $requiredFilled && !empty($this->form['password_confirmation']);
         }
 
         $noErrors = $this->getErrorBag()->isEmpty();
 
         return $requiredFilled && $noErrors;
+    }
+
+    /**
+     * Computed property to check for missing required fields in each tab.
+     */
+    public function getTabRequiredErrorsProperty()
+    {
+        $errors = [];
+
+        $errors['personal'] = empty(trim($this->form['first_name'] ?? '')) ||
+            empty(trim($this->form['last_name'] ?? '')) ||
+            empty($this->form['birth_date'] ?? '') ||
+            empty($this->form['gender'] ?? '') ||
+            empty($this->form['civil_status'] ?? '') ||
+            empty(trim($this->form['title'] ?? ''));
+
+        $errors['contact'] = empty(trim($this->form['email'] ?? '')) ||
+            empty(trim($this->form['phone_number'] ?? ''));
+
+        $errors['role'] = empty($this->form['role'] ?? '');
+
+        if (!$this->isEdit) {
+            $errors['login'] = empty($this->form['password'] ?? '') ||
+                empty($this->form['password_confirmation'] ?? '');
+        } else {
+            $errors['login'] = false;
+        }
+
+        return $errors;
     }
 
     public function sortBy($field)
@@ -209,6 +417,11 @@ class Officers extends Component
 
     public function viewProfile($userId)
     {
+        abort_unless($this->canManageOfficers(), 403);
+
+        $this->closeEditModal();
+        $this->closePermissionsModal();
+
         $this->selectedOfficer = User::with([
             'personalData.address',
             'personalData.contact',
@@ -244,6 +457,10 @@ class Officers extends Component
      */
     public function addOfficer()
     {
+        $this->authorizeOfficerAbility('officers.create');
+
+        $this->closeModal();
+        $this->closePermissionsModal();
         $this->resetValidation();
         $this->isEdit = false;
         $this->form = [
@@ -276,7 +493,10 @@ class Officers extends Component
      */
     public function editOfficer($userId)
     {
+        $this->authorizeOfficerAbility('officers.update');
+
         $this->resetValidation();
+        $this->closePermissionsModal();
         $this->isEdit = true;
         $this->editingOfficerId = $userId;
         $this->modalKey = now()->timestamp . rand(1000, 9999);
@@ -318,15 +538,22 @@ class Officers extends Component
      */
     public function saveOfficer()
     {
-        // Validate with officer-specific fields
-        $this->validate($this->getValidationRules(), $this->getCustomMessages());
+        $this->authorizeOfficerAbility($this->isEdit ? 'officers.update' : 'officers.create');
+
+        $rules = $this->getValidationRules();
+
+        if ($this->isEdit && ! empty($this->form['password']) && ! Auth::user()->can('officers.update')) {
+            $rules['form.current_password'] = 'required|current_password';
+        }
+
+        $this->validate($rules, $this->getCustomMessages());
         $this->updateTabErrors();
 
         DB::beginTransaction();
         try {
             if ($this->isEdit) {
                 // Update existing officer
-                $officer = $this->selectedOfficer;
+                $officer = User::with(['personalData.contact', 'personalData.address'])->findOrFail($this->form['id'] ?? $this->editingOfficerId);
 
                 // Update contact
                 if ($officer->personalData->contact) {
@@ -375,11 +602,13 @@ class Officers extends Component
                 $updateData = [
                     'email' => $this->form['email'],
                     'role' => $this->form['role'],  // Role can be changed for officers
+                    'is_officer' => true,
                 ];
                 if (! empty($this->form['password'])) {
                     $updateData['password'] = Hash::make($this->form['password']);
                 }
                 $officer->update($updateData);
+                $officer->syncRoles([$this->form['role']]);
 
                 $this->dispatch('toast', ['message' => 'Officer updated successfully!', 'type' => 'success']);
             } else {
@@ -413,12 +642,15 @@ class Officers extends Component
                 ]);
 
                 // Create user with role from form (not hardcoded like members)
-                User::create([
+                $user = User::create([
                     'personal_data_id' => $personalData->id,
                     'email' => $this->form['email'],
                     'password' => Hash::make($this->form['password']),
                     'role' => $this->form['role'],  // Role selected from dropdown
+                    'is_officer' => true,
                 ]);
+
+                $user->syncRoles([$this->form['role']]);
 
                 $this->dispatch('toast', ['message' => 'Officer created successfully!', 'type' => 'success']);
             }
@@ -427,7 +659,7 @@ class Officers extends Component
             $this->closeEditModal();
         } catch (\Exception $e) {
             DB::rollBack();
-            \Log::error('Officer save error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            Log::error('Officer save error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             $this->dispatch('toast', ['message' => 'An error occurred: ' . $e->getMessage(), 'type' => 'error']);
         }
     }
@@ -447,6 +679,8 @@ class Officers extends Component
      */
     public function confirmDelete($userId)
     {
+        $this->authorizeOfficerAbility('officers.delete');
+
         // Prevent officers from deleting their own account
         if (Auth::id() == $userId) {
             $this->dispatch('toast', ['message' => 'You cannot delete your own account.', 'type' => 'error']);
@@ -474,12 +708,15 @@ class Officers extends Component
      */
     public function deleteOfficer()
     {
+        $this->authorizeOfficerAbility('officers.delete');
+
         if (!$this->officerToDelete) {
             return;
         }
 
         try {
-            $officer = User::find($this->officerToDelete);
+            /** @var User|null $officer */
+            $officer = User::query()->whereKey($this->officerToDelete)->first();
 
             if (!$officer) {
                 $this->dispatch('toast', ['message' => 'Officer not found.', 'type' => 'error']);
@@ -487,11 +724,11 @@ class Officers extends Component
             }
 
             // Soft delete the user (cascades via model events if needed)
-            $officer->delete();
+            User::query()->whereKey($officer->id)->delete();
 
             // Optionally soft delete personal data as well
             if ($officer->personalData) {
-                $officer->personalData->delete();
+                PersonalData::query()->whereKey($officer->personalData->id)->delete();
             }
 
             $this->dispatch('toast', ['message' => 'Officer deleted successfully!', 'type' => 'success']);
@@ -503,7 +740,7 @@ class Officers extends Component
                 $this->closeModal();
             }
         } catch (\Exception $e) {
-            \Log::error('Officer delete error: ' . $e->getMessage());
+            Log::error('Officer delete error: ' . $e->getMessage());
             $this->dispatch('toast', ['message' => 'Failed to delete officer.', 'type' => 'error']);
         }
     }
@@ -513,8 +750,10 @@ class Officers extends Component
      */
     public function managePermissions($officerId)
     {
+        $this->authorizeOfficerAbility('officers.manage-permissions');
+
         $user = Auth::user();
-        if (!$user || !$user->can('officers.manage-permissions')) {
+        if (!$user) {
             $this->dispatch('toast', ['message' => 'You do not have permission to manage officer permissions.', 'type' => 'error']);
             return;
         }
@@ -527,9 +766,9 @@ class Officers extends Component
      * Close permissions modal
      */
     /**
-     * Handle permission saved event from OfficerPermissionManager
+     * Handle permission override saved event from OfficerOverrideManager
      */
-    public function onPermissionSaved($message = 'Permissions updated successfully.')
+    public function onPermissionOverrideSaved($message = 'Permission overrides saved.')
     {
         if (is_array($message)) {
             $message = $message['message'] ?? 'Permissions updated successfully.';
@@ -563,13 +802,10 @@ class Officers extends Component
      */
     public function render()
     {
+        abort_unless($this->canManageOfficers(), 403);
+
         $user = Auth::user();
-        $canEdit = $user && (
-            $user->can('officers.create') ||
-            $user->can('officers.update') ||
-            $user->can('officers.delete') ||
-            $user->can('officers.manage-permissions')
-        );
+        $canEdit = $this->canManageOfficers();
 
         // Query officers only (excludes 'member' and 'inactive' roles)
         $query = User::with(['personalData.address', 'personalData.contact', 'accounts'])

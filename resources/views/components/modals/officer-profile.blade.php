@@ -238,115 +238,72 @@
                 {{-- Permissions Tab --}}
                 @if ($activeTab === 'permissions')
                     @php
-                        // Get all roles/permissions data to display
-                        $permissions = $officer->getPermissionNames()->toArray();
-                        $allPermissions = [
-                            'Dashboard' => ['dashboard.view'],
-                            'Members' => [
-                                'members.view',
-                                'members.create',
-                                'members.update',
-                                'members.delete',
-                                'members.view-full-details',
-                            ],
-                            'Services' => ['services.view', 'services.create', 'services.update'],
-                            'Loans' => [
-                                'loans.view',
-                                'loans.create',
-                                'loans.update',
-                                'loans.approve',
-                                'loans.reject',
-                                'loans.disburse',
-                            ],
-                            'Transactions' => [
-                                'transactions.view',
-                                'transactions.create',
-                                'transactions.update',
-                                'transactions.void',
-                                'transactions.export',
-                            ],
-                            'Deposits & Withdrawals' => [
-                                'deposits.view',
-                                'deposits.create',
-                                'deposits.approve',
-                                'deposits.reject',
-                                'withdrawals.view',
-                                'withdrawals.create',
-                                'withdrawals.approve',
-                                'withdrawals.reject',
-                            ],
-                            'Reports' => ['reports.view', 'reports.export', 'reports.financial', 'reports.audit'],
-                            'Settings & Logs' => ['settings.view', 'settings.update', 'logs.view', 'logs.export'],
-                            'Announcements' => [
-                                'announcements.view',
-                                'announcements.create',
-                                'announcements.update',
-                                'announcements.delete',
-                            ],
-                            'Staff Management' => [
-                                'officers.create',
-                                'officers.update',
-                                'officers.delete',
-                                'officers.manage-permissions',
-                            ],
-                            'Notifications & Profile' => [
-                                'notifications.view',
-                                'notifications.manage',
-                                'profile.view',
-                                'profile.update',
-                            ],
-                        ];
-                    @endphp
-                    <div class="space-y-6">
-                        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-100">
-                            <h5 class="text-sm font-semibold text-gray-800 mb-2">Assigned Permissions</h5>
-                            <p class="text-xs text-gray-600 mb-4">
-                                This officer has <strong>{{ count($permissions) }}</strong> individual permissions
-                                assigned.
-                                {{ $canEdit ? 'Click "Manage Permissions" to modify.' : 'Contact an administrator to change permissions.' }}
-                            </p>
+                        use App\Models\OfficerPermissionOverride;
+                        use App\Support\PermissionCatalog;
 
-                            {{-- Display permissions by group --}}
-                            <div class="space-y-3">
-                                @foreach ($allPermissions as $groupName => $groupPerms)
-                                    @php
-                                        $assignedInGroup = array_filter(
-                                            $groupPerms,
-                                            fn($p) => in_array($p, $permissions),
-                                        );
-                                    @endphp
-                                    @if (count($assignedInGroup) > 0)
-                                        <div>
-                                            <h6 class="text-xs font-semibold text-gray-700 mb-1">{{ $groupName }}
-                                            </h6>
-                                            <div class="flex flex-wrap gap-1">
-                                                @foreach ($assignedInGroup as $perm)
-                                                    @php
-                                                        $parts = explode('.', $perm);
-                                                        $action = match ($parts[1] ?? '') {
-                                                            'view' => 'View',
-                                                            'create' => 'Create',
-                                                            'update' => 'Edit',
-                                                            'delete' => 'Delete',
-                                                            'approve' => 'Approve',
-                                                            'reject' => 'Reject',
-                                                            'disburse' => 'Disburse',
-                                                            'void' => 'Void',
-                                                            'export' => 'Export',
-                                                            'manage-permissions' => 'Manage Permissions',
-                                                            'view-full-details' => 'View Full Details',
-                                                            default => ucfirst($parts[1] ?? ''),
-                                                        };
-                                                    @endphp
-                                                    <span
-                                                        class="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded">{{ $action }}</span>
-                                                @endforeach
-                                            </div>
-                                        </div>
-                                    @endif
-                                @endforeach
-                            </div>
+                        $rolePerms = $officer->getPermissionsViaRoles()->pluck('name')->all();
+                        $overrideRows = OfficerPermissionOverride::where('user_id', $officer->id)
+                            ->get()
+                            ->keyBy('permission');
+                        $groups = PermissionCatalog::groups();
+                        $allowCount = $overrideRows->filter(fn($r) => $r->effect === 'allow')->count();
+                        $denyCount = $overrideRows->filter(fn($r) => $r->effect === 'disallow')->count();
+                    @endphp
+                    <div class="space-y-5">
+                        {{-- Summary header --}}
+                        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-100">
+                            <h5 class="text-sm font-semibold text-gray-800 mb-1">Role-Based Permissions</h5>
+                            <p class="text-xs text-gray-600">
+                                This officer inherits <strong>{{ count($rolePerms) }}</strong> permissions from their
+                                <em>{{ ucfirst($officer->getRoleNames()->first() ?? 'unknown') }}</em> role.
+                                @if ($allowCount > 0 || $denyCount > 0)
+                                    Overrides: <span class="text-emerald-700 font-medium">{{ $allowCount }}
+                                        allow</span>
+                                    · <span class="text-red-700 font-medium">{{ $denyCount }} deny</span>.
+                                @else
+                                    No overrides set.
+                                @endif
+                                {{ $canEdit ? 'Use "Manage Permissions" to set overrides.' : '' }}
+                            </p>
                         </div>
+
+                        {{-- Groups --}}
+                        @foreach ($groups as $groupName => $perms)
+                            @php
+                                $visible = collect($perms)->filter(
+                                    fn($p) => in_array($p, $rolePerms, true) || $overrideRows->has($p),
+                                );
+                            @endphp
+                            @if ($visible->isNotEmpty())
+                                <div>
+                                    <h6 class="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+                                        {{ $groupName }}</h6>
+                                    <div class="flex flex-wrap gap-1.5">
+                                        @foreach ($visible as $perm)
+                                            @php
+                                                $inRole = in_array($perm, $rolePerms, true);
+                                                $override = $overrideRows->get($perm);
+                                                $effect = $override?->effect;
+                                                $label = \App\Support\PermissionCatalog::formatLabel($perm);
+                                            @endphp
+                                            @if ($effect === 'disallow')
+                                                <span
+                                                    class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-red-100 text-red-700 rounded line-through"
+                                                    title="Disallowed by override">{{ $label }}</span>
+                                            @elseif ($effect === 'allow' && !$inRole)
+                                                <span
+                                                    class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-emerald-100 text-emerald-700 rounded"
+                                                    title="Allowed by override (not in role)">+{{ $label }}</span>
+                                            @elseif ($inRole)
+                                                <span
+                                                    class="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded"
+                                                    title="From role">{{ $label }}</span>
+                                            @endif
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endif
+                        @endforeach
                     </div>
                 @endif
 

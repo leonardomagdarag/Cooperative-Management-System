@@ -95,25 +95,12 @@
                             @endif
                         @endif
 
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Payment Amount *</label>
-                            <div class="relative">
-                                <span class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500">₱</span>
-                                <input type="number" wire:model="paymentAmount" step="0.01" min="1"
-                                    class="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    placeholder="0.00" required>
-                            </div>
-                            @error('paymentAmount')
-                                <span class="text-red-500 text-xs">{{ $message }}</span>
-                            @enderror
-                        </div>
+                        <x-forms.text-input name="paymentAmount" label="Payment Amount" model="paymentAmount"
+                            type="number" step="0.01" min="1" prefix="₱" :required="true"
+                            :validateOnBlur="false" />
 
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Note (Optional)</label>
-                            <textarea wire:model="paymentNote" rows="2"
-                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Any additional notes..."></textarea>
-                        </div>
+                        <x-forms.textarea-input name="paymentNote" label="Note (Optional)" model="paymentNote"
+                            :rows="2" placeholder="Any additional notes..." :validateOnBlur="false" />
 
                         <div class="flex gap-3 pt-4">
                             <button type="button" wire:click="closeService"

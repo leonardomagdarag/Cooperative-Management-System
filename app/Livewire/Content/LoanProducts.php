@@ -30,9 +30,29 @@ class LoanProducts extends Component
     public bool $requiresSpecialEligibility = false;
     public int $sortOrder = 0;
 
+    public bool $showModal = false;
+
     public function mount(): void
     {
         $this->loadLoanProducts();
+    }
+
+    public function openAddModal(): void
+    {
+        if (! $this->isAdmin()) {
+            $this->dispatch('error', message: 'Only admins can manage loan products.');
+
+            return;
+        }
+
+        $this->resetForm();
+        $this->showModal = true;
+    }
+
+    public function closeModal(): void
+    {
+        $this->resetForm();
+        $this->showModal = false;
     }
 
     public function toggleLoanProductStatus(int $id): void
@@ -120,6 +140,7 @@ class LoanProducts extends Component
         }
 
         $this->resetForm();
+        $this->showModal = false;
         $this->loadLoanProducts();
     }
 
@@ -153,7 +174,7 @@ class LoanProducts extends Component
         $this->requiresSpecialEligibility = (bool) $product->requires_special_eligibility;
         $this->sortOrder = (int) $product->sort_order;
 
-        $this->dispatch('success', message: 'Editing ' . $product->name . '.');
+        $this->showModal = true;
     }
 
     public function deleteLoanProduct(int $id): void

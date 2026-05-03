@@ -141,31 +141,12 @@
                             </div>
 
                             <div class="space-y-4">
-                                {{-- Title Field --}}
-                                <div>
-                                    <label for="title" class="block text-sm font-semibold text-gray-700 mb-2">
-                                        Title <span class="text-red-500">*</span>
-                                    </label>
-                                    <input type="text" id="title" wire:model="title"
-                                        class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 @error('title') border-red-500 @enderror"
-                                        placeholder="Enter announcement title">
-                                    @error('title')
-                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                    @enderror
-                                </div>
+                                <x-forms.text-input name="title" label="Title" model="title" :required="true"
+                                    maxlength="255" placeholder="Enter announcement title" :validateOnBlur="false" />
 
-                                {{-- Content Field --}}
-                                <div>
-                                    <label for="content" class="block text-sm font-semibold text-gray-700 mb-2">
-                                        Content <span class="text-red-500">*</span>
-                                    </label>
-                                    <textarea id="content" wire:model="content" rows="8"
-                                        class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 @error('content') border-red-500 @enderror"
-                                        placeholder="Enter announcement content"></textarea>
-                                    @error('content')
-                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                    @enderror
-                                </div>
+                                <x-forms.textarea-input name="content" label="Content" model="content"
+                                    :rows="8" :required="true" maxlength="5000"
+                                    placeholder="Enter announcement content" :validateOnBlur="false" />
                             </div>
                         </div>
 

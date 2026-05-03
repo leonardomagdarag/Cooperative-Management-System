@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\Loan;
+use App\Models\OfficerPermissionOverride;
 use App\Models\PersonalData;
 use App\Models\Transaction;
 use App\Models\User;

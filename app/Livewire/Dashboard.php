@@ -4,10 +4,13 @@ namespace App\Livewire;
 
 use App\Services\AuditLogService;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\On;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 class Dashboard extends Component
 {
+    #[Url(as: 'section', history: true)]
     public $currentSection = 'dashboard';
 
     public $isLoading = false;
@@ -18,6 +21,12 @@ class Dashboard extends Component
         'sectionChanged' => 'updateSection',
     ];
 
+    #[On('open-notifications-inbox')]
+    public function openNotificationsInbox(): void
+    {
+        $this->updateSection('notifications');
+    }
+
     private function isPermissionManagedRole(string $role): bool
     {
         return in_array($role, ['admin', 'manager', 'loan', 'secretary', 'treasurer'], true);
@@ -25,7 +34,7 @@ class Dashboard extends Component
 
     private function getUserSections($user): array
     {
-        $userRole = $user->role ?? 'member';
+        $userRole = $user->getRoleNames()->first() ?? 'member';
         $roleSections = config("settings.sections.{$userRole}", []);
 
         // Keep member/inactive/terminated behavior role-based.
@@ -48,6 +57,7 @@ class Dashboard extends Component
             'logs' => ['logs.view', 'logs.export'],
             'settings' => ['settings.view', 'settings.update'],
             'loan-products' => ['settings.view', 'settings.update'],
+            'role-permissions' => ['settings.view', 'settings.update'],
         ];
 
         $resolved = [];
@@ -76,7 +86,7 @@ class Dashboard extends Component
     {
         //get user role
         $user = Auth::user();
-        $userRole = $user->role ?? 'member';
+        $userRole = $user->getRoleNames()->first() ?? 'member';
         $userSections = $this->getUserSections($user);
 
         if (!empty($userSections) && !in_array($this->currentSection, $userSections, true)) {

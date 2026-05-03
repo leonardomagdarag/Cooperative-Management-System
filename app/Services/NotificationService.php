@@ -20,7 +20,7 @@ class NotificationService
 {
     private function resolveUserDashboardUrl(User $user): string
     {
-        $primaryRole = $user->getRoleNames()->first() ?? $user->role ?? 'member';
+        $primaryRole = $user->getRoleNames()->first() ?? 'member';
 
         $routeName = match ($primaryRole) {
             'admin' => 'admin.dashboard',
@@ -290,6 +290,67 @@ class NotificationService
             $priority,
             '/notifications'
         );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Loan review lifecycle notifications (officer review stage)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Notify member that their loan application is now being reviewed by an officer.
+     */
+    public function notifyLoanUnderReview(Loan $loan): void
+    {
+        $this->create(
+            $loan->user,
+            'general',
+            'Loan Application Under Review',
+            "Your loan application {$loan->loan_number} is now being reviewed by our loan officer.",
+            'normal',
+            $this->resolveUserDashboardUrl($loan->user),
+            $loan
+        );
+    }
+
+    /**
+     * Notify member that their loan application has been endorsed for final approval.
+     */
+    public function notifyLoanEndorsedForApproval(Loan $loan): void
+    {
+        $this->create(
+            $loan->user,
+            'general',
+            'Loan Application Endorsed',
+            "Your loan application {$loan->loan_number} has been endorsed and is awaiting final approval.",
+            'high',
+            $this->resolveUserDashboardUrl($loan->user),
+            $loan
+        );
+    }
+
+    /**
+     * Notify member that their loan application was rejected during officer review.
+     */
+    public function notifyLoanReviewRejected(Loan $loan, string $reason = '', bool $sendEmail = true): void
+    {
+        $message = "Your loan application {$loan->loan_number} has been rejected during review.";
+        if ($reason) {
+            $message .= ' Reason: ' . $reason;
+        }
+
+        $this->create(
+            $loan->user,
+            'loan_rejected',
+            'Loan Application Rejected',
+            $message,
+            'high',
+            $this->resolveUserDashboardUrl($loan->user),
+            $loan
+        );
+
+        if ($sendEmail && config('mail.default') !== 'log' && $loan->user?->email) {
+            Mail::to($loan->user->email)->queue(new LoanStatusNotification($loan, 'rejected', $reason));
+        }
     }
 
     /**

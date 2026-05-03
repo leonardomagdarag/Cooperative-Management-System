@@ -23,5 +23,23 @@
         @endif
     </div>
 
-    
+    <div class="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-2">Role Permission Management</h3>
+        <p class="text-sm text-gray-600 mb-4">
+            Configure the default permissions assigned to each officer role (Manager, Secretary, Loan Officer,
+            Treasurer).
+            Officers inherit their role's permissions; per-officer overrides can be set from the Officers section.
+        </p>
+
+        @if ($isAdmin)
+            <button type="button" wire:click="openRolePermissions"
+                class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700">
+                Manage Role Permissions
+            </button>
+        @else
+            <div class="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-xl p-4">
+                Only admins can manage role permissions.
+            </div>
+        @endif
+    </div>
 </div>

@@ -39,6 +39,24 @@ class LoanPolicy
         return $user->can('loans.reject');
     }
 
+    /**
+     * Officer-level review action (start review, schedule interview, endorse).
+     * Excludes final approval — use finalApprove() for that.
+     */
+    public function review(User $user): bool
+    {
+        return $user->can('loans.update') && ! $user->hasRole('member');
+    }
+
+    /**
+     * Final approval is restricted to admin and manager (chairman) only.
+     * This is a hard role gate, independent of permissions, to prevent escalation.
+     */
+    public function finalApprove(User $user): bool
+    {
+        return $user->hasAnyRole(['admin', 'manager']);
+    }
+
     public function delete(User $user): bool
     {
         return $user->can('loans.update');

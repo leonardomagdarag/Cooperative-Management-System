@@ -128,8 +128,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="{{ $canEdit ? '6' : '5' }}"
-                                            class="p-4 text-center">
+                                        <td colspan="{{ $canEdit ? '6' : '5' }}" class="p-4 text-center">
                                             <div class="flex flex-col items-center justify-center py-12">
                                                 <svg class="w-16 h-16 text-gray-400 mb-4" fill="none"
                                                     stroke="currentColor" viewBox="0 0 24 24">
@@ -231,7 +230,7 @@
             </div>
         @endif
 
-        {{-- Permissions Manager Modal --}}
+        {{-- Permission Overrides Modal --}}
         @if ($showPermissionsModal && $selectedOfficerForPermissions)
             <div class="fixed inset-0 z-50 flex items-center justify-center overflow-x-hidden overflow-y-auto outline-none focus:outline-none"
                 aria-labelledby="modal-title" role="dialog" aria-modal="true">
@@ -244,12 +243,12 @@
                     <div class="relative bg-white rounded-lg shadow">
                         {{-- Modal header --}}
                         <div
-                            class="flex items-center justify-between p-5 border-b border-gray-200 bg-gradient-to-r from-purple-600 to-indigo-600">
+                            class="flex items-center justify-between p-5 border-b border-gray-200 bg-gradient-to-r from-cyan-600 to-indigo-600">
                             <h3 class="text-xl font-semibold text-white">
-                                Manage Officer Permissions
+                                Manage Permission Overrides
                             </h3>
                             <button type="button" wire:click="closePermissionsModal"
-                                class="text-white bg-transparent hover:bg-purple-800 rounded-lg text-sm p-1.5 ml-auto inline-flex items-center transition-colors">
+                                class="text-white bg-transparent hover:bg-cyan-800 rounded-lg text-sm p-1.5 ml-auto inline-flex items-center transition-colors">
                                 <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd"
                                         d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
@@ -260,7 +259,7 @@
 
                         {{-- Modal body --}}
                         <div class="p-6">
-                            <livewire:content.officer-permission-manager :officerId="$selectedOfficerForPermissions" :key="'officer-permission-manager-' . $selectedOfficerForPermissions" />
+                            <livewire:content.officer-override-manager :officerId="$selectedOfficerForPermissions" :key="'officer-override-manager-' . $selectedOfficerForPermissions" />
                         </div>
                     </div>
                 </div>

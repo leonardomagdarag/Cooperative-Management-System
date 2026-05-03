@@ -152,7 +152,16 @@
         <div class="bg-white rounded-xl shadow-sm p-6">
             <h2 class="text-2xl font-bold text-gray-900 mb-6">Available Services</h2>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-{{ $isTreasurerMode ? '5' : '4' }} gap-6">
+            @php
+                $gridCols = 4;
+                if ($isTreasurerMode) {
+                    $gridCols++;
+                }
+                if ($isLoanReviewMode) {
+                    $gridCols++;
+                }
+            @endphp
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-{{ $gridCols }} gap-6">
                 @if ($isTreasurerMode)
                     {{-- Approve Transactions (Treasurer Only) --}}
                     <button wire:click="openService('approve')"
@@ -217,6 +226,25 @@
                     <p class="text-sm text-gray-600">Apply for personal, housing, business or emergency loans</p>
                 </button>
 
+                {{-- Loan Review (officers with loans.update) --}}
+                @if ($isLoanReviewMode)
+                    <button wire:click="openService('loan-review')"
+                        class="group bg-gradient-to-br from-indigo-50 to-violet-100 hover:from-indigo-100 hover:to-violet-200 rounded-xl p-6 text-left transition-all hover:shadow-lg relative">
+                        @if ($pendingLoanReviews > 0)
+                            <span
+                                class="absolute top-4 right-4 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
+                                {{ $pendingLoanReviews }}
+                            </span>
+                        @endif
+                        <div
+                            class="w-14 h-14 bg-indigo-600 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                            <i class="fas fa-file-alt text-white text-2xl"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-gray-900 mb-2">Loan Applications</h3>
+                        <p class="text-sm text-gray-600">Review and endorse pending loan applications</p>
+                    </button>
+                @endif
+
                 {{-- Loan Payment --}}
                 <button wire:click="openService('payment')"
                     class="group bg-gradient-to-br from-blue-50 to-cyan-100 hover:from-blue-100 hover:to-cyan-200 rounded-xl p-6 text-left transition-all hover:shadow-lg">
@@ -242,4 +270,5 @@
         @include('livewire.content.services.loan-modal')
         @include('livewire.content.services.payment-modal')
         @include('livewire.content.services.approve-modal')
+        @include('livewire.content.services.loan-review-modal')
     </div>
