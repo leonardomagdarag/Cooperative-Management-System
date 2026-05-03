@@ -135,4 +135,17 @@
 
 @stack('scripts')
 
+<script>
+    document.addEventListener('livewire:init', () => {
+        Livewire.hook('request', ({ fail }) => {
+            fail(({ status, preventDefault }) => {
+                if (status === 419 || status === 401) {
+                    preventDefault();
+                    window.location.href = '{{ route('login_page') }}';
+                }
+            });
+        });
+    });
+</script>
+
 </html>

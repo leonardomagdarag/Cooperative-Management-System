@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\User;
+use App\Support\PermissionCatalog;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -111,11 +112,12 @@ class SpatieRolePermissionSeeder extends Seeder
             // Super admin: all permissions
             'admin' => $allPermissions,
 
-            // Officer personas use direct user permissions but still need roles for route middleware.
-            'manager' => [],
-            'secretary' => [],
-            'loan' => [],
-            'treasurer' => [],
+            // Officer roles now receive permissions via their Spatie role (RBAC).
+            // Permissions are sourced from PermissionCatalog::rolePresets().
+            'manager'   => PermissionCatalog::rolePresets()['manager'],
+            'secretary' => PermissionCatalog::rolePresets()['secretary'],
+            'loan'      => PermissionCatalog::rolePresets()['loan'],
+            'treasurer' => PermissionCatalog::rolePresets()['treasurer'],
             'developer' => [],
 
             // Regular members: limited self-service permissions
@@ -147,123 +149,6 @@ class SpatieRolePermissionSeeder extends Seeder
             $role->syncPermissions($grantedPermissions);
         }
 
-        // === INITIALIZE OFFICERS WITH PERMISSIONS (not roles) ===
-        // Find all existing officers and assign permissions based on their old role
-        $officerRolePermissions = [
-            'manager' => [
-                'dashboard.view',
-                'members.view',
-                'members.create',
-                'members.update',
-                'members.delete',
-                'members.view-full-details',
-                'services.view',
-                'services.create',
-                'services.update',
-                'loans.view',
-                'loans.create',
-                'loans.update',
-                'loans.approve',
-                'loans.reject',
-                'loans.disburse',
-                'transactions.view',
-                'transactions.create',
-                'transactions.update',
-                'transactions.export',
-                'deposits.view',
-                'deposits.create',
-                'deposits.approve',
-                'withdrawals.view',
-                'withdrawals.create',
-                'withdrawals.approve',
-                'reports.view',
-                'reports.export',
-                'announcements.view',
-                'announcements.create',
-                'announcements.update',
-                'announcements.delete',
-                'settings.view',
-                'settings.update',
-                'officers.create',
-                'officers.update',
-                'officers.delete',
-                'officers.manage-permissions',
-                'notifications.view',
-                'notifications.manage',
-                'profile.view',
-                'profile.update',
-            ],
-            'treasurer' => [
-                'dashboard.view',
-                'members.view',
-                'services.view',
-                'services.create',
-                'services.update',
-                'loans.view',
-                'transactions.view',
-                'transactions.create',
-                'transactions.update',
-                'transactions.export',
-                'deposits.view',
-                'deposits.create',
-                'deposits.approve',
-                'deposits.reject',
-                'withdrawals.view',
-                'withdrawals.create',
-                'withdrawals.approve',
-                'withdrawals.reject',
-                'reports.view',
-                'reports.export',
-                'reports.financial',
-                'announcements.view',
-                'settings.view',
-                'notifications.view',
-                'profile.view',
-                'profile.update',
-            ],
-            'loan' => [
-                'dashboard.view',
-                'members.view',
-                'members.view-full-details',
-                'services.view',
-                'services.create',
-                'services.update',
-                'loans.view',
-                'loans.create',
-                'loans.update',
-                'loans.approve',
-                'loans.reject',
-                'loans.disburse',
-                'transactions.view',
-                'reports.view',
-                'reports.export',
-                'announcements.view',
-                'settings.view',
-                'notifications.view',
-                'profile.view',
-                'profile.update',
-            ],
-            'secretary' => [
-                'dashboard.view',
-                'members.view',
-                'members.create',
-                'members.update',
-                'services.view',
-                'loans.view',
-                'transactions.view',
-                'transactions.export',
-                'reports.view',
-                'reports.export',
-                'announcements.view',
-                'announcements.create',
-                'announcements.update',
-                'settings.view',
-                'notifications.view',
-                'profile.view',
-                'profile.update',
-            ],
-        ];
-
         // === ASSIGN ROLES & PERMISSIONS TO EXISTING USERS ===
 
         // 1. Assign 'admin' role to users with role='admin'
@@ -288,9 +173,9 @@ class SpatieRolePermissionSeeder extends Seeder
                 }
             });
 
-        // 3. Assign route roles to officer personas and developer.
+        // 3. Assign route roles to officer personas.
         User::query()
-            ->whereIn('role', ['manager', 'secretary', 'loan', 'treasurer', 'developer'])
+            ->whereIn('role', ['manager', 'secretary', 'loan', 'treasurer'])
             ->chunk(100, function ($users) {
                 foreach ($users as $user) {
                     $user->account_status = 'active';
@@ -308,17 +193,17 @@ class SpatieRolePermissionSeeder extends Seeder
             ->where('role', 'inactive')
             ->update(['account_status' => 'inactive']);
 
-        // 5. Assign permissions to existing officers based on their old role
+        // === CLEAR DIRECT USER PERMISSIONS FOR OFFICERS ===
+        // Permissions are now role-based. Remove any individually assigned
+        // permissions from officer users so only role grants apply.
+        // Per-officer exceptions use the officer_permission_overrides table.
         User::query()
-            ->whereIn('role', array_keys($officerRolePermissions))
-            ->chunk(100, function ($users) use ($officerRolePermissions) {
+            ->whereIn('role', array_keys(PermissionCatalog::rolePresets()))
+            ->chunk(100, function ($users) {
                 foreach ($users as $user) {
                     $user->is_officer = true;
                     $user->save();
-
-                    if (isset($officerRolePermissions[$user->role])) {
-                        $user->syncPermissions($officerRolePermissions[$user->role]);
-                    }
+                    $user->syncPermissions([]);
                 }
             });
 

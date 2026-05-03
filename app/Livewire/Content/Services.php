@@ -10,6 +10,7 @@ use App\Models\Transaction;
 use App\Services\AuditLogService;
 use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
@@ -108,11 +109,21 @@ class Services extends Component
 
     public $loanTypeWarnings = [];
 
-    public function mount()
+    // Loan review (officer-facing) ─────────────────────────────────────────
+    public $isLoanReviewMode = false;
+    public $selectedLoanId = null;
+    public $loanReviewNotes = '';
+    public $loanReviewAction = ''; // '' | 'reject' | 'interview_complete'
+
+    public function boot()
     {
         $this->notificationService = app(NotificationService::class);
         $this->securityOtpService = app(SecurityOtpService::class);
         $this->auditLogService = app(AuditLogService::class);
+    }
+
+    public function mount()
+    {
         $this->withdrawalApprovalOtpThreshold = (float) SystemSetting::get('security_withdrawal_otp_threshold', 2000);
         $this->loadLoanTypes();
 
@@ -122,6 +133,11 @@ class Services extends Component
             $user->can('withdrawals.approve') ||
             $user->can('transactions.update')
         );
+
+        // Loan review mode: any officer with loans.update can process review queue
+        $this->isLoanReviewMode = $user
+            && $user->can('loans.update')
+            && ! $user->hasRole('member');
 
         // If not treasurer mode, pre-select user's savings account for withdrawal
         if (! $this->isTreasurerMode) {
@@ -402,10 +418,347 @@ class Services extends Component
         $this->approvalOtpSentForTransactionId = null;
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Officer Loan Review actions
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Select a loan to act on inside the review modal.
+     */
+    public function selectLoanForReview(int $loanId): void
+    {
+        $user = Auth::user();
+        if (! $user || ! $user->can('loans.update')) {
+            $this->dispatch('error', message: 'You do not have permission to review loan applications.');
+            return;
+        }
+
+        $this->selectedLoanId = $loanId;
+        $this->loanReviewNotes = '';
+        $this->loanReviewAction = '';
+    }
+
+    public function cancelLoanReview(): void
+    {
+        $this->selectedLoanId = null;
+        $this->loanReviewNotes = '';
+        $this->loanReviewAction = '';
+    }
+
+    /**
+     * Officer picks up a pending loan for review (null → under_review).
+     */
+    public function startLoanReview(): void
+    {
+        $user = Auth::user();
+        if (! $user || ! $user->can('loans.update')) {
+            $this->dispatch('error', message: 'Unauthorized.');
+            return;
+        }
+
+        $loan = Loan::where('id', $this->selectedLoanId)
+            ->where('loan_status', 'pending')
+            ->whereNull('review_status')
+            ->first();
+
+        if (! $loan) {
+            $this->dispatch('error', message: 'Loan not found or already in review.');
+            return;
+        }
+
+        $loan->update([
+            'review_status' => 'under_review',
+            'reviewed_by'   => $user->id,
+            'reviewed_at'   => now(),
+        ]);
+
+        $this->auditLogService->log(
+            'loan.review_started',
+            'Officer started reviewing loan application.',
+            'loan',
+            $loan,
+            $user,
+            ['loan_number' => $loan->loan_number]
+        );
+
+        $this->notificationService->notifyLoanUnderReview($loan);
+
+        $this->dispatch('success', message: "Loan {$loan->loan_number} is now under review.");
+        $this->selectedLoanId = null;
+    }
+
+    /**
+     * Officer marks interview as completed (updates interview_status on the loan).
+     */
+    public function markLoanInterviewComplete(): void
+    {
+        $user = Auth::user();
+        if (! $user || ! $user->can('loans.update')) {
+            $this->dispatch('error', message: 'Unauthorized.');
+            return;
+        }
+
+        $this->validate(['loanReviewNotes' => 'nullable|string|max:1000']);
+
+        $loan = Loan::where('id', $this->selectedLoanId)
+            ->where('loan_status', 'pending')
+            ->where('review_status', 'under_review')
+            ->whereNotNull('interview_schedule')
+            ->first();
+
+        if (! $loan) {
+            $this->dispatch('error', message: 'Loan is not currently under review or has no interview scheduled.');
+            return;
+        }
+
+        $loan->update([
+            'interview_status'    => 'completed',
+            'interview_officer_id' => $user->id,
+            'review_notes'        => $this->loanReviewNotes ?: $loan->review_notes,
+        ]);
+
+        $this->auditLogService->log(
+            'loan.interview_completed',
+            'Officer marked loan interview as completed.',
+            'loan',
+            $loan,
+            $user,
+            ['loan_number' => $loan->loan_number]
+        );
+
+        $this->dispatch('success', message: 'Interview marked as completed.');
+        $this->loanReviewNotes = '';
+        $this->loanReviewAction = '';
+    }
+
+    /**
+     * Officer endorses a reviewed loan for final admin/manager approval.
+     */
+    public function endorseLoanForApproval(): void
+    {
+        $user = Auth::user();
+        if (! $user || ! $user->can('loans.update')) {
+            $this->dispatch('error', message: 'Unauthorized.');
+            return;
+        }
+
+        $this->validate(['loanReviewNotes' => 'nullable|string|max:1000']);
+
+        $loan = Loan::where('id', $this->selectedLoanId)
+            ->where('loan_status', 'pending')
+            ->where('review_status', 'under_review')
+            ->first();
+
+        if (! $loan) {
+            $this->dispatch('error', message: 'Loan must be under review before it can be endorsed.');
+            return;
+        }
+
+        // For interview-required loans, the interview must be completed first.
+        if (! empty($loan->interview_schedule) && $loan->interview_status !== 'completed') {
+            $this->dispatch('error', message: 'The scheduled interview must be marked complete before endorsing.');
+            return;
+        }
+
+        $loan->update([
+            'review_status' => 'endorsed_for_approval',
+            'reviewed_by'   => $user->id,
+            'reviewed_at'   => now(),
+            'review_notes'  => $this->loanReviewNotes ?: $loan->review_notes,
+        ]);
+
+        $this->auditLogService->log(
+            'loan.endorsed_for_approval',
+            'Officer endorsed loan for final approval.',
+            'loan',
+            $loan,
+            $user,
+            ['loan_number' => $loan->loan_number, 'notes' => $this->loanReviewNotes]
+        );
+
+        $this->notificationService->notifyLoanEndorsedForApproval($loan);
+
+        $this->dispatch('success', message: "Loan {$loan->loan_number} has been endorsed for final approval.");
+        $this->selectedLoanId = null;
+        $this->loanReviewNotes = '';
+        $this->loanReviewAction = '';
+    }
+
+    /**
+     * Officer rejects a loan application during review.
+     * Requires a written reason. Sets review_status = review_rejected.
+     */
+    public function rejectLoanInReview(): void
+    {
+        $user = Auth::user();
+        if (! $user || ! $user->can('loans.reject')) {
+            $this->dispatch('error', message: 'You do not have permission to reject loan applications.');
+            return;
+        }
+
+        $this->validate(['loanReviewNotes' => 'required|string|min:10|max:1000']);
+
+        $loan = Loan::where('id', $this->selectedLoanId)
+            ->where('loan_status', 'pending')
+            ->whereIn(DB::raw('COALESCE(review_status, \'none\')'), ['none', 'under_review'])
+            ->first();
+
+        // Fallback query for null review_status (COALESCE trick may not work on all drivers)
+        if (! $loan) {
+            $loan = Loan::where('id', $this->selectedLoanId)
+                ->where('loan_status', 'pending')
+                ->where(function ($q) {
+                    $q->whereNull('review_status')
+                        ->orWhere('review_status', 'under_review');
+                })
+                ->first();
+        }
+
+        if (! $loan) {
+            $this->dispatch('error', message: 'Loan not found or is not in a reviewable state.');
+            return;
+        }
+
+        DB::beginTransaction();
+        try {
+            $loan->update([
+                'review_status' => 'review_rejected',
+                'reviewed_by'   => $user->id,
+                'reviewed_at'   => now(),
+                'review_notes'  => $this->loanReviewNotes,
+            ]);
+
+            $this->auditLogService->log(
+                'loan.review_rejected',
+                'Officer rejected loan application during review.',
+                'loan',
+                $loan,
+                $user,
+                ['loan_number' => $loan->loan_number, 'reason' => $this->loanReviewNotes]
+            );
+
+            $this->notificationService->notifyLoanReviewRejected($loan, $this->loanReviewNotes);
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            $this->dispatch('error', message: 'Failed to reject loan: ' . $e->getMessage());
+            return;
+        }
+
+        $this->dispatch('success', message: "Loan {$loan->loan_number} has been rejected.");
+        $this->selectedLoanId = null;
+        $this->loanReviewNotes = '';
+        $this->loanReviewAction = '';
+    }
+
+    /**
+     * Admin / manager returns an endorsed loan back to officer review.
+     */
+    public function returnLoanForReview(): void
+    {
+        $user = Auth::user();
+        if (! $user || ! $user->hasAnyRole(['admin', 'manager'])) {
+            $this->dispatch('error', message: 'Only admin or manager can return a loan for re-review.');
+            return;
+        }
+
+        $loan = Loan::where('id', $this->selectedLoanId)
+            ->where('loan_status', 'pending')
+            ->where('review_status', 'endorsed_for_approval')
+            ->first();
+
+        if (! $loan) {
+            $this->dispatch('error', message: 'Loan not found or not in endorsed state.');
+            return;
+        }
+
+        $loan->update([
+            'review_status' => 'under_review',
+            'review_notes'  => $this->loanReviewNotes ?: $loan->review_notes,
+        ]);
+
+        $this->auditLogService->log(
+            'loan.returned_for_review',
+            'Admin returned endorsed loan to officer review.',
+            'loan',
+            $loan,
+            $user,
+            ['loan_number' => $loan->loan_number, 'notes' => $this->loanReviewNotes]
+        );
+
+        $this->dispatch('success', message: "Loan {$loan->loan_number} returned to the review queue.");
+        $this->selectedLoanId = null;
+        $this->loanReviewNotes = '';
+        $this->loanReviewAction = '';
+    }
+
+    /**
+     * Final loan approval — admin and manager (chairman) only.
+     * Hard role gate enforced regardless of permission assignment.
+     */
+    public function approveLoanFinal(): void
+    {
+        $user = Auth::user();
+        // Hard role gate: permission-based checks alone are insufficient for this action.
+        if (! $user || ! $user->hasAnyRole(['admin', 'manager'])) {
+            $this->dispatch('error', message: 'Only admin or manager can issue final loan approval.');
+            return;
+        }
+
+        $loan = Loan::where('id', $this->selectedLoanId)
+            ->where('loan_status', 'pending')
+            ->where('review_status', 'endorsed_for_approval')
+            ->first();
+
+        if (! $loan) {
+            $this->dispatch('error', message: 'Loan must be endorsed before it can be approved. Please ensure an officer has endorsed it first.');
+            return;
+        }
+
+        DB::beginTransaction();
+        try {
+            $loan->update([
+                'loan_status' => 'approved',
+                'approved_by' => $user->id,
+                'approved_at' => now(),
+            ]);
+
+            $this->auditLogService->log(
+                'loan.approved',
+                'Loan application approved.',
+                'loan',
+                $loan,
+                $user,
+                [
+                    'loan_number' => $loan->loan_number,
+                    'loan_amount' => (float) $loan->loan_amount,
+                ]
+            );
+
+            $this->notificationService->notifyLoanApproved($loan);
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            $this->dispatch('error', message: 'Failed to approve loan: ' . $e->getMessage());
+            return;
+        }
+
+        $this->dispatch('success', message: "Loan {$loan->loan_number} has been approved!");
+        $this->selectedLoanId = null;
+        $this->loanReviewNotes = '';
+        $this->loanReviewAction = '';
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
     public function openService($service)
     {
-        // Validate that a member is selected in treasurer mode (except for 'approve' service)
-        if ($this->isTreasurerMode && $service !== 'approve' && !$this->selectedMemberId) {
+        // 'approve' and 'loan-review' are officer-only panels that don't need a member pre-selected
+        $memberFreeServices = ['approve', 'loan-review'];
+
+        if ($this->isTreasurerMode && ! in_array($service, $memberFreeServices, true) && ! $this->selectedMemberId) {
             $this->dispatch('warning', message: 'Please select a member first before accessing services.');
             return;
         }
@@ -452,6 +805,10 @@ class Services extends Component
             'groupMembers',
             'interviewSchedule',
             'approvalOtpCode',
+            // Loan review
+            'selectedLoanId',
+            'loanReviewNotes',
+            'loanReviewAction',
         ]);
 
         $this->approvalOtpSentForTransactionId = null;
@@ -525,14 +882,9 @@ class Services extends Component
     public function nextDepositStep()
     {
         if ($this->depositStep === 1) {
-            $this->validate([
-                'depositAmount' => 'required|numeric|min:100',
-                'depositNote' => 'nullable|string|max:255',
-            ]);
+            $this->validate(Arr::only($this->depositRules(), ['depositAmount', 'depositNote']));
         } elseif ($this->depositStep === 2) {
-            $this->validate([
-                'depositTransactionMode' => 'required|in:counter,online',
-            ]);
+            $this->validate(Arr::only($this->depositRules(), ['depositTransactionMode']));
         }
         $this->depositStep++;
     }
@@ -547,11 +899,7 @@ class Services extends Component
     // Deposit methods
     public function submitDeposit()
     {
-        $this->validate([
-            'depositAmount' => 'required|numeric|min:100',
-            'depositTransactionMode' => 'required|in:counter,online',
-            'depositNote' => 'nullable|string|max:255',
-        ]);
+        $this->validate($this->depositRules());
 
         try {
             DB::beginTransaction();
@@ -661,14 +1009,9 @@ class Services extends Component
         $availableBalance = $account ? ($account->balance - $pendingWithdrawals) : 0;
 
         if ($this->withdrawalStep === 1) {
-            $this->validate([
-                'withdrawalAmount' => 'required|numeric|min:100|max:' . $availableBalance,
-                'withdrawalReason' => 'required|string|max:255',
-            ]);
+            $this->validate(Arr::only($this->withdrawalRules((float) $availableBalance), ['withdrawalAmount', 'withdrawalReason']));
         } elseif ($this->withdrawalStep === 2) {
-            $this->validate([
-                'withdrawalTransactionMode' => 'required|in:counter,online',
-            ]);
+            $this->validate(Arr::only($this->withdrawalRules((float) $availableBalance), ['withdrawalTransactionMode']));
         }
         $this->withdrawalStep++;
     }
@@ -693,11 +1036,7 @@ class Services extends Component
 
         $availableBalance = $account->balance - $pendingWithdrawals;
 
-        $this->validate([
-            'withdrawalAmount' => 'required|numeric|min:100|max:' . $availableBalance,
-            'withdrawalReason' => 'required|string|max:255',
-            'withdrawalTransactionMode' => 'required|in:counter,online',
-        ]);
+        $this->validate($this->withdrawalRules((float) $availableBalance));
 
         try {
             DB::beginTransaction();
@@ -874,28 +1213,15 @@ class Services extends Component
         }
 
         if ($this->loanStep === 2) {
-            // Amount and term validation
-            $rules = [
-                'loanAmount' => 'required|numeric|min:100|max:' . $loanConfig['max_amount'],
-                'loanTerm' => 'required|integer|min:1|max:' . $loanConfig['max_term'],
-                'loanPaymentFrequency' => 'required|in:weekly,monthly',
-            ];
-
             $requiredCoMakers = (int) ($loanConfig['required_co_makers'] ?? 0);
             if ($requiredCoMakers > 0 && count($this->groupMembers) !== $requiredCoMakers) {
                 $this->dispatch('error', message: 'This product requires exactly ' . $requiredCoMakers . ' co-makers.');
                 return;
             }
 
-            if (! empty($loanConfig['requires_interview'])) {
-                $rules['interviewSchedule'] = 'required|date|after:now';
-            }
-
-            $this->validate($rules);
+            $this->validate($this->loanDetailsRules($loanConfig));
         } elseif ($this->loanStep === 3) {
-            $this->validate([
-                'loanPurpose' => 'required|string|min:10|max:500',
-            ]);
+            $this->validate($this->loanPurposeRules());
         }
 
         $this->loanStep++;
@@ -916,16 +1242,8 @@ class Services extends Component
             return;
         }
 
-        $loanTypeOptions = implode(',', array_keys($this->loanTypes));
-
         // Validate loan data before submission
-        $this->validate([
-            'loanType' => 'required|in:' . $loanTypeOptions,
-            'loanAmount' => 'required|numeric|min:100|max:' . $loanConfig['max_amount'],
-            'loanTerm' => 'required|integer|min:1|max:' . $loanConfig['max_term'],
-            'loanPaymentFrequency' => 'required|in:weekly,monthly',
-            'loanPurpose' => 'required|string|min:10|max:500',
-        ]);
+        $this->validate($this->loanSubmitRules($loanConfig));
 
         $targetUser = $this->resolveLoanTargetUser();
         if (! $targetUser) {
@@ -1022,10 +1340,7 @@ class Services extends Component
     // Loan payment methods
     public function submitLoanPayment()
     {
-        $this->validate([
-            'paymentLoanId' => 'required|exists:loans,id',
-            'paymentAmount' => 'required|numeric|min:100',
-        ]);
+        $this->validate($this->paymentStep1Rules());
 
         try {
             DB::beginTransaction();
@@ -1332,6 +1647,74 @@ class Services extends Component
             ->get();
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // Validation rule builders — single source of truth per workflow
+    // ─────────────────────────────────────────────────────────────
+
+    private function depositRules(): array
+    {
+        return [
+            'depositAmount'          => 'required|numeric|min:100',
+            'depositTransactionMode' => 'required|in:counter,online',
+            'depositNote'            => 'nullable|string|max:255',
+        ];
+    }
+
+    private function withdrawalRules(float $availableBalance): array
+    {
+        return [
+            'withdrawalAmount'          => "required|numeric|min:100|max:{$availableBalance}",
+            'withdrawalReason'          => 'required|string|max:255',
+            'withdrawalTransactionMode' => 'required|in:counter,online',
+        ];
+    }
+
+    private function loanDetailsRules(array $loanConfig): array
+    {
+        $rules = [
+            'loanAmount'           => "required|numeric|min:100|max:{$loanConfig['max_amount']}",
+            'loanTerm'             => "required|integer|min:1|max:{$loanConfig['max_term']}",
+            'loanPaymentFrequency' => 'required|in:weekly,monthly',
+        ];
+
+        if (! empty($loanConfig['requires_interview'])) {
+            $rules['interviewSchedule'] = 'required|date|after:now';
+        }
+
+        return $rules;
+    }
+
+    private function loanPurposeRules(): array
+    {
+        return [
+            'loanPurpose' => 'required|string|min:10|max:500',
+        ];
+    }
+
+    private function loanSubmitRules(array $loanConfig): array
+    {
+        return array_merge(
+            ['loanType' => 'required|in:' . implode(',', array_keys($this->loanTypes))],
+            $this->loanDetailsRules($loanConfig),
+            $this->loanPurposeRules(),
+        );
+    }
+
+    private function paymentStep1Rules(): array
+    {
+        return [
+            'paymentLoanId' => 'required|exists:loans,id',
+            'paymentAmount' => 'required|numeric|min:100',
+        ];
+    }
+
+    private function paymentStep2Rules(): array
+    {
+        return [
+            'paymentTransactionMode' => 'required|in:counter,online',
+        ];
+    }
+
     public function render()
     {
         // Get target user based on treasurer mode
@@ -1380,14 +1763,32 @@ class Services extends Component
                 ->get();
         }
 
+        // Build review queue for loan review officers
+        $reviewableLoans = collect();
+        $pendingLoanReviews = 0;
+        if ($this->isLoanReviewMode) {
+            $reviewableLoans = Loan::with(['user.personalData', 'reviewer', 'groupMembers.personalData'])
+                ->where('loan_status', 'pending')
+                ->where(function ($q) {
+                    $q->whereNull('review_status')
+                        ->orWhereIn('review_status', ['under_review', 'endorsed_for_approval']);
+                })
+                ->orderBy('applied_at', 'asc')
+                ->get();
+
+            $pendingLoanReviews = $reviewableLoans->count();
+        }
+
         return view('livewire.content.services', [
             'savingsAccount' => $savingsAccount,
             'shareCapitalAccount' => $shareCapitalAccount,
             'activeLoans' => $activeLoans,
             'pendingRequests' => $pendingRequests,
-            'pendingTransactions' => $pendingTransactions,
-            'members' => $members,
-            'selectedMember' => $this->selectedMemberId ? \App\Models\User::with('personalData')->find($this->selectedMemberId) : null,
+            'pendingTransactions'  => $pendingTransactions,
+            'members'              => $members,
+            'reviewableLoans'      => $reviewableLoans,
+            'pendingLoanReviews'   => $pendingLoanReviews,
+            'selectedMember'       => $this->selectedMemberId ? \App\Models\User::with('personalData')->find($this->selectedMemberId) : null,
         ]);
     }
 }

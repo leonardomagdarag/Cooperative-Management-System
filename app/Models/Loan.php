@@ -19,6 +19,11 @@ class Loan extends Model
         'term_months',
         'payment_frequency',
         'loan_status',
+        // Officer review lifecycle
+        'review_status',
+        'reviewed_by',
+        'reviewed_at',
+        'review_notes',
         'applied_at',
         'approved_at',
         'approved_by',
@@ -35,6 +40,7 @@ class Loan extends Model
         'interest_rate' => 'decimal:2',
         'applied_at' => 'datetime',
         'approved_at' => 'datetime',
+        'reviewed_at' => 'datetime',
         'due_date' => 'date',
         'interview_schedule' => 'datetime',
     ];
@@ -42,20 +48,20 @@ class Loan extends Model
     protected static function boot()
     {
         parent::boot();
-        
+
         static::creating(function ($loan) {
             if (empty($loan->loan_number)) {
                 // Get the latest loan_number including soft deleted records
                 $latest = static::withTrashed()
                     ->orderByRaw('CAST(SUBSTRING(loan_number, 5) AS UNSIGNED) DESC')
                     ->first();
-                
+
                 if ($latest && preg_match('/LOAN(\d+)/', $latest->loan_number, $matches)) {
                     $nextNumber = intval($matches[1]) + 1;
                 } else {
                     $nextNumber = 1;
                 }
-                
+
                 $loan->loan_number = 'LOAN' . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
             }
         });
@@ -99,6 +105,37 @@ class Loan extends Model
     public function interviewOfficer()
     {
         return $this->belongsTo(User::class, 'interview_officer_id');
+    }
+
+    public function reviewer()
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    /**
+     * Human-readable review status label.
+     */
+    public function getReviewStatusLabelAttribute(): string
+    {
+        return match ($this->review_status) {
+            'under_review'           => 'Under Review',
+            'endorsed_for_approval'  => 'Endorsed for Approval',
+            'review_rejected'        => 'Rejected in Review',
+            default                  => 'Awaiting Review',
+        };
+    }
+
+    /**
+     * Tailwind colour key for the review status badge.
+     */
+    public function getReviewStatusColorAttribute(): string
+    {
+        return match ($this->review_status) {
+            'under_review'          => 'blue',
+            'endorsed_for_approval' => 'amber',
+            'review_rejected'       => 'red',
+            default                 => 'gray',
+        };
     }
 
     public function groupMembers()

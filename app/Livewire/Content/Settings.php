@@ -7,6 +7,17 @@ use Livewire\Component;
 
 class Settings extends Component
 {
+
+    public function openRolePermissions(): void
+    {
+        if (! $this->isAdmin()) {
+            $this->dispatch('error', message: 'Only admins can manage role permissions.');
+            return;
+        }
+
+        $this->dispatch('sectionChanged', 'role-permissions');
+    }
+
     public function openLoanProducts(): void
     {
         if (! $this->isAdmin()) {

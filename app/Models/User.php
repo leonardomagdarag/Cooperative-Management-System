@@ -7,12 +7,16 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use App\Models\OfficerPermissionOverride;
 use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, SoftDeletes, HasRoles;
+    use HasFactory, Notifiable, SoftDeletes, HasRoles {
+        // Alias the trait's version so we can call it from our override
+        HasRoles::checkPermissionTo as spatieCheckPermissionTo;
+    }
 
     /**
      * The attributes that are mass assignable.
@@ -154,5 +158,40 @@ class User extends Authenticatable
     public function trustedDevices()
     {
         return $this->hasMany(TrustedDevice::class);
+    }
+
+    public function permissionOverrides()
+    {
+        return $this->hasMany(OfficerPermissionOverride::class);
+    }
+
+    /**
+     * Override Spatie's checkPermissionTo so that per-officer overrides are
+     * applied before the role check.  Disallow returns false (Spatie converts
+     * this to null inside Gate::before, so the Gate's default deny takes over).
+     * Allow grants access even when the role lacks the permission.
+     */
+    public function checkPermissionTo($permission, $guardName = null): bool
+    {
+        if ($this->is_officer) {
+            $effect = OfficerPermissionOverride::getCachedEffect(
+                $this->id,
+                (string) $permission
+            );
+
+            if ($effect === OfficerPermissionOverride::EFFECT_DISALLOW) {
+                return false;
+            }
+
+            $hasViaRole = $this->spatieCheckPermissionTo($permission, $guardName);
+
+            if (! $hasViaRole) {
+                return $effect === OfficerPermissionOverride::EFFECT_ALLOW;
+            }
+
+            return true;
+        }
+
+        return $this->spatieCheckPermissionTo($permission, $guardName);
     }
 }

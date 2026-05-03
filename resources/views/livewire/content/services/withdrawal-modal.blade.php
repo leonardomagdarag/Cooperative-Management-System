@@ -64,29 +64,12 @@
                         @endif
                     </div>
 
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Amount *</label>
-                        <div class="relative">
-                            <span class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500">₱</span>
-                            <input type="number" wire:model="withdrawalAmount" step="0.01" min="100"
-                                max="{{ $this->availableBalance }}"
-                                class="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                                placeholder="0.00" required>
-                        </div>
-                        @error('withdrawalAmount')
-                            <span class="text-red-500 text-xs">{{ $message }}</span>
-                        @enderror
-                    </div>
+                    <x-forms.text-input name="withdrawalAmount" label="Amount" model="withdrawalAmount" type="number"
+                        step="0.01" min="100" :max="$this->availableBalance" prefix="₱" :required="true"
+                        :validateOnBlur="false" />
 
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Reason *</label>
-                        <textarea wire:model="withdrawalReason" rows="2"
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                            placeholder="Purpose of withdrawal..." required></textarea>
-                        @error('withdrawalReason')
-                            <span class="text-red-500 text-xs">{{ $message }}</span>
-                        @enderror
-                    </div>
+                    <x-forms.textarea-input name="withdrawalReason" label="Reason" model="withdrawalReason"
+                        :rows="2" placeholder="Purpose of withdrawal..." :required="true" :validateOnBlur="false" />
 
                     <div class="flex gap-3 pt-4">
                         <button type="button" wire:click="closeService"
@@ -167,8 +150,7 @@
                     <div class="bg-gray-50 rounded-lg p-4 space-y-3">
                         <div class="flex justify-between">
                             <span class="text-gray-600">Amount:</span>
-                            <span
-                                class="font-semibold text-gray-900">₱{{ number_format($withdrawalAmount, 2) }}</span>
+                            <span class="font-semibold text-gray-900">₱{{ number_format($withdrawalAmount, 2) }}</span>
                         </div>
                         <div class="flex justify-between">
                             <span class="text-gray-600">Reason:</span>

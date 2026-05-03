@@ -12,9 +12,23 @@
 <body>
 
     {{-- Load the dashboard and other stuff --}}
-    <livewire:dashboard :currentSection="request('section', 'dashboard')" />
+    {{-- currentSection is synced from the URL ?section= query param via Livewire #[Url] --}}
+    <livewire:dashboard />
 
     @livewireScripts
+
+    <script>
+        document.addEventListener('livewire:init', () => {
+            Livewire.hook('request', ({ fail }) => {
+                fail(({ status, preventDefault }) => {
+                    if (status === 419 || status === 401) {
+                        preventDefault();
+                        window.location.href = '{{ route('login_page') }}';
+                    }
+                });
+            });
+        });
+    </script>
 </body>
 
 </html>

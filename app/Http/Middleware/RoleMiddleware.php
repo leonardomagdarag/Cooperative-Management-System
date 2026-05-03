@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class RoleMiddleware
 {
@@ -19,25 +20,57 @@ class RoleMiddleware
     {
         $user = Auth::user();
 
-        // Not logged in
-        if (!$user) {
-            return redirect('/login');
+        // Not logged in - prefer the auth middleware to handle this, but be safe
+        if (! $user) {
+            if ($request->expectsJson() || $request->wantsJson()) {
+                return response()->json(['message' => 'Unauthenticated.'], 401);
+            }
+
+            return redirect()->guest(route('login_page'));
         }
 
         // Check if account is inactive or terminated
         if (($user->account_status ?? 'active') !== 'active') {
             Auth::logout();
-            return redirect('/login')->with('error', 'Your account is not active.');
+
+            if ($request->expectsJson() || $request->wantsJson()) {
+                return response()->json(['message' => 'Your account is not active.'], 403);
+            }
+
+            return redirect()->route('login_page')->with('error', 'Your account is not active.');
         }
 
-        // Route role authorization must be based on Spatie roles only.
-        $hasAllowedRole = method_exists($user, 'hasAnyRole')
-            ? $user->hasAnyRole($roles)
-            : false;
+        // Normalize and sanitize provided roles
+        $roles = array_filter(array_map('trim', is_array($roles) ? $roles : [$roles]));
 
-        // If user doesn't have an allowed role
-        if (! $hasAllowedRole) {
-            return redirect('/')->with('error', 'unauthorized access');
+        // If no roles were provided or Spatie isn't available, deny access and log for debugging
+        if (empty($roles) || ! method_exists($user, 'hasAnyRole')) {
+            Log::warning('RoleMiddleware: missing roles or Spatie not configured', [
+                'user_id' => $user->id ?? null,
+                'roles' => $roles,
+                'route' => $request->path(),
+            ]);
+
+            if ($request->expectsJson() || $request->wantsJson()) {
+                return response()->json(['message' => 'Forbidden.'], 403);
+            }
+
+            abort(403, 'Unauthorized access.');
+        }
+
+        // Authorize by Spatie roles
+        if (! $user->hasAnyRole($roles)) {
+            Log::warning('RoleMiddleware: unauthorized role access', [
+                'user_id' => $user->id ?? null,
+                'required_roles' => $roles,
+                'route' => $request->path(),
+            ]);
+
+            if ($request->expectsJson() || $request->wantsJson()) {
+                return response()->json(['message' => 'Forbidden.'], 403);
+            }
+
+            abort(403, 'Unauthorized access.');
         }
 
         return $next($request);

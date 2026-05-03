@@ -77,44 +77,19 @@
                             </p>
                         </div>
 
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Loan Amount *</label>
-                            <div class="relative">
-                                <span class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500">₱</span>
-                                <input type="number" wire:model.live="loanAmount" step="100" min="100"
-                                    max="{{ $loanTypes[$loanType]['max_amount'] }}"
-                                    class="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                                    placeholder="0.00" required>
-                            </div>
-                            <p class="text-xs text-gray-500 mt-1">Maximum:
-                                ₱{{ number_format($loanTypes[$loanType]['max_amount']) }}</p>
-                            @error('loanAmount')
-                                <span class="text-red-500 text-xs">{{ $message }}</span>
-                            @enderror
-                        </div>
+                        <x-forms.text-input name="loanAmount" label="Loan Amount" model="loanAmount" type="number"
+                            step="100" min="100" :max="$loanTypes[$loanType]['max_amount']" prefix="₱"
+                            helperText="Maximum: ₱{{ number_format($loanTypes[$loanType]['max_amount']) }}"
+                            :required="true" :validateOnBlur="false" />
 
                         <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Loan Term (Months) *</label>
-                                <input type="number" wire:model.live="loanTerm" min="1"
-                                    max="{{ $loanTypes[$loanType]['max_term'] }}"
-                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                                    required>
-                                <p class="text-xs text-gray-500 mt-1">Max: {{ $loanTypes[$loanType]['max_term'] }}
-                                    months</p>
-                                @error('loanTerm')
-                                    <span class="text-red-500 text-xs">{{ $message }}</span>
-                                @enderror
-                            </div>
+                            <x-forms.text-input name="loanTerm" label="Loan Term (Months)" model="loanTerm"
+                                type="number" min="1" :max="$loanTypes[$loanType]['max_term']"
+                                helperText="Max: {{ $loanTypes[$loanType]['max_term'] }} months" :required="true"
+                                :validateOnBlur="false" />
 
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Payment Frequency *</label>
-                                <select wire:model="loanPaymentFrequency"
-                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
-                                    <option value="weekly">Weekly</option>
-                                    <option value="monthly">Monthly</option>
-                                </select>
-                            </div>
+                            <x-forms.select-input name="loanPaymentFrequency" label="Payment Frequency"
+                                model="loanPaymentFrequency" :options="['weekly' => 'Weekly', 'monthly' => 'Monthly']" :validateOnBlur="false" />
                         </div>
 
                         {{-- GROUP LOAN: Group Members Selection --}}
@@ -249,15 +224,11 @@
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-2">Interview Schedule
                                         *</label>
-                                    <input type="datetime-local" wire:model="interviewSchedule"
+                                    <x-forms.text-input name="interviewSchedule" label="Interview Schedule"
+                                        model="interviewSchedule" type="datetime-local"
                                         min="{{ now()->addDay()->format('Y-m-d\TH:i') }}"
-                                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                                        required>
-                                    <p class="text-xs text-gray-500 mt-1">Select a date and time for your interview
-                                        (must be at least 24 hours from now)</p>
-                                    @error('interviewSchedule')
-                                        <span class="text-red-500 text-xs">{{ $message }}</span>
-                                    @enderror
+                                        helperText="Select a date and time at least 24 hours from now"
+                                        :required="true" :validateOnBlur="false" />
                                 </div>
                             </div>
                         @endif
@@ -280,16 +251,10 @@
                     <div class="space-y-6">
                         <h4 class="text-xl font-bold text-gray-900">Loan Purpose</h4>
 
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Purpose of Loan *</label>
-                            <textarea wire:model="loanPurpose" rows="4"
-                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                                placeholder="Describe how you will use the loan..." required></textarea>
-                            <p class="text-xs text-gray-500 mt-1">Minimum 10 characters</p>
-                            @error('loanPurpose')
-                                <span class="text-red-500 text-xs">{{ $message }}</span>
-                            @enderror
-                        </div>
+                        <x-forms.textarea-input name="loanPurpose" label="Purpose of Loan" model="loanPurpose"
+                            :rows="4" placeholder="Describe how you will use the loan..."
+                            helperText="Minimum 10 characters" maxlength="500" :required="true"
+                            :validateOnBlur="false" />
 
                         <div class="flex gap-3 pt-4">
                             <button type="button" wire:click="previousLoanStep"
