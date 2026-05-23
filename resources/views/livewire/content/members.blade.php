@@ -4,7 +4,7 @@
         $canViewMemberId = Auth::user()->can('members.view-full-details');
     @endphp
     {{-- Auto-refresh every 20 seconds; paused while modals are open --}}
-    <div x-data="{ showModal: @entangle('showModal'), showEditModal: @entangle('showEditModal') }" x-show="!showModal && !showEditModal" wire:poll.visible.20s aria-hidden="true"
+    <div x-data="{ showModal: @entangle('showModal'), showEditModal: @entangle('showEditModal'), showExportModal: @entangle('showExportModal') }" x-show="!showModal && !showEditModal && !showExportModal" wire:poll.visible.20s aria-hidden="true"
         class="w-px h-px opacity-0 pointer-events-none"></div>
 
     <div>
@@ -36,8 +36,8 @@
                                 </path>
                             </svg>
                         </button>
-                        {{-- Only admins, managers, and secretaries can add members --}}
-                        @if ($canEdit)
+                        {{-- Only officers with members.create permission can add members --}}
+                        @if ($canCreate)
                             <button type="button" wire:click="addMember" wire:loading.attr="disabled"
                                 wire:loading.class="opacity-50 cursor-not-allowed"
                                 class="inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-center text-white bg-blue-700 rounded-lg hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed">
@@ -60,18 +60,21 @@
                                 <span wire:loading wire:target="addMember">Loading...</span>
                             </button>
                         @endif
-                        <button type="button"
-                            class="inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-center text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 focus:ring-4 focus:ring-blue-300">
-                            <svg class="w-5 h-5 mr-2 -ml-1" fill="currentColor" viewBox="0 0 20 20">
-                                <path
-                                    d="M8.707 7.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l2-2a1 1 0 00-1.414-1.414L11 7.586V3a1 1 0 10-2 0v4.586l-.293-.293z">
-                                </path>
-                                <path
-                                    d="M3 5a2 2 0 012-2h1a1 1 0 010 2H5v7h2l1 2h4l1-2h2V5h-1a1 1 0 110-2h1a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V5z">
-                                </path>
-                            </svg>
-                            Export
-                        </button>
+                        @if ($canExport)
+                            <button type="button" wire:click="openExportModal" wire:loading.attr="disabled"
+                                wire:target="openExportModal,exportMembers"
+                                class="inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-center text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 focus:ring-4 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <svg class="w-5 h-5 mr-2 -ml-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path
+                                        d="M8.707 7.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l2-2a1 1 0 00-1.414-1.414L11 7.586V3a1 1 0 10-2 0v4.586l-.293-.293z">
+                                    </path>
+                                    <path
+                                        d="M3 5a2 2 0 012-2h1a1 1 0 010 2H5v7h2l1 2h4l1-2h2V5h-1a1 1 0 110-2h1a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V5z">
+                                    </path>
+                                </svg>
+                                Export
+                            </button>
+                        @endif
                     </div>
                 </div>
             </div>
@@ -161,8 +164,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="{{ $canViewMemberId ? '5' : '4' }}"
-                                            class="p-4 text-center">
+                                        <td colspan="{{ $canViewMemberId ? '5' : '4' }}" class="p-4 text-center">
                                             <div class="flex flex-col items-center justify-center py-12">
                                                 <svg class="w-16 h-16 text-gray-400 mb-4" fill="none"
                                                     stroke="currentColor" viewBox="0 0 24 24">
@@ -223,7 +225,96 @@
                 :canEdit="$canEdit" :activeTab="$activeTab" />
         @endif
 
-        {{-- Edit/Add Member Modal (always rendered; visibility controlled via entangled showEditModal for snappier open/close) --}}
-        <x-modals.member-form wire:key="member-form-{{ $modalKey }}" :isEdit="$isEdit" :tabErrors="$tabErrors" :form="$form" />
+        {{-- Edit/Add Member Modal --}}
+        @if ($showEditModal)
+            <x-modals.member-form wire:key="member-form-{{ $modalKey }}" :isEdit="$isEdit" :tabErrors="$tabErrors"
+                :form="$form" />
+        @endif
+
+        {{-- Export Modal --}}
+        @if ($showExportModal)
+            <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="members-export-modal-title" role="dialog"
+                aria-modal="true">
+                <button type="button" class="fixed inset-0 bg-gray-500/75 transition-opacity"
+                    wire:click="closeExportModal" aria-label="Close export modal"></button>
+
+                <div class="flex min-h-full items-center justify-center p-4">
+                    <div class="relative w-full max-w-lg rounded-2xl bg-white shadow-xl">
+                        <div class="flex items-start justify-between border-b border-gray-200 px-6 py-4">
+                            <div>
+                                <h2 class="text-lg font-semibold text-gray-900" id="members-export-modal-title">Export Members</h2>
+                                <p class="mt-1 text-sm text-gray-500">Choose the file type and joined date range to export.</p>
+                            </div>
+                            <button type="button" class="text-gray-400 hover:text-gray-600"
+                                wire:click="closeExportModal">
+                                <span class="sr-only">Close</span>
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <form wire:submit="exportMembers" class="space-y-5 px-6 py-5">
+                            <div>
+                                <label for="members-export-type" class="mb-2 block text-sm font-medium text-gray-700">File type</label>
+                                <select id="members-export-type" wire:model="exportType"
+                                    class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500">
+                                    <option value="pdf">PDF</option>
+                                    <option value="excel">Excel</option>
+                                </select>
+                                @error('exportType')
+                                    <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                                @enderror
+                            </div>
+
+                            <div class="grid gap-4 sm:grid-cols-2">
+                                <div>
+                                    <label for="members-export-start" class="mb-2 block text-sm font-medium text-gray-700">Start date</label>
+                                    <input id="members-export-start" type="date" wire:model="exportStartDate"
+                                        class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500">
+                                    @error('exportStartDate')
+                                        <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                                    @enderror
+                                </div>
+
+                                <div>
+                                    <label for="members-export-end" class="mb-2 block text-sm font-medium text-gray-700">End date</label>
+                                    <input id="members-export-end" type="date" wire:model="exportEndDate"
+                                        class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500">
+                                    @error('exportEndDate')
+                                        <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                                    @enderror
+                                </div>
+                            </div>
+
+                            <div class="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                                Only members whose join date falls within the selected range will be included. Current search filters also apply.
+                            </div>
+
+                            <div class="flex justify-end gap-3 border-t border-gray-200 pt-4">
+                                <button type="button"
+                                    class="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                    wire:click="closeExportModal">
+                                    Cancel
+                                </button>
+                                <button type="submit" wire:loading.attr="disabled" wire:target="exportMembers"
+                                    class="inline-flex items-center rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-50">
+                                    <svg wire:loading.remove wire:target="exportMembers" class="mr-2 h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M8.707 7.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l2-2a1 1 0 00-1.414-1.414L11 7.586V3a1 1 0 10-2 0v4.586l-.293-.293z"></path>
+                                        <path d="M3 5a2 2 0 012-2h1a1 1 0 010 2H5v7h2l1 2h4l1-2h2V5h-1a1 1 0 110-2h1a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V5z"></path>
+                                    </svg>
+                                    <svg wire:loading wire:target="exportMembers" class="mr-2 h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    <span wire:loading.remove wire:target="exportMembers">Download Export</span>
+                                    <span wire:loading wire:target="exportMembers">Preparing...</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        @endif
     </div>
 </div>

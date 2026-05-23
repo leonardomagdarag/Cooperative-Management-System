@@ -47,7 +47,7 @@ class Dashboard extends Component
             'dashboard' => ['dashboard.view'],
             'notifications' => ['dashboard.view'],
             'officers' => ['officers.create', 'officers.update', 'officers.delete', 'officers.manage-permissions'],
-            'members' => ['members.view', 'members.create', 'members.update', 'members.delete', 'members.view-full-details'],
+            'members' => ['members.view'],
             'services' => ['services.view', 'services.create', 'services.update'],
             'loans' => ['loans.view', 'loans.create', 'loans.update', 'loans.approve', 'loans.reject', 'loans.disburse'],
             'transactions' => ['transactions.view', 'transactions.create', 'transactions.update', 'transactions.void', 'transactions.export'],
@@ -63,6 +63,12 @@ class Dashboard extends Component
         $resolved = [];
         foreach ($roleSections as $section) {
             if ($section === 'logs' && $userRole !== 'admin') {
+                continue;
+            }
+
+            // Dashboard and notifications are always accessible to any authenticated user.
+            if (in_array($section, ['dashboard', 'notifications', 'profile', 'settings'], true)) {
+                $resolved[] = $section;
                 continue;
             }
 
@@ -98,9 +104,9 @@ class Dashboard extends Component
             'member' => 'overviews.member-overview',
             'admin' => 'overviews.admin-overview',
             'manager' => 'overviews.manager-overview',
-            'loan' => 'overviews.officer-overview',
-            'secretary' => 'overviews.officer-overview',
-            'treasurer' => 'overviews.officer-overview',
+            'loan' => 'overviews.loan-overview',
+            'secretary' => 'overviews.secretary-overview',
+            'treasurer' => 'overviews.treasurer-overview',
         ];
 
         $currentSectionPath = $this->currentSection === 'dashboard' && isset($sectionMapping[$userRole])
@@ -129,6 +135,9 @@ class Dashboard extends Component
         $allowedSections = $this->getUserSections($user);
 
         if (in_array($newSection, $allowedSections, true)) {
+            $this->currentSection = $newSection;
+        } elseif ($newSection === 'profile' && Auth::check()) {
+            // Profile is always accessible to any authenticated user viewing their own data.
             $this->currentSection = $newSection;
         } else {
             // Optional: unauthorized attempt

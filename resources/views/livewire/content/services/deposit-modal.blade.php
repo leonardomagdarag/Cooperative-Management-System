@@ -229,7 +229,7 @@
                     </div>
                     <h4 class="text-xl font-bold text-gray-900 mb-2">Request Submitted!</h4>
                     <p class="text-gray-600 mb-6">
-                        @if ($isTreasurerMode && $depositTransactionMode === 'counter')
+                        @if (($isTreasurerMode || $isAdminMode) && $depositTransactionMode === 'counter')
                             The deposit has been processed successfully and the account balance has been updated.
                         @else
                             Please visit our office to complete your deposit. Bring this reference for faster

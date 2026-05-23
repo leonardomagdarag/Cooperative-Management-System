@@ -3,13 +3,35 @@
 use App\Livewire\Content\Officers;
 use App\Models\User;
 use Livewire\Livewire;
+use Spatie\Permission\Models\Role;
 use function Pest\Laravel\actingAs;
 
-test('officer password rejects predictable name plus digits', function () {
-    /** @var User $user */
+function makeAdminUser(): User
+{
     $user = User::factory()->create(['role' => 'admin']);
-    actingAs($user);
 
+    Role::findOrCreate('admin', 'web');
+    $user->assignRole('admin');
+
+    return $user;
+}
+
+beforeEach(function () {
+    actingAs(makeAdminUser());
+});
+
+test('opening an officer profile closes the add officer modal', function () {
+    $officer = User::factory()->create(['role' => 'manager']);
+
+    Livewire::test(Officers::class)
+        ->call('addOfficer')
+        ->assertSet('showEditModal', true)
+        ->call('viewProfile', $officer->id)
+        ->assertSet('showEditModal', false)
+        ->assertSet('showModal', true);
+});
+
+test('officer password rejects predictable name plus digits', function () {
     Livewire::test(Officers::class)
         ->call('addOfficer')
         ->set('form.first_name', 'John')
@@ -20,10 +42,6 @@ test('officer password rejects predictable name plus digits', function () {
 });
 
 test('officer password confirmation errors stay on the confirmation field', function () {
-    /** @var User $user */
-    $user = User::factory()->create(['role' => 'admin']);
-    actingAs($user);
-
     Livewire::test(Officers::class)
         ->call('addOfficer')
         ->set('form.password', 'Strong12!')
@@ -34,10 +52,6 @@ test('officer password confirmation errors stay on the confirmation field', func
 });
 
 test('officer birth date uses the configured minimum age', function () {
-    /** @var User $user */
-    $user = User::factory()->create(['role' => 'admin']);
-    actingAs($user);
-
     config()->set('settings.requirement.age', 21);
 
     Livewire::test(Officers::class)
@@ -49,7 +63,7 @@ test('officer birth date uses the configured minimum age', function () {
 
 test('officer birth date passes when it meets the configured minimum age', function () {
     /** @var User $user */
-    $user = User::factory()->create(['role' => 'admin']);
+    $user = makeAdminUser();
     actingAs($user);
 
     config()->set('settings.requirement.age', 21);
@@ -63,7 +77,7 @@ test('officer birth date passes when it meets the configured minimum age', funct
 
 test('add-mode next step advances from personal to contact', function () {
     /** @var User $user */
-    $user = User::factory()->create(['role' => 'admin']);
+    $user = makeAdminUser();
     actingAs($user);
 
     Livewire::test(Officers::class)
@@ -80,7 +94,7 @@ test('add-mode next step advances from personal to contact', function () {
 
 test('edit mode allows blank officer passwords', function () {
     /** @var User $user */
-    $user = User::factory()->create(['role' => 'admin']);
+    $user = makeAdminUser();
     actingAs($user);
 
     Livewire::test(Officers::class)
@@ -93,8 +107,14 @@ test('edit mode allows blank officer passwords', function () {
 });
 
 test('edit mode requires current password when changing password without officer update permission', function () {
+    Permission::findOrCreate('officers.create', 'web');
+
+    $role = Role::findOrCreate('officer-create-only', 'web');
+    $role->syncPermissions(['officers.create']);
+
     /** @var User $user */
-    $user = User::factory()->create(['role' => 'admin']);
+    $user = User::factory()->create(['role' => 'manager']);
+    $user->assignRole($role);
     actingAs($user);
 
     Livewire::test(Officers::class)

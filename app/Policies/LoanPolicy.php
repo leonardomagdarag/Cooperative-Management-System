@@ -45,7 +45,7 @@ class LoanPolicy
      */
     public function review(User $user): bool
     {
-        return $user->can('loans.update') && ! $user->hasRole('member');
+        return $user->can('loans.update');
     }
 
     /**

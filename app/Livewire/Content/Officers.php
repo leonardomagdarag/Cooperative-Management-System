@@ -180,7 +180,7 @@ class Officers extends Component
     /**
      * Called by the Next button in add-mode only.
      */
-    public function nextStep(string $currentTab): void
+    public function nextStep(string $currentTab)
     {
         if ($currentTab !== 'review') {
             $this->validateTab($currentTab);
@@ -192,7 +192,10 @@ class Officers extends Component
 
         if ($next) {
             $this->dispatch('wizard-advance', tab: $next);
+            return $next;
         }
+
+        return null;
     }
 
     /**
@@ -470,14 +473,14 @@ class Officers extends Component
             'birth_date' => '',
             'gender' => 'male',         // Officer-specific: default to male
             'civil_status' => 'single', // Officer-specific: default to single
-            'title' => 'Member',        // Officer-specific: default title
+            'title' => '',              // Officer-specific: require an explicit title selection
             'email' => '',
             'phone_number' => '',
             'street' => '',
             'barangay' => '',
             'city' => '',
             'postal_code' => '',
-            'role' => 'secretary',      // Officer-specific: defaults to secretary role
+            'role' => '',               // Officer-specific: require an explicit role selection
             'password' => '',
             'password_confirmation' => '',
         ];
@@ -539,6 +542,8 @@ class Officers extends Component
     public function saveOfficer()
     {
         $this->authorizeOfficerAbility($this->isEdit ? 'officers.update' : 'officers.create');
+
+        $this->form['email'] = User::normalizeEmail($this->form['email'] ?? null);
 
         $rules = $this->getValidationRules();
 

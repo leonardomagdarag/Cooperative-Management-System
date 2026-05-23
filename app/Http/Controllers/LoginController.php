@@ -41,12 +41,12 @@ class LoginController extends Controller
 
     public function login(Request $request)
     {
-        $credentials = $request->only('email', 'password');
-        $email = strtolower(trim((string) $request->input('email')));
+        $email = User::normalizeEmail($request->input('email'));
+        $password = (string) $request->input('password');
         $ipAddress = (string) ($request->ip() ?? 'unknown');
 
         // Attempt login
-        if (Auth::attempt($credentials)) {
+        if ($this->attemptLoginWithNormalizedEmailFallback($email, $password)) {
             $request->session()->regenerate(); // prevents session fixation
 
             $user = Auth::user();
@@ -247,8 +247,54 @@ class LoginController extends Controller
         return redirect('/');
     }
 
+    private function attemptLoginWithNormalizedEmailFallback(string $email, string $password): bool
+    {
+        if (Auth::attempt([
+            'email' => $email,
+            'password' => $password,
+        ])) {
+            return true;
+        }
+
+        if ($email === '') {
+            return false;
+        }
+
+        $matches = DB::table('users')
+            ->select('id')
+            ->whereRaw('LOWER(TRIM(email)) = ?', [$email])
+            ->limit(2)
+            ->pluck('id');
+
+        if ($matches->count() !== 1) {
+            return false;
+        }
+
+        $user = Auth::getProvider()->retrieveById($matches->first());
+
+        if (! $user instanceof User) {
+            return false;
+        }
+
+        if (! Hash::check($password, $user->password)) {
+            return false;
+        }
+
+        if ($user->email !== $email) {
+            $user->forceFill(['email' => $email])->save();
+        }
+
+        Auth::login($user);
+
+        return true;
+    }
+
     public function register(Request $request, TurnstileService $turnstileService)
     {
+        $request->merge([
+            'email' => User::normalizeEmail($request->input('email')),
+        ]);
+
         // Validate the incoming request
         $validated = $request->validate([
             // Personal Information

@@ -14,7 +14,7 @@ class TransactionPolicy
 
     public function view(User $user, Transaction $transaction): bool
     {
-        if ($user->can('transactions.view') && ! $user->hasRole('member')) {
+        if ($user->can('transactions.view-all')) {
             return true;
         }
 

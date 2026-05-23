@@ -65,6 +65,7 @@
             @if ($max !== null) max="{{ $max }}" @endif
             @if ($inputmode) inputmode="{{ $inputmode }}" @endif
             @if ($autocomplete) autocomplete="{{ $autocomplete }}" @endif
+            {{ $attributes->except('class') }}
             class="peer block w-full {{ $prefix ? 'pl-7' : 'px-3' }} py-2 {{ $inputPadding }} text-sm border rounded-lg transition-all duration-200 focus:outline-none focus:ring-2
                 @if ($hasError) border-red-500 text-red-900 placeholder-red-300 focus:ring-red-500 focus:border-red-500
                 @else

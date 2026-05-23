@@ -18,34 +18,14 @@ use Livewire\Component;
 class AdminOverview extends Component
 {
     public array $kpis = [];
-
-    /**
-     * Last N months (oldest -> newest) for simple bar charts.
-     * Shape: [{ label, deposits, withdrawals, expenses, net }]
-     *
-     * @var array<int,array{label:string,deposits:float,withdrawals:float,expenses:float,net:float}>
-     */
     public array $monthlySeries = [];
-
-    /** @var float */
-    public float $monthlyMaxAbsNet = 0.0;
-
-    /** @var array<string,int> */
+    public float $monthlyMaxValue = 0.0;
     public array $loanStatusCounts = [];
-
-    /**
-     * @var array<int,array{status:string,label:string,count:int,percent:float,color:string}>
-     */
     public array $loanStatusSeries = [];
-
-    /** @var \Illuminate\Database\Eloquent\Collection<int,\App\Models\Transaction> */
     public Collection $pendingTransactions;
-
-    /** @var \Illuminate\Database\Eloquent\Collection<int,\App\Models\Expense> */
     public Collection $recentExpenses;
-
-    /** @var \Illuminate\Database\Eloquent\Collection<int,\App\Models\Announcement> */
     public Collection $recentAnnouncements;
+    public string $greeting = '';
 
     public function mount(): void
     {
@@ -54,6 +34,13 @@ class AdminOverview extends Component
         $this->pendingTransactions = new Collection();
         $this->recentExpenses = new Collection();
         $this->recentAnnouncements = new Collection();
+
+        $hour = (int) now()->format('H');
+        $this->greeting = match (true) {
+            $hour < 12 => 'Good morning',
+            $hour < 17 => 'Good afternoon',
+            default    => 'Good evening',
+        };
 
         $this->loadData();
     }
@@ -81,7 +68,6 @@ class AdminOverview extends Component
 
         $financialThisMonth = $this->financialSummary($start, $end);
 
-        // Loan snapshot
         $activeLoanStatuses = ['approved', 'active'];
         $paidLoanStatuses = ['paid', 'paid_off', 'paid-off'];
 
@@ -139,7 +125,7 @@ class AdminOverview extends Component
         $this->recentAnnouncements = Announcement::query()
             ->with('creator.personalData')
             ->latest()
-            ->take(5)
+            ->take(4)
             ->get();
 
         $this->kpis = [
@@ -171,17 +157,15 @@ class AdminOverview extends Component
         $months = max(1, min(24, $months));
 
         $series = [];
-        $maxAbsNet = 0.0;
+        $maxValue = 0.0;
         $baseNow = now();
 
         for ($i = $months - 1; $i >= 0; $i--) {
             $monthStart = $baseNow->copy()->subMonths($i)->startOfMonth();
             $monthEnd = $monthStart->copy()->endOfMonth();
-
             $summary = $this->financialSummary($monthStart, $monthEnd);
-
             $net = (float) ($summary['net'] ?? 0);
-            $maxAbsNet = max($maxAbsNet, abs($net));
+            $maxValue = max($maxValue, abs($net), (float) ($summary['total_deposits'] ?? 0));
 
             $series[] = [
                 'label' => $monthStart->format('M Y'),
@@ -193,67 +177,23 @@ class AdminOverview extends Component
         }
 
         $this->monthlySeries = $series;
-        $this->monthlyMaxAbsNet = (float) $maxAbsNet;
+        $this->monthlyMaxValue = (float) $maxValue;
     }
 
     private function buildLoanStatusSeries(): void
     {
-        $total = array_sum($this->loanStatusCounts);
-        $total = max(0, (int) $total);
+        $total = max(0, (int) array_sum($this->loanStatusCounts));
 
-        // Keep a sensible, consistent order; add any unknown statuses at the end.
-        $preferredOrder = [
-            'pending',
-            'approved',
-            'active',
-            'paid',
-            'paid_off',
-            'paid-off',
-            'paid_off',
-            'paid_off',
-            'paid_off',
-            'paid_off',
-            'paid_off',
-            'paid_off',
-            'paid_off',
-            'paid_off',
-            'paid_off',
-            'paid_off',
-            'paid_off',
-            'paid_off',
-            'paid_off',
-            'paid_off',
-            'paid_off',
-            'paid_off',
-            'paid_off',
-            'paid_off',
-        ];
-
+        $preferredOrder = ['pending', 'approved', 'active', 'paid', 'paid_off', 'paid-off', 'rejected', 'disbursed'];
         $colorMap = [
-            'pending' => 'bg-amber-500',
-            'approved' => 'bg-cyan-500',
-            'active' => 'bg-emerald-500',
-            'paid' => 'bg-gray-700',
-            'paid_off' => 'bg-gray-700',
-            'paid-off' => 'bg-gray-700',
-            'paid_off' => 'bg-gray-700',
-            'paid_off' => 'bg-gray-700',
-            'paid_off' => 'bg-gray-700',
-            'paid_off' => 'bg-gray-700',
-            'paid_off' => 'bg-gray-700',
-            'paid_off' => 'bg-gray-700',
-            'paid_off' => 'bg-gray-700',
-            'paid_off' => 'bg-gray-700',
-            'paid_off' => 'bg-gray-700',
-            'paid_off' => 'bg-gray-700',
-            'paid_off' => 'bg-gray-700',
-            'paid_off' => 'bg-gray-700',
-            'paid_off' => 'bg-gray-700',
-            'paid_off' => 'bg-gray-700',
-            'paid_off' => 'bg-gray-700',
-            'paid_off' => 'bg-gray-700',
-            'paid_off' => 'bg-gray-700',
-            'paid_off' => 'bg-gray-700',
+            'pending'   => 'bg-amber-500',
+            'approved'  => 'bg-cyan-500',
+            'active'    => 'bg-emerald-500',
+            'disbursed' => 'bg-blue-500',
+            'paid'      => 'bg-slate-500',
+            'paid_off'  => 'bg-slate-500',
+            'paid-off'  => 'bg-slate-500',
+            'rejected'  => 'bg-red-400',
         ];
 
         $seen = [];
@@ -265,7 +205,6 @@ class AdminOverview extends Component
                 $seen[$status] = true;
             }
         }
-
         foreach (array_keys($this->loanStatusCounts) as $status) {
             if (!isset($seen[$status])) {
                 $orderedStatuses[] = $status;
@@ -277,13 +216,12 @@ class AdminOverview extends Component
         foreach ($orderedStatuses as $status) {
             $count = (int) ($this->loanStatusCounts[$status] ?? 0);
             $percent = $total > 0 ? round(($count / $total) * 100, 1) : 0.0;
-
             $series[] = [
-                'status' => (string) $status,
-                'label' => ucwords(str_replace(['_', '-'], ' ', (string) $status)),
-                'count' => $count,
+                'status'  => (string) $status,
+                'label'   => ucwords(str_replace(['_', '-'], ' ', (string) $status)),
+                'count'   => $count,
                 'percent' => (float) $percent,
-                'color' => $colorMap[$status] ?? 'bg-slate-500',
+                'color'   => $colorMap[$status] ?? 'bg-slate-400',
             ];
         }
 

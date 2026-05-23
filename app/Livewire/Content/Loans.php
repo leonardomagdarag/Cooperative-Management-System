@@ -49,12 +49,19 @@ class Loans extends Component
      * Load loan details with payment history
      * 
      * Eager loads:
-     * - account.user.personalData: Borrower information
-     * - payments: Complete payment history for the loan
+     * - user.personalData: Borrower information
+     * - approvedBy: Loan officer who approved
+     * - completedPayments: Complete payment history for the loan
+     * - groupMembers.personalData: Co-borrowers for group loans
      */
     public function viewDetails($loanId)
     {
-        $this->selectedLoan = Loan::with(['account.user.personalData', 'payments'])->find($loanId);
+        $this->selectedLoan = Loan::with([
+            'user.personalData',
+            'approvedBy',
+            'completedPayments',
+            'groupMembers.personalData',
+        ])->find($loanId);
         $this->showModal = true;
     }
 
@@ -62,6 +69,84 @@ class Loans extends Component
     {
         $this->showModal = false;
         $this->selectedLoan = null;
+    }
+
+    /**
+     * Generate an amortization schedule for a loan.
+     *
+     * This is used by the loan detail modal to render the payment schedule tab.
+     */
+    public function generateAmortizationSchedule($loan): array
+    {
+        $principal = (float) $loan->loan_amount;
+        $annualRate = (float) $loan->interest_rate / 100;
+        $termMonths = (int) ($loan->term_months ?: 0);
+
+        $periodsPerYear = match ($loan->payment_frequency) {
+            'weekly' => 52,
+            'bi-weekly' => 26,
+            'monthly' => 12,
+            'quarterly' => 4,
+            'annually' => 1,
+            default => 12,
+        };
+
+        $periodRate = $annualRate / $periodsPerYear;
+        $totalPeriods = match ($loan->payment_frequency) {
+            'weekly' => $termMonths * 4.33,
+            'bi-weekly' => $termMonths * 2.17,
+            'monthly' => $termMonths,
+            'quarterly' => $termMonths / 3,
+            'annually' => $termMonths / 12,
+            default => $termMonths,
+        };
+
+        if ($totalPeriods <= 0) {
+            return [];
+        }
+
+        if ($periodRate > 0) {
+            $periodicPayment = $principal * ($periodRate * pow(1 + $periodRate, $totalPeriods)) /
+                (pow(1 + $periodRate, $totalPeriods) - 1);
+        } else {
+            $periodicPayment = $principal / $totalPeriods;
+        }
+
+        $schedule = [];
+        $balance = $principal;
+        $startDate = $loan->approved_at ?? $loan->applied_at ?? now();
+
+        for ($i = 1; $i <= ceil($totalPeriods); $i++) {
+            $interestPayment = $balance * $periodRate;
+            $principalPayment = $periodicPayment - $interestPayment;
+
+            if ($i === ceil($totalPeriods)) {
+                $principalPayment = $balance;
+                $periodicPayment = $principalPayment + $interestPayment;
+            }
+
+            $balance -= $principalPayment;
+
+            $dueDate = match ($loan->payment_frequency) {
+                'weekly' => $startDate->copy()->addWeeks($i),
+                'bi-weekly' => $startDate->copy()->addWeeks($i * 2),
+                'monthly' => $startDate->copy()->addMonths($i),
+                'quarterly' => $startDate->copy()->addMonths($i * 3),
+                'annually' => $startDate->copy()->addYears($i),
+                default => $startDate->copy()->addMonths($i),
+            };
+
+            $schedule[] = [
+                'payment_number' => $i,
+                'due_date' => $dueDate,
+                'payment_amount' => round($periodicPayment, 2),
+                'principal' => round($principalPayment, 2),
+                'interest' => round($interestPayment, 2),
+                'balance' => round(max($balance, 0), 2),
+            ];
+        }
+
+        return $schedule;
     }
 
     /**

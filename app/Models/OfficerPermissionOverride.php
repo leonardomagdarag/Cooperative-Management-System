@@ -2,47 +2,65 @@
 
 namespace App\Models;
 
+use App\Support\PermissionCatalog;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Cache;
 
 class OfficerPermissionOverride extends Model
 {
-    public const EFFECT_ALLOW    = 'allow';
+    use HasFactory;
+
+    public const EFFECT_ALLOW = 'allow';
     public const EFFECT_DISALLOW = 'disallow';
 
-    protected $fillable = ['user_id', 'permission', 'effect'];
+    protected $fillable = [
+        'user_id',
+        'permission',
+        'effect',
+    ];
 
-    /** Per-request in-memory cache — keyed by "userId||permission". */
-    private static array $cache = [];
-
-    /**
-     * Reset the in-memory cache. Call after writes and in test setUp.
-     */
-    public static function clearCache(): void
+    protected static function booted(): void
     {
-        static::$cache = [];
+        static::saved(function (self $override): void {
+            self::forgetCachedEffect($override->user_id, $override->permission);
+        });
+
+        static::deleted(function (self $override): void {
+            self::forgetCachedEffect($override->user_id, $override->permission);
+        });
     }
 
-    /**
-     * Cached lookup of a single override effect for a user+permission pair.
-     * Returns null when no override row exists.
-     */
-    public static function getCachedEffect(int $userId, string $permission): ?string
-    {
-        $key = $userId . '||' . $permission;
-        if (! array_key_exists($key, static::$cache)) {
-            $effect = static::where('user_id', $userId)
-                ->where('permission', $permission)
-                ->value('effect');
-            // Store false as sentinel for "row not found"
-            static::$cache[$key] = $effect ?? false;
-        }
-        $cached = static::$cache[$key];
-        return $cached === false ? null : (string) $cached;
-    }
-
-    public function user(): BelongsTo
+    public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public static function getCachedEffect(int $userId, string $permission): ?string
+    {
+        return Cache::rememberForever(
+            self::cacheKey($userId, $permission),
+            static fn(): ?string => self::query()
+                ->where('user_id', $userId)
+                ->where('permission', $permission)
+                ->value('effect')
+        );
+    }
+
+    public static function forgetAllCachedEffects(int $userId): void
+    {
+        foreach (PermissionCatalog::allPermissions() as $permission) {
+            self::forgetCachedEffect($userId, $permission);
+        }
+    }
+
+    public static function forgetCachedEffect(int $userId, string $permission): void
+    {
+        Cache::forget(self::cacheKey($userId, $permission));
+    }
+
+    private static function cacheKey(int $userId, string $permission): string
+    {
+        return sprintf('officer_permission_override:%d:%s', $userId, $permission);
     }
 }

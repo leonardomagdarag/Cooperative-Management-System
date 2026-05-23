@@ -14,6 +14,7 @@
 
     // Role selection data
     $roleKeys = ['manager', 'secretary', 'loan', 'treasurer'];
+    $adminRole = 'admin';
     $roleDisplayNames = \App\Support\PermissionCatalog::roleDisplayNames();
     $roleDescriptions = \App\Support\PermissionCatalog::roleDescriptions();
     $rolePresets = \App\Support\PermissionCatalog::rolePresets();
@@ -42,7 +43,10 @@
             return;
         }
 
-        await $wire.nextStep(this.formTab);
+        const nextTab = await $wire.nextStep(this.formTab);
+        if (nextTab) {
+            this.formTab = nextTab;
+        }
     },
 
     prevBtn() {
@@ -206,12 +210,44 @@ $wire.on('wizard-advance', ({ tab }) => { formTab = tab; });" x-show="show" x-cl
                     </div>
 
                     {{-- ─── Role Selection Tab ──────────────────────────────────── --}}
-                    <div x-show="formTab === 'role'" x-transition x-data="{ roleVal: $wire.entangle('form.role') }" class="space-y-5">
+                    <div x-show="formTab === 'role'" x-transition x-data="{ roleVal: @entangle('form.role').live }" class="space-y-5">
 
-                        {{-- 4 role cards --}}
+                        {{-- Admin role card (separated) --}}
+                        <p class="text-xs font-semibold uppercase tracking-wider text-rose-500">Privileged Role</p>
+                        <label @click="roleVal = 'admin'"
+                            :class="roleVal === 'admin'
+                                ?
+                                'ring-2 ring-rose-500 border-rose-500 bg-rose-50' :
+                                'border-rose-200 bg-white hover:border-rose-300 hover:bg-rose-50/40'"
+                            class="cursor-pointer rounded-xl border-2 p-4 transition-all flex items-start gap-3">
+                            <input type="radio" wire:model.live="form.role" value="admin" class="sr-only">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center justify-between gap-2">
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-semibold text-gray-900 text-sm">Administrator</span>
+                                        <span
+                                            class="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700">Full
+                                            Access</span>
+                                    </div>
+                                    <span
+                                        :class="roleVal === 'admin' ? 'opacity-100 scale-100' : 'opacity-0 scale-75'"
+                                        class="inline-flex shrink-0 items-center justify-center w-5 h-5 rounded-full bg-rose-500 text-white transition-all duration-150">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="3"
+                                            viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    </span>
+                                </div>
+                                <p class="mt-1 text-xs text-gray-500 leading-relaxed">{{ $roleDescriptions['admin'] }}
+                                </p>
+                            </div>
+                        </label>
+
+                        {{-- Officer role cards --}}
+                        <p class="text-xs font-semibold uppercase tracking-wider text-gray-400">Officer Roles</p>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             @foreach ($roleKeys as $roleKey)
-                                <label
+                                <label @click="roleVal = '{{ $roleKey }}'"
                                     :class="roleVal === '{{ $roleKey }}'
                                         ?
                                         'ring-2 ring-cyan-500 border-cyan-500 bg-cyan-50' :
@@ -260,6 +296,21 @@ $wire.on('wizard-advance', ({ tab }) => { formTab = tab; });" x-show="show" x-cl
                                             Not Granted
                                         </span>
                                     </p>
+                                </div>
+                            </div>
+
+                            {{-- Admin: all permissions --}}
+                            <div x-show="roleVal === 'admin'" class="p-4">
+                                <div
+                                    class="flex items-center gap-2 rounded-lg bg-rose-50 border border-rose-200 px-4 py-3">
+                                    <svg class="w-4 h-4 text-rose-500 shrink-0" fill="currentColor"
+                                        viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd"
+                                            d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z"
+                                            clip-rule="evenodd" />
+                                    </svg>
+                                    <p class="text-sm text-rose-700 font-medium">Administrators have unrestricted
+                                        access to all system features and permissions.</p>
                                 </div>
                             </div>
 
@@ -445,7 +496,7 @@ $wire.on('wizard-advance', ({ tab }) => { formTab = tab; });" x-show="show" x-cl
 
                             @if ($isAddMode)
                                 <button type="button" x-show="formTab !== 'login'" @click="nextBtn()"
-                                    wire:loading.attr="disabled"
+                                    wire:loading.attr="disabled" wire:target="nextStep"
                                     class="text-white bg-linear-to-r from-cyan-500 to-blue-500 hover:bg-linear-to-bl focus:ring-4 focus:outline-none focus:ring-cyan-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center disabled:opacity-50 disabled:cursor-not-allowed">
                                     Next
                                 </button>

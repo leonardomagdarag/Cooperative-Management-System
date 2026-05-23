@@ -39,11 +39,7 @@ class LoanProducts extends Component
 
     public function openAddModal(): void
     {
-        if (! $this->isAdmin()) {
-            $this->dispatch('error', message: 'Only admins can manage loan products.');
-
-            return;
-        }
+        abort_unless(Auth::user()?->can('settings.update'), 403);
 
         $this->resetForm();
         $this->showModal = true;
@@ -57,15 +53,11 @@ class LoanProducts extends Component
 
     public function toggleLoanProductStatus(int $id): void
     {
-        if (! $this->isAdmin()) {
-            $this->dispatch('error', message: 'Only admins can change loan availability.');
-
-            return;
-        }
+        abort_unless(Auth::user()?->can('settings.update'), 403);
 
         $product = LoanProduct::query()->find($id);
         if (! $product) {
-            $this->dispatch('error', message: 'Loan product not found.');
+            $this->dispatch('toast', ['message' => 'Loan product not found.', 'type' => 'error']);
 
             return;
         }
@@ -79,16 +71,12 @@ class LoanProducts extends Component
         }
 
         $this->loadLoanProducts();
-        $this->dispatch('success', message: $product->name . ($product->is_active ? ' enabled.' : ' disabled.'));
+        $this->dispatch('toast', ['message' => $product->name . ($product->is_active ? ' enabled.' : ' disabled.'), 'type' => 'success']);
     }
 
     public function saveLoanProduct(): void
     {
-        if (! $this->isAdmin()) {
-            $this->dispatch('error', message: 'Only admins can manage loan products.');
-
-            return;
-        }
+        abort_unless(Auth::user()?->can('settings.update'), 403);
 
         $validated = $this->validate([
             'code' => [
@@ -133,10 +121,10 @@ class LoanProducts extends Component
 
         if ($this->editingLoanProductId) {
             LoanProduct::query()->whereKey($this->editingLoanProductId)->update($payload);
-            $this->dispatch('success', message: 'Loan product updated.');
+            $this->dispatch('toast', ['message' => 'Loan product updated.', 'type' => 'success']);
         } else {
             LoanProduct::query()->create($payload);
-            $this->dispatch('success', message: 'Loan product created.');
+            $this->dispatch('toast', ['message' => 'Loan product created.', 'type' => 'success']);
         }
 
         $this->resetForm();
@@ -146,9 +134,7 @@ class LoanProducts extends Component
 
     public function editLoanProduct(int $id): void
     {
-        if (! $this->isAdmin()) {
-            return;
-        }
+        abort_unless(Auth::user()?->can('settings.update'), 403);
 
         $product = LoanProduct::query()->find($id);
         if (! $product) {
@@ -179,9 +165,7 @@ class LoanProducts extends Component
 
     public function deleteLoanProduct(int $id): void
     {
-        if (! $this->isAdmin()) {
-            return;
-        }
+        abort_unless(Auth::user()?->can('settings.update'), 403);
 
         LoanProduct::query()->whereKey($id)->delete();
 
@@ -190,7 +174,7 @@ class LoanProducts extends Component
         }
 
         $this->loadLoanProducts();
-        $this->dispatch('success', message: 'Loan product deleted.');
+        $this->dispatch('toast', ['message' => 'Loan product deleted.', 'type' => 'success']);
     }
 
     public function resetForm(): void
@@ -223,7 +207,7 @@ class LoanProducts extends Component
     public function render()
     {
         return view('livewire.content.loan-products', [
-            'isAdmin' => $this->isAdmin(),
+            'canManage' => (bool) Auth::user()?->can('settings.update'),
             'loanProducts' => $this->loanProducts,
         ]);
     }
@@ -235,12 +219,5 @@ class LoanProducts extends Component
             ->orderBy('name')
             ->get()
             ->toArray();
-    }
-
-    private function isAdmin(): bool
-    {
-        $user = Auth::user();
-
-        return (bool) ($user && $user->hasRole('admin'));
     }
 }

@@ -119,7 +119,8 @@
                                                     'id',
                                                     array_merge(
                                                         [
-                                                            $this->isTreasurerMode && $this->selectedMemberId
+                                                            ($this->isTreasurerMode || $this->isAdminMode) &&
+                                                            $this->selectedMemberId
                                                                 ? $this->selectedMemberId
                                                                 : Auth::id(),
                                                         ],
