@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -87,6 +88,18 @@ class User extends Authenticatable
         });
     }
 
+    public static function normalizeEmail(mixed $email): string
+    {
+        return strtolower(trim((string) $email));
+    }
+
+    protected function email(): Attribute
+    {
+        return Attribute::make(
+            set: fn(mixed $value) => static::normalizeEmail($value),
+        );
+    }
+
     public function isActive(): bool
     {
         return $this->account_status === 'active';
@@ -128,11 +141,6 @@ class User extends Authenticatable
     public function recordedTransactions()
     {
         return $this->hasMany(Transaction::class, 'recorded_by');
-    }
-
-    public function logs()
-    {
-        return $this->hasMany(Log::class);
     }
 
     public function approvedLoans()

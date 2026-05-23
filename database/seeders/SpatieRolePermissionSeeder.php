@@ -13,8 +13,6 @@ class SpatieRolePermissionSeeder extends Seeder
 {
     /**
      * All available permissions in the system, organized by resource.
-     * Officer permissions are assigned individually, not via roles.
-     * Members use the 'member' role with fixed permissions.
      */
     public function run(): void
     {
@@ -47,6 +45,7 @@ class SpatieRolePermissionSeeder extends Seeder
 
             // Transactions
             'transactions.view',
+            'transactions.view-all',
             'transactions.create',
             'transactions.update',
             'transactions.void',
@@ -105,19 +104,16 @@ class SpatieRolePermissionSeeder extends Seeder
         $allPermissions = Permission::query()->pluck('name')->all();
 
         // === DEFINE ROLES ===
-        // Only 3 fixed roles: admin, member, and 2 inactive states
-        // Officers DON'T get a fixed role; they get individual permissions instead
-
+        $officerPresets = PermissionCatalog::rolePresets();
         $rolePermissions = [
             // Super admin: all permissions
             'admin' => $allPermissions,
 
-            // Officer roles now receive permissions via their Spatie role (RBAC).
-            // Permissions are sourced from PermissionCatalog::rolePresets().
-            'manager'   => PermissionCatalog::rolePresets()['manager'],
-            'secretary' => PermissionCatalog::rolePresets()['secretary'],
-            'loan'      => PermissionCatalog::rolePresets()['loan'],
-            'treasurer' => PermissionCatalog::rolePresets()['treasurer'],
+            // Officer roles receive their default permissions via Spatie roles.
+            'manager'   => $officerPresets['manager'],
+            'secretary' => $officerPresets['secretary'],
+            'loan'      => $officerPresets['loan'],
+            'treasurer' => $officerPresets['treasurer'],
             'developer' => [],
 
             // Regular members: limited self-service permissions
@@ -143,10 +139,23 @@ class SpatieRolePermissionSeeder extends Seeder
             'terminated' => [],
         ];
 
-        // Create and sync roles with permissions
+        // Bootstrap roles without wiping settings-managed edits on later seeds.
         foreach ($rolePermissions as $roleName => $grantedPermissions) {
             $role = Role::findOrCreate($roleName, 'web');
-            $role->syncPermissions($grantedPermissions);
+
+            if (! $role->permissions()->exists()) {
+                $role->syncPermissions($grantedPermissions);
+                continue;
+            }
+
+            if (! in_array($roleName, PermissionCatalog::officerRoles(), true)) {
+                $existingPermissions = $role->permissions()->pluck('name')->all();
+                $missingPermissions = array_values(array_diff($grantedPermissions, $existingPermissions));
+
+                if ($missingPermissions !== []) {
+                    $role->givePermissionTo($missingPermissions);
+                }
+            }
         }
 
         // === ASSIGN ROLES & PERMISSIONS TO EXISTING USERS ===
@@ -175,7 +184,16 @@ class SpatieRolePermissionSeeder extends Seeder
 
         // 3. Assign route roles to officer personas.
         User::query()
-            ->whereIn('role', ['manager', 'secretary', 'loan', 'treasurer'])
+            ->where(function ($query) {
+                foreach (PermissionCatalog::officerRoles() as $index => $roleName) {
+                    if ($index === 0) {
+                        $query->where('role', $roleName);
+                        continue;
+                    }
+
+                    $query->orWhere('role', $roleName);
+                }
+            })
             ->chunk(100, function ($users) {
                 foreach ($users as $user) {
                     $user->account_status = 'active';
@@ -198,7 +216,16 @@ class SpatieRolePermissionSeeder extends Seeder
         // permissions from officer users so only role grants apply.
         // Per-officer exceptions use the officer_permission_overrides table.
         User::query()
-            ->whereIn('role', array_keys(PermissionCatalog::rolePresets()))
+            ->where(function ($query) {
+                foreach (PermissionCatalog::officerRoles() as $index => $roleName) {
+                    if ($index === 0) {
+                        $query->where('role', $roleName);
+                        continue;
+                    }
+
+                    $query->orWhere('role', $roleName);
+                }
+            })
             ->chunk(100, function ($users) {
                 foreach ($users as $user) {
                     $user->is_officer = true;

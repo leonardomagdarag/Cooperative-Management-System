@@ -29,6 +29,8 @@ class Services extends Component
 
     public $isTreasurerMode = false;
 
+    public $isAdminMode = false;
+
     public $selectedMemberId = null;
 
     public $memberSearch = '';
@@ -128,16 +130,15 @@ class Services extends Component
         $this->loadLoanTypes();
 
         $user = Auth::user();
-        $this->isTreasurerMode = $user && (
+        $this->isAdminMode = $user && $user->hasRole('admin');
+        $this->isTreasurerMode = $user && ! $this->isAdminMode && (
             $user->can('deposits.approve') ||
             $user->can('withdrawals.approve') ||
             $user->can('transactions.update')
         );
 
         // Loan review mode: any officer with loans.update can process review queue
-        $this->isLoanReviewMode = $user
-            && $user->can('loans.update')
-            && ! $user->hasRole('member');
+        $this->isLoanReviewMode = $user && $user->can('loans.update');
 
         // If not treasurer mode, pre-select user's savings account for withdrawal
         if (! $this->isTreasurerMode) {
@@ -154,6 +155,7 @@ class Services extends Component
     {
         $this->selectedMemberId = $memberId;
         $this->memberSearch = '';
+        $this->dispatch('member-selected');
 
         // Pre-select member's savings account for withdrawal
         $member = \App\Models\User::find($memberId);
@@ -172,6 +174,7 @@ class Services extends Component
         $this->selectedMemberId = null;
         $this->withdrawalAccountId = '';
         $this->refreshLoanTypeWarnings();
+        $this->dispatch('member-cleared');
     }
 
     public function viewTransactionForApproval($transactionId)
@@ -753,13 +756,19 @@ class Services extends Component
 
     // ─────────────────────────────────────────────────────────────────────────
 
+    private function isActingForMember(): bool
+    {
+        return (bool) ($this->selectedMemberId && ($this->isTreasurerMode || $this->isAdminMode));
+    }
+
     public function openService($service)
     {
         // 'approve' and 'loan-review' are officer-only panels that don't need a member pre-selected
         $memberFreeServices = ['approve', 'loan-review'];
 
-        if ($this->isTreasurerMode && ! in_array($service, $memberFreeServices, true) && ! $this->selectedMemberId) {
-            $this->dispatch('warning', message: 'Please select a member first before accessing services.');
+        // Treasurer and admin both require a member to be selected for member-facing services
+        if (($this->isTreasurerMode || $this->isAdminMode) && ! in_array($service, $memberFreeServices, true) && ! $this->selectedMemberId) {
+            $this->dispatch('warning', message: 'Please select a member first before accessing this service.');
             return;
         }
 
@@ -904,8 +913,8 @@ class Services extends Component
         try {
             DB::beginTransaction();
 
-            // Get target user (member if treasurer mode, or auth user)
-            $targetUser = $this->isTreasurerMode && $this->selectedMemberId
+            // Get target user (member if acting for member, or auth user)
+            $targetUser = $this->isActingForMember()
                 ? \App\Models\User::find($this->selectedMemberId)
                 : Auth::user();
 
@@ -924,7 +933,7 @@ class Services extends Component
             $isAutoApprove = $this->depositTransactionMode === 'online';
 
             // Create transaction
-            $note = ($this->isTreasurerMode ? 'Processed by treasurer - ' : '')
+            $note = ($this->isActingForMember() ? 'Processed by officer - ' : '')
                 . ($this->depositTransactionMode === 'counter' ? 'Over the counter' : 'Online payment')
                 . ($this->depositNote ? ' | ' . $this->depositNote : '');
 
@@ -1042,7 +1051,7 @@ class Services extends Component
             DB::beginTransaction();
 
             // ALL withdrawals now require approval (no auto-approve)
-            $note = ($this->isTreasurerMode ? 'Processed by treasurer - ' : '')
+            $note = ($this->isActingForMember() ? 'Processed by officer - ' : '')
                 . $this->withdrawalReason . ' | '
                 . ($this->withdrawalTransactionMode === 'counter' ? 'Over the counter' : 'Online payment');
 
@@ -1056,7 +1065,7 @@ class Services extends Component
                 'recorded_by' => Auth::id(),
             ]);
 
-            $targetUser = $this->isTreasurerMode && $this->selectedMemberId
+            $targetUser = $this->isActingForMember()
                 ? \App\Models\User::find($this->selectedMemberId)
                 : Auth::user();
 
@@ -1183,7 +1192,7 @@ class Services extends Component
         }
 
         // Don't allow adding yourself
-        $currentUserId = $this->isTreasurerMode && $this->selectedMemberId
+        $currentUserId = $this->isActingForMember()
             ? $this->selectedMemberId
             : Auth::id();
 
@@ -1356,7 +1365,7 @@ class Services extends Component
             }
 
             // Get target user
-            $targetUser = $this->isTreasurerMode && $this->selectedMemberId
+            $targetUser = $this->isActingForMember()
                 ? \App\Models\User::find($this->selectedMemberId)
                 : Auth::user();
 
@@ -1372,7 +1381,7 @@ class Services extends Component
             // Counter transactions need treasurer approval
             $isAutoApprove = $this->paymentTransactionMode === 'online';
 
-            $note = ($this->isTreasurerMode ? 'Processed by treasurer - ' : '')
+            $note = ($this->isActingForMember() ? 'Processed by officer - ' : '')
                 . 'Loan payment for ' . $loan->loan_number
                 . ' | ' . ($this->paymentTransactionMode === 'counter' ? 'Over the counter' : 'Online payment')
                 . ($this->paymentNote ? ' | ' . $this->paymentNote : '');
@@ -1528,7 +1537,7 @@ class Services extends Component
 
     private function resolveLoanTargetUser()
     {
-        if ($this->isTreasurerMode && $this->selectedMemberId) {
+        if ($this->isActingForMember()) {
             return \App\Models\User::find($this->selectedMemberId);
         }
 
@@ -1601,7 +1610,7 @@ class Services extends Component
 
     public function getAvailableBalanceProperty()
     {
-        $targetUser = $this->isTreasurerMode && $this->selectedMemberId
+        $targetUser = $this->isActingForMember()
             ? \App\Models\User::find($this->selectedMemberId)
             : Auth::user();
 
@@ -1628,7 +1637,7 @@ class Services extends Component
      */
     public function getPendingWithdrawalsProperty()
     {
-        if ($this->isTreasurerMode && $this->selectedMemberId) {
+        if ($this->isActingForMember()) {
             $user = \App\Models\User::find($this->selectedMemberId);
         } else {
             $user = Auth::user();
@@ -1717,8 +1726,8 @@ class Services extends Component
 
     public function render()
     {
-        // Get target user based on treasurer mode
-        $targetUser = $this->isTreasurerMode && $this->selectedMemberId
+        // Get target user based on mode
+        $targetUser = $this->isActingForMember()
             ? \App\Models\User::find($this->selectedMemberId)
             : Auth::user();
 
@@ -1726,9 +1735,12 @@ class Services extends Component
         $shareCapitalAccount = $targetUser?->accounts()->where('account_type', 'share-capital')->first();
         $activeLoans = $targetUser?->loans()->whereIn('loan_status', ['approved', 'active'])->get() ?? collect();
 
+        // Admins and treasurers see all pending requests and can approve
+        $canApproveTransactions = $this->isTreasurerMode || $this->isAdminMode;
+
         // For members: only count their own pending requests
-        // For treasurers: count all pending requests if viewing approval section
-        if ($this->isTreasurerMode) {
+        // For treasurers/admins: count all pending requests if viewing approval section
+        if ($canApproveTransactions) {
             $pendingRequests = Transaction::whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_payment'])
                 ->where('status', 'pending')
                 ->count();
@@ -1748,9 +1760,9 @@ class Services extends Component
             $pendingTransactions = collect();
         }
 
-        // Get members list if treasurer
+        // Get members list for treasurer or admin
         $members = collect();
-        if ($this->isTreasurerMode) {
+        if ($this->isTreasurerMode || $this->isAdminMode) {
             $members = \App\Models\User::where('role', 'member')
                 ->with('personalData')
                 ->when($this->memberSearch, function ($query) {

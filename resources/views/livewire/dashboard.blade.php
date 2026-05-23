@@ -17,8 +17,10 @@
                 {{-- Notification Dropdown (Livewire) --}}
                 @livewire('header.notification-dropdown')
 
-                {{-- User Info --}}
-                <div class="flex items-center gap-3 pl-4 border-l border-gray-200">
+                {{-- User Info - clickable to go to My Profile --}}
+                <button wire:click="updateSection('profile')"
+                    class="flex items-center gap-3 pl-4 border-l border-gray-200 hover:opacity-80 transition-opacity cursor-pointer"
+                    title="View my profile">
                     <div class="text-right">
                         <p class="text-sm font-medium text-gray-900">
                             {{ auth()->user()->personalData ? auth()->user()->personalData->first_name . ' ' . auth()->user()->personalData->last_name : 'User' }}
@@ -28,10 +30,10 @@
                         </p>
                     </div>
                     <div
-                        class="w-10 h-10 rounded-full bg-linear-to-r from-emerald-500 to-cyan-500 flex items-center justify-center text-white font-semibold">
+                        class="w-10 h-10 rounded-full bg-linear-to-r from-emerald-500 to-cyan-500 flex items-center justify-center text-white font-semibold ring-2 ring-transparent hover:ring-emerald-400 transition-all">
                         {{ auth()->user()->personalData ? strtoupper(substr(auth()->user()->personalData->first_name, 0, 1)) : 'U' }}
                     </div>
-                </div>
+                </button>
             </div>
         </div>
     </nav>

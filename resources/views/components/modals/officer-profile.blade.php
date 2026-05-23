@@ -1,9 +1,14 @@
 @props(['officer', 'canEdit', 'activeTab'])
 
-<div class="fixed inset-0 z-50 flex items-center justify-center overflow-x-hidden overflow-y-auto outline-none focus:outline-none"
+<div {{ $attributes }} x-data="{ show: false }" x-init="setTimeout(() => show = true, 10)" x-show="show"
+    x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150"
+    x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
+    class="fixed inset-0 z-50 flex items-center justify-center overflow-x-hidden overflow-y-auto outline-none focus:outline-none"
     aria-labelledby="modal-title" role="dialog" aria-modal="true">
     {{-- Backdrop --}}
-    <div class="absolute inset-0 bg-gray-900 opacity-50 transition-opacity" wire:click="closeModal"></div>
+    <div class="absolute inset-0 bg-gray-900 opacity-50 transition-opacity"
+        @click="show = false; setTimeout(() => $wire.closeModal(), 150)"></div>
 
     {{-- Modal content --}}
     <div class="relative w-full max-w-6xl max-h-[90vh] mx-auto my-6 z-10">
@@ -14,7 +19,7 @@
                 <h3 class="text-xl font-semibold text-white">
                     Officer Profile
                 </h3>
-                <button type="button" wire:click="closeModal"
+                <button type="button" @click="show = false; setTimeout(() => $wire.closeModal(), 150)"
                     class="text-white bg-transparent hover:bg-cyan-800 rounded-lg text-sm p-1.5 ml-auto inline-flex items-center transition-colors">
                     <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd"
@@ -238,14 +243,11 @@
                 {{-- Permissions Tab --}}
                 @if ($activeTab === 'permissions')
                     @php
-                        use App\Models\OfficerPermissionOverride;
-                        use App\Support\PermissionCatalog;
-
                         $rolePerms = $officer->getPermissionsViaRoles()->pluck('name')->all();
-                        $overrideRows = OfficerPermissionOverride::where('user_id', $officer->id)
+                        $overrideRows = \App\Models\OfficerPermissionOverride::where('user_id', $officer->id)
                             ->get()
                             ->keyBy('permission');
-                        $groups = PermissionCatalog::groups();
+                        $groups = \App\Support\PermissionCatalog::groups();
                         $allowCount = $overrideRows->filter(fn($r) => $r->effect === 'allow')->count();
                         $denyCount = $overrideRows->filter(fn($r) => $r->effect === 'disallow')->count();
                     @endphp

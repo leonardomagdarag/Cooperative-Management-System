@@ -67,7 +67,7 @@ class Logs extends Component
     public function render()
     {
         $user = Auth::user();
-        abort_unless($user && $user->hasRole('admin') && $user->can('logs.view'), 403);
+        abort_unless($user && $user->can('logs.view'), 403);
 
         $query = Activity::query()
             ->with(['causer.personalData', 'subject'])

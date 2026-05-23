@@ -278,7 +278,7 @@
                         </div>
                         <h4 class="text-xl font-bold text-gray-900 mb-2">Payment Submitted!</h4>
                         <p class="text-gray-600 mb-6">
-                            @if ($isTreasurerMode && $paymentTransactionMode === 'counter')
+                            @if (($isTreasurerMode || $isAdminMode) && $paymentTransactionMode === 'counter')
                                 The loan payment has been processed successfully.
                             @else
                                 Please visit our office to complete your loan payment.
@@ -307,7 +307,7 @@
                     </div>
                     <h4 class="text-lg font-bold text-gray-900 mb-2">No Active Loans</h4>
                     <p class="text-gray-600 mb-6">
-                        @if ($isTreasurerMode && $selectedMember)
+                        @if (($isTreasurerMode || $isAdminMode) && $selectedMember)
                             This member doesn't have any active loans to make payments for.
                         @else
                             You don't have any active loans to make payments for.

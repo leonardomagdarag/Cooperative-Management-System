@@ -12,8 +12,10 @@ use App\Models\PersonalData;
 use App\Models\User;
 use App\Services\AuditLogService;
 use App\Traits\ValidatesPersonForm;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Closure;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -52,6 +54,8 @@ class Members extends Component
 
     public $showEditModal = false;
 
+    public $showExportModal = false;
+
     public $isEdit = false;
 
     public $activeTab = 'overview';
@@ -64,6 +68,12 @@ class Members extends Component
     public $modalKey = 0;
 
     public $profileModalKey = 0;
+
+    public string $exportType = 'pdf';
+
+    public ?string $exportStartDate = null;
+
+    public ?string $exportEndDate = null;
 
     /**
      * Per-tab validation field map for the member form.
@@ -128,6 +138,11 @@ class Members extends Component
         'employment' => false,
         'login' => false,
     ];
+
+    public function mount(): void
+    {
+        $this->resetExportFilters();
+    }
 
     /**
      * Convert empty string to null for numeric fields
@@ -485,6 +500,42 @@ class Members extends Component
         $this->resetPage();
     }
 
+    public function openExportModal(): void
+    {
+        $this->closeModal();
+        $this->closeEditModal();
+        $this->resetValidation(['exportType', 'exportStartDate', 'exportEndDate']);
+        $this->resetExportFilters();
+        $this->showExportModal = true;
+    }
+
+    public function closeExportModal(): void
+    {
+        $this->showExportModal = false;
+        $this->resetValidation(['exportType', 'exportStartDate', 'exportEndDate']);
+    }
+
+    public function exportMembers()
+    {
+        $validated = $this->validate([
+            'exportType' => ['required', 'in:pdf,excel'],
+            'exportStartDate' => ['required', 'date'],
+            'exportEndDate' => ['required', 'date', 'after_or_equal:exportStartDate'],
+        ], [
+            'exportEndDate.after_or_equal' => 'The end date must be on or after the start date.',
+        ]);
+
+        $start = Carbon::parse($validated['exportStartDate'])->startOfDay();
+        $end = Carbon::parse($validated['exportEndDate'])->endOfDay();
+        $members = $this->membersExportQuery($start, $end)->get();
+
+        $this->showExportModal = false;
+
+        return $validated['exportType'] === 'pdf'
+            ? $this->downloadMembersPdf($members, $start, $end)
+            : $this->downloadMembersExcel($members, $start, $end);
+    }
+
     /**
      * Toggle sort direction or change sort field
      */
@@ -504,6 +555,7 @@ class Members extends Component
     public function viewProfile($userId)
     {
         $this->closeEditModal();
+        $this->closeExportModal();
 
         $this->selectedMember = User::with([
             'personalData.address',
@@ -543,6 +595,7 @@ class Members extends Component
     public function addMember()
     {
         $this->closeModal();
+        $this->closeExportModal();
 
         $this->resetValidation();
         $this->isEdit = false;
@@ -611,6 +664,7 @@ class Members extends Component
         ]);
 
         $this->resetValidation();
+    $this->closeExportModal();
         $this->isEdit = true;
         $this->editingMemberId = $userId;
         $this->modalKey = now()->timestamp . rand(1000, 9999); // Generate truly unique key using timestamp
@@ -703,6 +757,8 @@ class Members extends Component
      */
     public function saveMember()
     {
+        $this->form['email'] = User::normalizeEmail($this->form['email'] ?? null);
+
         Log::info('=== SAVE MEMBER CALLED ===', [
             'isEdit' => $this->isEdit,
             'editingMemberId' => $this->editingMemberId,
@@ -1105,33 +1161,51 @@ class Members extends Component
     public function render()
     {
         $user = Auth::user();
+        $canCreate = $user && $user->can('members.create');
         $canEdit = $user && (
-            $user->can('members.create') ||
             $user->can('members.update') ||
             $user->can('members.delete')
         );
+        $canExport = (bool) $user;
 
-        // Build query with only what the table needs (keeps re-renders cheaper, including modal open)
-        $query = User::with(['personalData'])
+        $query = $this->membersQuery()->with(['personalData']);
+        $this->applyMembersSorting($query);
+
+        $members = $query->paginate(10);
+
+        return view('livewire.content.members', [
+            'members' => $members,
+            'canCreate' => $canCreate,
+            'canEdit' => $canEdit,
+            'canExport' => $canExport,
+        ]);
+    }
+
+    private function resetExportFilters(): void
+    {
+        $this->exportType = 'pdf';
+        $this->exportStartDate = now()->startOfMonth()->toDateString();
+        $this->exportEndDate = now()->endOfMonth()->toDateString();
+    }
+
+    private function membersQuery(): Builder
+    {
+        return User::query()
             ->where('role', 'member')
-            ->when($this->search, function ($query) {
-                $query->where(function ($q) {
-                    // Search by user fields
+            ->when($this->search, function (Builder $query) {
+                $query->where(function (Builder $q) {
                     $q->where('user_number', 'like', '%' . $this->search . '%')
                         ->orWhere('email', 'like', '%' . $this->search . '%')
-                        // Search by personal data
-                        ->orWhereHas('personalData', function ($subQ) {
+                        ->orWhereHas('personalData', function (Builder $subQ) {
                             $subQ->where('first_name', 'like', '%' . $this->search . '%')
                                 ->orWhere('last_name', 'like', '%' . $this->search . '%')
                                 ->orWhere('mid_name', 'like', '%' . $this->search . '%')
-                                // Search by contact
-                                ->orWhereHas('contact', function ($contactQ) {
+                                ->orWhereHas('contact', function (Builder $contactQ) {
                                     $contactQ->where('phone_no', 'like', '%' . $this->search . '%')
                                         ->orWhere('email', 'like', '%' . $this->search . '%')
                                         ->orWhere('facebook', 'like', '%' . $this->search . '%');
                                 })
-                                // Search by address
-                                ->orWhereHas('address', function ($addressQ) {
+                                ->orWhereHas('address', function (Builder $addressQ) {
                                     $addressQ->where('street', 'like', '%' . $this->search . '%')
                                         ->orWhere('barangay', 'like', '%' . $this->search . '%')
                                         ->orWhere('city_municipality', 'like', '%' . $this->search . '%')
@@ -1142,25 +1216,150 @@ class Members extends Component
                         });
                 });
             });
+    }
 
-        // Special handling: JOIN required to sort by personal_data fields
-        if (in_array($this->sortField, ['first_name', 'last_name', 'mid_name'])) {
+    private function applyMembersSorting(Builder $query): void
+    {
+        if (in_array($this->sortField, ['first_name', 'last_name', 'mid_name'], true)) {
             $query->join('personal_data', 'users.personal_data_id', '=', 'personal_data.id')
                 ->orderBy('personal_data.' . $this->sortField, $this->sortDirection)
-                ->select('users.*');  // Select only users columns to avoid conflicts
-        } elseif ($this->sortField === 'user_number') {
-            // Sort user_number as numeric
-            $query->orderByRaw('CAST(user_number AS UNSIGNED) ' . $this->sortDirection);
-        } else {
-            $query->orderBy($this->sortField, $this->sortDirection);
+                ->select('users.*');
+
+            return;
         }
 
-        $members = $query->paginate(10);
+        if ($this->sortField === 'user_number') {
+            $query->orderByRaw('CAST(users.user_number AS UNSIGNED) ' . $this->sortDirection);
 
-        return view('livewire.content.members', [
+            return;
+        }
+
+        $query->orderBy('users.' . $this->sortField, $this->sortDirection);
+    }
+
+    private function membersExportQuery(Carbon $start, Carbon $end): Builder
+    {
+        $query = $this->membersQuery()
+            ->with(['personalData.address', 'personalData.contact'])
+            ->whereBetween('users.created_at', [$start, $end]);
+
+        $this->applyMembersSorting($query);
+
+        return $query;
+    }
+
+    private function downloadMembersPdf($members, Carbon $start, Carbon $end)
+    {
+        $pdf = Pdf::loadView('exports.members-pdf', [
             'members' => $members,
-            'canEdit' => $canEdit,
+            'start' => $start,
+            'end' => $end,
+            'generatedAt' => now(),
+            'generatedBy' => Auth::user(),
+            'appName' => config('app.name', 'Cooperative Management System'),
         ]);
+
+        return response()->streamDownload(function () use ($pdf) {
+            echo $pdf->output();
+        }, $this->exportFilename('pdf', $start, $end), [
+            'Content-Type' => 'application/pdf',
+        ]);
+    }
+
+    private function downloadMembersExcel($members, Carbon $start, Carbon $end)
+    {
+        $xml = $this->buildMembersSpreadsheetXml($members);
+
+        return response()->streamDownload(function () use ($xml) {
+            echo $xml;
+        }, $this->exportFilename('xls', $start, $end), [
+            'Content-Type' => 'application/vnd.ms-excel; charset=UTF-8',
+        ]);
+    }
+
+    private function exportFilename(string $extension, Carbon $start, Carbon $end): string
+    {
+        return 'members-' . $start->format('Y-m-d') . '-to-' . $end->format('Y-m-d') . '.' . $extension;
+    }
+
+    private function buildMembersSpreadsheetXml($members): string
+    {
+        $headers = [
+            'Member ID',
+            'Full Name',
+            'Email',
+            'Phone Number',
+            'Status',
+            'Gender',
+            'Civil Status',
+            'Address',
+            'Join Date',
+        ];
+
+        $rows = $members->map(function (User $member) {
+            $address = $member->personalData?->address;
+
+            return [
+                $member->user_number,
+                $this->memberFullName($member),
+                $member->email,
+                $member->personalData?->contact?->phone_no ?? '',
+                ucfirst((string) ($member->account_status ?? 'active')),
+                $member->personalData?->gender ?? '',
+                $member->personalData?->civil_status ?? '',
+                $this->memberAddress($address),
+                optional($member->created_at)->format('M d, Y') ?? '',
+            ];
+        });
+
+        $xmlRows = collect([$headers])
+            ->merge($rows)
+            ->map(function ($row) {
+                $cells = collect($row)->map(function ($value) {
+                    $escaped = htmlspecialchars((string) $value, ENT_QUOTES | ENT_XML1, 'UTF-8');
+
+                    return '<Cell><Data ss:Type="String">' . $escaped . '</Data></Cell>';
+                })->implode('');
+
+                return '<Row>' . $cells . '</Row>';
+            })->implode('');
+
+        return '<?xml version="1.0" encoding="UTF-8"?>'
+            . '<?mso-application progid="Excel.Sheet"?>'
+            . '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"'
+            . ' xmlns:o="urn:schemas-microsoft-com:office:office"'
+            . ' xmlns:x="urn:schemas-microsoft-com:office:excel"'
+            . ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"'
+            . ' xmlns:html="http://www.w3.org/TR/REC-html40">'
+            . '<Worksheet ss:Name="Members"><Table>'
+            . $xmlRows
+            . '</Table></Worksheet></Workbook>';
+    }
+
+    private function memberFullName(User $member): string
+    {
+        return trim(implode(' ', array_filter([
+            $member->personalData?->first_name,
+            $member->personalData?->mid_name,
+            $member->personalData?->last_name,
+            $member->personalData?->suffix,
+        ])));
+    }
+
+    private function memberAddress(?Address $address): string
+    {
+        if (! $address) {
+            return '';
+        }
+
+        return implode(', ', array_filter([
+            $address->street,
+            $address->barangay,
+            $address->city_municipality,
+            $address->province,
+            $address->region,
+            $address->zip_code,
+        ]));
     }
 
     public function nextPage()

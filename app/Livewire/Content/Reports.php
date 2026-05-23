@@ -170,9 +170,7 @@ class Reports extends Component
 
     public function getCanViewBalanceSheetProperty(): bool
     {
-        $user = Auth::user();
-
-        return (bool) $user?->hasRole('admin');
+        return (bool) Auth::user()?->can('reports.financial');
     }
 
     public function getFinancialSummaryProperty(): array

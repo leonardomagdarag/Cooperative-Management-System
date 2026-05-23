@@ -83,13 +83,13 @@
                         <tbody class="bg-white divide-y divide-gray-200">
                             @forelse($loans as $loan)
                                 <tr class="hover:bg-gray-100 cursor-pointer"
-                                    wire:click="viewDetails('{{ $loan->loan_id }}')">
+                                    wire:click="viewDetails({{ $loan->id }})">
                                     <td class="p-4" onclick="event.stopPropagation()">
-                                        <input wire:model="selectedRows" value="{{ $loan->loan_id }}" type="checkbox"
+                                        <input wire:model="selectedRows" value="{{ $loan->id }}" type="checkbox"
                                             class="w-4 h-4 rounded">
                                     </td>
                                     @if ($canEdit)
-                                        <td class="p-4 text-sm font-semibold text-gray-900">{{ $loan->loan_id }}</td>
+                                        <td class="p-4 text-sm font-semibold text-gray-900">{{ $loan->loan_number }}</td>
                                     @endif
                                     <td class="p-4 text-base font-medium text-gray-900">
                                         {{ $loan->account->user->personalData->first_name ?? '' }}
@@ -156,4 +156,9 @@
             {{ $loans->links() }}
         </div>
     </div>
+
+    {{-- Details Modal --}}
+    @if ($showModal && $selectedLoan)
+        <x-modals.member-loan-detail :loan="$selectedLoan" />
+    @endif
 </div>

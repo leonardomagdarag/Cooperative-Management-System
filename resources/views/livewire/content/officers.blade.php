@@ -232,34 +232,89 @@
 
         {{-- Permission Overrides Modal --}}
         @if ($showPermissionsModal && $selectedOfficerForPermissions)
-            <div class="fixed inset-0 z-50 flex items-center justify-center overflow-x-hidden overflow-y-auto outline-none focus:outline-none"
-                aria-labelledby="modal-title" role="dialog" aria-modal="true">
+            @php
+                $permOfficer = \App\Models\User::with('personalData')->find($selectedOfficerForPermissions);
+                $permName = $permOfficer
+                    ? trim(($permOfficer->personalData?->first_name ?? '') . ' ' . ($permOfficer->personalData?->last_name ?? ''))
+                    : '';
+                $permName = $permName ?: ($permOfficer?->email ?? 'Officer');
+                $permRole = $permOfficer
+                    ? (\App\Support\PermissionCatalog::roleDisplayNames()[$permOfficer->role] ?? ucfirst($permOfficer->role))
+                    : '';
+            @endphp
+            <div x-data="{ show: false }" x-init="setTimeout(() => show = true, 10)" x-show="show"
+                x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0"
+                x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150"
+                x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
+                class="fixed inset-0 z-[60] flex items-center justify-center overflow-x-hidden overflow-y-auto outline-none focus:outline-none"
+                aria-labelledby="perm-modal-title" role="dialog" aria-modal="true">
                 {{-- Backdrop --}}
                 <div class="absolute inset-0 bg-gray-900 opacity-50 transition-opacity"
-                    wire:click="closePermissionsModal"></div>
+                    @click="show = false; setTimeout(() => $wire.closePermissionsModal(), 150)"></div>
 
                 {{-- Modal content --}}
-                <div class="relative w-full max-w-4xl max-h-[90vh] mx-auto my-6 z-10 overflow-y-auto">
-                    <div class="relative bg-white rounded-lg shadow">
+                <div class="relative z-10 mx-auto my-6 w-full max-w-4xl"
+                    x-transition:enter="transition ease-out duration-200 delay-75"
+                    x-transition:enter-start="opacity-0 scale-95"
+                    x-transition:enter-end="opacity-100 scale-100">
+                    <div class="relative flex max-h-[90vh] flex-col rounded-xl bg-white shadow-2xl">
                         {{-- Modal header --}}
                         <div
-                            class="flex items-center justify-between p-5 border-b border-gray-200 bg-gradient-to-r from-cyan-600 to-indigo-600">
-                            <h3 class="text-xl font-semibold text-white">
-                                Manage Permission Overrides
-                            </h3>
-                            <button type="button" wire:click="closePermissionsModal"
-                                class="text-white bg-transparent hover:bg-cyan-800 rounded-lg text-sm p-1.5 ml-auto inline-flex items-center transition-colors">
-                                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            class="flex shrink-0 items-center justify-between border-b border-indigo-700/30 bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-4">
+                            <div>
+                                <h3 id="perm-modal-title" class="text-lg font-semibold text-white">
+                                    Manage Permission Overrides
+                                </h3>
+                                @if ($permName)
+                                    <p class="mt-0.5 text-sm text-indigo-100">
+                                        {{ $permName }}
+                                        @if ($permRole)
+                                            <span class="mx-1 text-indigo-300">·</span>
+                                            <span class="font-medium text-indigo-200">{{ $permRole }}</span>
+                                        @endif
+                                    </p>
+                                @endif
+                            </div>
+                            <button type="button"
+                                @click="show = false; setTimeout(() => $wire.closePermissionsModal(), 150)"
+                                class="ml-4 inline-flex items-center rounded-lg bg-white/10 p-1.5 text-white transition-colors hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/50">
+                                <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd"
                                         d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                                        clip-rule="evenodd"></path>
+                                        clip-rule="evenodd" />
                                 </svg>
                             </button>
                         </div>
 
                         {{-- Modal body --}}
-                        <div class="p-6">
-                            <livewire:content.officer-override-manager :officerId="$selectedOfficerForPermissions" :key="'officer-override-manager-' . $selectedOfficerForPermissions" />
+                        <div class="flex-1 overflow-y-auto p-6">
+                            <livewire:content.officer-override-manager :officerId="$selectedOfficerForPermissions"
+                                :key="'officer-override-manager-' . $selectedOfficerForPermissions" />
+                        </div>
+
+                        {{-- Modal footer --}}
+                        <div
+                            class="flex shrink-0 items-center justify-end gap-2 border-t border-gray-200 bg-gray-50 px-6 py-3">
+                            <button type="button"
+                                @click="show = false; setTimeout(() => $wire.closePermissionsModal(), 150)"
+                                class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-gray-200">
+                                Close
+                            </button>
+                            <button type="button"
+                                x-data="{ dirty: false }"
+                                x-on:permission-dirty.window="dirty = $event.detail.dirty"
+                                :disabled="!dirty"
+                                @click="$wire.dispatchTo('content.officer-override-manager', 'do-save')"
+                                :class="dirty
+                                    ? 'bg-cyan-600 text-white hover:bg-cyan-700 focus:ring-cyan-300 cursor-pointer'
+                                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'"
+                                class="inline-flex items-center gap-1.5 rounded-lg px-5 py-2 text-sm font-semibold transition-colors focus:outline-none focus:ring-4">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.5"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                                Save Overrides
+                            </button>
                         </div>
                     </div>
                 </div>

@@ -111,5 +111,23 @@
         Livewire.on('toast', (event) => {
             window.toast[event.type || 'success'](event.message);
         });
+
+        // Detect session expiry / auth failures on any Livewire request
+        Livewire.hook('request', ({
+            fail
+        }) => {
+            fail(({
+                status,
+                preventDefault
+            }) => {
+                if (status === 401 || status === 419) {
+                    preventDefault();
+                    window.toast.warning('Your session has expired. Redirecting to login…');
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 1500);
+                }
+            });
+        });
     </script>
 @endscript

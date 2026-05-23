@@ -2,23 +2,16 @@
 
 namespace App\Support;
 
-/**
- * Single source of truth for permission groups, labels, and role presets.
- * All Livewire components and views should import from here instead of
- * duplicating the arrays inline.
- */
 class PermissionCatalog
 {
-    /**
-     * Returns all permission groups.  Keys are human-readable group names,
-     * values are arrays of Spatie permission strings.
-     */
+    public static function officerRoles(): array
+    {
+        return ['manager', 'secretary', 'loan', 'treasurer'];
+    }
+
     public static function groups(): array
     {
         return [
-            'Dashboard' => [
-                'dashboard.view',
-            ],
             'Members' => [
                 'members.view',
                 'members.create',
@@ -41,32 +34,23 @@ class PermissionCatalog
             ],
             'Transactions' => [
                 'transactions.view',
+                'transactions.view-all',
                 'transactions.create',
                 'transactions.update',
                 'transactions.void',
                 'transactions.export',
             ],
-            'Deposits & Withdrawals' => [
+            'Deposits' => [
                 'deposits.view',
                 'deposits.create',
                 'deposits.approve',
                 'deposits.reject',
+            ],
+            'Withdrawals' => [
                 'withdrawals.view',
                 'withdrawals.create',
                 'withdrawals.approve',
                 'withdrawals.reject',
-            ],
-            'Reports' => [
-                'reports.view',
-                'reports.export',
-                'reports.financial',
-                'reports.audit',
-            ],
-            'Settings & Logs' => [
-                'settings.view',
-                'settings.update',
-                'logs.view',
-                'logs.export',
             ],
             'Announcements' => [
                 'announcements.view',
@@ -74,90 +58,47 @@ class PermissionCatalog
                 'announcements.update',
                 'announcements.delete',
             ],
-            'Staff Management' => [
+            'Reports' => [
+                'reports.view',
+                'reports.export',
+                'reports.financial',
+                'reports.audit',
+            ],
+            'Officer Management' => [
                 'officers.create',
                 'officers.update',
                 'officers.delete',
                 'officers.manage-permissions',
             ],
-            'Notifications & Profile' => [
-                'notifications.view',
-                'notifications.manage',
-                'profile.view',
-                'profile.update',
+            'Logs' => [
+                'logs.view',
+                'logs.export',
             ],
         ];
     }
 
-    /**
-     * Returns a flat list of all permission strings.
-     */
-    public static function all(): array
-    {
-        return array_merge(...array_values(self::groups()));
-    }
-
-    /**
-     * Human-readable label for a permission string.
-     */
-    public static function formatLabel(string $permission): string
-    {
-        $parts = explode('.', $permission);
-        if (count($parts) === 2) {
-            $resource = ucfirst($parts[0]);
-            $action = match ($parts[1]) {
-                'view'               => 'View',
-                'create'             => 'Create',
-                'update'             => 'Edit',
-                'delete'             => 'Delete',
-                'approve'            => 'Approve',
-                'reject'             => 'Reject',
-                'disburse'           => 'Disburse',
-                'void'               => 'Void',
-                'export'             => 'Export',
-                'manage-permissions' => 'Manage Permissions',
-                'view-full-details'  => 'View Full Details',
-                'financial'          => 'Financial Reports',
-                'audit'              => 'Audit Reports',
-                'manage'             => 'Manage',
-                default              => ucfirst($parts[1]),
-            };
-            return "{$resource}: {$action}";
-        }
-
-        return ucfirst(str_replace(['.', '-'], ' ', $permission));
-    }
-
-    /**
-     * Human-readable display names for the four officer roles.
-     */
     public static function roleDisplayNames(): array
     {
         return [
-            'manager'   => 'Manager',
+            'admin' => 'Administrator',
+            'manager' => 'Manager',
             'secretary' => 'Secretary',
-            'loan'      => 'Loan Officer',
+            'loan' => 'Loan Officer',
             'treasurer' => 'Treasurer',
         ];
     }
 
-    /**
-     * Short descriptions of each officer role's responsibilities.
-     */
     public static function roleDescriptions(): array
     {
         return [
-            'manager'   => 'Oversees all cooperative operations. Has broad access to members, loans, transactions, reports, announcements, and staff management.',
-            'secretary' => 'Handles records and communications. Manages member registrations, creates announcements, and exports basic reports.',
-            'loan'      => 'Focuses on loan processing. Creates and reviews loan applications and manages loan products and services.',
-            'treasurer' => 'Manages cooperative finances. Handles transactions, deposits, withdrawals, and financial reports.',
+            'admin' => 'Full system access. Can manage all settings, roles, permissions, and officer accounts.',
+            'manager' => 'Broad operational oversight across officers, members, services, and reporting.',
+            'secretary' => 'Member recordkeeping, communication, announcements, and day-to-day reporting.',
+            'loan' => 'Loan processing, service transactions, and member loan support.',
+            'treasurer' => 'Cash movement, transaction validation, and financial reporting support.',
         ];
     }
 
-    /**
-     * Default permissions per officer role, used as seeder baselines and
-     * as convenient presets in the role-permission manager.
-     */
     public static function rolePresets(): array
     {
         return [
@@ -178,17 +119,21 @@ class PermissionCatalog
                 'loans.reject',
                 'loans.disburse',
                 'transactions.view',
+                'transactions.view-all',
                 'transactions.create',
                 'transactions.update',
                 'transactions.export',
                 'deposits.view',
                 'deposits.create',
                 'deposits.approve',
+                'deposits.reject',
                 'withdrawals.view',
                 'withdrawals.create',
                 'withdrawals.approve',
+                'withdrawals.reject',
                 'reports.view',
                 'reports.export',
+                'reports.financial',
                 'announcements.view',
                 'announcements.create',
                 'announcements.update',
@@ -198,22 +143,60 @@ class PermissionCatalog
                 'officers.create',
                 'officers.update',
                 'officers.delete',
-                'officers.manage-permissions',
-                'logs.view',
-                'logs.export',
                 'notifications.view',
-                'notifications.manage',
+                'profile.view',
+                'profile.update',
+            ],
+            'secretary' => [
+                'dashboard.view',
+                'members.view',
+                'members.create',
+                'members.update',
+                'members.view-full-details',
+                'transactions.view',
+                'transactions.view-all',
+                'deposits.view',
+                'withdrawals.view',
+                'announcements.view',
+                'announcements.create',
+                'announcements.update',
+                'reports.view',
+                'reports.export',
+                'settings.view',
+                'notifications.view',
+                'profile.view',
+                'profile.update',
+            ],
+            'loan' => [
+                'dashboard.view',
+                'members.view',
+                'members.view-full-details',
+                'services.view',
+                'services.create',
+                'services.update',
+                'loans.view',
+                'loans.create',
+                'loans.update',
+                'loans.approve',
+                'loans.reject',
+                'loans.disburse',
+                'reports.view',
+                'reports.export',
+                'announcements.view',
+                'settings.view',
+                'notifications.view',
                 'profile.view',
                 'profile.update',
             ],
             'treasurer' => [
                 'dashboard.view',
                 'members.view',
+                'members.view-full-details',
                 'services.view',
                 'services.create',
                 'services.update',
-                'loans.view',
                 'transactions.view',
+                'transactions.view-all',
                 'transactions.create',
                 'transactions.update',
                 'transactions.export',
@@ -234,45 +217,26 @@ class PermissionCatalog
                 'profile.view',
                 'profile.update',
             ],
-            'loan' => [
-                'dashboard.view',
-                'members.view',
-                'members.view-full-details',
-                'services.view',
-                'services.create',
-                'services.update',
-                'loans.view',
-                'loans.create',
-                'loans.update',
-                'loans.reject',
-                'transactions.view',
-                'reports.view',
-                'reports.export',
-                'announcements.view',
-                'settings.view',
-                'notifications.view',
-                'profile.view',
-                'profile.update',
-            ],
-            'secretary' => [
-                'dashboard.view',
-                'members.view',
-                'members.create',
-                'members.update',
-                'services.view',
-                'loans.view',
-                'transactions.view',
-                'transactions.export',
-                'reports.view',
-                'reports.export',
-                'announcements.view',
-                'announcements.create',
-                'announcements.update',
-                'settings.view',
-                'notifications.view',
-                'profile.view',
-                'profile.update',
-            ],
         ];
+    }
+
+    public static function allPermissions(): array
+    {
+        return array_values(array_unique(array_merge(...array_values(self::groups()))));
+    }
+
+    public static function formatLabel(string $permission): string
+    {
+        [$resource, $action] = array_pad(explode('.', $permission, 2), 2, null);
+
+        if ($action === null) {
+            return ucwords(str_replace(['-', '_'], ' ', $permission));
+        }
+
+        return sprintf(
+            '%s %s',
+            ucwords(str_replace(['-', '_'], ' ', $action)),
+            ucwords(str_replace(['-', '_'], ' ', $resource))
+        );
     }
 }

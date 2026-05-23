@@ -26,7 +26,7 @@ class MemberOverview extends Component
     public function loadDashboardData()
     {
         $user = Auth::user();
-        
+
         // Load user with all necessary relationships
         $member = User::with([
             'accounts',
@@ -44,14 +44,14 @@ class MemberOverview extends Component
 
         // Get active loans
         $this->activeLoans = $member->loans?->whereIn('loan_status', ['approved', 'active'])->values();
-        
+
         // Calculate total loan balance
-        $this->totalLoanBalance = $this->activeLoans->sum(function($loan) {
+        $this->totalLoanBalance = $this->activeLoans->sum(function ($loan) {
             return $loan->remainingBalance();
         });
 
         // Get upcoming payments (next 30 days)
-        $this->upcomingPayments = $this->activeLoans->filter(function($loan) {
+        $this->upcomingPayments = $this->activeLoans->filter(function ($loan) {
             return $loan->due_date && \Carbon\Carbon::parse($loan->due_date)->diffInDays(now(), false) <= 30;
         })->sortBy('due_date')->take(5)->values();
 
