@@ -2,7 +2,9 @@
 
 namespace App\Livewire\Content;
 
+use App\Models\Notification;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -13,6 +15,9 @@ class Notifications extends Component
     public string $status = 'all';
     public string $category = 'all';
 
+    public bool $showModal = false;
+    public ?int $selectedNotificationId = null;
+
     public function updatingStatus(): void
     {
         $this->resetPage();
@@ -21,6 +26,45 @@ class Notifications extends Component
     public function updatingCategory(): void
     {
         $this->resetPage();
+    }
+
+    #[On('open-notification-modal')]
+    public function openNotificationModal(int $notificationId): void
+    {
+        $notification = Auth::user()->notifications()->find($notificationId);
+
+        if (! $notification) {
+            return;
+        }
+
+        if (! $notification->is_read) {
+            $notification->markAsRead();
+        }
+
+        $this->selectedNotificationId = $notificationId;
+        $this->showModal = true;
+    }
+
+    public function openNotification(int $id): void
+    {
+        $notification = Auth::user()->notifications()->find($id);
+
+        if (! $notification) {
+            return;
+        }
+
+        if (! $notification->is_read) {
+            $notification->markAsRead();
+        }
+
+        $this->selectedNotificationId = $id;
+        $this->showModal = true;
+    }
+
+    public function closeModal(): void
+    {
+        $this->showModal = false;
+        $this->selectedNotificationId = null;
     }
 
     public function markAsRead(int $notificationId): void
@@ -47,14 +91,6 @@ class Notifications extends Component
             ]);
     }
 
-    public function deleteRead(): void
-    {
-        Auth::user()
-            ->notifications()
-            ->read()
-            ->delete();
-    }
-
     public function render()
     {
         $query = Auth::user()
@@ -78,9 +114,15 @@ class Notifications extends Component
             $query->where('type', 'announcement');
         }
 
+        $selectedNotification = $this->selectedNotificationId
+            ? Auth::user()->notifications()->find($this->selectedNotificationId)
+            : null;
+
         return view('livewire.content.notifications', [
-            'notifications' => $query->paginate(12),
-            'unreadCount' => Auth::user()->notifications()->unread()->active()->count(),
+            'notifications'        => $query->paginate(12),
+            'unreadCount'          => Auth::user()->notifications()->unread()->active()->count(),
+            'selectedNotification' => $selectedNotification,
         ]);
     }
 }
+

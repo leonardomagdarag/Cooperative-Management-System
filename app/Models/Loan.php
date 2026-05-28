@@ -92,9 +92,40 @@ class Loan extends Model
         return $this->completedPayments()->sum('amount');
     }
 
+    public function totalInterest(): float
+    {
+        $principal = (float) $this->loan_amount;
+        $months = max(1, (int) ($this->term_months ?? 0));
+        $monthlyRate = (float) $this->interest_rate / 100;
+
+        if ($principal <= 0 || $monthlyRate <= 0) {
+            return 0.0;
+        }
+
+        return round($principal * $monthlyRate * $months, 2);
+    }
+
+    public function monthlyPayment(): float
+    {
+        $months = max(1, (int) ($this->term_months ?? 0));
+
+        return round($this->totalPayable() / $months, 2);
+    }
+
+    public function totalPayable(): float
+    {
+        $principal = (float) $this->loan_amount;
+
+        if ($principal <= 0) {
+            return 0.0;
+        }
+
+        return round($principal + $this->totalInterest(), 2);
+    }
+
     public function remainingBalance()
     {
-        return $this->loan_amount - $this->totalPaid();
+        return max(0, round($this->totalPayable() - $this->totalPaid(), 2));
     }
 
     public function employment()
@@ -138,6 +169,11 @@ class Loan extends Model
         };
     }
 
+    public function getLoanTypeLabelAttribute(): string
+    {
+        return ucwords(str_replace(['_', '-'], ' ', (string) $this->loan_type));
+    }
+
     public function groupMembers()
     {
         return $this->belongsToMany(User::class, 'group_loan_members')
@@ -148,5 +184,10 @@ class Loan extends Model
     public function account()
     {
         return $this->belongsTo(Account::class, 'account_id');
+    }
+
+    public function documents()
+    {
+        return $this->hasMany(LoanDocument::class)->latest('created_at');
     }
 }

@@ -11,7 +11,6 @@ export default defineConfig({
                 'resources/css/app.css',
                 'resources/js/app.js',
                 'resources/js/login.js',
-                'resources/js/officer-dashboard.js',
             ],
             refresh: true,
         }),

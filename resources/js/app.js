@@ -1,10 +1,14 @@
 import './bootstrap';
 import './reports-charts';
 
-import Alpine from 'alpinejs';
+import { Livewire, Alpine } from '../../vendor/livewire/livewire/dist/livewire.esm';
 
 window.Alpine = Alpine;
-Alpine.start();
+
+// window.livewireScriptConfig is set in dashboard.blade.php BEFORE this script loads.
+// That prevents livewire.esm from registering a DOMContentLoaded auto-start.
+// We call Livewire.start() manually here (once) to boot everything.
+Livewire.start();
 
 
 const navbar = document.getElementById("top-navbar");

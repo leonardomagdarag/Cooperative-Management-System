@@ -61,7 +61,7 @@ return new class extends Migration
         Schema::create('personal_data', function (Blueprint $table) {
             $table->id();
             $table->string('personal_data_number', 20)->unique();
-            $table->enum('title', ['Chairman', 'Vice Chairman', 'Secretary', 'Treasurer', 'Loan Officer', 'Member'])->default('Member');
+            $table->enum('title', ['Chairman', 'Vice Chairman', 'Secretary', 'Treasurer', 'Loan Officer', 'Accountant', 'Member'])->default('Member');
             $table->string('first_name', 100);
             $table->string('last_name', 100);
             $table->string('mid_name', 100)->nullable();

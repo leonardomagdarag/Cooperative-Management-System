@@ -27,7 +27,7 @@ class NotificationDropdown extends Component
             ]);
     }
 
-    public function openNotification(int $notificationId): mixed
+    public function openNotification(int $notificationId): void
     {
         $notification = Auth::user()->notifications()->find($notificationId);
 
@@ -35,13 +35,7 @@ class NotificationDropdown extends Component
             $notification->markAsRead();
         }
 
-        if ($notification && $notification->action_url) {
-            return $this->redirect($notification->action_url, navigate: false);
-        }
-
-        $this->dispatch('open-notifications-inbox');
-
-        return null;
+        $this->dispatch('open-notifications-inbox', notificationId: $notificationId);
     }
 
     public function openInbox(): void

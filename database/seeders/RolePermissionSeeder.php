@@ -12,6 +12,8 @@ class RolePermissionSeeder extends Seeder
      */
     public function run(): void
     {
+        RolePermission::query()->where('role', 'treasurer')->delete();
+
         $rolePermissions = [
             // ADMIN
             ['role' => 'admin', 'section' => 'dashboard', 'permissions' => ['view']],
@@ -61,14 +63,15 @@ class RolePermissionSeeder extends Seeder
             ['role' => 'secretary', 'section' => 'reports', 'permissions' => ['view', 'export']],
             ['role' => 'secretary', 'section' => 'settings', 'permissions' => ['view']],
 
-            // TREASURER
-            ['role' => 'treasurer', 'section' => 'dashboard', 'permissions' => ['view']],
-            ['role' => 'treasurer', 'section' => 'services', 'permissions' => ['view', 'create', 'edit']],
-            ['role' => 'treasurer', 'section' => 'members', 'permissions' => ['view']],
-            ['role' => 'treasurer', 'section' => 'ledger', 'permissions' => ['view', 'create', 'edit', 'export']],
-            ['role' => 'treasurer', 'section' => 'announcements', 'permissions' => ['view']],
-            ['role' => 'treasurer', 'section' => 'reports', 'permissions' => ['view', 'export']],
-            ['role' => 'treasurer', 'section' => 'settings', 'permissions' => ['view']],
+            // ACCOUNTANT
+            ['role' => 'accountant', 'section' => 'dashboard', 'permissions' => ['view']],
+            ['role' => 'accountant', 'section' => 'services', 'permissions' => ['view', 'create', 'edit']],
+            ['role' => 'accountant', 'section' => 'loans', 'permissions' => ['view', 'approve', 'reject']],
+            ['role' => 'accountant', 'section' => 'members', 'permissions' => ['view', 'create']],
+            ['role' => 'accountant', 'section' => 'ledger', 'permissions' => ['view', 'create', 'edit', 'export']],
+            ['role' => 'accountant', 'section' => 'announcements', 'permissions' => ['view']],
+            ['role' => 'accountant', 'section' => 'reports', 'permissions' => ['view', 'export']],
+            ['role' => 'accountant', 'section' => 'settings', 'permissions' => ['view']],
         ];
 
         foreach ($rolePermissions as $permission) {

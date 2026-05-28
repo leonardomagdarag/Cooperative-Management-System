@@ -22,10 +22,6 @@ class Settings extends Component
 
     public bool $showPersonalAccountSettings = false;
 
-    public bool $showPublicContentModal = false;
-
-    public array $publicPageContentForm = [];
-
     public array $passwordForm = [
         'current_password' => '',
         'password' => '',
@@ -36,6 +32,8 @@ class Settings extends Component
         'current_password' => '',
     ];
 
+    public $profilePhotoUpload = null;
+
     public function mount(): void
     {
         if ($this->isMemberAccount()) {
@@ -43,8 +41,6 @@ class Settings extends Component
 
             return;
         }
-
-        $this->fillPublicPageContentForm();
     }
 
     public function setMemberTab(string $tab): void
@@ -80,6 +76,7 @@ class Settings extends Component
         $user->password = $validated['passwordForm']['password'];
         $user->remember_token = Str::random(60);
         $user->save();
+        $user->invalidateOtherSessions(session()->getId());
 
         TrustedDevice::query()
             ->where('user_id', $user->id)
@@ -194,8 +191,7 @@ class Settings extends Component
     {
         abort_unless(Auth::user()?->can('settings.update'), 403);
 
-        $this->fillPublicPageContentForm();
-        $this->showPublicContentModal = true;
+        $this->dispatch('sectionChanged', 'public-content');
     }
 
     public function openMyAccountSettings(): void
@@ -215,21 +211,6 @@ class Settings extends Component
     public function backToSystemSettings(): void
     {
         $this->showPersonalAccountSettings = false;
-    }
-
-    public function closePublicContentManager(): void
-    {
-        $this->showPublicContentModal = false;
-    }
-
-    public function savePublicContentDraft(): void
-    {
-        abort_unless(Auth::user()?->can('settings.update'), 403);
-
-        $this->dispatch('toast', [
-            'message' => 'Public page content editing is available for preview only until a site content table is added.',
-            'type' => 'info',
-        ]);
     }
 
     public function render()
@@ -256,9 +237,7 @@ class Settings extends Component
     {
         $user = Auth::user();
 
-        return (bool) $user && (
-            $user->hasRole('member') || ($user->role ?? null) === 'member'
-        );
+        return (bool) $user && $user->hasRole('member') && ! ($user->is_officer ?? false);
     }
 
     private function memberUser(): User
@@ -285,78 +264,6 @@ class Settings extends Component
         ];
     }
 
-
-    private function fillPublicPageContentForm(): void
-    {
-        $this->publicPageContentForm = [
-            'home' => [
-                'hero_subtitle' => (string) config('content.home.hero_subtitle', ''),
-                'active_members' => (string) config('content.home.active_members', ''),
-                'total_assets' => (string) config('content.home.total_assets', ''),
-                'years_service' => (string) config('content.home.years_service', ''),
-                'service_done' => (string) config('content.home.service_done', ''),
-            ],
-            'about' => [
-                'about1' => (string) config('content.about.about1', ''),
-                'about2' => (string) config('content.about.about2', ''),
-                'history' => (string) config('content.about.history', ''),
-                'mission' => (string) config('content.about.mission', ''),
-                'vision' => (string) config('content.about.vision', ''),
-            ],
-            'board' => [
-                'chairperson' => [
-                    'name' => (string) config('content.board.chairperson.name', ''),
-                    'title' => (string) config('content.board.chairperson.title', ''),
-                ],
-                'vice_chairperson' => [
-                    'name' => (string) config('content.board.vice_chairperson.name', ''),
-                    'title' => (string) config('content.board.vice_chairperson.title', ''),
-                ],
-                'treasurer' => [
-                    'name' => (string) config('content.board.treasurer.name', ''),
-                    'title' => (string) config('content.board.treasurer.title', ''),
-                ],
-                'secretary' => [
-                    'name' => (string) config('content.board.secretary.name', ''),
-                    'title' => (string) config('content.board.secretary.title', ''),
-                ],
-            ],
-            'officers' => [
-                'officer1' => [
-                    'name' => (string) config('content.officers.officer1.name', ''),
-                    'title' => (string) config('content.officers.officer1.title', ''),
-                ],
-                'officer2' => [
-                    'name' => (string) config('content.officers.officer2.name', ''),
-                    'title' => (string) config('content.officers.officer2.title', ''),
-                ],
-                'officer3' => [
-                    'name' => (string) config('content.officers.officer3.name', ''),
-                    'title' => (string) config('content.officers.officer3.title', ''),
-                ],
-                'officer4' => [
-                    'name' => (string) config('content.officers.officer4.name', ''),
-                    'title' => (string) config('content.officers.officer4.title', ''),
-                ],
-            ],
-            'news' => [
-                'hero_description' => (string) config('content.news.hero_description', ''),
-                'newsletter_title' => (string) config('content.news.newsletter.title', ''),
-                'newsletter_description' => (string) config('content.news.newsletter.description', ''),
-                'privacy_note' => (string) config('content.news.newsletter.privacy_note', ''),
-            ],
-            'events' => [
-                'events' => (string) config('content.events.events', ''),
-            ],
-            'contact' => [
-                'address' => (string) config('content.contact.address', ''),
-                'phone' => (string) config('content.contact.phone', ''),
-                'email' => (string) config('content.contact.email', ''),
-                'office_hours' => (string) config('content.contact.office_hours', ''),
-                'map_embed' => (string) config('content.contact.map_embed', ''),
-            ],
-        ];
-    }
 
     private function signOutCurrentUser(): void
     {

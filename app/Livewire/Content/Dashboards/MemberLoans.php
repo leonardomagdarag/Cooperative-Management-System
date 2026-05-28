@@ -77,20 +77,8 @@ class MemberLoans extends Component
     public function generateAmortizationSchedule($loan)
     {
         $principal = floatval($loan->loan_amount);
-        $annualRate = floatval($loan->interest_rate) / 100;
         $termMonths = intval($loan->term_months);
 
-        // Convert annual rate to period rate based on payment frequency
-        $periodsPerYear = match ($loan->payment_frequency) {
-            'weekly' => 52,
-            'bi-weekly' => 26,
-            'monthly' => 12,
-            'quarterly' => 4,
-            'annually' => 1,
-            default => 12
-        };
-
-        $periodRate = $annualRate / $periodsPerYear;
         $totalPeriods = match ($loan->payment_frequency) {
             'weekly' => $termMonths * 4.33,
             'bi-weekly' => $termMonths * 2.17,
@@ -100,28 +88,32 @@ class MemberLoans extends Component
             default => $termMonths
         };
 
-        // Calculate periodic payment using amortization formula
-        // PMT = P * [r(1+r)^n] / [(1+r)^n - 1]
-        if ($periodRate > 0) {
-            $periodicPayment = $principal * ($periodRate * pow(1 + $periodRate, $totalPeriods)) /
-                (pow(1 + $periodRate, $totalPeriods) - 1);
-        } else {
-            // Zero interest
-            $periodicPayment = $principal / $totalPeriods;
+        if ($totalPeriods <= 0) {
+            return [];
         }
+
+        $roundedPeriods = max(1, (int) ceil($totalPeriods));
+        $totalInterest = method_exists($loan, 'totalInterest')
+            ? $loan->totalInterest()
+            : round($principal * (floatval($loan->interest_rate) / 100) * max(1, $termMonths), 2);
+        $totalPayable = round($principal + $totalInterest, 2);
+        $principalPerPeriod = $principal / $roundedPeriods;
+        $interestPerPeriod = $totalInterest / $roundedPeriods;
 
         $schedule = [];
         $balance = $principal;
         $startDate = $loan->approved_at ?? $loan->applied_at;
 
-        for ($i = 1; $i <= ceil($totalPeriods); $i++) {
-            $interestPayment = $balance * $periodRate;
-            $principalPayment = $periodicPayment - $interestPayment;
+        for ($i = 1; $i <= $roundedPeriods; $i++) {
+            $interestPayment = $interestPerPeriod;
+            $principalPayment = $principalPerPeriod;
+            $paymentAmount = $principalPayment + $interestPayment;
 
             // Adjust last payment to zero out balance
-            if ($i == ceil($totalPeriods)) {
+            if ($i == $roundedPeriods) {
                 $principalPayment = $balance;
-                $periodicPayment = $principalPayment + $interestPayment;
+                $paymentAmount = round($totalPayable - collect($schedule)->sum('payment_amount'), 2);
+                $interestPayment = round($paymentAmount - $principalPayment, 2);
             }
 
             $balance -= $principalPayment;
@@ -139,7 +131,7 @@ class MemberLoans extends Component
             $schedule[] = [
                 'payment_number' => $i,
                 'due_date' => $dueDate,
-                'payment_amount' => round($periodicPayment, 2),
+                'payment_amount' => round($paymentAmount, 2),
                 'principal' => round($principalPayment, 2),
                 'interest' => round($interestPayment, 2),
                 'balance' => round(max($balance, 0), 2)

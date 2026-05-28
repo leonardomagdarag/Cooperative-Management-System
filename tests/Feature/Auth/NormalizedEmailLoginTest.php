@@ -29,7 +29,7 @@ test('users can log in with normalized email when a legacy record stores extra w
     ]);
 
     $this->assertAuthenticatedAs($user->fresh());
-    $response->assertRedirect('/manager/dashboard');
+    $response->assertRedirect(route('dashboard', absolute: false));
 
     expect($user->fresh()->email)->toBe('manager.legacy@example.com');
 });

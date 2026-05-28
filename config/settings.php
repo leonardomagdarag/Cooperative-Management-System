@@ -8,8 +8,8 @@ return [
         'manager' => ['dashboard', 'notifications', 'officers', 'members', 'services', 'tickets', 'ledger' /* shows transactions (loans, payments, etc) */, 'announcements', 'reports', 'settings', 'profile'],
         'member' => ['dashboard', 'notifications', 'services', 'loans', 'history', 'announcements', 'settings', 'profile'], // members have a different services content. They can apply for loan here or withdraw or deposit using online payment
         'loan' => ['dashboard', 'notifications', 'services', 'loans', 'members', 'messages', 'announcements', 'settings', 'profile'], // officer services allows the officer to record a services like show loan applications (approve them or not), make deposits, withdrawal or pay loans of members if they do not use online payment
-        'secretary' => ['dashboard', 'notifications', 'members', 'ledger', 'tickets', 'messages', 'announcements',  'reports', 'settings', 'profile'],
-        'treasurer' => ['dashboard', 'notifications', 'services', 'members', 'ledger', 'announcements', 'reports', 'settings', 'profile'],
+        'accountant' => ['dashboard', 'notifications', 'services', 'loans', 'members', 'ledger', 'announcements', 'reports', 'settings', 'profile'],
+        'secretary' => ['dashboard', 'notifications', 'members', 'ledger', 'announcements', 'reports', 'settings', 'profile'],
     ],
     'requirement' => [
         'age' => 18,

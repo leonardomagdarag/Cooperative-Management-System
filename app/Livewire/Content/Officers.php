@@ -5,7 +5,9 @@ namespace App\Livewire\Content;
 use App\Models\Address;
 use App\Models\Contact;
 use App\Models\PersonalData;
+use App\Support\PersonPasswordPolicy;
 use App\Models\User;
+use App\Support\PermissionCatalog;
 use App\Traits\ValidatesPersonForm;
 use Carbon\Carbon;
 use Closure;
@@ -13,8 +15,12 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Livewire\WithPagination;
+use Spatie\Permission\Models\Role;
 
 /**
  * Officers Component
@@ -25,9 +31,12 @@ use Livewire\WithPagination;
  */
 class Officers extends Component
 {
-    use WithPagination, ValidatesPersonForm;
+    use WithPagination, ValidatesPersonForm, WithFileUploads;
+
+    private const NON_ASSIGNABLE_ROLES = ['developer', 'member', 'inactive', 'terminated'];
 
     private const OFFICER_MANAGEMENT_PERMISSIONS = [
+        'officers.view',
         'officers.create',
         'officers.update',
         'officers.delete',
@@ -101,6 +110,8 @@ class Officers extends Component
 
     public $profileModalKey = 0;
 
+    public $photoUpload = null;
+
     // Track tab validation errors
     public $tabErrors = [
         'personal' => false,
@@ -145,36 +156,6 @@ class Officers extends Component
     private function minimumAgeRequirement(): int
     {
         return max(0, (int) config('settings.requirement.age', 18));
-    }
-
-    /**
-     * Detect passwords that combine the officer name with simple number sequences.
-     */
-    private function passwordLooksTooPredictable(string $password): bool
-    {
-        $normalizedPassword = strtolower(preg_replace('/[^a-z0-9]+/i', '', $password) ?? '');
-
-        if ($normalizedPassword === '') {
-            return false;
-        }
-
-        $nameTokens = collect([
-            $this->form['first_name'] ?? '',
-            $this->form['mid_name'] ?? '',
-            $this->form['last_name'] ?? '',
-        ])
-            ->map(fn($value) => strtolower(preg_replace('/[^a-z]+/i', '', (string) $value) ?? ''))
-            ->filter(fn($value) => strlen($value) >= 3)
-            ->unique()
-            ->values();
-
-        if ($nameTokens->isEmpty()) {
-            return false;
-        }
-
-        return $nameTokens->contains(function (string $token) use ($normalizedPassword) {
-            return str_contains($normalizedPassword, $token) && preg_match('/\d{3,}/', $normalizedPassword);
-        });
     }
 
     /**
@@ -295,26 +276,9 @@ class Officers extends Component
             ],
             'form.gender' => 'required|in:male,female,other',
             'form.civil_status' => 'required|in:single,married,widowed,separated',
-            'form.title' => 'required|in:Chairman,Vice Chairman,Secretary,Treasurer,Loan Officer,Member',
-            'form.role' => 'required|in:admin,manager,secretary,treasurer,loan',
-            'form.password' => [
-                $this->isEdit ? 'nullable' : 'required',
-                'string',
-                'min:6',
-                'regex:/^(?=.*[A-Za-z])(?=.*\d).+$/',
-                function (string $attribute, mixed $value, Closure $fail) {
-                    if (blank($value)) {
-                        return;
-                    }
-
-                    if ($this->passwordLooksTooPredictable((string) $value)) {
-                        $fail('Avoid passwords that reuse your name with simple number sequences.');
-                    }
-                },
-            ],
-            'form.password_confirmation' => $this->isEdit
-                ? 'nullable|same:form.password'
-                : 'required|same:form.password',
+            'form.title' => 'required|in:Chairman,Vice Chairman,Secretary,Treasurer,Loan Officer,Accountant,Member',
+            'form.role' => ['required', Rule::in($this->assignableRoleNames())],
+            ...$this->getPasswordValidationRules(),
             'form.current_password' => 'nullable',
         ];
     }
@@ -429,7 +393,8 @@ class Officers extends Component
             'personalData.address',
             'personalData.contact',
             'personalData.employment',
-            'personalData.memberId'
+            'personalData.memberId',
+            'roles',
         ])->find($userId);
         $this->activeTab = 'overview';
         $this->profileModalKey = now()->timestamp . rand(1000, 9999);
@@ -485,6 +450,7 @@ class Officers extends Component
             'password_confirmation' => '',
         ];
         $this->modalKey = now()->timestamp . rand(1000, 9999);
+        $this->photoUpload = null;
         $this->showEditModal = true;
     }
 
@@ -505,7 +471,7 @@ class Officers extends Component
         $this->modalKey = now()->timestamp . rand(1000, 9999);
         $this->showModal = false;
         $this->selectedOfficer = null;
-        $officer = User::with(['personalData.address', 'personalData.contact'])->find($userId);
+        $officer = User::with(['personalData.address', 'personalData.contact', 'roles'])->find($userId);
 
         $this->selectedOfficer = $officer;
         $this->form = [
@@ -523,9 +489,10 @@ class Officers extends Component
             'barangay' => $officer->personalData->address->barangay ?? '',
             'city' => $officer->personalData->address->city_municipality ?? '',
             'postal_code' => $officer->personalData->address->zip_code ?? '',
-            'role' => $officer->role,  // User's system role (admin, manager, etc.)
+            'role' => $officer->primary_role,
         ];
 
+        $this->photoUpload = null;
         $this->showEditModal = true;
     }
 
@@ -535,7 +502,7 @@ class Officers extends Component
      * Extended version of saveMember() with additional fields:
      * - gender: Demographic data stored in personal_data table
      * - civil_status: Demographic data stored in personal_data table
-     * - role: System role (admin/manager/secretary/treasurer/loan) with validation
+     * - role: Officer role managed through Spatie with legacy column mirroring
      *
      * Uses database transaction to ensure data integrity across multiple tables.
      */
@@ -593,7 +560,7 @@ class Officers extends Component
                 }
 
                 // Update personal data including officer-specific demographic fields
-                $officer->personalData->update([
+                $officerPersonalDataUpdate = [
                     'first_name' => $this->form['first_name'],
                     'last_name' => $this->form['last_name'],
                     'mid_name' => !empty($this->form['mid_name']) ? $this->form['mid_name'] : null,
@@ -601,12 +568,22 @@ class Officers extends Component
                     'gender' => !empty($this->form['gender']) ? $this->form['gender'] : null,
                     'civil_status' => !empty($this->form['civil_status']) ? $this->form['civil_status'] : null,
                     'title' => !empty($this->form['title']) ? $this->form['title'] : null,
-                ]);
+                ];
 
-                // Update user record including role (key difference from members)
+                if ($this->photoUpload) {
+                    if ($officer->personalData->profile_picture) {
+                        Storage::disk('public')->delete($officer->personalData->profile_picture);
+                    }
+                    $officerPersonalDataUpdate['profile_picture'] = $this->photoUpload->store('profile-photos', 'public');
+                }
+
+                $officer->personalData->update($officerPersonalDataUpdate);
+
+                // Mirror the selected officer role into the legacy column for compatibility
+                // while Spatie remains the source of truth used by the UI and guards.
                 $updateData = [
                     'email' => $this->form['email'],
-                    'role' => $this->form['role'],  // Role can be changed for officers
+                    'role' => $this->form['role'],
                     'is_officer' => true,
                 ];
                 if (! empty($this->form['password'])) {
@@ -634,6 +611,9 @@ class Officers extends Component
                 }
 
                 // Create personal data with officer-specific demographic fields
+                $officerProfilePhotoPath = $this->photoUpload
+                    ? $this->photoUpload->store('profile-photos', 'public')
+                    : null;
                 $personalData = PersonalData::create([
                     'first_name' => $this->form['first_name'],
                     'last_name' => $this->form['last_name'],
@@ -642,16 +622,17 @@ class Officers extends Component
                     'gender' => !empty($this->form['gender']) ? $this->form['gender'] : null,
                     'civil_status' => !empty($this->form['civil_status']) ? $this->form['civil_status'] : null,
                     'title' => !empty($this->form['title']) ? $this->form['title'] : null,
+                    'profile_picture' => $officerProfilePhotoPath,
                     'contact_id' => $contact->id,
                     'address_id' => $address ? $address->id : null,
                 ]);
 
-                // Create user with role from form (not hardcoded like members)
+                // Keep the legacy role column in sync until member/status semantics are split.
                 $user = User::create([
                     'personal_data_id' => $personalData->id,
                     'email' => $this->form['email'],
                     'password' => Hash::make($this->form['password']),
-                    'role' => $this->form['role'],  // Role selected from dropdown
+                    'role' => $this->form['role'],
                     'is_officer' => true,
                 ]);
 
@@ -676,6 +657,7 @@ class Officers extends Component
         $this->form = [];
         $this->selectedOfficer = null;
         $this->editingOfficerId = null;
+        $this->photoUpload = null;
         $this->resetValidation();
     }
 
@@ -802,27 +784,39 @@ class Officers extends Component
      *
      * Key differences from Members render:
      * - Stricter permissions: only admin and manager can edit
-     * - Filters by officer roles (admin, manager, secretary, treasurer, loan)
-     * - Search includes role field in addition to names
+     * - Filters officers via the officer flag and assigned roles
+     * - Search includes assigned role names in addition to profile fields
      */
     public function render()
     {
         abort_unless($this->canManageOfficers(), 403);
 
         $user = Auth::user();
-        $canEdit = $this->canManageOfficers();
+        $canEdit = (bool) ($user && $user->canAny([
+            'officers.create',
+            'officers.update',
+            'officers.delete',
+            'officers.manage-permissions',
+        ]));
 
-        // Query officers only (excludes 'member' and 'inactive' roles)
-        $query = User::with(['personalData.address', 'personalData.contact', 'accounts'])
-            ->whereIn('role', ['admin', 'manager', 'secretary', 'treasurer', 'loan'])
+        // Officer identity comes from Spatie roles; the legacy role column is only
+        // mirrored for compatibility with member/status flows during the transition.
+        $query = User::with(['personalData.address', 'personalData.contact', 'accounts', 'roles'])
+            ->officerUsers()
             ->when($this->search, function ($query) {
-                // Search by name OR role
-                $query->whereHas('personalData', function ($q) {
-                    $q->where('first_name', 'like', '%' . $this->search . '%')
-                        ->orWhere('last_name', 'like', '%' . $this->search . '%')
-                        ->orWhere('mid_name', 'like', '%' . $this->search . '%');
-                })
-                    ->orWhere('role', 'like', '%' . $this->search . '%');
+                $search = '%' . $this->search . '%';
+
+                $query->where(function ($builder) use ($search) {
+                    $builder->whereHas('personalData', function ($q) use ($search) {
+                        $q->where('first_name', 'like', $search)
+                            ->orWhere('last_name', 'like', $search)
+                            ->orWhere('mid_name', 'like', $search);
+                    })
+                        ->orWhere('email', 'like', $search)
+                        ->orWhereHas('roles', function ($roleQuery) use ($search) {
+                            $roleQuery->where('name', 'like', $search);
+                        });
+                });
             });
 
         // Special handling: JOIN required to sort by personal_data fields
@@ -835,10 +829,61 @@ class Officers extends Component
         }
 
         $officers = $query->paginate(10);
+        $roleSelection = $this->assignableRolesData();
 
         return view('livewire.content.officers', [
             'officers' => $officers,
             'canEdit' => $canEdit,
+            'adminRoleKey' => $roleSelection['adminRole'],
+            'assignableRoleKeys' => $roleSelection['roleKeys'],
+            'assignableRoleDisplayNames' => $roleSelection['displayNames'],
+            'assignableRoleDescriptions' => $roleSelection['descriptions'],
+            'assignableRolePermissions' => $roleSelection['permissions'],
+            'rolePermissionGroups' => PermissionCatalog::groups(),
         ]);
+    }
+
+    private function assignableRoleNames(): array
+    {
+        return Role::query()
+            ->whereNotIn('name', self::NON_ASSIGNABLE_ROLES)
+            ->pluck('name')
+            ->sortBy(fn(string $roleName) => $roleName === 'admin' ? '0:admin' : '1:' . $roleName)
+            ->values()
+            ->all();
+    }
+
+    private function assignableRolesData(): array
+    {
+        $roles = Role::query()
+            ->with('permissions')
+            ->whereNotIn('name', self::NON_ASSIGNABLE_ROLES)
+            ->get()
+            ->sortBy(fn(Role $role) => $role->name === 'admin' ? '0:admin' : '1:' . $role->name)
+            ->values();
+
+        $roleNames = $roles->pluck('name')->all();
+        $displayNameCatalog = PermissionCatalog::roleDisplayNames();
+        $descriptionCatalog = PermissionCatalog::roleDescriptions();
+
+        return [
+            'adminRole' => in_array('admin', $roleNames, true) ? 'admin' : null,
+            'roleKeys' => array_values(array_filter($roleNames, fn(string $roleName) => $roleName !== 'admin')),
+            'displayNames' => $roles
+                ->mapWithKeys(fn(Role $role) => [
+                    $role->name => $displayNameCatalog[$role->name] ?? ucwords(str_replace(['-', '_'], ' ', $role->name)),
+                ])
+                ->all(),
+            'descriptions' => $roles
+                ->mapWithKeys(fn(Role $role) => [
+                    $role->name => $descriptionCatalog[$role->name] ?? 'Custom database role with permissions managed in Settings -> Role Permissions.',
+                ])
+                ->all(),
+            'permissions' => $roles
+                ->mapWithKeys(fn(Role $role) => [
+                    $role->name => $role->permissions->pluck('name')->values()->all(),
+                ])
+                ->all(),
+        ];
     }
 }

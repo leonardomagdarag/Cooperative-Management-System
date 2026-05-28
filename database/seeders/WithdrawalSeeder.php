@@ -18,7 +18,9 @@ class WithdrawalSeeder extends Seeder
             return;
         }
 
-        $recordedBy = User::where('role', 'admin')->first()->user_id ?? 'USR_0001';
+        $recordedBy = User::role('admin')->value('id')
+            ?? User::query()->where('role', 'admin')->value('id')
+            ?? 1;
         $accountsToWithdraw = $accounts->random(min($accounts->count(), (int)($accounts->count() * 0.6)));
 
         foreach ($accountsToWithdraw as $account) {

@@ -119,7 +119,7 @@
                                             <td class="py-3 pr-4 pl-1 font-medium text-gray-900">
                                                 {{ $loan->user?->personalData?->first_name ?? '—' }} {{ $loan->user?->personalData?->last_name ?? '' }}
                                             </td>
-                                            <td class="py-3 pr-4 text-gray-600 text-xs">{{ $loan->product?->name ?? 'N/A' }}</td>
+                                            <td class="py-3 pr-4 text-gray-600 text-xs">{{ $loan->loan_type_label }}</td>
                                             <td class="py-3 pr-4 font-bold text-gray-900">₱{{ number_format($loan->loan_amount, 2) }}</td>
                                             <td class="py-3 pr-1 text-xs text-gray-400">{{ $loan->created_at?->format('M d') }}</td>
                                         </tr>

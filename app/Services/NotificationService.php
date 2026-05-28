@@ -20,18 +20,7 @@ class NotificationService
 {
     private function resolveUserDashboardUrl(User $user): string
     {
-        $primaryRole = $user->getRoleNames()->first() ?? 'member';
-
-        $routeName = match ($primaryRole) {
-            'admin' => 'admin.dashboard',
-            'manager' => 'manager.dashboard',
-            'secretary' => 'secretary.dashboard',
-            'loan' => 'loan.dashboard',
-            'treasurer' => 'treasurer.dashboard',
-            default => 'member.dashboard',
-        };
-
-        return Route::has($routeName) ? route($routeName) : '/member/dashboard';
+        return $this->routeIfExists('dashboard', '/dashboard');
     }
 
     private function routeIfExists(string $routeName, string $fallback, array $parameters = []): string
@@ -93,7 +82,36 @@ class NotificationService
      */
     public function notifyNewAnnouncement(Announcement $announcement, bool $sendEmail = true): void
     {
-        $users = User::all();
+        $visibility = (array) ($announcement->visibility ?? ['members']);
+
+        // 'public' means website visitors — no registered users to notify.
+        // Build the target user set based on the remaining visibility values.
+        if (in_array('everyone', $visibility, true)) {
+            $users = User::all();
+        } else {
+            $userIds = collect();
+
+            if (in_array('members', $visibility, true)) {
+                $userIds = $userIds->merge(
+                    User::role('member')->pluck('id')
+                );
+            }
+
+            if (in_array('officers', $visibility, true)) {
+                // Officers = all staff roles (everyone except members / inactive / terminated).
+                $officerRoles = ['admin', 'manager', 'secretary', 'accountant', 'loan', 'developer'];
+                $userIds = $userIds->merge(
+                    User::role($officerRoles)->pluck('id')
+                );
+            }
+
+            // 'public' only → no registered users; skip notifications.
+            if ($userIds->isEmpty()) {
+                return;
+            }
+
+            $users = User::whereIn('id', $userIds->unique())->get();
+        }
 
         $this->createForUsers(
             $users,

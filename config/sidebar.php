@@ -18,7 +18,6 @@ return [
     'members' => true,             // Show this
     'services' => true,            // Show services
     'loans' => true,               // Show loans
-    'transactions' => true,        // Show transactions
     'ledger' => true,             // Not functional yet
     'history' => true,             // Show history
     'tickets' => true,            // Not functional yet

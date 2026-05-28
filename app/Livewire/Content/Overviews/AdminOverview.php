@@ -51,10 +51,10 @@ class AdminOverview extends Component
         $start = $now->copy()->startOfMonth();
         $end = $now->copy()->endOfMonth();
 
-        $totalMembers = User::query()->where('role', 'member')->count();
-        $totalStaff = User::query()->whereIn('role', ['admin', 'manager', 'loan', 'secretary', 'treasurer'])->count();
+        $totalMembers = User::query()->memberUsers()->count();
+        $totalStaff = User::query()->officerUsers()->count();
         $newMembersThisMonth = User::query()
-            ->where('role', 'member')
+            ->memberUsers()
             ->whereBetween('created_at', [$start, $end])
             ->count();
 
@@ -63,7 +63,7 @@ class AdminOverview extends Component
             ->sum('balance');
 
         $totalShareCapital = (float) Account::query()
-            ->whereIn('account_type', ['share-capital', 'share_capital'])
+            ->where('account_type', 'share-capital')
             ->sum('balance');
 
         $financialThisMonth = $this->financialSummary($start, $end);

@@ -10,6 +10,14 @@ use Illuminate\Support\Facades\Hash;
 
 class UserSeeder extends Seeder
 {
+    private function buildMemberEmail(string $firstName, string $lastName): string
+    {
+        $normalizedFirstName = strtolower((string) preg_replace('/\s+/', '', trim($firstName)));
+        $normalizedLastName = strtolower(trim($lastName));
+
+        return "{$normalizedFirstName}.{$normalizedLastName}@example.com";
+    }
+
     /**
      * Run the database seeds.
      */
@@ -34,77 +42,84 @@ class UserSeeder extends Seeder
         ]);
         $developer->assignRole('developer');
 
-        // Create an admin user
-        $admin = User::create([
-            'user_number' => 'USR000002',
-            'personal_data_id' => PersonalData::factory()->create([
-                'first_name' => 'Admin',
-                'last_name' => 'Account',
-                'birth_date' => '1985-01-01',
-                'title' => 'Chairman',
-            ])->id,
-            'email' => 'admin@example.com',
-            'password' => Hash::make('password'),
-            'role' => 'admin',
-        ]);
-        $admin->assignRole('admin');
-
-        // Create additional staff accounts
-        $roles = [
-            ['role' => 'treasurer', 'firstName' => 'Maria', 'lastName' => 'Santos', 'title' => 'Treasurer'],
-            ['role' => 'secretary', 'firstName' => 'Ana', 'lastName' => 'Garcia', 'title' => 'Secretary'],
-            ['role' => 'loan', 'firstName' => 'Pedro', 'lastName' => 'Reyes', 'title' => 'Loan Officer'],
+        // Create one seeded user for each officer role.
+        $officers = [
+            ['role' => 'admin', 'firstName' => 'Quennie Joy', 'lastName' => 'Almazan', 'title' => 'Chairman', 'userNumber' => 'USR000002', 'birthDate' => '1985-01-01'],
+            ['role' => 'manager', 'firstName' => 'Carl Michael', 'lastName' => 'Bigal', 'title' => 'Vice Chairman', 'userNumber' => 'USR000003'],
+            ['role' => 'accountant', 'firstName' => 'Jasmin', 'lastName' => 'Latayan', 'title' => 'Accountant', 'userNumber' => 'USR000004'],
+            ['role' => 'loan', 'firstName' => 'Leanard', 'lastName' => 'Guiriba', 'title' => 'Loan Officer', 'userNumber' => 'USR000005'],
+            ['role' => 'secretary', 'firstName' => 'Jenica', 'lastName' => 'Malveda', 'title' => 'Secretary', 'userNumber' => 'USR000006'],
         ];
 
-        foreach ($roles as $index => $roleData) {
-            $staff = User::create([
-                'user_number' => 'USR' . str_pad($index + 3, 6, '0', STR_PAD_LEFT),
-                'personal_data_id' => PersonalData::factory()->create([
-                    'first_name' => $roleData['firstName'],
-                    'last_name' => $roleData['lastName'],
-                    'title' => $roleData['title'],
-                ])->id,
-                'email' => strtolower($roleData['role']) . '@example.com',
+        foreach ($officers as $officerData) {
+            $personalData = [
+                'first_name' => $officerData['firstName'],
+                'last_name' => $officerData['lastName'],
+                'title' => $officerData['title'],
+            ];
+
+            if (isset($officerData['birthDate'])) {
+                $personalData['birth_date'] = $officerData['birthDate'];
+            }
+
+            $officer = User::create([
+                'user_number' => $officerData['userNumber'],
+                'personal_data_id' => PersonalData::factory()->create($personalData)->id,
+                'email' => strtolower($officerData['role']) . '@example.com',
                 'password' => Hash::make('password'),
-                'role' => $roleData['role'],
+                'role' => $officerData['role'],
+                'is_officer' => true,
             ]);
-            $staff->assignRole($roleData['role']);
+            $officer->assignRole($officerData['role']);
         }
 
         // ===================================
-        // GENERATE 5 MEMBER USERS
+        // GENERATE MEMBER USERS
         // ===================================
 
-        // Create 4 members with specific emails
-        for ($i = 1; $i <= 4; $i++) {
+        $members = [
+            ['userNumber' => 'USR000007', 'firstName' => 'Arjay', 'lastName' => 'Ramos'],
+            ['userNumber' => 'USR000008', 'firstName' => 'Cris David', 'lastName' => 'Jarabejo'],
+            ['userNumber' => 'USR000009', 'firstName' => 'Glendo', 'lastName' => 'Camarines'],
+            ['userNumber' => 'USR000010', 'firstName' => 'Jerrelyn', 'lastName' => 'Amper'],
+            ['userNumber' => 'USR000011', 'firstName' => 'Jean Leslie', 'lastName' => 'Velasco'],
+            ['userNumber' => 'USR000012', 'firstName' => 'Jeral Jean', 'lastName' => 'Cabillon'],
+            ['userNumber' => 'USR000013', 'firstName' => 'Leo Angelo', 'lastName' => 'Centeno'],
+            ['userNumber' => 'USR000014', 'firstName' => 'Alyson', 'lastName' => 'Penano'],
+            ['userNumber' => 'USR000015', 'firstName' => 'Ravie', 'lastName' => 'Premor'],
+            [
+                'userNumber' => 'USR000016',
+                'firstName' => 'Leo',
+                'lastName' => 'Magdarag',
+                'midName' => 'Baluyot',
+                'birthDate' => '1995-06-15',
+                'email' => 'leo.baluyot.magdarag039@gmail.com',
+            ],
+        ];
+
+        foreach ($members as $memberData) {
+            $personalData = [
+                'first_name' => $memberData['firstName'],
+                'last_name' => $memberData['lastName'],
+                'title' => 'Member',
+            ];
+
+            if (isset($memberData['midName'])) {
+                $personalData['mid_name'] = $memberData['midName'];
+            }
+
+            if (isset($memberData['birthDate'])) {
+                $personalData['birth_date'] = $memberData['birthDate'];
+            }
+
             $member = User::create([
-                'user_number' => 'USR' . str_pad($i + 5, 6, '0', STR_PAD_LEFT),
-                'personal_data_id' => PersonalData::factory()->create([
-                    'first_name' => 'Member',
-                    'last_name' => 'Test' . $i,
-                    'title' => 'Member',
-                ])->id,
-                'email' => "member{$i}@example.com",
+                'user_number' => $memberData['userNumber'],
+                'personal_data_id' => PersonalData::factory()->create($personalData)->id,
+                'email' => $memberData['email'] ?? $this->buildMemberEmail($memberData['firstName'], $memberData['lastName']),
                 'password' => Hash::make('password'),
                 'role' => 'member',
             ]);
             $member->assignRole('member');
         }
-
-        // Create Leo Magdarag member account (5th member)
-        $fifthMember = User::create([
-            'user_number' => 'USR000010',
-            'personal_data_id' => PersonalData::factory()->create([
-                'first_name' => 'Leo',
-                'last_name' => 'Magdarag',
-                'mid_name' => 'Baluyot',
-                'birth_date' => '1995-06-15',
-                'title' => 'Member',
-            ])->id,
-            'email' => 'leo.baluyot.magdarag039@gmail.com',
-            'password' => Hash::make('password'),
-            'role' => 'member',
-        ]);
-        $fifthMember->assignRole('member');
     }
 }

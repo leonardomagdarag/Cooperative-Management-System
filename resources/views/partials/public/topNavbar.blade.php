@@ -1,7 +1,9 @@
 @php
-    function sectionLink($section)
-    {
-        return request()->routeIs('home_page') ? "#$section" : route('home_page') . "#$section";
+    if (!function_exists('sectionLink')) {
+        function sectionLink($section)
+        {
+            return request()->routeIs('home_page') ? "#$section" : route('home_page') . "#$section";
+        }
     }
 @endphp
 

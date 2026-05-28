@@ -26,6 +26,8 @@ return new class extends Migration
                 'loan',
                 'treasurer',
                 'secretary',
+                'accountant',
+                'inactive',
                 'terminated'
             ])->default('member');
             $table->timestamps();

@@ -1,4 +1,4 @@
-@props(['loan'])
+@props(['loan', 'canUploadDocuments' => false])
 
 <div x-data="{ show: false, activeTab: 'details' }" x-init="setTimeout(() => show = true, 10)" x-show="show" x-transition:enter="transition ease-out duration-200"
     x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
@@ -59,6 +59,12 @@
             {{-- Modal body --}}
             <div class="p-6 space-y-6 max-h-[calc(90vh-180px)] overflow-y-auto">
 
+                @php
+                    $amortizationSchedule = $this->generateAmortizationSchedule($loan);
+                    $projectedInterest = collect($amortizationSchedule)->sum('interest');
+                    $projectedRepayment = (float) $loan->loan_amount + $projectedInterest;
+                @endphp
+
                 {{-- Details Tab --}}
                 <div x-show="activeTab === 'details'" class="space-y-6">
                     {{-- Loan Overview Cards --}}
@@ -87,21 +93,33 @@
                             <dl class="space-y-2">
                                 <div class="flex justify-between">
                                     <dt class="text-sm text-gray-600">Loan Type:</dt>
-                                    <dd class="text-sm font-medium text-gray-900">{{ ucfirst($loan->loan_type) }}</dd>
+                                    <dd class="text-sm font-medium text-gray-900">{{ $loan->loan_type_label }}</dd>
                                 </div>
                                 <div class="flex justify-between">
-                                    <dt class="text-sm text-gray-600">Interest Rate:</dt>
-                                    <dd class="text-sm font-medium text-gray-900">{{ $loan->interest_rate }}% per annum
+                                    <dt class="text-sm text-gray-600">Principal Amount:</dt>
+                                    <dd class="text-sm font-medium text-gray-900">₱{{ number_format($loan->loan_amount, 2) }}</dd>
+                                </div>
+                                <div class="flex justify-between">
+                                    <dt class="text-sm text-gray-600">Annual Interest Rate:</dt>
+                                    <dd class="text-sm font-medium text-gray-900">{{ number_format((float) $loan->interest_rate, 2) }}%
                                     </dd>
                                 </div>
                                 <div class="flex justify-between">
-                                    <dt class="text-sm text-gray-600">Term:</dt>
+                                    <dt class="text-sm text-gray-600">Repayment Term:</dt>
                                     <dd class="text-sm font-medium text-gray-900">{{ $loan->term_months }} months</dd>
                                 </div>
                                 <div class="flex justify-between">
                                     <dt class="text-sm text-gray-600">Payment Frequency:</dt>
                                     <dd class="text-sm font-medium text-gray-900">
-                                        {{ ucfirst($loan->payment_frequency) }}</dd>
+                                        {{ ucwords(str_replace('-', ' ', $loan->payment_frequency)) }}</dd>
+                                </div>
+                                <div class="flex justify-between">
+                                    <dt class="text-sm text-gray-600">Estimated Interest Over Term:</dt>
+                                    <dd class="text-sm font-medium text-gray-900">₱{{ number_format($projectedInterest, 2) }}</dd>
+                                </div>
+                                <div class="flex justify-between">
+                                    <dt class="text-sm text-gray-600">Estimated Total Repayment:</dt>
+                                    <dd class="text-sm font-medium text-gray-900">₱{{ number_format($projectedRepayment, 2) }}</dd>
                                 </div>
                                 <div class="flex justify-between">
                                     <dt class="text-sm text-gray-600">Status:</dt>
@@ -185,6 +203,111 @@
                             </div>
                         </div>
                     @endif
+
+                    <div class="rounded-xl border border-gray-200 bg-gray-50/80 p-5">
+                        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <h4 class="font-semibold text-gray-900">Documents</h4>
+                                <p class="mt-1 text-sm text-gray-500">Loan-related image files and PDFs attached to this record.</p>
+                            </div>
+                            <span class="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-600 ring-1 ring-gray-200">
+                                {{ $loan->documents->count() }} {{ 
+                                    Illuminate\Support\Str::plural('file', $loan->documents->count())
+                                }}
+                            </span>
+                        </div>
+
+                        @if ($canUploadDocuments)
+                            <form wire:submit="uploadLoanDocument" class="mt-4 rounded-lg border border-dashed border-cyan-200 bg-white p-4">
+                                <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-900">Upload a supporting document</p>
+                                        <p class="mt-1 text-xs text-gray-500">Accepted formats: JPG, PNG, GIF, WEBP, or PDF up to 10 MB.</p>
+                                    </div>
+                                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+                                        <input type="file" wire:model="loanDocumentUpload" accept=".jpg,.jpeg,.png,.gif,.webp,.pdf"
+                                            class="block w-full text-sm text-gray-700 file:mr-4 file:rounded-lg file:border-0 file:bg-cyan-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-cyan-700 hover:file:bg-cyan-100 sm:w-auto">
+                                        <button type="submit" wire:loading.attr="disabled" wire:target="loanDocumentUpload,uploadLoanDocument"
+                                            class="inline-flex items-center justify-center rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60">
+                                            <span wire:loading.remove wire:target="loanDocumentUpload,uploadLoanDocument">Upload</span>
+                                            <span wire:loading wire:target="loanDocumentUpload,uploadLoanDocument">Uploading...</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                @error('loanDocumentUpload')
+                                    <p class="mt-3 text-sm text-red-600">{{ $message }}</p>
+                                @enderror
+                            </form>
+                        @endif
+
+                        @if ($loan->documents->isNotEmpty())
+                            <div class="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                                @foreach ($loan->documents as $document)
+                                    @php
+                                        $isImage = \Illuminate\Support\Str::startsWith((string) $document->mime_type, 'image/')
+                                            || \Illuminate\Support\Str::endsWith(strtolower($document->storage_path), ['.jpg', '.jpeg', '.png', '.gif', '.webp']);
+                                        $fileSizeKb = max(1, (int) ceil(((int) $document->file_size) / 1024));
+                                    @endphp
+                                    <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm" x-data="{ lightbox: false }">
+                                        <div class="flex items-start gap-4">
+                                            @if ($isImage)
+                                                <img src="{{ Storage::url($document->storage_path) }}" alt="{{ $document->original_name }}"
+                                                    @click="lightbox = true"
+                                                    class="h-20 w-20 cursor-pointer rounded-lg border border-gray-200 object-cover transition-opacity hover:opacity-90">
+                                            @else
+                                                <div class="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border border-red-100 bg-red-50 text-red-500">
+                                                    <svg class="h-8 w-8" fill="currentColor" viewBox="0 0 24 24">
+                                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 1.5L18.5 9H13V3.5zM6 20V4h5v7h7v9H6z" />
+                                                    </svg>
+                                                </div>
+                                            @endif
+
+                                            <div class="min-w-0 flex-1">
+                                                <p class="truncate text-sm font-medium text-gray-800">{{ $document->original_name }}</p>
+                                                <p class="mt-1 text-xs text-gray-500">
+                                                    {{ strtoupper($isImage ? 'image' : 'pdf') }}
+                                                    <span class="mx-1">&bull;</span>
+                                                    {{ number_format($fileSizeKb) }} KB
+                                                    <span class="mx-1">&bull;</span>
+                                                    {{ $document->created_at->format('M d, Y h:i A') }}
+                                                </p>
+                                                @if ($document->uploadedBy)
+                                                    <p class="mt-1 text-xs text-gray-500">
+                                                        Uploaded by {{ trim(($document->uploadedBy->personalData->first_name ?? '') . ' ' . ($document->uploadedBy->personalData->last_name ?? '')) ?: ($document->uploadedBy->user_number ?? 'Officer') }}
+                                                    </p>
+                                                @endif
+                                                <a href="{{ Storage::url($document->storage_path) }}" target="_blank"
+                                                    class="mt-3 inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800">
+                                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 3h7m0 0v7m0-7L10 14"></path>
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5v14h14v-5"></path>
+                                                    </svg>
+                                                    Open document
+                                                </a>
+                                            </div>
+                                        </div>
+
+                                        @if ($isImage)
+                                            <div x-show="lightbox" x-cloak @click="lightbox = false"
+                                                class="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4" x-transition>
+                                                <img src="{{ Storage::url($document->storage_path) }}" alt="{{ $document->original_name }} full"
+                                                    class="max-h-full max-w-full rounded-lg shadow-2xl" @click.stop>
+                                                <button @click="lightbox = false"
+                                                    class="absolute right-4 top-4 text-2xl text-white/80 hover:text-white">
+                                                    &times;
+                                                </button>
+                                            </div>
+                                        @endif
+                                    </div>
+                                @endforeach
+                            </div>
+                        @else
+                            <div class="mt-4 rounded-lg border border-gray-200 bg-white px-4 py-8 text-center text-sm text-gray-500">
+                                No documents uploaded for this loan yet.
+                            </div>
+                        @endif
+                    </div>
                 </div>
 
                 {{-- Payment Schedule Tab --}}
@@ -192,7 +315,7 @@
                     <div class="flex items-center justify-between mb-4">
                         <h4 class="font-semibold text-gray-900">Amortization Schedule</h4>
                         <span class="text-sm text-gray-600">Total Periods:
-                            {{ count($this->generateAmortizationSchedule($loan)) }}</span>
+                            {{ count($amortizationSchedule) }}</span>
                     </div>
 
                     <div class="overflow-x-auto">
@@ -220,7 +343,7 @@
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
-                                @foreach ($this->generateAmortizationSchedule($loan) as $payment)
+                                @foreach ($amortizationSchedule as $payment)
                                     <tr class="hover:bg-gray-50">
                                         <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                             {{ $payment['payment_number'] }}</td>

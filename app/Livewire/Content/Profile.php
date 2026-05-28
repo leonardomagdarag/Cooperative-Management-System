@@ -4,18 +4,22 @@ namespace App\Livewire\Content;
 
 use App\Traits\ManagesOwnProfile;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Spatie\Activitylog\Models\Activity;
 
 class Profile extends Component
 {
-    use ManagesOwnProfile;
+    use ManagesOwnProfile, WithFileUploads;
 
     public string $activeTab = 'overview';
 
     public string $profileMode = 'member';
 
     public bool $showEditModal = false;
+
+    public $profilePhotoUpload = null;
 
     public function mount(): void
     {
@@ -34,23 +38,38 @@ class Profile extends Component
     {
         $this->resetValidation();
         $this->fillOwnProfileForm();
+        $this->profilePhotoUpload = null;
         $this->showEditModal = true;
     }
 
     public function closeEditModal(): void
     {
         $this->showEditModal = false;
+        $this->profilePhotoUpload = null;
         $this->resetValidation();
         $this->fillOwnProfileForm();
     }
 
     public function saveProfile(): void
     {
-        $this->saveOwnProfile(
+        $emailChanged = $this->saveOwnProfile(
             'member.profile.update',
             'Member profile updated from profile page.',
         );
 
+        if ($this->profilePhotoUpload) {
+            $user = Auth::user()->loadMissing('personalData');
+            if ($user->personalData) {
+                if ($user->personalData->profile_picture) {
+                    Storage::disk('public')->delete($user->personalData->profile_picture);
+                }
+                $user->personalData->update([
+                    'profile_picture' => $this->profilePhotoUpload->store('profile-photos', 'public'),
+                ]);
+            }
+        }
+
+        $this->profilePhotoUpload = null;
         $this->showEditModal = false;
 
         $this->dispatch('toast', [

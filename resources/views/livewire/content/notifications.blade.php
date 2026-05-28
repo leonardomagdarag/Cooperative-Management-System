@@ -16,12 +16,6 @@
                     type="button">
                     Mark all read
                 </button>
-
-                <button wire:click="deleteRead"
-                    class="px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                    type="button">
-                    Clear read
-                </button>
             </div>
         </div>
     </div>
@@ -54,11 +48,14 @@
         <div class="space-y-3">
             @forelse ($notifications as $notification)
                 <article @class([
-                    'rounded-xl border p-4 transition-colors',
-                    'border-blue-200 bg-blue-50/50' => !$notification->is_read,
-                    'border-gray-200 bg-white' => $notification->is_read,
-                ])>
-                    <div class="flex items-start justify-between gap-3">
+                    'rounded-xl border transition-colors cursor-pointer hover:shadow-sm',
+                    'border-blue-200 bg-blue-50/50 hover:bg-blue-50' => !$notification->is_read,
+                    'border-gray-200 bg-white hover:bg-gray-50' => $notification->is_read,
+                ])
+                    wire:click="openNotification({{ $notification->id }})"
+                    role="button"
+                    tabindex="0">
+                    <div class="flex items-start justify-between gap-3 p-4">
                         <div class="flex items-start gap-3 min-w-0">
                             <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 {{ $notification->color_class }}">
                                 <i class="fas {{ $notification->icon }}"></i>
@@ -66,27 +63,14 @@
 
                             <div class="min-w-0">
                                 <h3 class="text-sm font-semibold text-gray-900 truncate">{{ $notification->title }}</h3>
-                                <p class="text-sm text-gray-600 mt-1">{{ $notification->message }}</p>
+                                <p class="text-sm text-gray-600 mt-1 line-clamp-2">{{ $notification->message }}</p>
                                 <p class="text-xs text-gray-500 mt-2">{{ $notification->time_ago }}</p>
                             </div>
                         </div>
 
-                        <div class="flex items-center gap-2 shrink-0">
-                            @if (!$notification->is_read)
-                                <button wire:click="markAsRead({{ $notification->id }})"
-                                    class="text-xs font-semibold text-emerald-700 hover:text-emerald-800"
-                                    type="button">
-                                    Mark read
-                                </button>
-                            @endif
-
-                            @if ($notification->action_url)
-                                <a href="{{ $notification->action_url }}"
-                                    class="text-xs font-semibold text-cyan-700 hover:text-cyan-800">
-                                    Open
-                                </a>
-                            @endif
-                        </div>
+                        @if (!$notification->is_read)
+                            <span class="shrink-0 w-2 h-2 mt-2 rounded-full bg-blue-500"></span>
+                        @endif
                     </div>
                 </article>
             @empty
@@ -100,4 +84,69 @@
             {{ $notifications->links() }}
         </div>
     </div>
+
+    {{-- Notification Detail Modal --}}
+    @if ($showModal && $selectedNotification)
+        <div
+            x-data
+            x-init="document.body.classList.add('overflow-hidden'); return () => document.body.classList.remove('overflow-hidden')"
+            @keydown.escape.window="$wire.closeModal()"
+            class="fixed inset-0 z-50 flex items-center justify-center p-4"
+            wire:key="notification-modal-{{ $selectedNotification->id }}">
+
+            {{-- Backdrop --}}
+            <div class="absolute inset-0 bg-black/60" wire:click="closeModal"></div>
+
+            {{-- Modal panel --}}
+            <div class="relative z-10 w-full max-w-lg bg-white rounded-2xl border-2 border-gray-300 shadow-2xl overflow-hidden">
+
+                {{-- Header --}}
+                <div class="flex items-start gap-4 p-6 border-b border-gray-100">
+                    <div class="w-12 h-12 rounded-full flex items-center justify-center shrink-0 {{ $selectedNotification->color_class }}">
+                        <i class="fas {{ $selectedNotification->icon }} text-lg"></i>
+                    </div>
+
+                    <div class="flex-1 min-w-0">
+                        <h2 class="text-base font-bold text-gray-900 leading-snug">{{ $selectedNotification->title }}</h2>
+                        <p class="text-xs text-gray-500 mt-1">{{ $selectedNotification->time_ago }}</p>
+                    </div>
+
+                    <button wire:click="closeModal" type="button"
+                        class="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
+                        <i class="fas fa-times text-sm"></i>
+                    </button>
+                </div>
+
+                {{-- Body --}}
+                <div class="p-6 space-y-4">
+                    <p class="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{{ $selectedNotification->message }}</p>
+
+                    <div class="flex flex-wrap gap-2 pt-1">
+                        <span @class([
+                            'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold',
+                            'bg-red-100 text-red-700' => $selectedNotification->priority === 'urgent',
+                            'bg-orange-100 text-orange-700' => $selectedNotification->priority === 'high',
+                            'bg-blue-100 text-blue-700' => $selectedNotification->priority === 'normal',
+                            'bg-gray-100 text-gray-600' => $selectedNotification->priority === 'low',
+                        ])>
+                            {{ ucfirst($selectedNotification->priority) }} priority
+                        </span>
+
+                        <span class="inline-flex items-center gap-1 rounded-full bg-gray-100 text-gray-600 px-2.5 py-1 text-xs font-semibold">
+                            {{ $selectedNotification->created_at->format('M d, Y \a\t g:i A') }}
+                        </span>
+                    </div>
+                </div>
+
+                {{-- Footer --}}
+                <div class="flex justify-end gap-2 px-6 py-4 bg-gray-50 border-t border-gray-100">
+                    <button wire:click="closeModal" type="button"
+                        class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
 </div>
+

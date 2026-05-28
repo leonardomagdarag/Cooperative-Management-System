@@ -9,6 +9,7 @@
     'disabled' => false,
     'validateOnBlur' => true,
     'defer' => false,
+    'live' => false,
 ])
 
 @php
@@ -34,7 +35,7 @@
 
     <div class="relative">
         <select id="{{ $name }}"
-            @if ($defer) wire:model.defer="{{ $model }}" @else wire:model="{{ $model }}" @endif
+            @if ($live) wire:model.live="{{ $model }}" @elseif ($defer) wire:model.defer="{{ $model }}" @else wire:model="{{ $model }}" @endif
             @if ($validateOnBlur) wire:blur="validateField('{{ $model }}')" @endif
             @if ($disabled) disabled @endif @if ($required) required @endif
             class="peer block w-full px-3 py-2 pr-10 text-sm border rounded-lg transition-all duration-200 focus:outline-none focus:ring-2

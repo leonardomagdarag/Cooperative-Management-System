@@ -1,8 +1,21 @@
-@props(['officer' => null, 'isEdit' => false, 'tabErrors' => []])
+@props([
+    'officer' => null,
+    'isEdit' => false,
+    'tabErrors' => [],
+    'roleKeys' => [],
+    'adminRole' => null,
+    'roleDisplayNames' => [],
+    'roleDescriptions' => [],
+    'rolePermissionMap' => [],
+    'allGroups' => [],
+])
 
 @php
     $canManageOfficers = Auth::user()?->can('officers.update') ?? false;
     $isAddMode = !$isEdit;
+    $passwordGuidance = \App\Support\PersonPasswordPolicy::guidanceText();
+    $passwordHelperText = \App\Support\PersonPasswordPolicy::helperText();
+    $passwordPattern = \App\Support\PersonPasswordPolicy::htmlPattern();
 
     $wizardSteps = ['personal', 'contact', 'role', 'login'];
     $stepLabels = [
@@ -12,16 +25,10 @@
         'login' => 'Login Info',
     ];
 
-    // Role selection data
-    $roleKeys = ['manager', 'secretary', 'loan', 'treasurer'];
-    $adminRole = 'admin';
-    $roleDisplayNames = \App\Support\PermissionCatalog::roleDisplayNames();
-    $roleDescriptions = \App\Support\PermissionCatalog::roleDescriptions();
-    $rolePresets = \App\Support\PermissionCatalog::rolePresets();
-    $allGroups = \App\Support\PermissionCatalog::groups();
+    $adminRole = is_string($adminRole) && $adminRole !== '' ? $adminRole : null;
 @endphp
 
-<div {{ $attributes }} x-data="{
+<div {{ $attributes }} data-password-form="officer" x-data="{
     show: @entangle('showEditModal'),
     formTab: 'personal',
     isAdd: {{ $isAddMode ? 'true' : 'false' }},
@@ -194,7 +201,26 @@ $wire.on('wizard-advance', ({ tab }) => { formTab = tab; });" x-show="show" x-cl
                                     'Secretary' => 'Secretary',
                                     'Treasurer' => 'Treasurer',
                                     'Loan Officer' => 'Loan Officer',
+                                    'Accountant' => 'Accountant',
                                 ]" :validateOnBlur="true" :defer="true" />
+                        </div>
+
+                        {{-- Profile Photo Upload --}}
+                        <div class="mt-4" x-data="{ preview: null }">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Profile Photo <span class="text-gray-400 text-xs">(optional)</span></label>
+                            <div class="flex items-center gap-4">
+                                <div class="w-20 h-20 rounded-full bg-gray-100 border border-gray-300 overflow-hidden flex items-center justify-center shrink-0">
+                                    <span x-show="!preview" class="text-gray-400"><i class="fas fa-user text-2xl"></i></span>
+                                    <img x-show="preview" :src="preview" class="w-full h-full object-cover" alt="Preview" style="display:none">
+                                </div>
+                                <div class="flex-1">
+                                    <input type="file" wire:model="photoUpload" accept="image/*"
+                                        @change="const f=$event.target.files[0]; if(f){const r=new FileReader();r.onload=e=>preview=e.target.result;r.readAsDataURL(f)}"
+                                        class="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+                                    <p class="mt-1 text-xs text-gray-400">JPG, PNG or GIF · max 2MB</p>
+                                    @error('photoUpload') <span class="text-red-500 text-xs mt-1">{{ $message }}</span> @enderror
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -213,35 +239,43 @@ $wire.on('wizard-advance', ({ tab }) => { formTab = tab; });" x-show="show" x-cl
                     <div x-show="formTab === 'role'" x-transition x-data="{ roleVal: @entangle('form.role').live }" class="space-y-5">
 
                         {{-- Admin role card (separated) --}}
-                        <p class="text-xs font-semibold uppercase tracking-wider text-rose-500">Privileged Role</p>
-                        <label @click="roleVal = 'admin'"
-                            :class="roleVal === 'admin'
-                                ?
-                                'ring-2 ring-rose-500 border-rose-500 bg-rose-50' :
-                                'border-rose-200 bg-white hover:border-rose-300 hover:bg-rose-50/40'"
-                            class="cursor-pointer rounded-xl border-2 p-4 transition-all flex items-start gap-3">
-                            <input type="radio" wire:model.live="form.role" value="admin" class="sr-only">
-                            <div class="flex-1 min-w-0">
-                                <div class="flex items-center justify-between gap-2">
-                                    <div class="flex items-center gap-2">
-                                        <span class="font-semibold text-gray-900 text-sm">Administrator</span>
+                        @if ($adminRole)
+                            <p class="text-xs font-semibold uppercase tracking-wider text-rose-500">Privileged Role</p>
+                            <label @click="roleVal = '{{ $adminRole }}'"
+                                :class="roleVal === '{{ $adminRole }}'
+                                    ?
+                                    'ring-2 ring-rose-500 border-rose-500 bg-rose-50' :
+                                    'border-rose-200 bg-white hover:border-rose-300 hover:bg-rose-50/40'"
+                                class="cursor-pointer rounded-xl border-2 p-4 transition-all flex items-start gap-3">
+                                <input type="radio" wire:model.live="form.role" value="{{ $adminRole }}"
+                                    class="sr-only">
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-semibold text-gray-900 text-sm">
+                                                {{ $roleDisplayNames[$adminRole] ?? ucfirst($adminRole) }}
+                                            </span>
+                                            <span
+                                                class="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700">Full
+                                                Access</span>
+                                        </div>
                                         <span
-                                            class="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700">Full
-                                            Access</span>
+                                            :class="roleVal === '{{ $adminRole }}' ? 'opacity-100 scale-100' :
+                                                'opacity-0 scale-75'"
+                                            class="inline-flex shrink-0 items-center justify-center w-5 h-5 rounded-full bg-rose-500 text-white transition-all duration-150">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor"
+                                                stroke-width="3" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round"
+                                                    d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        </span>
                                     </div>
-                                    <span
-                                        :class="roleVal === 'admin' ? 'opacity-100 scale-100' : 'opacity-0 scale-75'"
-                                        class="inline-flex shrink-0 items-center justify-center w-5 h-5 rounded-full bg-rose-500 text-white transition-all duration-150">
-                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="3"
-                                            viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                                        </svg>
-                                    </span>
+                                    <p class="mt-1 text-xs text-gray-500 leading-relaxed">
+                                        {{ $roleDescriptions[$adminRole] ?? 'Full system access.' }}
+                                    </p>
                                 </div>
-                                <p class="mt-1 text-xs text-gray-500 leading-relaxed">{{ $roleDescriptions['admin'] }}
-                                </p>
-                            </div>
-                        </label>
+                            </label>
+                        @endif
 
                         {{-- Officer role cards --}}
                         <p class="text-xs font-semibold uppercase tracking-wider text-gray-400">Officer Roles</p>
@@ -284,7 +318,7 @@ $wire.on('wizard-advance', ({ tab }) => { formTab = tab; });" x-show="show" x-cl
                             <div
                                 class="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
                                 <div>
-                                    <h4 class="text-sm font-semibold text-gray-700">Default Permissions</h4>
+                                    <h4 class="text-sm font-semibold text-gray-700">Configured Permissions</h4>
                                     <p class="text-xs text-gray-500 mt-0.5">
                                         <span class="inline-flex items-center gap-1">
                                             <span class="w-2 h-2 rounded-full bg-teal-500 inline-block"></span>
@@ -300,19 +334,21 @@ $wire.on('wizard-advance', ({ tab }) => { formTab = tab; });" x-show="show" x-cl
                             </div>
 
                             {{-- Admin: all permissions --}}
-                            <div x-show="roleVal === 'admin'" class="p-4">
-                                <div
-                                    class="flex items-center gap-2 rounded-lg bg-rose-50 border border-rose-200 px-4 py-3">
-                                    <svg class="w-4 h-4 text-rose-500 shrink-0" fill="currentColor"
-                                        viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd"
-                                            d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z"
-                                            clip-rule="evenodd" />
-                                    </svg>
-                                    <p class="text-sm text-rose-700 font-medium">Administrators have unrestricted
-                                        access to all system features and permissions.</p>
+                            @if ($adminRole)
+                                <div x-show="roleVal === '{{ $adminRole }}'" class="p-4">
+                                    <div
+                                        class="flex items-center gap-2 rounded-lg bg-rose-50 border border-rose-200 px-4 py-3">
+                                        <svg class="w-4 h-4 text-rose-500 shrink-0" fill="currentColor"
+                                            viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd"
+                                                d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z"
+                                                clip-rule="evenodd" />
+                                        </svg>
+                                        <p class="text-sm text-rose-700 font-medium">Administrators have unrestricted
+                                            access to all system features and permissions.</p>
+                                    </div>
                                 </div>
-                            </div>
+                            @endif
 
                             @foreach ($roleKeys as $roleKey)
                                 <div x-show="roleVal === '{{ $roleKey }}'" class="p-4">
@@ -320,10 +356,10 @@ $wire.on('wizard-advance', ({ tab }) => { formTab = tab; });" x-show="show" x-cl
                                         @foreach ($allGroups as $groupName => $groupPerms)
                                             @php
                                                 $granted = array_values(
-                                                    array_intersect($groupPerms, $rolePresets[$roleKey]),
+                                                    array_intersect($groupPerms, $rolePermissionMap[$roleKey] ?? []),
                                                 );
                                                 $notGranted = array_values(
-                                                    array_diff($groupPerms, $rolePresets[$roleKey]),
+                                                    array_diff($groupPerms, $rolePermissionMap[$roleKey] ?? []),
                                                 );
                                             @endphp
                                             <div>
@@ -373,7 +409,7 @@ $wire.on('wizard-advance', ({ tab }) => { formTab = tab; });" x-show="show" x-cl
                                     clip-rule="evenodd" />
                             </svg>
                             <span>
-                                These are the <strong>default permissions</strong> for this role.
+                                These permissions reflect the role's <strong>current database configuration</strong>.
                                 You can customize which permissions each role has under
                                 <strong>Settings → Role Permissions</strong>.
                             </span>
@@ -405,11 +441,7 @@ $wire.on('wizard-advance', ({ tab }) => { formTab = tab; });" x-show="show" x-cl
                                     </div>
                                     <div class="text-sm text-gray-700">
                                         <p class="font-semibold text-gray-900">Password guidance</p>
-                                        <p class="mt-1 leading-6">
-                                            Use at least 6 characters and combine letters with numbers.
-                                            Add uppercase letters and symbols for better strength.
-                                            Avoid names, birthdays, and simple sequences like 12345.
-                                        </p>
+                                        <p class="mt-1 leading-6">{{ $passwordGuidance }}</p>
                                     </div>
                                 </div>
                             </div>
@@ -418,12 +450,9 @@ $wire.on('wizard-advance', ({ tab }) => { formTab = tab; });" x-show="show" x-cl
                                 <x-forms.text-input name="password" label="Password" model="form.password"
                                     type="password" :required="$isAddMode" placeholder="Enter password"
                                     autocomplete="new-password"
-                                    helperText="Use letters and numbers; add symbols if possible." :validateOnBlur="true"
-                                    :defer="true"
-                                    x-on:input="window.__officerPasswordStrengthUpdate && window.__officerPasswordStrengthUpdate()"
-                                    x-on:change="window.__officerPasswordStrengthUpdate && window.__officerPasswordStrengthUpdate()"
-                                    x-on:keyup="window.__officerPasswordStrengthUpdate && window.__officerPasswordStrengthUpdate()"
-                                    x-on:focusout="window.__officerPasswordStrengthUpdate && window.__officerPasswordStrengthUpdate()" />
+                                    helperText="{{ $passwordHelperText }}" :validateOnBlur="true" :defer="true"
+                                    minlength="{{ \App\Support\PersonPasswordPolicy::MIN_LENGTH }}"
+                                    pattern="{{ $passwordPattern }}" title="{{ $passwordGuidance }}" />
 
                                 <div
                                     class="mt-3 flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
@@ -438,7 +467,7 @@ $wire.on('wizard-advance', ({ tab }) => { formTab = tab; });" x-show="show" x-cl
                                         class="min-w-16 text-sm font-semibold text-gray-700">Weak</span>
                                     <button type="button"
                                         class="inline-flex h-8 w-8 items-center justify-center rounded-full text-cyan-600 transition-colors hover:bg-cyan-50 hover:text-cyan-700"
-                                        title="Use at least 6 characters, combine letters and numbers, add a capital letter and a special character if possible, and avoid names, birthdays, or simple sequences like 12345."
+                                        title="{{ $passwordGuidance }}"
                                         aria-label="Password guidance">
                                         <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
                                             <path fill-rule="evenodd"
@@ -551,96 +580,4 @@ $wire.on('wizard-advance', ({ tab }) => { formTab = tab; });" x-show="show" x-cl
     }
 </style>
 
-<script>
-    (() => {
-        if (window.__officerFormStrengthBound) {
-            return;
-        }
-
-        window.__officerFormStrengthBound = true;
-        window.__officerPasswordStrengthUpdate = () => {
-            const strengthLabel = document.getElementById('officer-password-strength-label');
-            const strengthBar = document.getElementById('officer-password-strength-bar');
-
-            if (!strengthLabel || !strengthBar) {
-                return;
-            }
-
-            const getNameTokens = () => ['first_name', 'mid_name', 'last_name']
-                .map((id) => document.getElementById(id)?.value || '')
-                .map((value) => value.toLowerCase().replace(/[^a-z]+/g, ''))
-                .filter((value) => value.length >= 3);
-
-            const passwordInput = document.getElementById('password');
-            const value = passwordInput?.value || '';
-            const normalized = value.toLowerCase();
-
-            const setState = (label, labelClass, barClass, width) => {
-                strengthLabel.textContent = label;
-                strengthLabel.className = `min-w-16 text-sm font-semibold ${labelClass}`;
-                strengthBar.className = `h-full rounded-full transition-all duration-200 ${barClass}`;
-                strengthBar.style.width = width;
-            };
-
-            if (!value) {
-                setState('Weak', 'text-gray-700', 'bg-gray-300', '0%');
-                return;
-            }
-
-            const hasLetters = /[a-z]/i.test(value);
-            const hasNumbers = /\d/.test(value);
-            const hasUppercase = /[A-Z]/.test(value);
-            const hasSpecial = /[^A-Za-z0-9]/.test(value);
-            const looksPredictable = getNameTokens().some((token) => normalized.includes(token) && /\d{3,}/
-                .test(normalized));
-
-            if (looksPredictable) {
-                setState('Too weak', 'text-red-700', 'bg-red-500', '20%');
-                return;
-            }
-
-            if (hasLetters && hasNumbers && hasUppercase && hasSpecial) {
-                setState('Strong', 'text-emerald-700', 'bg-emerald-500', '100%');
-                return;
-            }
-
-            if (hasLetters && hasNumbers && hasUppercase) {
-                setState('Medium', 'text-cyan-700', 'bg-cyan-500', '70%');
-                return;
-            }
-
-            if (hasLetters && hasNumbers) {
-                setState('Weak', 'text-amber-700', 'bg-amber-500', '45%');
-                return;
-            }
-
-            setState('Weak', 'text-gray-700', 'bg-gray-300', '25%');
-        };
-
-        document.addEventListener('input', (event) => {
-            if (event.target && ['password', 'first_name', 'mid_name', 'last_name'].includes(event.target
-                    .id)) {
-                window.__officerPasswordStrengthUpdate();
-            }
-        });
-
-        document.addEventListener('keyup', (event) => {
-            if (event.target && ['password', 'first_name', 'mid_name', 'last_name'].includes(event.target
-                    .id)) {
-                window.__officerPasswordStrengthUpdate();
-            }
-        });
-
-        document.addEventListener('blur', (event) => {
-            if (event.target && event.target.id === 'password') {
-                window.__officerPasswordStrengthUpdate();
-            }
-        }, true);
-
-        document.addEventListener('DOMContentLoaded', () => {
-            window.__officerPasswordStrengthUpdate();
-        });
-
-        window.__officerPasswordStrengthUpdate();
-    })();
-</script>
+@include('components.forms.password-strength-script', ['scope' => 'officer', 'labelId' => 'officer-password-strength-label', 'barId' => 'officer-password-strength-bar'])

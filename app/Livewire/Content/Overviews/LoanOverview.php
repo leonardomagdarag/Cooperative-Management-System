@@ -88,7 +88,7 @@ class LoanOverview extends Component
         $this->buildLoanStatusSeries();
 
         $this->pendingLoans = Loan::query()
-            ->with(['user.personalData', 'product'])
+            ->with(['user.personalData'])
             ->where('loan_status', 'pending')
             ->latest()
             ->take(8)

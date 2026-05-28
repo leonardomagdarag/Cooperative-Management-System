@@ -10,6 +10,7 @@ use App\Models\Transaction;
 use App\Services\AuditLogService;
 use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
+use App\Support\PermissionCatalog;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -30,6 +31,8 @@ class Services extends Component
     public $isTreasurerMode = false;
 
     public $isAdminMode = false;
+
+    public $canManageMemberServices = false;
 
     public $selectedMemberId = null;
 
@@ -94,6 +97,8 @@ class Services extends Component
     // Loan payment
     public $paymentLoanId = '';
 
+    public $paymentScheduleKey = '';
+
     public $paymentAmount = '';
 
     public $paymentNote = '';
@@ -131,17 +136,14 @@ class Services extends Component
 
         $user = Auth::user();
         $this->isAdminMode = $user && $user->hasRole('admin');
-        $this->isTreasurerMode = $user && ! $this->isAdminMode && (
-            $user->can('deposits.approve') ||
-            $user->can('withdrawals.approve') ||
-            $user->can('transactions.update')
-        );
+        $this->isTreasurerMode = $user && ! $this->isAdminMode && $this->canApprovePendingTransactions($user);
+        $this->canManageMemberServices = $this->canManageServicesForMembers($user);
 
         // Loan review mode: any officer with loans.update can process review queue
         $this->isLoanReviewMode = $user && $user->can('loans.update');
 
-        // If not treasurer mode, pre-select user's savings account for withdrawal
-        if (! $this->isTreasurerMode) {
+        // Member-facing services default to the authenticated user's savings account.
+        if (! $this->canManageMemberServices) {
             $savingsAccount = Auth::user()->accounts()->where('account_type', 'savings')->first();
             if ($savingsAccount) {
                 $this->withdrawalAccountId = $savingsAccount->id;
@@ -149,6 +151,90 @@ class Services extends Component
         }
 
         $this->refreshLoanTypeWarnings();
+    }
+
+    private function canApprovePendingTransactions($user): bool
+    {
+        return (bool) ($user && (
+            $user->can('transactions.approve') ||
+            $user->can('deposits.approve') ||
+            $user->can('withdrawals.approve')
+        ));
+    }
+
+    private function canRejectPendingTransactions($user): bool
+    {
+        return (bool) ($user && (
+            $user->can('transactions.approve') ||
+            $user->can('deposits.reject') ||
+            $user->can('withdrawals.reject')
+        ));
+    }
+
+    private function canManageServicesForMembers($user): bool
+    {
+        $isOfficer = $user && (
+            ($user->is_officer ?? false) ||
+            $user->hasAnyRole(PermissionCatalog::officerRoles())
+        );
+
+        return (bool) ($user && (
+            $this->isAdminMode ||
+            ($isOfficer && (
+                $user->can('services.view') ||
+                $this->isTreasurerMode ||
+                $user->can('services.create') ||
+                $user->can('services.update') ||
+                $user->can('loans.update')
+            ))
+        ));
+    }
+
+    private function isLoanOfficerFocusedMode($user = null): bool
+    {
+        $user ??= Auth::user();
+
+        return (bool) ($user && ! $this->isAdminMode && $user->hasRole('loan'));
+    }
+
+    private function allowedServicesForCurrentUser($user = null): array
+    {
+        $user ??= Auth::user();
+
+        if (! $user) {
+            return [];
+        }
+
+        if ($this->canManageMemberServices) {
+            if ($this->isLoanOfficerFocusedMode($user)) {
+                return ['loan-review', 'loan', 'payment'];
+            }
+
+            $services = ['deposit', 'withdraw', 'loan', 'payment'];
+
+            if ($this->isTreasurerMode || $this->isAdminMode) {
+                $services[] = 'approve';
+            }
+
+            if ($this->isLoanReviewMode) {
+                $services[] = 'loan-review';
+            }
+
+            return array_values(array_unique($services));
+        }
+
+        $services = ['deposit', 'withdraw', 'loan', 'payment'];
+
+        if ($this->isLoanReviewMode) {
+            $services[] = 'loan-review';
+        }
+
+        return $services;
+    }
+
+    private function canAccessService(string $service, $user = null): bool
+    {
+        return in_array($service, $this->allowedServicesForCurrentUser($user), true);
     }
 
     public function selectMember($memberId)
@@ -187,11 +273,7 @@ class Services extends Component
     public function approveTransaction()
     {
         $user = Auth::user();
-        $canApprove = $user && (
-            $user->can('deposits.approve') ||
-            $user->can('withdrawals.approve') ||
-            $user->can('transactions.update')
-        );
+        $canApprove = $this->canApprovePendingTransactions($user);
 
         if (!$canApprove || !$this->selectedTransactionId) {
             return;
@@ -200,22 +282,41 @@ class Services extends Component
         try {
             DB::beginTransaction();
 
-            $transaction = Transaction::with(['account', 'loan', 'user'])->findOrFail($this->selectedTransactionId);
+            $transaction = Transaction::with(['loan', 'user'])
+                ->whereKey($this->selectedTransactionId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $account = null;
+            if ($transaction->account_id) {
+                $account = Account::query()
+                    ->whereKey($transaction->account_id)
+                    ->lockForUpdate()
+                    ->first();
+            }
 
             // Check if already processed
             if ($transaction->status !== 'pending') {
                 $this->dispatch('warning', message: 'Transaction has already been processed.');
                 $this->selectedTransactionId = null;
+                DB::rollBack();
                 return;
             }
 
             // For withdrawals, verify the account still has sufficient balance
             if ($transaction->transaction_type === 'withdrawal') {
-                if ($transaction->account->balance < $transaction->amount) {
-                    $this->dispatch('error', message: 'Insufficient balance. Current balance: ₱' . number_format($transaction->account->balance, 2));
+                if (! $account || $account->balance < $transaction->amount) {
+                    $currentBalance = (float) ($account?->balance ?? 0);
+                    $this->dispatch('error', message: 'Insufficient balance. Current balance: ₱' . number_format($currentBalance, 2));
                     DB::rollBack();
                     return;
                 }
+            }
+
+            if (in_array($transaction->transaction_type, ['deposit', 'withdrawal'], true) && ! $account) {
+                $this->dispatch('error', message: 'The linked account is missing for this transaction.');
+                DB::rollBack();
+                return;
             }
 
             if ($this->requiresWithdrawalApprovalOtp($transaction) && ! $this->passesWithdrawalApprovalOtp($transaction)) {
@@ -243,7 +344,8 @@ class Services extends Component
 
             // Update account balance
             if ($transaction->transaction_type === 'deposit') {
-                $transaction->account->increment('balance', $transaction->amount);
+                $account->balance += (float) $transaction->amount;
+                $account->save();
 
                 if ($transaction->user) {
                     $this->notificationService->notifyAccountActivity(
@@ -254,7 +356,8 @@ class Services extends Component
                     );
                 }
             } elseif ($transaction->transaction_type === 'withdrawal') {
-                $transaction->account->decrement('balance', $transaction->amount);
+                $account->balance -= (float) $transaction->amount;
+                $account->save();
 
                 // Send withdrawal approval notification
                 if ($transaction->user) {
@@ -269,25 +372,24 @@ class Services extends Component
                 $loan = $transaction->loan;
                 $loan->refresh(); // Refresh to get updated balance after this payment
 
-                // remainingBalance() now calculates based on completed payments
-                // But since we just marked this as completed, we need to check
-                $remainingBalance = $loan->loan_amount - $loan->completedPayments()->sum('amount');
+                $remainingBalance = $loan->remainingBalance();
 
                 if ($remainingBalance <= 0) {
-                    $loan->update(['loan_status' => 'paid']);
+                    $loan->update(['loan_status' => 'paid_off']);
                 }
             }
 
-            DB::commit();;
+            DB::commit();
 
             $this->dispatch('success', message: 'Transaction approved successfully!');
             $this->selectedTransactionId = null;
             $this->approvalAction = '';
             $this->approvalOtpCode = '';
             $this->approvalOtpSentForTransactionId = null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
-            $this->dispatch('error', message: 'Failed to approve transaction: ' . $e->getMessage());
+            report($e);
+            $this->dispatch('error', message: 'Failed to approve transaction. Please try again or contact support.');
         }
     }
 
@@ -324,11 +426,7 @@ class Services extends Component
         ]);
 
         $user = Auth::user();
-        $canReject = $user && (
-            $user->can('deposits.reject') ||
-            $user->can('withdrawals.reject') ||
-            $user->can('transactions.update')
-        );
+        $canReject = $this->canRejectPendingTransactions($user);
 
         if (!$canReject || !$this->selectedTransactionId) {
             return;
@@ -758,16 +856,21 @@ class Services extends Component
 
     private function isActingForMember(): bool
     {
-        return (bool) ($this->selectedMemberId && ($this->isTreasurerMode || $this->isAdminMode));
+        return (bool) ($this->selectedMemberId && $this->canManageMemberServices);
     }
 
     public function openService($service)
     {
+        if (! $this->canAccessService($service, Auth::user())) {
+            $this->dispatch('warning', message: 'This service is not available for your role.');
+            return;
+        }
+
         // 'approve' and 'loan-review' are officer-only panels that don't need a member pre-selected
         $memberFreeServices = ['approve', 'loan-review'];
 
-        // Treasurer and admin both require a member to be selected for member-facing services
-        if (($this->isTreasurerMode || $this->isAdminMode) && ! in_array($service, $memberFreeServices, true) && ! $this->selectedMemberId) {
+        // Officer-facing member services require a member to be selected first.
+        if ($this->canManageMemberServices && ! in_array($service, $memberFreeServices, true) && ! $this->selectedMemberId) {
             $this->dispatch('warning', message: 'Please select a member first before accessing this service.');
             return;
         }
@@ -807,6 +910,7 @@ class Services extends Component
             'loanPurpose',
             'loanPaymentFrequency',
             'paymentLoanId',
+            'paymentScheduleKey',
             'paymentAmount',
             'paymentNote',
             'paymentTransactionMode',
@@ -928,9 +1032,12 @@ class Services extends Component
                 return;
             }
 
-            // Only online/digital wallet transactions are auto-approved
-            // Counter transactions need treasurer approval
-            $isAutoApprove = $this->depositTransactionMode === 'online';
+            $proofPath = $this->depositProof
+                ? $this->depositProof->store('transaction-proofs', 'public')
+                : null;
+
+            $requiresProofVerification = $this->depositTransactionMode === 'online';
+            $isAutoApprove = false;
 
             // Create transaction
             $note = ($this->isActingForMember() ? 'Processed by officer - ' : '')
@@ -943,13 +1050,17 @@ class Services extends Component
                 'amount' => $this->depositAmount,
                 'transaction_date' => now(),
                 'status' => $isAutoApprove ? 'completed' : 'pending',
+                'proof_of_payment_path' => $proofPath,
+                'proof_of_payment_uploaded_at' => $proofPath ? now() : null,
                 'note' => $note,
                 'recorded_by' => Auth::id(),
             ]);
 
             $this->auditLogService->log(
                 'transaction.deposit_submitted',
-                $isAutoApprove ? 'Online deposit submitted and auto-completed.' : 'Deposit submitted and awaiting approval.',
+                $requiresProofVerification
+                    ? 'Online deposit submitted with proof and awaiting verification.'
+                    : 'Deposit submitted and awaiting approval.',
                 'transaction',
                 $transaction,
                 Auth::user(),
@@ -957,11 +1068,12 @@ class Services extends Component
                     'amount' => (float) $this->depositAmount,
                     'mode' => $this->depositTransactionMode,
                     'status' => $transaction->status,
+                    'has_proof' => $proofPath !== null,
                     'target_user_id' => $targetUser?->id,
                 ]
             );
 
-            // Update account balance only if auto-approved (online)
+            // Update account balance only if a deposit is auto-approved.
             if ($isAutoApprove) {
                 $account->increment('balance', $this->depositAmount);
 
@@ -985,12 +1097,7 @@ class Services extends Component
             // Store transaction for receipt/confirmation
             $this->completedDepositTransaction = $transaction->fresh();
 
-            // Move to appropriate step
-            if ($this->depositTransactionMode === 'online') {
-                $this->depositStep++; // Go to payment portal step
-            } else {
-                $this->depositStep = 99; // Go to success message
-            }
+            $this->depositStep = 99;
         } catch (\Exception $e) {
             DB::rollBack();
             $this->dispatch('error', message: 'Failed to submit deposit request: ' . $e->getMessage());
@@ -1117,15 +1224,20 @@ class Services extends Component
     public function nextPaymentStep()
     {
         if ($this->paymentStep === 1) {
-            $this->validate([
-                'paymentLoanId' => 'required|exists:loans,id',
-                'paymentAmount' => 'required|numeric|min:100',
-            ]);
+            $this->validate($this->paymentStep1Rules());
 
-            // Check if payment amount exceeds remaining balance
-            $loan = Loan::find($this->paymentLoanId);
-            if ($loan && $this->paymentAmount > $loan->remainingBalance()) {
-                $this->addError('paymentAmount', 'Payment exceeds remaining loan balance (₱' . number_format($loan->remainingBalance(), 2) . ')');
+            $loan = $this->resolveSelectedPaymentLoan();
+            $selectedSchedule = $loan ? $this->findSelectedPaymentSchedule($loan) : null;
+
+            if (! $loan || ! $selectedSchedule) {
+                $this->addError('paymentScheduleKey', 'Please select a valid payment schedule.');
+                return;
+            }
+
+            $this->paymentAmount = $selectedSchedule['amount_due'];
+
+            if ($this->paymentAmount > $loan->remainingBalance()) {
+                $this->addError('paymentScheduleKey', 'Selected payment exceeds remaining loan balance (₱' . number_format($loan->remainingBalance(), 2) . ')');
                 return;
             }
         } elseif ($this->paymentStep === 2) {
@@ -1140,6 +1252,40 @@ class Services extends Component
     {
         if ($this->paymentStep > 1) {
             $this->paymentStep--;
+        }
+    }
+
+    public function updatedPaymentLoanId($loanId): void
+    {
+        $this->paymentScheduleKey = '';
+        $this->paymentAmount = '';
+
+        if (blank($loanId)) {
+            return;
+        }
+
+        $loan = $this->resolveSelectedPaymentLoan();
+        $availableSchedules = $loan ? $this->getAvailablePaymentSchedules($loan) : [];
+
+        if (count($availableSchedules) === 1) {
+            $this->paymentScheduleKey = (string) $availableSchedules[0]['key'];
+            $this->paymentAmount = $availableSchedules[0]['amount_due'];
+        }
+    }
+
+    public function updatedPaymentScheduleKey($scheduleKey): void
+    {
+        $this->paymentAmount = '';
+
+        if (blank($scheduleKey)) {
+            return;
+        }
+
+        $loan = $this->resolveSelectedPaymentLoan();
+        $selectedSchedule = $loan ? $this->findSelectedPaymentSchedule($loan) : null;
+
+        if ($selectedSchedule) {
+            $this->paymentAmount = $selectedSchedule['amount_due'];
         }
     }
 
@@ -1350,11 +1496,41 @@ class Services extends Component
     public function submitLoanPayment()
     {
         $this->validate($this->paymentStep1Rules());
+        $this->validate($this->paymentStep2Rules());
 
         try {
             DB::beginTransaction();
 
-            $loan = Loan::find($this->paymentLoanId);
+            // Get target user first so loan ownership can be enforced.
+            $targetUser = $this->isActingForMember()
+                ? \App\Models\User::find($this->selectedMemberId)
+                : Auth::user();
+
+            if (! $targetUser) {
+                $this->dispatch('error', message: 'Unable to resolve the member for this payment.');
+                DB::rollBack();
+                return;
+            }
+
+            $loan = Loan::query()
+                ->whereKey($this->paymentLoanId)
+                ->where('user_id', $targetUser->id)
+                ->first();
+
+            if (! $loan) {
+                $this->dispatch('error', message: 'Selected loan is invalid for this member.');
+                DB::rollBack();
+                return;
+            }
+
+            $selectedSchedule = $this->findSelectedPaymentSchedule($loan);
+            if (! $selectedSchedule) {
+                $this->addError('paymentScheduleKey', 'Please select a valid payment schedule.');
+                DB::rollBack();
+                return;
+            }
+
+            $this->paymentAmount = $selectedSchedule['amount_due'];
 
             // Validate payment doesn't exceed remaining balance
             $remainingBalance = $loan->remainingBalance();
@@ -1363,11 +1539,6 @@ class Services extends Component
                 DB::rollBack();
                 return;
             }
-
-            // Get target user
-            $targetUser = $this->isActingForMember()
-                ? \App\Models\User::find($this->selectedMemberId)
-                : Auth::user();
 
             $account = $targetUser->accounts()->where('account_type', 'savings')->first();
 
@@ -1416,9 +1587,10 @@ class Services extends Component
             if ($isAutoApprove) {
                 $this->notificationService->notifyLoanPayment($loan, (float) $this->paymentAmount);
 
-                $newRemainingBalance = $loan->loan_amount - $loan->completedPayments()->sum('amount');
+                $loan->refresh();
+                $newRemainingBalance = $loan->remainingBalance();
                 if ($newRemainingBalance <= 0) {
-                    $loan->update(['loan_status' => 'paid']);
+                    $loan->update(['loan_status' => 'paid_off']);
                 }
             } else {
                 $this->notificationService->notifyAccountActivity(
@@ -1429,7 +1601,7 @@ class Services extends Component
                 );
             }
 
-            DB::commit();;
+            DB::commit();
 
             $this->completedPaymentTransaction = $transaction->fresh();
 
@@ -1438,9 +1610,10 @@ class Services extends Component
             } else {
                 $this->paymentStep = 99;
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
-            $this->dispatch('error', message: 'Failed to submit payment: ' . $e->getMessage());
+            report($e);
+            $this->dispatch('error', message: 'Failed to submit payment. Please try again or contact support.');
         }
     }
 
@@ -1665,6 +1838,7 @@ class Services extends Component
         return [
             'depositAmount'          => 'required|numeric|min:100',
             'depositTransactionMode' => 'required|in:counter,online',
+            'depositProof'           => 'required_if:depositTransactionMode,online|nullable|file|mimes:jpg,jpeg,png,webp,pdf|max:5120',
             'depositNote'            => 'nullable|string|max:255',
         ];
     }
@@ -1713,7 +1887,7 @@ class Services extends Component
     {
         return [
             'paymentLoanId' => 'required|exists:loans,id',
-            'paymentAmount' => 'required|numeric|min:100',
+            'paymentScheduleKey' => 'required',
         ];
     }
 
@@ -1724,22 +1898,156 @@ class Services extends Component
         ];
     }
 
-    public function render()
+    private function resolveSelectedPaymentLoan(): ?Loan
     {
-        // Get target user based on mode
+        if (blank($this->paymentLoanId)) {
+            return null;
+        }
+
         $targetUser = $this->isActingForMember()
             ? \App\Models\User::find($this->selectedMemberId)
             : Auth::user();
+
+        if (! $targetUser) {
+            return null;
+        }
+
+        return Loan::query()
+            ->whereKey($this->paymentLoanId)
+            ->where('user_id', $targetUser->id)
+            ->first();
+    }
+
+    public function getAvailablePaymentSchedules(Loan $loan): array
+    {
+        $paidAmount = (float) $loan->completedPayments()->sum('amount');
+        $schedule = $this->generateAmortizationSchedule($loan);
+        $availableSchedules = [];
+        $cumulativeAmount = 0.0;
+
+        foreach ($schedule as $scheduleEntry) {
+            $entryAmount = (float) $scheduleEntry['payment_amount'];
+            $coveredAmount = min(max($paidAmount - $cumulativeAmount, 0), $entryAmount);
+            $amountDue = round($entryAmount - $coveredAmount, 2);
+            $cumulativeAmount += $entryAmount;
+
+            if ($amountDue <= 0) {
+                continue;
+            }
+
+            $availableSchedules[] = [
+                'key' => (string) $scheduleEntry['payment_number'],
+                'payment_number' => $scheduleEntry['payment_number'],
+                'due_date' => $scheduleEntry['due_date'],
+                'payment_amount' => round($entryAmount, 2),
+                'amount_due' => $amountDue,
+            ];
+        }
+
+        return $availableSchedules;
+    }
+
+    public function findSelectedPaymentSchedule(Loan $loan): ?array
+    {
+        foreach ($this->getAvailablePaymentSchedules($loan) as $scheduleEntry) {
+            if ((string) $scheduleEntry['key'] === (string) $this->paymentScheduleKey) {
+                return $scheduleEntry;
+            }
+        }
+
+        return null;
+    }
+
+    private function generateAmortizationSchedule(Loan $loan): array
+    {
+        $principal = (float) $loan->loan_amount;
+        $termMonths = (int) ($loan->term_months ?: 0);
+
+        $totalPeriods = match ($loan->payment_frequency) {
+            'weekly' => $termMonths * 4.33,
+            'bi-weekly' => $termMonths * 2.17,
+            'monthly' => $termMonths,
+            'quarterly' => $termMonths / 3,
+            'annually' => $termMonths / 12,
+            default => $termMonths,
+        };
+
+        if ($totalPeriods <= 0) {
+            return [];
+        }
+
+        $roundedPeriods = max(1, (int) ceil($totalPeriods));
+        $totalInterest = method_exists($loan, 'totalInterest')
+            ? $loan->totalInterest()
+            : round($principal * ((float) $loan->interest_rate / 100) * max(1, $termMonths), 2);
+        $totalPayable = round($principal + $totalInterest, 2);
+        $principalPerPeriod = $principal / $roundedPeriods;
+        $interestPerPeriod = $totalInterest / $roundedPeriods;
+
+        $schedule = [];
+        $balance = $principal;
+        $startDate = $loan->approved_at ?? $loan->applied_at ?? now();
+
+        for ($i = 1; $i <= $roundedPeriods; $i++) {
+            $interestPayment = $interestPerPeriod;
+            $principalPayment = $principalPerPeriod;
+            $paymentAmount = $principalPayment + $interestPayment;
+
+            if ($i === $roundedPeriods) {
+                $principalPayment = $balance;
+                $paymentAmount = round($totalPayable - collect($schedule)->sum('payment_amount'), 2);
+                $interestPayment = round($paymentAmount - $principalPayment, 2);
+            }
+
+            $balance -= $principalPayment;
+
+            $dueDate = match ($loan->payment_frequency) {
+                'weekly' => $startDate->copy()->addWeeks($i),
+                'bi-weekly' => $startDate->copy()->addWeeks($i * 2),
+                'monthly' => $startDate->copy()->addMonths($i),
+                'quarterly' => $startDate->copy()->addMonths($i * 3),
+                'annually' => $startDate->copy()->addYears($i),
+                default => $startDate->copy()->addMonths($i),
+            };
+
+            $schedule[] = [
+                'payment_number' => $i,
+                'due_date' => $dueDate,
+                'payment_amount' => round($paymentAmount, 2),
+                'principal' => round($principalPayment, 2),
+                'interest' => round($interestPayment, 2),
+                'balance' => round(max($balance, 0), 2),
+            ];
+        }
+
+        return $schedule;
+    }
+
+    public function render()
+    {
+        $currentUser = Auth::user();
+
+        // Get target user based on mode
+        $targetUser = $this->isActingForMember()
+            ? \App\Models\User::find($this->selectedMemberId)
+            : $currentUser;
+
+        $hideSelectedMemberFinancials = $this->isLoanOfficerFocusedMode($currentUser);
 
         $savingsAccount = $targetUser?->accounts()->where('account_type', 'savings')->first();
         $shareCapitalAccount = $targetUser?->accounts()->where('account_type', 'share-capital')->first();
         $activeLoans = $targetUser?->loans()->whereIn('loan_status', ['approved', 'active'])->get() ?? collect();
 
-        // Admins and treasurers see all pending requests and can approve
+        if ($hideSelectedMemberFinancials) {
+            $savingsAccount = null;
+            $shareCapitalAccount = null;
+        }
+
+        // Admins and designated approvers see all pending requests and can approve
         $canApproveTransactions = $this->isTreasurerMode || $this->isAdminMode;
 
         // For members: only count their own pending requests
-        // For treasurers/admins: count all pending requests if viewing approval section
+        // For approvers/admins: count all pending requests if viewing approval section
         if ($canApproveTransactions) {
             $pendingRequests = Transaction::whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_payment'])
                 ->where('status', 'pending')
@@ -1760,10 +2068,10 @@ class Services extends Component
             $pendingTransactions = collect();
         }
 
-        // Get members list for treasurer or admin
+        // Get members list for roles that can process services on behalf of members.
         $members = collect();
-        if ($this->isTreasurerMode || $this->isAdminMode) {
-            $members = \App\Models\User::where('role', 'member')
+        if ($this->canManageMemberServices) {
+            $members = \App\Models\User::query()->memberUsers()
                 ->with('personalData')
                 ->when($this->memberSearch, function ($query) {
                     $query->whereHas('personalData', function ($q) {
@@ -1800,6 +2108,8 @@ class Services extends Component
             'members'              => $members,
             'reviewableLoans'      => $reviewableLoans,
             'pendingLoanReviews'   => $pendingLoanReviews,
+            'availableServices'    => $this->allowedServicesForCurrentUser($currentUser),
+            'hideSelectedMemberFinancials' => $hideSelectedMemberFinancials,
             'selectedMember'       => $this->selectedMemberId ? \App\Models\User::with('personalData')->find($this->selectedMemberId) : null,
         ]);
     }

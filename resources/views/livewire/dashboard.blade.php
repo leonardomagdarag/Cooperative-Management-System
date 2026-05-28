@@ -72,7 +72,7 @@
 
     {{-- Main Content Area --}}
     <main class="ml-20 lg:ml-64 mt-16 p-6 w-full min-h-screen bg-gray-50 transition-all duration-300 relative">
-        <div wire:loading.flex wire:target="updateSection"
+        <div wire:loading.flex wire:target="updateSection, openNotificationsInbox"
             class="absolute inset-0 z-20 items-center justify-center bg-gray-50/60">
             <div class="flex items-center gap-3 px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
                 <svg class="animate-spin h-5 w-5 text-emerald-600" xmlns="http://www.w3.org/2000/svg" fill="none"

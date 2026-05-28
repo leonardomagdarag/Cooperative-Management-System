@@ -88,18 +88,20 @@
 
                                 {{-- Role Badge --}}
                                 @php
+                                    $primaryRole = $officer->primary_role;
                                     $roleColors = [
                                         'admin' => 'bg-red-100 text-red-800 border-red-200',
                                         'manager' => 'bg-purple-100 text-purple-800 border-purple-200',
-                                        'secretary' => 'bg-blue-100 text-blue-800 border-blue-200',
+                                        'accountant' => 'bg-amber-100 text-amber-800 border-amber-200',
+                                        'loan' => 'bg-emerald-100 text-emerald-800 border-emerald-200',
                                         'officer' => 'bg-emerald-100 text-emerald-800 border-emerald-200',
                                     ];
                                     $roleColor =
-                                        $roleColors[$officer->role] ?? 'bg-gray-100 text-gray-800 border-gray-200';
+                                        $roleColors[$primaryRole] ?? 'bg-gray-100 text-gray-800 border-gray-200';
                                 @endphp
                                 <span
                                     class="inline-block mt-3 px-3 py-1 text-xs font-semibold rounded-full border-2 {{ $roleColor }}">
-                                    {{ strtoupper($officer->role) }}
+                                    {{ strtoupper($primaryRole) }}
                                 </span>
                             </div>
                         </div>
@@ -150,7 +152,7 @@
                                 <div class="grid grid-cols-2 gap-4">
                                     <div>
                                         <span class="text-sm font-medium text-gray-600">System Role:</span>
-                                        <p class="text-gray-800 font-semibold">{{ ucfirst($officer->role) }}</p>
+                                        <p class="text-gray-800 font-semibold">{{ ucfirst($primaryRole) }}</p>
                                     </div>
                                     <div>
                                         <span class="text-sm font-medium text-gray-600">Position:</span>
@@ -163,7 +165,7 @@
                                 <div class="mt-4">
                                     <span class="text-sm font-medium text-gray-600 block mb-2">Permissions:</span>
                                     <div class="flex flex-wrap gap-2">
-                                        @if ($officer->role === 'admin')
+                                        @if ($primaryRole === 'admin')
                                             <span class="px-2 py-1 text-xs bg-red-100 text-red-800 rounded">Full System
                                                 Access</span>
                                             <span class="px-2 py-1 text-xs bg-red-100 text-red-800 rounded">User
@@ -174,7 +176,7 @@
                                                 Approval</span>
                                             <span class="px-2 py-1 text-xs bg-red-100 text-red-800 rounded">Reports
                                                 Access</span>
-                                        @elseif($officer->role === 'manager')
+                                        @elseif($primaryRole === 'manager')
                                             <span class="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded">Member
                                                 Management</span>
                                             <span class="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded">Loan
@@ -185,14 +187,17 @@
                                             <span
                                                 class="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded">Reports
                                                 Access</span>
-                                        @elseif($officer->role === 'secretary')
-                                            <span class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">Member
-                                                Records</span>
-                                            <span class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">Document
-                                                Management</span>
+                                        @elseif($primaryRole === 'accountant')
                                             <span
-                                                class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">Transaction
+                                                class="px-2 py-1 text-xs bg-amber-100 text-amber-800 rounded">Transaction
+                                                Management</span>
+                                            <span class="px-2 py-1 text-xs bg-amber-100 text-amber-800 rounded">Member
+                                                Onboarding</span>
+                                            <span class="px-2 py-1 text-xs bg-amber-100 text-amber-800 rounded">Service
                                                 Processing</span>
+                                            <span
+                                                class="px-2 py-1 text-xs bg-amber-100 text-amber-800 rounded">Financial
+                                                Reports</span>
                                         @else
                                             <span class="px-2 py-1 text-xs bg-emerald-100 text-emerald-800 rounded">View
                                                 Records</span>
@@ -311,13 +316,31 @@
 
                 {{-- Documents Tab --}}
                 @if ($activeTab === 'documents')
-                    <div class="text-center py-12">
-                        <svg class="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor"
-                            viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        <p class="text-gray-600">Document management coming soon</p>
+                    <div class="space-y-6">
+                        <div>
+                            <h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">Profile Photo</h4>
+                            @if ($officer->personalData?->profile_picture)
+                                <div class="flex items-center gap-4">
+                                    <img src="{{ Storage::url($officer->personalData->profile_picture) }}"
+                                        alt="Profile photo"
+                                        class="w-32 h-32 rounded-full object-cover border-2 border-gray-200 shadow-sm">
+                                    <div>
+                                        <p class="text-sm text-gray-600">Profile photo on file</p>
+                                        <a href="{{ Storage::url($officer->personalData->profile_picture) }}" target="_blank"
+                                            class="mt-2 inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800">
+                                            <i class="fas fa-external-link-alt text-xs"></i> View full size
+                                        </a>
+                                    </div>
+                                </div>
+                            @else
+                                <div class="flex items-center gap-3 text-gray-400 py-4">
+                                    <div class="w-16 h-16 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center">
+                                        <i class="fas fa-user text-2xl"></i>
+                                    </div>
+                                    <p class="text-sm">No profile photo uploaded</p>
+                                </div>
+                            @endif
+                        </div>
                     </div>
                 @endif
             </div>

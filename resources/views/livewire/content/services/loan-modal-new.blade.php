@@ -107,7 +107,8 @@
 
                                     @if ($memberSearch && strlen($memberSearch) >= 2)
                                         @php
-                                            $searchResults = \App\Models\User::where('role', 'member')
+                                            $searchResults = \App\Models\User::query()
+                                                ->memberUsers()
                                                 ->whereHas('personalData', function ($q) {
                                                     $q->where(
                                                         'first_name',

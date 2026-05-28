@@ -49,9 +49,9 @@ class ManagerOverview extends Component
         $start = $now->copy()->startOfMonth();
         $end   = $now->copy()->endOfMonth();
 
-        $totalMembers       = User::query()->where('role', 'member')->count();
-        $newMembersThisMonth = User::query()->where('role', 'member')->whereBetween('created_at', [$start, $end])->count();
-        $totalStaff         = User::query()->whereIn('role', ['admin', 'manager', 'loan', 'secretary', 'treasurer'])->count();
+        $totalMembers       = User::query()->memberUsers()->count();
+        $newMembersThisMonth = User::query()->memberUsers()->whereBetween('created_at', [$start, $end])->count();
+        $totalStaff         = User::query()->officerUsers()->count();
 
         $totalSavings = (float) Account::query()->where('account_type', 'savings')->sum('balance');
 
@@ -78,7 +78,7 @@ class ManagerOverview extends Component
 
         $this->recentMembers = User::query()
             ->with('personalData')
-            ->where('role', 'member')
+            ->memberUsers()
             ->latest()
             ->take(6)
             ->get();

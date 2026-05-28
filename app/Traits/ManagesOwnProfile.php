@@ -162,6 +162,7 @@ trait ManagesOwnProfile
     protected function ownProfileRules(User $user): array
     {
         return [
+            'profilePhotoUpload' => ['nullable', 'image', 'mimes:jpg,jpeg,png,gif', 'max:2048'],
             'profileForm.title' => ['nullable', 'string', 'max:100'],
             'profileForm.first_name' => ['required', 'string', 'max:100'],
             'profileForm.mid_name' => ['nullable', 'string', 'max:100'],
