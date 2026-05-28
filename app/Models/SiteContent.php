@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\SiteContentCatalog;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
@@ -65,11 +66,13 @@ class SiteContent extends Model
         static::saved(function ($content) {
             Cache::forget("site_content.{$content->section}.{$content->key}");
             Cache::forget("site_content.section.{$content->section}");
+            Cache::forget(SiteContentCatalog::CACHE_KEY);
         });
 
         static::deleted(function ($content) {
             Cache::forget("site_content.{$content->section}.{$content->key}");
             Cache::forget("site_content.section.{$content->section}");
+            Cache::forget(SiteContentCatalog::CACHE_KEY);
         });
     }
 }

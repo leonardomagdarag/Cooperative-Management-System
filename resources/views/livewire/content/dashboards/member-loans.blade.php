@@ -299,6 +299,12 @@
                     {{-- Modal body --}}
                     <div class="p-6 space-y-6 max-h-[calc(90vh-180px)] overflow-y-auto">
 
+                        @php
+                            $amortizationSchedule = $this->generateAmortizationSchedule($selectedLoan);
+                            $projectedInterest = collect($amortizationSchedule)->sum('interest');
+                            $projectedRepayment = (float) $selectedLoan->loan_amount + $projectedInterest;
+                        @endphp
+
                         {{-- Details Tab --}}
                         <div x-show="activeTab === 'details'" class="space-y-6">
                             {{-- Loan Overview Cards --}}
@@ -328,22 +334,37 @@
                                         <div class="flex justify-between">
                                             <dt class="text-sm text-gray-600">Loan Type:</dt>
                                             <dd class="text-sm font-medium text-gray-900">
-                                                {{ ucfirst($selectedLoan->loan_type) }}</dd>
+                                                {{ $selectedLoan->loan_type_label }}</dd>
                                         </div>
                                         <div class="flex justify-between">
-                                            <dt class="text-sm text-gray-600">Interest Rate:</dt>
+                                            <dt class="text-sm text-gray-600">Principal Amount:</dt>
                                             <dd class="text-sm font-medium text-gray-900">
-                                                {{ $selectedLoan->interest_rate }}% per annum</dd>
+                                                ₱{{ number_format($selectedLoan->loan_amount, 2) }}</dd>
                                         </div>
                                         <div class="flex justify-between">
-                                            <dt class="text-sm text-gray-600">Term:</dt>
+                                            <dt class="text-sm text-gray-600">Annual Interest Rate:</dt>
+                                            <dd class="text-sm font-medium text-gray-900">
+                                                {{ number_format((float) $selectedLoan->interest_rate, 2) }}%</dd>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <dt class="text-sm text-gray-600">Repayment Term:</dt>
                                             <dd class="text-sm font-medium text-gray-900">
                                                 {{ $selectedLoan->term_months }} months</dd>
                                         </div>
                                         <div class="flex justify-between">
                                             <dt class="text-sm text-gray-600">Payment Frequency:</dt>
                                             <dd class="text-sm font-medium text-gray-900">
-                                                {{ ucfirst($selectedLoan->payment_frequency) }}</dd>
+                                                {{ ucwords(str_replace('-', ' ', $selectedLoan->payment_frequency)) }}</dd>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <dt class="text-sm text-gray-600">Estimated Interest Over Term:</dt>
+                                            <dd class="text-sm font-medium text-gray-900">
+                                                ₱{{ number_format($projectedInterest, 2) }}</dd>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <dt class="text-sm text-gray-600">Estimated Total Repayment:</dt>
+                                            <dd class="text-sm font-medium text-gray-900">
+                                                ₱{{ number_format($projectedRepayment, 2) }}</dd>
                                         </div>
                                         <div class="flex justify-between">
                                             <dt class="text-sm text-gray-600">Status:</dt>
@@ -437,7 +458,7 @@
                             <div class="flex items-center justify-between mb-4">
                                 <h4 class="font-semibold text-gray-900">Amortization Schedule</h4>
                                 <span class="text-sm text-gray-600">Total Periods:
-                                    {{ count($this->generateAmortizationSchedule($selectedLoan)) }}</span>
+                                    {{ count($amortizationSchedule) }}</span>
                             </div>
 
                             <div class="overflow-x-auto">
@@ -465,7 +486,7 @@
                                         </tr>
                                     </thead>
                                     <tbody class="bg-white divide-y divide-gray-200">
-                                        @foreach ($this->generateAmortizationSchedule($selectedLoan) as $payment)
+                                        @foreach ($amortizationSchedule as $payment)
                                             <tr class="hover:bg-gray-50">
                                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                                     {{ $payment['payment_number'] }}</td>

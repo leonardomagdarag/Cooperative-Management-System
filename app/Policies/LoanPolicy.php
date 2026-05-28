@@ -3,18 +3,19 @@
 namespace App\Policies;
 
 use App\Models\Loan;
+use App\Support\PermissionCatalog;
 use App\Models\User;
 
 class LoanPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->can('loans.view');
+        return $this->isOfficerUser($user) && $user->can('loans.view');
     }
 
     public function view(User $user, Loan $loan): bool
     {
-        return $user->can('loans.view')
+        return ($this->isOfficerUser($user) && $user->can('loans.view'))
             || $loan->user_id === $user->id;
     }
 
@@ -23,20 +24,30 @@ class LoanPolicy
         return $user->can('loans.create');
     }
 
+    public function encode(User $user): bool
+    {
+        return $user->hasRole('admin') && $user->can('loans.encode');
+    }
+
     public function update(User $user, Loan $loan): bool
     {
-        return $user->can('loans.update')
+        return ($this->isOfficerUser($user) && $user->can('loans.update'))
             || ($user->can('loans.create') && $loan->user_id === $user->id);
     }
 
     public function approve(User $user): bool
     {
-        return $user->can('loans.approve');
+        return $this->isOfficerUser($user) && $user->can('loans.approve');
+    }
+
+    public function uploadDocument(User $user, Loan $loan): bool
+    {
+        return $user->hasAnyRole(['admin', 'manager', 'accountant']);
     }
 
     public function reject(User $user): bool
     {
-        return $user->can('loans.reject');
+        return $this->isOfficerUser($user) && $user->can('loans.reject');
     }
 
     /**
@@ -45,7 +56,7 @@ class LoanPolicy
      */
     public function review(User $user): bool
     {
-        return $user->can('loans.update');
+        return $this->isOfficerUser($user) && $user->can('loans.update');
     }
 
     /**
@@ -59,6 +70,13 @@ class LoanPolicy
 
     public function delete(User $user): bool
     {
-        return $user->can('loans.update');
+        return $this->isOfficerUser($user) && $user->can('loans.update');
+    }
+
+    private function isOfficerUser(User $user): bool
+    {
+        return (bool) (($user->is_officer ?? false)
+            || $user->hasRole('admin')
+            || $user->hasAnyRole(PermissionCatalog::officerRoles()));
     }
 }

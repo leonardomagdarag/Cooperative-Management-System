@@ -1,4 +1,4 @@
-<footer class="bg-gray-900 text-white py-16 px-4">
+<footer class="bg-gray-900 text-white py-16 px-4" x-data="{ activePolicyModal: null }">
     <div class="max-w-6xl mx-auto">
         <!-- Main Footer Content -->
         <div class="grid md:grid-cols-3 gap-12 mb-12">
@@ -75,16 +75,30 @@
                 </div>
                 <a href="#gmail_link" class=" text-sm text-gray-400 hover:text-gray-200">
                     <i class="fas fa-envelope mr-2"></i>
-                    {!! config('content.contact.email') !!}
+                    {!! data_get($publicContent ?? [], 'contact.email') !!}
                 </a>
             </div>
         </div>
 
         <!-- Bottom Bar -->
         <div class="border-t border-gray-800 pt-8">
+            <div class="mb-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-sm text-gray-400">
+                <button type="button" @click="activePolicyModal = 'terms'"
+                    class="inline-flex items-center gap-2 transition hover:text-white">
+                    <i class="fas fa-file-contract text-xs"></i>
+                    Terms and Agreement
+                </button>
+                <button type="button" @click="activePolicyModal = 'privacy'"
+                    class="inline-flex items-center gap-2 transition hover:text-white">
+                    <i class="fas fa-shield-halved text-xs"></i>
+                    Privacy Policy
+                </button>
+            </div>
             <p class="text-center text-gray-500 text-sm">
                 &copy; 2024 Settlers Credit Cooperative. All rights reserved.
             </p>
         </div>
     </div>
+
+    @include('partials.policies.modal')
 </footer>

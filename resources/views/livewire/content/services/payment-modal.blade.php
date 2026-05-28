@@ -49,6 +49,11 @@
             @if ($activeLoans && $activeLoans->count() > 0)
                 {{-- Step 1: Payment Details --}}
                 @if ($paymentStep === 1)
+                    @php
+                        $selectedLoan = null;
+                        $availableSchedules = [];
+                        $selectedSchedule = null;
+                    @endphp
                     <div class="p-6 space-y-4">
                         <h4 class="text-lg font-semibold text-gray-900 mb-4">Enter Payment Details</h4>
 
@@ -74,6 +79,8 @@
                         @if ($paymentLoanId)
                             @php
                                 $selectedLoan = $activeLoans->firstWhere('id', $paymentLoanId);
+                                $availableSchedules = $selectedLoan ? $this->getAvailablePaymentSchedules($selectedLoan) : [];
+                                $selectedSchedule = $selectedLoan ? $this->findSelectedPaymentSchedule($selectedLoan) : null;
                             @endphp
 
                             @if ($selectedLoan)
@@ -95,9 +102,42 @@
                             @endif
                         @endif
 
-                        <x-forms.text-input name="paymentAmount" label="Payment Amount" model="paymentAmount"
-                            type="number" step="0.01" min="1" prefix="₱" :required="true"
-                            :validateOnBlur="false" />
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Payment Schedule *</label>
+                            <select wire:model.live="paymentScheduleKey"
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                @disabled(! $paymentLoanId || empty($availableSchedules)) required>
+                                <option value="">-- Choose a scheduled payment --</option>
+                                @foreach ($availableSchedules ?? [] as $schedule)
+                                    <option value="{{ $schedule['key'] }}">
+                                        Due {{ $schedule['due_date']->format('M d, Y') }} - ₱{{ number_format($schedule['amount_due'], 2) }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @if ($paymentLoanId && empty($availableSchedules ?? []))
+                                <p class="mt-2 text-xs text-amber-700">No unpaid scheduled installments remain for this loan.</p>
+                            @endif
+                            @error('paymentScheduleKey')
+                                <span class="text-red-500 text-xs">{{ $message }}</span>
+                            @enderror
+                        </div>
+
+                        @if ($selectedSchedule)
+                            <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm space-y-1">
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Selected Due Date:</span>
+                                    <span class="font-semibold text-gray-900">{{ $selectedSchedule['due_date']->format('M d, Y') }}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Scheduled Amount:</span>
+                                    <span class="font-semibold text-gray-900">₱{{ number_format($selectedSchedule['payment_amount'], 2) }}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Amount Due:</span>
+                                    <span class="font-semibold text-blue-700">₱{{ number_format($selectedSchedule['amount_due'], 2) }}</span>
+                                </div>
+                            </div>
+                        @endif
 
                         <x-forms.textarea-input name="paymentNote" label="Note (Optional)" model="paymentNote"
                             :rows="2" placeholder="Any additional notes..." :validateOnBlur="false" />
@@ -176,7 +216,8 @@
                 {{-- Step 3: Confirmation --}}
                 @if ($paymentStep === 3)
                     @php
-                        $selectedLoan = $activeLoans->firstWhere('loan_id', $paymentLoanId);
+                        $selectedLoan = $activeLoans->firstWhere('id', $paymentLoanId);
+                        $selectedSchedule = $selectedLoan ? $this->findSelectedPaymentSchedule($selectedLoan) : null;
                     @endphp
                     <div class="p-6 space-y-4">
                         <h4 class="text-lg font-semibold text-gray-900 mb-4">Confirm Your Payment</h4>
@@ -186,6 +227,12 @@
                                 <div class="flex justify-between">
                                     <span class="text-gray-600">Loan:</span>
                                     <span class="font-semibold text-gray-900">{{ $selectedLoan->loan_number }}</span>
+                                </div>
+                            @endif
+                            @if ($selectedSchedule)
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Scheduled Due Date:</span>
+                                    <span class="font-semibold text-gray-900">{{ $selectedSchedule['due_date']->format('M d, Y') }}</span>
                                 </div>
                             @endif
                             <div class="flex justify-between">

@@ -23,6 +23,7 @@ class PersonalData extends Model
         'education',
         'civil_status',
         'religion',
+        'profile_picture',
         'address_id',
         'contact_id',
         'employment_id',

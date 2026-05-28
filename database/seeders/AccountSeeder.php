@@ -14,7 +14,7 @@ class AccountSeeder extends Seeder
     public function run(): void
     {
         // Get all member users
-        $members = User::where('role', 'member')->get();
+        $members = User::query()->memberUsers()->get();
 
         if ($members->isEmpty()) {
             $this->command->error('No member users found. Please run UserSeeder first.');

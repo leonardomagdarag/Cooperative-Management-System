@@ -18,7 +18,9 @@ class DepositSeeder extends Seeder
             return;
         }
 
-        $recordedBy = User::where('role', 'admin')->first()->user_id ?? 'USR_0001';
+        $recordedBy = User::role('admin')->value('id')
+            ?? User::query()->where('role', 'admin')->value('id')
+            ?? 1;
 
         foreach ($accounts as $account) {
             $depositCount = rand(2, 5);

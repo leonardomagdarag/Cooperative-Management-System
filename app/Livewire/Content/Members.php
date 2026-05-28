@@ -9,6 +9,7 @@ use App\Models\Contact;
 use App\Models\Employment;
 use App\Models\MemberId;
 use App\Models\PersonalData;
+use App\Support\PersonPasswordPolicy;
 use App\Models\User;
 use App\Services\AuditLogService;
 use App\Traits\ValidatesPersonForm;
@@ -20,7 +21,9 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
@@ -33,7 +36,7 @@ use PHPMailer\PHPMailer\Exception;
  */
 class Members extends Component
 {
-    use WithPagination, ValidatesPersonForm;
+    use WithPagination, ValidatesPersonForm, WithFileUploads;
 
     // Search and filtering
     public $search = '';
@@ -69,6 +72,15 @@ class Members extends Component
 
     public $profileModalKey = 0;
 
+    public $photoUpload = null;
+
+    public $nationalIdPhoto = null;
+    public $tinPhoto = null;
+    public $sssPhoto = null;
+    public $philhealthPhoto = null;
+    public $barangayIdPhoto = null;
+
+    public $agreementUpload = null;
     public string $exportType = 'pdf';
 
     public ?string $exportStartDate = null;
@@ -127,6 +139,9 @@ class Members extends Component
             'form.password',
             'form.password_confirmation',
         ],
+        'agreement' => [
+            'form.terms_agreed',
+        ],
     ];
 
     // Track tab validation errors
@@ -137,6 +152,7 @@ class Members extends Component
         'ids' => false,
         'employment' => false,
         'login' => false,
+        'agreement' => false,
     ];
 
     public function mount(): void
@@ -161,40 +177,10 @@ class Members extends Component
     }
 
     /**
-     * Detect obvious passwords that combine a member name with predictable number sequences.
-     */
-    private function passwordLooksTooPredictable(string $password): bool
-    {
-        $normalizedPassword = strtolower(preg_replace('/[^a-z0-9]+/i', '', $password) ?? '');
-
-        if ($normalizedPassword === '') {
-            return false;
-        }
-
-        $nameTokens = collect([
-            $this->form['first_name'] ?? '',
-            $this->form['mid_name'] ?? '',
-            $this->form['last_name'] ?? '',
-        ])
-            ->map(fn($value) => strtolower(preg_replace('/[^a-z]+/i', '', (string) $value) ?? ''))
-            ->filter(fn($value) => strlen($value) >= 3)
-            ->unique()
-            ->values();
-
-        if ($nameTokens->isEmpty()) {
-            return false;
-        }
-
-        return $nameTokens->contains(function (string $token) use ($normalizedPassword) {
-            return str_contains($normalizedPassword, $token) && preg_match('/\d{3,}/', $normalizedPassword);
-        });
-    }
-
-    /**
      * Sequential step order used by the add-member wizard.
      * Returns the tab name that follows $currentTab, or null if $currentTab is the last step.
      */
-    private const WIZARD_STEPS = ['personal', 'address', 'contact', 'ids', 'employment', 'login', 'review'];
+    private const WIZARD_STEPS = ['personal', 'address', 'contact', 'ids', 'employment', 'login', 'agreement', 'review'];
 
     /**
      * Called by the Next button in add-mode only.
@@ -346,24 +332,9 @@ class Members extends Component
             'form.other_income_source' => 'nullable|string|max:255',
             'form.other_income_amount' => 'nullable|numeric|min:0',
             // Password
-            'form.password' => [
-                $this->isEdit ? 'nullable' : 'required',
-                'string',
-                'min:6',
-                'regex:/^(?=.*[A-Za-z])(?=.*\d).+$/',
-                function (string $attribute, mixed $value, Closure $fail) {
-                    if (blank($value)) {
-                        return;
-                    }
-
-                    if ($this->passwordLooksTooPredictable((string) $value)) {
-                        $fail('Avoid passwords that reuse your name with simple number sequences.');
-                    }
-                },
-            ],
-            'form.password_confirmation' => $this->isEdit
-                ? 'nullable|same:form.password'
-                : 'required|same:form.password',
+            ...$this->getPasswordValidationRules(),
+            // Agreement
+            'form.terms_agreed' => $this->isEdit ? 'nullable|boolean' : 'accepted',
         ];
     }
 
@@ -429,6 +400,9 @@ class Members extends Component
         // Login tab fields
         $loginFields = ['form.password', 'form.password_confirmation', 'form.current_password'];
         $this->tabErrors['login'] = collect($loginFields)->some(fn($field) => $errors->has($field));
+
+        // Agreement tab fields
+        $this->tabErrors['agreement'] = $errors->has('form.terms_agreed') || $errors->has('agreementUpload');
     }
 
     /**
@@ -488,6 +462,9 @@ class Members extends Component
         $errors['address'] = false;
         $errors['ids'] = false;
         $errors['employment'] = false;
+
+        // Agreement tab required fields (add mode only)
+        $errors['agreement'] = !$this->isEdit && empty($this->form['terms_agreed'] ?? false);
 
         return $errors;
     }
@@ -645,8 +622,17 @@ class Members extends Component
             // Login
             'password' => '',
             'password_confirmation' => '',
+            // Agreement
+            'terms_agreed' => false,
         ];
         $this->modalKey = now()->timestamp . rand(1000, 9999); // Generate truly unique key using timestamp
+        $this->photoUpload = null;
+        $this->nationalIdPhoto = null;
+        $this->tinPhoto = null;
+        $this->sssPhoto = null;
+        $this->philhealthPhoto = null;
+        $this->barangayIdPhoto = null;
+        $this->agreementUpload = null;
         $this->showEditModal = true;
     }
 
@@ -664,7 +650,7 @@ class Members extends Component
         ]);
 
         $this->resetValidation();
-    $this->closeExportModal();
+        $this->closeExportModal();
         $this->isEdit = true;
         $this->editingMemberId = $userId;
         $this->modalKey = now()->timestamp . rand(1000, 9999); // Generate truly unique key using timestamp
@@ -741,6 +727,12 @@ class Members extends Component
             'profile_picture' => '',
         ];
 
+        $this->photoUpload = null;
+        $this->nationalIdPhoto = null;
+        $this->tinPhoto = null;
+        $this->sssPhoto = null;
+        $this->philhealthPhoto = null;
+        $this->barangayIdPhoto = null;
         $this->showEditModal = true;
 
         Log::info('=== EDIT MEMBER FORM POPULATED ===', [
@@ -777,6 +769,9 @@ class Members extends Component
         if ($this->isEdit && ! empty($this->form['password']) && ! Auth::user()->can('members.update')) {
             $rules['form.current_password'] = 'required|current_password';
         }
+
+        // Agreement file upload validation
+        $rules['agreementUpload'] = 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240';
 
         // Add beneficiaries array validation
         $rules['form.beneficiaries'] = 'nullable|array';
@@ -884,7 +879,7 @@ class Members extends Component
                 }
 
                 // Update personal data
-                $member->personalData->update([
+                $personalDataUpdate = [
                     'first_name' => $this->form['first_name'],
                     'last_name' => $this->form['last_name'],
                     'mid_name' => $this->form['mid_name'] ?? null,
@@ -895,7 +890,38 @@ class Members extends Component
                     'civil_status' => $this->form['civil_status'] ?? null,
                     'religion' => $this->form['religion'] ?? null,
                     'title' => $this->form['title'] ?? 'Member',
-                ]);
+                ];
+
+                if ($this->photoUpload) {
+                    if ($member->personalData->profile_picture) {
+                        Storage::disk('public')->delete($member->personalData->profile_picture);
+                    }
+                    $personalDataUpdate['profile_picture'] = $this->photoUpload->store('profile-photos', 'public');
+                }
+
+                $member->personalData->update($personalDataUpdate);
+
+                // Handle ID photo uploads for existing memberId
+                if ($member->personalData->memberId) {
+                    $idUpdates = [];
+                    $idFields = [
+                        'national_id_photo' => $this->nationalIdPhoto,
+                        'tin_photo'          => $this->tinPhoto,
+                        'sss_photo'          => $this->sssPhoto,
+                        'philhealth_photo'   => $this->philhealthPhoto,
+                        'barangay_id_photo'  => $this->barangayIdPhoto,
+                    ];
+                    foreach ($idFields as $column => $upload) {
+                        if ($upload) {
+                            $existing = $member->personalData->memberId->$column;
+                            if ($existing) Storage::disk('public')->delete($existing);
+                            $idUpdates[$column] = $upload->store('id-photos', 'public');
+                        }
+                    }
+                    if ($idUpdates) {
+                        $member->personalData->memberId->update($idUpdates);
+                    }
+                }
 
                 // Update beneficiaries
                 if (isset($this->form['beneficiaries'])) {
@@ -1006,17 +1032,27 @@ class Members extends Component
 
                 // Step 4: Create member IDs record (optional)
                 $memberId = null;
-                if (! empty($this->form['national_id']) || ! empty($this->form['tin'])) {
+                $hasIdData = ! empty($this->form['national_id']) || ! empty($this->form['tin']) || ! empty($this->form['sss']) || ! empty($this->form['philhealth']) || ! empty($this->form['barangay_id'])
+                    || $this->nationalIdPhoto || $this->tinPhoto || $this->sssPhoto || $this->philhealthPhoto || $this->barangayIdPhoto;
+                if ($hasIdData) {
                     $memberId = MemberId::create([
-                        'national_id' => $this->form['national_id'] ?? null,
-                        'tin' => $this->form['tin'] ?? null,
-                        'sss' => $this->form['sss'] ?? null,
-                        'philhealth' => $this->form['philhealth'] ?? null,
-                        'barangay_id' => $this->form['barangay_id'] ?? null,
+                        'national_id'       => $this->form['national_id'] ?? null,
+                        'national_id_photo' => $this->nationalIdPhoto ? $this->nationalIdPhoto->store('id-photos', 'public') : null,
+                        'tin'               => $this->form['tin'] ?? null,
+                        'tin_photo'         => $this->tinPhoto ? $this->tinPhoto->store('id-photos', 'public') : null,
+                        'sss'               => $this->form['sss'] ?? null,
+                        'sss_photo'         => $this->sssPhoto ? $this->sssPhoto->store('id-photos', 'public') : null,
+                        'philhealth'        => $this->form['philhealth'] ?? null,
+                        'philhealth_photo'  => $this->philhealthPhoto ? $this->philhealthPhoto->store('id-photos', 'public') : null,
+                        'barangay_id'       => $this->form['barangay_id'] ?? null,
+                        'barangay_id_photo' => $this->barangayIdPhoto ? $this->barangayIdPhoto->store('id-photos', 'public') : null,
                     ]);
                 }
 
                 // Step 5: Create personal data record (links to all related records)
+                $profilePhotoPath = $this->photoUpload
+                    ? $this->photoUpload->store('profile-photos', 'public')
+                    : null;
                 $personalData = PersonalData::create([
                     'first_name' => $this->form['first_name'],
                     'last_name' => $this->form['last_name'],
@@ -1028,6 +1064,7 @@ class Members extends Component
                     'civil_status' => $this->form['civil_status'] ?? null,
                     'religion' => $this->form['religion'] ?? null,
                     'title' => $this->form['title'] ?? 'Member',
+                    'profile_picture' => $profilePhotoPath,
                     'contact_id' => $contact->id,
                     'address_id' => $address ? $address->id : null,
                     'employment_id' => $employment ? $employment->id : null,
@@ -1042,7 +1079,12 @@ class Members extends Component
                     'role' => 'member',
                 ]);
 
-                // Step 7: Create beneficiaries if provided
+                // Step 7: Store agreement file upload if provided
+                if ($this->agreementUpload) {
+                    $this->agreementUpload->store('member-agreements/' . $user->id, 'public');
+                }
+
+                // Step 8: Create beneficiaries if provided
                 if (isset($this->form['beneficiaries'])) {
                     foreach ($this->form['beneficiaries'] as $beneficiaryData) {
                         Beneficiary::create([
@@ -1062,7 +1104,7 @@ class Members extends Component
                     }
                 }
 
-                // Step 8: Automatically create savings and share capital accounts
+                // Step 9: Automatically create savings and share capital accounts
                 Account::create([
                     'user_id' => $user->id,
                     'account_type' => 'savings',
@@ -1144,6 +1186,12 @@ class Members extends Component
         $this->form = [];
         $this->isEdit = false;
         $this->editingMemberId = null;
+        $this->photoUpload = null;
+        $this->nationalIdPhoto = null;
+        $this->tinPhoto = null;
+        $this->sssPhoto = null;
+        $this->philhealthPhoto = null;
+        $this->barangayIdPhoto = null;
         // Keep modalKey as-is to prevent issues with next modal open
         $this->resetValidation();
 
@@ -1191,7 +1239,7 @@ class Members extends Component
     private function membersQuery(): Builder
     {
         return User::query()
-            ->where('role', 'member')
+            ->memberUsers()
             ->when($this->search, function (Builder $query) {
                 $query->where(function (Builder $q) {
                     $q->where('user_number', 'like', '%' . $this->search . '%')

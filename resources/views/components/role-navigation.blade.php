@@ -11,7 +11,6 @@
         'members' => ['icon' => 'fas fa-users', 'label' => 'Members'],
         'services' => ['icon' => 'fas fa-briefcase', 'label' => 'Services'],
         'loans' => ['icon' => 'fas fa-hand-holding-usd', 'label' => 'Loans'],
-        'transactions' => ['icon' => 'fas fa-exchange-alt', 'label' => 'Transactions'],
         'ledger' => ['icon' => 'fas fa-book', 'label' => 'Ledger'],
         'history' => ['icon' => 'fas fa-history', 'label' => 'History'],
         'tickets' => ['icon' => 'fas fa-ticket-alt', 'label' => 'Tickets'],

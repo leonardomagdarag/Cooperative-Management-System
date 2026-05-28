@@ -29,7 +29,7 @@
                 {{-- Step Indicator --}}
                 @if ($depositStep < 99)
                     <div class="flex items-center justify-between">
-                        @php $steps = $depositTransactionMode === 'online' ? 4 : 3; @endphp
+                        @php $steps = 3; @endphp
                         @for ($i = 1; $i <= $steps; $i++)
                             <div class="flex items-center {{ $i < $steps ? 'flex-1' : '' }}">
                                 <div
@@ -174,6 +174,19 @@
                                 Please visit our office with your payment to complete this transaction.
                             </p>
                         </div>
+                    @elseif ($depositTransactionMode === 'online')
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-700">Proof of Payment</label>
+                            <input type="file" wire:model="depositProof" accept=".jpg,.jpeg,.png,.webp,.pdf"
+                                class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/30">
+                            <p class="text-xs text-gray-500">Upload a screenshot, receipt, or PDF proof before submitting.</p>
+                            @if ($depositProof)
+                                <p class="text-xs font-medium text-gray-700">Selected: {{ $depositProof->getClientOriginalName() }}</p>
+                            @endif
+                            @error('depositProof')
+                                <span class="text-red-500 text-xs">{{ $message }}</span>
+                            @enderror
+                        </div>
                     @endif
 
                     <div class="flex gap-3 pt-4">
@@ -189,38 +202,6 @@
                 </div>
             @endif
 
-            {{-- Step 4: Online Payment Portal (Mock) --}}
-            @if ($depositStep === 4)
-                <div class="p-6 space-y-4">
-                    <div class="text-center py-8">
-                        <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <i class="fas fa-credit-card text-green-600 text-3xl"></i>
-                        </div>
-                        <h4 class="text-lg font-semibold text-gray-900 mb-2">Online Payment Portal</h4>
-                        <p class="text-gray-600 mb-6">Complete your payment through your preferred digital wallet or
-                            bank
-                            transfer</p>
-
-                        <div class="bg-gray-50 rounded-lg p-6 mb-6">
-                            <p class="text-sm text-gray-600 mb-4">Payment integration coming soon!</p>
-                            <p class="text-2xl font-bold text-gray-900">₱{{ number_format($depositAmount, 2) }}</p>
-                        </div>
-                    </div>
-
-                    <button type="button" wire:click="completeOnlineDepositPayment"
-                        class="w-full px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700">
-                        Complete Payment <i class="fas fa-arrow-right ml-2"></i>
-                    </button>
-                </div>
-            @endif
-
-            {{-- Step 5 (Online): Receipt --}}
-            @if ($depositStep === 5 && $completedDepositTransaction)
-                @include('livewire.content.services.receipt', [
-                    'transaction' => $completedDepositTransaction,
-                ])
-            @endif
-
             {{-- Success Message (Counter) --}}
             @if ($depositStep === 99)
                 <div class="p-6 text-center">
@@ -229,11 +210,10 @@
                     </div>
                     <h4 class="text-xl font-bold text-gray-900 mb-2">Request Submitted!</h4>
                     <p class="text-gray-600 mb-6">
-                        @if (($isTreasurerMode || $isAdminMode) && $depositTransactionMode === 'counter')
-                            The deposit has been processed successfully and the account balance has been updated.
+                        @if ($depositTransactionMode === 'online')
+                            Your online deposit proof has been uploaded. The transaction will remain pending until an officer verifies the payment.
                         @else
-                            Please visit our office to complete your deposit. Bring this reference for faster
-                            processing.
+                            Please visit our office to complete your deposit. The request will remain pending until it is approved.
                         @endif
                     </p>
 

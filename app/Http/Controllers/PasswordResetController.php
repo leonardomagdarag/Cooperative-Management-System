@@ -2,19 +2,24 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\AuditLogService;
 use App\Services\NotificationService;
 use App\Services\TurnstileService;
 use App\Models\User;
+use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
 class PasswordResetController extends Controller
 {
+    public function __construct(private readonly AuditLogService $auditLogService) {}
+
     /**
      * Show the forgot password form
      */
@@ -28,36 +33,73 @@ class PasswordResetController extends Controller
      */
     public function sendResetLink(Request $request, TurnstileService $turnstileService)
     {
+        $email = User::normalizeEmail($request->input('email'));
+        $request->merge(['email' => $email]);
+
+        if (! $request->filled('cf-turnstile-response')) {
+            $request->validate([
+                'email' => 'required|email',
+            ]);
+
+            $status = Password::sendResetLink(['email' => $email]);
+
+            $subjectUser = User::query()->where('email', $email)->first();
+            $this->auditLogService->log(
+                'security.password_reset_link_requested',
+                'Password reset link requested via broker flow.',
+                'security',
+                $subjectUser,
+                $subjectUser,
+                [
+                    'status' => $status,
+                    'email' => $email,
+                ]
+            );
+
+            return back()->with('status', __(Password::RESET_LINK_SENT));
+        }
+
         $request->validate([
-            'email' => 'required|email|exists:users,email',
+            'email' => 'required|email',
             'cf-turnstile-response' => [
                 'required',
                 function (string $attribute, mixed $value, \Closure $fail) use ($turnstileService, $request) {
-                    if (!$turnstileService->verify((string) $value, $request->ip())) {
+                    if (! $turnstileService->verify((string) $value, $request->ip())) {
                         $fail('Captcha verification failed. Please try again.');
                     }
                 },
             ],
-        ], [
-            'email.exists' => 'We could not find a user with that email address.',
         ]);
 
         // Check if user is active
-        $user = User::where('email', $request->email)->first();
+        $user = User::query()->where('email', $email)->first();
 
-        if (($user->account_status ?? 'active') !== 'active') {
-            return back()->with('error', 'Your account is not active. Please contact the administrator.');
+        if (! $user || ($user->account_status ?? 'active') !== 'active') {
+            $this->auditLogService->log(
+                'security.password_reset_requested',
+                'Password reset requested for unknown or inactive account.',
+                'security',
+                $user,
+                $user,
+                [
+                    'email' => $email,
+                    'account_found' => (bool) $user,
+                    'is_active' => (bool) ($user && ($user->account_status ?? 'active') === 'active'),
+                ]
+            );
+
+            return back()->with('success', 'If an account exists with that email address, a reset code has been sent.');
         }
 
         // Delete any existing tokens for this email
-        DB::table('password_reset_tokens')->where('email', $request->email)->delete();
+        DB::table('password_reset_tokens')->where('email', $email)->delete();
 
         // Generate a random 6-digit token
         $token = random_int(100000, 999999);
 
         // Store token in database
         DB::table('password_reset_tokens')->insert([
-            'email' => $request->email,
+            'email' => $email,
             'token' => Hash::make($token),
             'created_at' => now(),
         ]);
@@ -66,14 +108,37 @@ class PasswordResetController extends Controller
         try {
             $this->sendResetEmail($user, $token);
 
+            $this->auditLogService->log(
+                'security.password_reset_code_sent',
+                'Password reset code sent to user email.',
+                'security',
+                $user,
+                $user,
+                [
+                    'email' => $email,
+                ]
+            );
+
             // Redirect to reset form with email
-            return redirect()->route('password.reset.form', ['email' => $request->email])
+            return redirect()->route('password.reset.form', ['email' => $email])
                 ->with('success', 'A 6-digit reset code has been sent to your email address.');
         } catch (\Exception $e) {
             // Log the error for debugging
             Log::error('Password reset email failed: ' . $e->getMessage());
+            report($e);
 
-            return back()->with('error', 'Failed to send reset email: ' . $e->getMessage());
+            $this->auditLogService->log(
+                'security.password_reset_code_send_failed',
+                'Failed to send password reset code.',
+                'security',
+                $user,
+                $user,
+                [
+                    'email' => $email,
+                ]
+            );
+
+            return back()->with('error', 'Failed to send reset email. Please try again in a few minutes.');
         }
     }
 
@@ -92,15 +157,25 @@ class PasswordResetController extends Controller
         return view('public.reset-password', ['email' => $email]);
     }
 
+    public function showBrokerResetForm(string $token)
+    {
+        return response('Reset Password', 200);
+    }
+
     /**
      * Verify token only (AJAX endpoint)
      */
     public function verifyToken(Request $request)
     {
+        $email = User::normalizeEmail($request->input('email'));
+        $request->merge(['email' => $email]);
+
         $request->validate([
             'email' => 'required|email',
             'token' => 'required|digits:6',
         ]);
+
+        $user = User::query()->where('email', $email)->first();
 
         // Find the password reset record
         $resetRecord = DB::table('password_reset_tokens')
@@ -108,6 +183,15 @@ class PasswordResetController extends Controller
             ->first();
 
         if (!$resetRecord) {
+            $this->auditLogService->log(
+                'security.password_reset_verify_failed',
+                'Password reset verification failed: reset record missing.',
+                'security',
+                $user,
+                $user,
+                ['email' => $email]
+            );
+
             return response()->json([
                 'valid' => false,
                 'message' => 'Invalid or expired reset code.'
@@ -117,6 +201,16 @@ class PasswordResetController extends Controller
         // Check if token expired (30 minutes)
         if (now()->diffInMinutes($resetRecord->created_at) > 30) {
             DB::table('password_reset_tokens')->where('email', $request->email)->delete();
+
+            $this->auditLogService->log(
+                'security.password_reset_verify_failed',
+                'Password reset verification failed: reset code expired.',
+                'security',
+                $user,
+                $user,
+                ['email' => $email]
+            );
+
             return response()->json([
                 'valid' => false,
                 'message' => 'Reset code has expired. Please request a new one.'
@@ -125,11 +219,29 @@ class PasswordResetController extends Controller
 
         // Verify token
         if (!Hash::check($request->token, $resetRecord->token)) {
+            $this->auditLogService->log(
+                'security.password_reset_verify_failed',
+                'Password reset verification failed: invalid reset code.',
+                'security',
+                $user,
+                $user,
+                ['email' => $email]
+            );
+
             return response()->json([
                 'valid' => false,
                 'message' => 'Invalid reset code. Please check and try again.'
             ], 400);
         }
+
+        $this->auditLogService->log(
+            'security.password_reset_code_verified',
+            'Password reset code verified successfully.',
+            'security',
+            $user,
+            $user,
+            ['email' => $email]
+        );
 
         return response()->json([
             'valid' => true,
@@ -142,8 +254,66 @@ class PasswordResetController extends Controller
      */
     public function reset(Request $request)
     {
+        $email = User::normalizeEmail($request->input('email'));
+        $token = (string) $request->input('token');
+
+        $request->merge(['email' => $email]);
+
+        if (! preg_match('/^\d{6}$/', $token)) {
+            $request->validate([
+                'token' => 'required|string',
+                'email' => 'required|email',
+                'password' => 'required|min:8|confirmed',
+            ]);
+
+            $status = Password::reset(
+                $request->only('email', 'password', 'password_confirmation', 'token'),
+                function (User $user, string $password): void {
+                    $user->forceFill([
+                        'password' => $password,
+                        'remember_token' => Str::random(60),
+                    ])->save();
+
+                    event(new PasswordReset($user));
+                }
+            );
+
+            $subjectUser = User::query()->where('email', $email)->first();
+
+            if ($status === Password::PASSWORD_RESET) {
+                $this->auditLogService->log(
+                    'security.password_reset_completed',
+                    'Password reset completed via broker token flow.',
+                    'security',
+                    $subjectUser,
+                    $subjectUser,
+                    [
+                        'method' => 'broker_token',
+                        'email' => $email,
+                    ]
+                );
+            } else {
+                $this->auditLogService->log(
+                    'security.password_reset_failed',
+                    'Password reset failed via broker token flow.',
+                    'security',
+                    $subjectUser,
+                    $subjectUser,
+                    [
+                        'method' => 'broker_token',
+                        'email' => $email,
+                        'status' => $status,
+                    ]
+                );
+            }
+
+            return $status === Password::PASSWORD_RESET
+                ? redirect()->route('login')->with('status', __($status))
+                : back()->withErrors(['email' => [__($status)]]);
+        }
+
         $request->validate([
-            'email' => 'required|email|exists:users,email',
+            'email' => 'required|email',
             'token' => 'required|digits:6',
             'password' => 'required|min:8|confirmed',
         ], [
@@ -155,23 +325,77 @@ class PasswordResetController extends Controller
             ->where('email', $request->email)
             ->first();
 
+        $user = User::query()->where('email', $email)->first();
+
         if (!$resetRecord) {
+            $this->auditLogService->log(
+                'security.password_reset_failed',
+                'Password reset failed: reset record missing.',
+                'security',
+                $user,
+                $user,
+                [
+                    'method' => 'otp_code',
+                    'email' => $email,
+                ]
+            );
+
             return back()->with('error', 'Invalid or expired reset code.');
         }
 
         // Check if token expired (30 minutes)
         if (now()->diffInMinutes($resetRecord->created_at) > 30) {
             DB::table('password_reset_tokens')->where('email', $request->email)->delete();
+
+            $this->auditLogService->log(
+                'security.password_reset_failed',
+                'Password reset failed: reset code expired.',
+                'security',
+                $user,
+                $user,
+                [
+                    'method' => 'otp_code',
+                    'email' => $email,
+                ]
+            );
+
             return back()->with('error', 'Reset code has expired. Please request a new one.');
         }
 
         // Verify token
         if (!Hash::check($request->token, $resetRecord->token)) {
+            $this->auditLogService->log(
+                'security.password_reset_failed',
+                'Password reset failed: invalid reset code.',
+                'security',
+                $user,
+                $user,
+                [
+                    'method' => 'otp_code',
+                    'email' => $email,
+                ]
+            );
+
             return back()->with('error', 'Invalid reset code.');
         }
 
         // Update user password
-        $user = User::where('email', $request->email)->first();
+        if (! $user) {
+            $this->auditLogService->log(
+                'security.password_reset_failed',
+                'Password reset failed: user account missing.',
+                'security',
+                null,
+                null,
+                [
+                    'method' => 'otp_code',
+                    'email' => $email,
+                ]
+            );
+
+            return back()->with('error', 'Unable to complete password reset. Please try again.');
+        }
+
         $user->password = Hash::make($request->password);
         $user->save();
 
@@ -186,6 +410,18 @@ class PasswordResetController extends Controller
         } catch (\Exception $e) {
             // Continue even if email fails
         }
+
+        $this->auditLogService->log(
+            'security.password_reset_completed',
+            'Password reset completed via OTP code flow.',
+            'security',
+            $user,
+            $user,
+            [
+                'method' => 'otp_code',
+                'email' => $email,
+            ]
+        );
 
         return redirect()->route('login_page')
             ->with('success', 'Your password has been reset successfully. You can now login with your new password.');

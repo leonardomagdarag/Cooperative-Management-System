@@ -3,9 +3,25 @@
 @php
     $canManageMembers = Auth::user()->can('members.update');
     $isAddMode = !$isEdit;
+    $passwordGuidance = \App\Support\PersonPasswordPolicy::guidanceText();
+    $passwordHelperText = \App\Support\PersonPasswordPolicy::helperText();
+    $passwordPattern = \App\Support\PersonPasswordPolicy::htmlPattern();
+    $editModeTabs = [
+        'personal' => 'Personal Info',
+        'address' => 'Address',
+        'contact' => 'Contact Info',
+        'ids' => 'Government IDs',
+        'employment' => 'Employment',
+    ];
+
+    if ($canManageMembers) {
+        $editModeTabs['login'] = 'Login Info';
+    }
+
+    $editModeTabs['documents'] = 'Documents';
 
     // Ordered steps for add-mode wizard progress bar
-    $wizardSteps = ['personal', 'address', 'contact', 'ids', 'employment', 'login', 'review'];
+    $wizardSteps = ['personal', 'address', 'contact', 'ids', 'employment', 'login', 'agreement', 'review'];
 
     $stepLabels = [
         'personal' => 'Personal Info',
@@ -14,11 +30,12 @@
         'ids' => 'Gov\'t IDs',
         'employment' => 'Employment',
         'login' => 'Login Info',
+        'agreement' => 'Agreement',
         'review' => 'Review',
     ];
 @endphp
 
-<div {{ $attributes }} x-data="{
+<div {{ $attributes }} data-password-form="member" x-data="{
     show: @entangle('showEditModal'),
     formTab: 'personal',
     isAdd: {{ $isAddMode ? 'true' : 'false' }},
@@ -36,7 +53,7 @@
     async nextBtn() {
         if (!this.isAdd) {
             // edit-mode: advance without re-validation
-            const order = ['personal', 'address', 'contact', 'ids', 'employment', 'login'];
+            const order = {{ json_encode(array_keys($editModeTabs)) }};
             const idx = order.indexOf(this.formTab);
             if (idx !== -1 && idx + 1 < order.length) { this.formTab = order[idx + 1]; }
             return;
@@ -47,7 +64,7 @@
 
     // Previous button: go back with no validation
     prevBtn() {
-        const order = this.isAdd ? ['personal', 'address', 'contact', 'ids', 'employment', 'login', 'review'] : ['personal', 'address', 'contact', 'ids', 'employment', 'login'];
+        const order = this.isAdd ? ['personal', 'address', 'contact', 'ids', 'employment', 'login', 'agreement', 'review'] : {{ json_encode(array_keys($editModeTabs)) }};
         const idx = order.indexOf(this.formTab);
         if (idx > 0) { this.formTab = order[idx - 1]; }
     },
@@ -165,7 +182,7 @@ $wire.on('wizard-advance', ({ tab }) => { formTab = tab; });" x-show="show" x-cl
                 {{-- ──────────────────────────────────────────────────────── --}}
             @else
                 <div class="flex border-b border-gray-200 bg-gray-50 px-6 overflow-x-auto">
-                    @foreach (['personal' => 'Personal Info', 'address' => 'Address', 'contact' => 'Contact Info', 'ids' => 'Government IDs', 'employment' => 'Employment'] as $tab => $label)
+                    @foreach ($editModeTabs as $tab => $label)
                         <button @click="goToTab('{{ $tab }}')"
                             :class="formTab === '{{ $tab }}'
                                 ?
@@ -178,19 +195,6 @@ $wire.on('wizard-advance', ({ tab }) => { formTab = tab; });" x-show="show" x-cl
                             @endif
                         </button>
                     @endforeach
-                    @if ($canManageMembers)
-                        <button @click="goToTab('login')"
-                            :class="formTab === 'login'
-                                ?
-                                'border-cyan-500 text-cyan-600' :
-                                'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
-                            class="py-4 px-5 border-b-2 font-medium text-sm whitespace-nowrap transition-colors relative">
-                            Login Info
-                            @if (($tabErrors['login'] ?? false) || ($this->tabRequiredErrors['login'] ?? false))
-                                <span class="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
-                            @endif
-                        </button>
-                    @endif
                 </div>
             @endif
 
@@ -228,6 +232,28 @@ $wire.on('wizard-advance', ({ tab }) => { formTab = tab; });" x-show="show" x-cl
                             ]" :validateOnBlur="true" :defer="true" />
                         <x-forms.text-input name="religion" label="Religion" model="form.religion"
                             placeholder="Enter religion" :validateOnBlur="true" :defer="true" />
+                    </div>
+
+                    {{-- Profile Photo Upload --}}
+                    <div class="mt-4" x-data="{ preview: null }">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Profile Photo <span class="text-gray-400 text-xs">(optional)</span></label>
+                        <div class="flex items-center gap-4">
+                            <div class="w-20 h-20 rounded-full bg-gray-100 border border-gray-300 overflow-hidden flex items-center justify-center shrink-0">
+                                @if (!empty($form['profile_picture']))
+                                    <img src="{{ Storage::url($form['profile_picture']) }}" class="w-full h-full object-cover" alt="Current photo">
+                                @else
+                                    <span x-show="!preview" class="text-gray-400"><i class="fas fa-user text-2xl"></i></span>
+                                @endif
+                                <img x-show="preview" :src="preview" class="w-full h-full object-cover" alt="Preview" style="display:none">
+                            </div>
+                            <div class="flex-1">
+                                <input type="file" wire:model="photoUpload" accept="image/*"
+                                    @change="const f=$event.target.files[0]; if(f){const r=new FileReader();r.onload=e=>preview=e.target.result;r.readAsDataURL(f)}"
+                                    class="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+                                <p class="mt-1 text-xs text-gray-400">JPG, PNG or GIF · max 2MB</p>
+                                @error('photoUpload') <span class="text-red-500 text-xs mt-1">{{ $message }}</span> @enderror
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -276,18 +302,120 @@ $wire.on('wizard-advance', ({ tab }) => { formTab = tab; });" x-show="show" x-cl
                 </div>
 
                 {{-- Tab 4: Government IDs --}}
-                <div x-show="formTab === 'ids'" x-transition class="space-y-6">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <x-forms.text-input name="national_id" label="National ID (PhilSys)" model="form.national_id"
-                            placeholder="XXXX-XXXX-XXXX-XXXX" maxlength="64" :validateOnBlur="true" :defer="true" />
-                        <x-forms.text-input name="tin" label="TIN (Tax Identification Number)" model="form.tin"
-                            placeholder="XXX-XXX-XXX-XXX" maxlength="64" :validateOnBlur="true" :defer="true" />
-                        <x-forms.text-input name="sss" label="SSS Number" model="form.sss"
-                            placeholder="XX-XXXXXXX-X" maxlength="64" :validateOnBlur="true" :defer="true" />
-                        <x-forms.text-input name="philhealth" label="PhilHealth Number" model="form.philhealth"
-                            placeholder="XX-XXXXXXXXX-X" maxlength="64" :validateOnBlur="true" :defer="true" />
-                        <x-forms.text-input name="barangay_id" label="Barangay ID" model="form.barangay_id"
-                            placeholder="Enter barangay ID" maxlength="64" :validateOnBlur="true" :defer="true" />
+                <div x-show="formTab === 'ids'" x-transition class="space-y-3">
+                    {{-- National ID --}}
+                    <div class="grid grid-cols-2 gap-4 items-start p-3 rounded-xl bg-gray-50 border border-gray-100" x-data="{ preview: null }">
+                        <div>
+                            <x-forms.text-input name="national_id" label="National ID (PhilSys)" model="form.national_id"
+                                placeholder="XXXX-XXXX-XXXX-XXXX" maxlength="64" :validateOnBlur="true" :defer="true" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">National ID Photo</label>
+                            <div class="flex items-center gap-3">
+                                <div class="w-24 h-16 rounded-lg bg-white border border-gray-300 overflow-hidden flex items-center justify-center shrink-0">
+                                    <span x-show="!preview" class="text-gray-300 text-xs text-center"><i class="fas fa-id-card text-xl"></i></span>
+                                    <img x-show="preview" :src="preview" class="w-full h-full object-cover" style="display:none">
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <input type="file" wire:model="nationalIdPhoto" accept="image/*"
+                                        @change="const f=$event.target.files[0]; if(f){const r=new FileReader();r.onload=e=>preview=e.target.result;r.readAsDataURL(f)}"
+                                        class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+                                    @error('nationalIdPhoto') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- TIN --}}
+                    <div class="grid grid-cols-2 gap-4 items-start p-3 rounded-xl bg-gray-50 border border-gray-100" x-data="{ preview: null }">
+                        <div>
+                            <x-forms.text-input name="tin" label="TIN (Tax Identification Number)" model="form.tin"
+                                placeholder="XXX-XXX-XXX-XXX" maxlength="64" :validateOnBlur="true" :defer="true" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">TIN Photo</label>
+                            <div class="flex items-center gap-3">
+                                <div class="w-24 h-16 rounded-lg bg-white border border-gray-300 overflow-hidden flex items-center justify-center shrink-0">
+                                    <span x-show="!preview" class="text-gray-300 text-xs text-center"><i class="fas fa-id-card text-xl"></i></span>
+                                    <img x-show="preview" :src="preview" class="w-full h-full object-cover" style="display:none">
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <input type="file" wire:model="tinPhoto" accept="image/*"
+                                        @change="const f=$event.target.files[0]; if(f){const r=new FileReader();r.onload=e=>preview=e.target.result;r.readAsDataURL(f)}"
+                                        class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+                                    @error('tinPhoto') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- SSS --}}
+                    <div class="grid grid-cols-2 gap-4 items-start p-3 rounded-xl bg-gray-50 border border-gray-100" x-data="{ preview: null }">
+                        <div>
+                            <x-forms.text-input name="sss" label="SSS Number" model="form.sss"
+                                placeholder="XX-XXXXXXX-X" maxlength="64" :validateOnBlur="true" :defer="true" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">SSS Photo</label>
+                            <div class="flex items-center gap-3">
+                                <div class="w-24 h-16 rounded-lg bg-white border border-gray-300 overflow-hidden flex items-center justify-center shrink-0">
+                                    <span x-show="!preview" class="text-gray-300 text-xs text-center"><i class="fas fa-id-card text-xl"></i></span>
+                                    <img x-show="preview" :src="preview" class="w-full h-full object-cover" style="display:none">
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <input type="file" wire:model="sssPhoto" accept="image/*"
+                                        @change="const f=$event.target.files[0]; if(f){const r=new FileReader();r.onload=e=>preview=e.target.result;r.readAsDataURL(f)}"
+                                        class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+                                    @error('sssPhoto') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- PhilHealth --}}
+                    <div class="grid grid-cols-2 gap-4 items-start p-3 rounded-xl bg-gray-50 border border-gray-100" x-data="{ preview: null }">
+                        <div>
+                            <x-forms.text-input name="philhealth" label="PhilHealth Number" model="form.philhealth"
+                                placeholder="XX-XXXXXXXXX-X" maxlength="64" :validateOnBlur="true" :defer="true" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">PhilHealth Photo</label>
+                            <div class="flex items-center gap-3">
+                                <div class="w-24 h-16 rounded-lg bg-white border border-gray-300 overflow-hidden flex items-center justify-center shrink-0">
+                                    <span x-show="!preview" class="text-gray-300 text-xs text-center"><i class="fas fa-id-card text-xl"></i></span>
+                                    <img x-show="preview" :src="preview" class="w-full h-full object-cover" style="display:none">
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <input type="file" wire:model="philhealthPhoto" accept="image/*"
+                                        @change="const f=$event.target.files[0]; if(f){const r=new FileReader();r.onload=e=>preview=e.target.result;r.readAsDataURL(f)}"
+                                        class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+                                    @error('philhealthPhoto') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Barangay ID --}}
+                    <div class="grid grid-cols-2 gap-4 items-start p-3 rounded-xl bg-gray-50 border border-gray-100" x-data="{ preview: null }">
+                        <div>
+                            <x-forms.text-input name="barangay_id" label="Barangay ID" model="form.barangay_id"
+                                placeholder="Enter barangay ID" maxlength="64" :validateOnBlur="true" :defer="true" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Barangay ID Photo</label>
+                            <div class="flex items-center gap-3">
+                                <div class="w-24 h-16 rounded-lg bg-white border border-gray-300 overflow-hidden flex items-center justify-center shrink-0">
+                                    <span x-show="!preview" class="text-gray-300 text-xs text-center"><i class="fas fa-id-card text-xl"></i></span>
+                                    <img x-show="preview" :src="preview" class="w-full h-full object-cover" style="display:none">
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <input type="file" wire:model="barangayIdPhoto" accept="image/*"
+                                        @change="const f=$event.target.files[0]; if(f){const r=new FileReader();r.onload=e=>preview=e.target.result;r.readAsDataURL(f)}"
+                                        class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+                                    @error('barangayIdPhoto') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -351,11 +479,7 @@ $wire.on('wizard-advance', ({ tab }) => { formTab = tab; });" x-show="show" x-cl
                                     </div>
                                     <div class="text-sm text-gray-700">
                                         <p class="font-semibold text-gray-900">Password guidance</p>
-                                        <p class="mt-1 leading-6">
-                                            Use at least 6 characters and combine letters with numbers.
-                                            Add capital letters and special characters to make it stronger.
-                                            Avoid names, birthdays, member IDs, and simple sequences like 12345.
-                                        </p>
+                                        <p class="mt-1 leading-6">{{ $passwordGuidance }}</p>
                                     </div>
                                 </div>
                             </div>
@@ -364,12 +488,9 @@ $wire.on('wizard-advance', ({ tab }) => { formTab = tab; });" x-show="show" x-cl
                                 <x-forms.text-input name="password" label="Password" model="form.password"
                                     type="password" :required="$isAddMode" placeholder="Enter password"
                                     autocomplete="new-password"
-                                    helperText="Use letters and numbers to start; uppercase letters and symbols make it stronger."
-                                    :validateOnBlur="true" :defer="true"
-                                    x-on:input="window.__memberPasswordStrengthUpdate && window.__memberPasswordStrengthUpdate()"
-                                    x-on:change="window.__memberPasswordStrengthUpdate && window.__memberPasswordStrengthUpdate()"
-                                    x-on:keyup="window.__memberPasswordStrengthUpdate && window.__memberPasswordStrengthUpdate()"
-                                    x-on:focusout="window.__memberPasswordStrengthUpdate && window.__memberPasswordStrengthUpdate()" />
+                                    helperText="{{ $passwordHelperText }}" :validateOnBlur="true" :defer="true"
+                                    minlength="{{ \App\Support\PersonPasswordPolicy::MIN_LENGTH }}"
+                                    pattern="{{ $passwordPattern }}" title="{{ $passwordGuidance }}" />
 
                                 <div
                                     class="mt-3 flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
@@ -384,7 +505,7 @@ $wire.on('wizard-advance', ({ tab }) => { formTab = tab; });" x-show="show" x-cl
                                         class="min-w-16 text-sm font-semibold text-gray-700">Weak</span>
                                     <button type="button"
                                         class="inline-flex h-8 w-8 items-center justify-center rounded-full text-cyan-600 transition-colors hover:bg-cyan-50 hover:text-cyan-700"
-                                        title="Use at least 6 characters, combine letters and numbers, add a capital letter and a special character if possible, and avoid names, birthdays, member IDs, or simple sequences like 12345."
+                                        title="{{ $passwordGuidance }}"
                                         aria-label="Password guidance">
                                         <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
                                             <path fill-rule="evenodd"
@@ -421,6 +542,255 @@ $wire.on('wizard-advance', ({ tab }) => { formTab = tab; });" x-show="show" x-cl
                                 </div>
                             </div>
                         @endif
+                    </div>
+                @endif
+
+                {{-- Documents tab (edit-mode only) --}}
+                @if ($isEdit)
+                    <div x-show="formTab === 'documents'" x-transition class="space-y-6">
+                        <div class="rounded-xl border border-cyan-100 bg-linear-to-r from-cyan-50 to-emerald-50 p-4">
+                            <div class="flex items-start gap-3">
+                                <div class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cyan-100 text-cyan-700">
+                                    <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd"
+                                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                                            clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div class="text-sm text-gray-700">
+                                    <p class="font-semibold text-gray-900">Member documents</p>
+                                    <p class="mt-1 leading-6">
+                                        Upload supporting files that are not collected during account creation.
+                                        Accepted formats: JPG, PNG, and PDF up to 10 MB per file.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                            <div class="rounded-xl border border-gray-200 bg-white p-5">
+                                <div class="flex items-start justify-between gap-4">
+                                    <div>
+                                        <h4 class="text-sm font-semibold text-gray-900">Proof of Registration</h4>
+                                        <p class="mt-1 text-xs text-gray-500">Upload the member's registration proof as an image or PDF.</p>
+                                    </div>
+                                    @if (!empty($form['proof_of_registration_path']))
+                                        <a href="{{ Storage::url($form['proof_of_registration_path']) }}" target="_blank"
+                                            class="inline-flex items-center gap-1 text-xs font-medium text-cyan-700 hover:text-cyan-800">
+                                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M14 3h7m0 0v7m0-7L10 14" />
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 5v14h14" />
+                                            </svg>
+                                            View current file
+                                        </a>
+                                    @endif
+                                </div>
+
+                                @if (!empty($form['proof_of_registration_path']))
+                                    <p class="mt-3 truncate text-xs text-gray-500">{{ basename($form['proof_of_registration_path']) }}</p>
+                                @else
+                                    <p class="mt-3 text-xs text-gray-400">No file uploaded yet.</p>
+                                @endif
+
+                                <input type="file" wire:model="proofOfRegistrationUpload"
+                                    accept="image/jpeg,image/png,application/pdf"
+                                    class="mt-4 block w-full text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-cyan-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-cyan-700 hover:file:bg-cyan-100 cursor-pointer">
+                                <p class="mt-2 text-xs text-gray-400">Replace the existing file by selecting a new upload.</p>
+                                @error('proofOfRegistrationUpload')
+                                    <span class="mt-1 block text-xs text-red-500">{{ $message }}</span>
+                                @enderror
+                            </div>
+
+                            <div class="rounded-xl border border-gray-200 bg-white p-5">
+                                <div class="flex items-start justify-between gap-4">
+                                    <div>
+                                        <h4 class="text-sm font-semibold text-gray-900">Other Supporting Document</h4>
+                                        <p class="mt-1 text-xs text-gray-500">Use this for any extra member paperwork that should be kept on file.</p>
+                                    </div>
+                                    @if (!empty($form['other_document_path']))
+                                        <a href="{{ Storage::url($form['other_document_path']) }}" target="_blank"
+                                            class="inline-flex items-center gap-1 text-xs font-medium text-cyan-700 hover:text-cyan-800">
+                                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M14 3h7m0 0v7m0-7L10 14" />
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 5v14h14" />
+                                            </svg>
+                                            View current file
+                                        </a>
+                                    @endif
+                                </div>
+
+                                @if (!empty($form['other_document_path']))
+                                    <p class="mt-3 truncate text-xs text-gray-500">{{ basename($form['other_document_path']) }}</p>
+                                @else
+                                    <p class="mt-3 text-xs text-gray-400">No file uploaded yet.</p>
+                                @endif
+
+                                <input type="file" wire:model="otherDocumentUpload"
+                                    accept="image/jpeg,image/png,application/pdf"
+                                    class="mt-4 block w-full text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-cyan-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-cyan-700 hover:file:bg-cyan-100 cursor-pointer">
+                                <p class="mt-2 text-xs text-gray-400">Replace the existing file by selecting a new upload.</p>
+                                @error('otherDocumentUpload')
+                                    <span class="mt-1 block text-xs text-red-500">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+                    </div>
+                @endif
+
+                {{-- Agreement Step (add-mode only) --}}
+                @if ($isAddMode)
+                    <div x-show="formTab === 'agreement'" x-transition class="space-y-6" x-data="{ activePolicyModal: null }">
+
+                        {{-- Header banner --}}
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+                            <svg class="w-5 h-5 text-blue-600 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd"
+                                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                            <div class="text-sm text-blue-800">
+                                <p class="font-semibold">Terms, Privacy &amp; Agreement</p>
+                                <p class="mt-0.5">Please read and accept the terms and conditions before proceeding.
+                                    You may also upload a signed membership agreement or any supporting document.</p>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4
+                                class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                Review the policy documents
+                            </h4>
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                <button type="button" @click="activePolicyModal = 'terms'"
+                                    class="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700">
+                                    <i class="fas fa-file-contract"></i>
+                                    View Terms and Agreement
+                                </button>
+                                <button type="button" @click="activePolicyModal = 'privacy'"
+                                    class="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700">
+                                    <i class="fas fa-shield-halved"></i>
+                                    View Privacy Policy
+                                </button>
+                            </div>
+                            <p class="mt-3 text-xs text-gray-500">These documents use the same editable site content shown on the public website footer and registration page.</p>
+                        </div>
+
+                        {{-- Agreement checkbox --}}
+                        <div>
+                            <label
+                                class="flex items-start gap-3 cursor-pointer rounded-lg border border-gray-200 bg-white p-4 hover:bg-gray-50 transition-colors">
+                                <input type="checkbox" wire:model.live="form.terms_agreed"
+                                    class="mt-0.5 h-4 w-4 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500 cursor-pointer"
+                                    id="terms_agreed">
+                                <span class="text-sm text-gray-700 leading-5">
+                                    I have reviewed the cooperative's <button type="button" @click.prevent="activePolicyModal = 'terms'"
+                                        class="font-semibold text-cyan-700 underline underline-offset-2">Terms and Agreement</button>
+                                    and <button type="button" @click.prevent="activePolicyModal = 'privacy'"
+                                        class="font-semibold text-cyan-700 underline underline-offset-2">Privacy Policy</button>.
+                                    I voluntarily agree to be bound by these terms. <span class="text-red-500">*</span>
+                                </span>
+                            </label>
+                            @error('form.terms_agreed')
+                                <p class="mt-1.5 text-xs text-red-600 flex items-center gap-1">
+                                    <svg class="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd"
+                                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                                            clip-rule="evenodd" />
+                                    </svg>
+                                    {{ $message }}
+                                </p>
+                            @enderror
+                        </div>
+
+                        @include('partials.policies.modal')
+
+                        {{-- Document / Agreement File Upload --}}
+                        <div>
+                            <h4
+                                class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                </svg>
+                                Upload Agreement / Supporting Document
+                                <span class="text-gray-400 font-normal normal-case text-xs">(optional)</span>
+                            </h4>
+                            <div x-data="{ agreementPreview: null, agreementName: null, agreementIsImage: false }"
+                                class="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                                <input x-ref="agreementInput" type="file" wire:model="agreementUpload"
+                                    accept="image/jpeg,image/png,application/pdf"
+                                    class="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-cyan-50 file:text-cyan-700 hover:file:bg-cyan-100 cursor-pointer"
+                                    @change="
+                                        const file = $event.target.files[0];
+                                        if (!file) {
+                                            agreementName = null;
+                                            agreementPreview = null;
+                                            agreementIsImage = false;
+                                            return;
+                                        }
+
+                                        agreementName = file.name;
+                                        agreementIsImage = file.type.startsWith('image/');
+
+                                        if (agreementIsImage) {
+                                            const reader = new FileReader();
+                                            reader.onload = event => agreementPreview = event.target.result;
+                                            reader.readAsDataURL(file);
+                                        } else {
+                                            agreementPreview = null;
+                                        }
+                                    ">
+                                <p class="mt-2 text-xs text-gray-500">Select a JPG, PNG, or PDF file up to 10 MB.</p>
+
+                                <div x-show="agreementName" class="mt-4 flex items-start gap-4">
+                                    <div x-show="agreementIsImage"
+                                        class="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-white">
+                                        <img :src="agreementPreview" class="h-full w-full object-cover" alt="Preview">
+                                    </div>
+                                    <div x-show="!agreementIsImage"
+                                        class="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-red-100 bg-red-50 text-red-500">
+                                        <svg class="h-7 w-7" fill="currentColor" viewBox="0 0 24 24">
+                                            <path
+                                                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 1.5L18.5 9H13V3.5zM6 20V4h5v7h7v9H6z" />
+                                        </svg>
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <p class="truncate text-sm font-medium text-gray-900" x-text="agreementName"></p>
+                                        <p class="mt-0.5 flex items-center gap-1 text-xs text-emerald-600">
+                                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor"
+                                                stroke-width="2" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round"
+                                                    d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            File selected
+                                        </p>
+                                        <button type="button"
+                                            @click="agreementName = null; agreementPreview = null; agreementIsImage = false; $refs.agreementInput.value = ''; $wire.set('agreementUpload', null)"
+                                            class="mt-1 text-xs text-red-500 transition-colors hover:text-red-700">
+                                            Remove file
+                                        </button>
+                                    </div>
+                                </div>
+
+                                @error('agreementUpload')
+                                    <p class="mt-1.5 text-xs text-red-600 flex items-center gap-1">
+                                        <svg class="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd"
+                                                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                                                clip-rule="evenodd" />
+                                        </svg>
+                                        {{ $message }}
+                                    </p>
+                                @enderror
+                            </div>
+                        </div>
+
                     </div>
                 @endif
 
@@ -718,7 +1088,7 @@ $wire.on('wizard-advance', ({ tab }) => { formTab = tab; });" x-show="show" x-cl
                 <div class="flex gap-2">
                     {{-- Next: add-mode triggers server validation; edit-mode advances freely --}}
                     @php
-                        $lastInputTab = $isAddMode ? 'review' : ($canManageMembers ? 'login' : 'employment');
+                        $lastInputTab = $isAddMode ? 'review' : 'documents';
                     @endphp
                     <button type="button" @click="nextBtn()"
                         x-show="formTab !== '{{ $lastInputTab }}' && formTab !== 'review'"
@@ -797,96 +1167,4 @@ $wire.on('wizard-advance', ({ tab }) => { formTab = tab; });" x-show="show" x-cl
     }
 </style>
 
-<script>
-    (() => {
-        if (window.__memberFormEmailSyncBound) {
-            return;
-        }
-
-        window.__memberFormEmailSyncBound = true;
-        window.__memberPasswordStrengthUpdate = () => {
-            const strengthLabel = document.getElementById('member-password-strength-label');
-            const strengthBar = document.getElementById('member-password-strength-bar');
-
-            if (!strengthLabel || !strengthBar) {
-                return;
-            }
-
-            const getNameTokens = () => ['first_name', 'mid_name', 'last_name']
-                .map((id) => document.getElementById(id)?.value || '')
-                .map((value) => value.toLowerCase().replace(/[^a-z]+/g, ''))
-                .filter((value) => value.length >= 3);
-
-            const passwordInput = document.getElementById('password');
-            const value = passwordInput?.value || '';
-            const normalized = value.toLowerCase();
-
-            const setState = (label, labelClass, barClass, width) => {
-                strengthLabel.textContent = label;
-                strengthLabel.className = `min-w-16 text-sm font-semibold ${labelClass}`;
-                strengthBar.className = `h-full rounded-full transition-all duration-200 ${barClass}`;
-                strengthBar.style.width = width;
-            };
-
-            if (!value) {
-                setState('Weak', 'text-gray-700', 'bg-gray-300', '0%');
-                return;
-            }
-
-            const hasLetters = /[a-z]/i.test(value);
-            const hasNumbers = /\d/.test(value);
-            const hasUppercase = /[A-Z]/.test(value);
-            const hasSpecial = /[^A-Za-z0-9]/.test(value);
-            const looksPredictable = getNameTokens().some((token) => normalized.includes(token) && /\d{3,}/
-                .test(normalized));
-
-            if (looksPredictable) {
-                setState('Too weak', 'text-red-700', 'bg-red-500', '20%');
-                return;
-            }
-
-            if (hasLetters && hasNumbers && hasUppercase && hasSpecial) {
-                setState('Strong', 'text-emerald-700', 'bg-emerald-500', '100%');
-                return;
-            }
-
-            if (hasLetters && hasNumbers && hasUppercase) {
-                setState('Medium', 'text-cyan-700', 'bg-cyan-500', '70%');
-                return;
-            }
-
-            if (hasLetters && hasNumbers) {
-                setState('Weak', 'text-amber-700', 'bg-amber-500', '45%');
-                return;
-            }
-
-            setState('Weak', 'text-gray-700', 'bg-gray-300', '25%');
-        };
-
-        document.addEventListener('input', (event) => {
-            if (event.target && ['password', 'first_name', 'mid_name', 'last_name'].includes(event.target
-                    .id)) {
-                window.__memberPasswordStrengthUpdate();
-            }
-        });
-
-        document.addEventListener('keyup', (event) => {
-            if (event.target && ['password', 'first_name', 'mid_name', 'last_name'].includes(event.target
-                    .id)) {
-                window.__memberPasswordStrengthUpdate();
-            }
-        });
-
-        document.addEventListener('blur', (event) => {
-            if (event.target && event.target.id === 'password') {
-                window.__memberPasswordStrengthUpdate();
-            }
-        }, true);
-
-        document.addEventListener('DOMContentLoaded', () => {
-            window.__memberPasswordStrengthUpdate();
-        });
-
-        window.__memberPasswordStrengthUpdate();
-    })();
-</script>
+@include('components.forms.password-strength-script', ['scope' => 'member', 'labelId' => 'member-password-strength-label', 'barId' => 'member-password-strength-bar'])

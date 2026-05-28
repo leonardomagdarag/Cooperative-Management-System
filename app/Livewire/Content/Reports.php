@@ -207,16 +207,7 @@ class Reports extends Component
             ->get(['loan_amount', 'interest_rate', 'term_months']);
 
         $totalInterestEarned = (float) $loans->sum(function (Loan $loan) {
-            $principal = (float) $loan->loan_amount;
-            $annualRate = (float) $loan->interest_rate / 100;
-            $months = (int) ($loan->term_months ?: 0);
-
-            if ($principal <= 0 || $annualRate <= 0 || $months <= 0) {
-                return 0;
-            }
-
-            // Simple interest approximation over term.
-            return $principal * $annualRate * ($months / 12);
+            return $loan->totalInterest();
         });
 
         // Cashflow-like net for the period.
@@ -314,7 +305,7 @@ class Reports extends Component
             ->sum('balance');
 
         $shareCapital = (float) Account::query()
-            ->whereIn('account_type', ['share-capital', 'share_capital'])
+            ->where('account_type', 'share-capital')
             ->sum('balance');
 
         $totalAssets = $cashAndCashEquivalents + $netLoansReceivable;
@@ -368,7 +359,7 @@ class Reports extends Component
     public function getMembersProperty()
     {
         return User::query()
-            ->where('role', 'member')
+            ->memberUsers()
             ->with('personalData')
             ->orderBy('id', 'desc')
             ->get();

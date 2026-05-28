@@ -54,6 +54,29 @@
                                 @endforeach
                             </div>
 
+                            {{-- Profile Photo Upload --}}
+                            <div x-data="{ preview: null }">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Profile Photo</label>
+                                <div class="flex items-center gap-4">
+                                    <div class="w-16 h-16 rounded-full bg-gray-100 border border-gray-300 overflow-hidden flex items-center justify-center shrink-0">
+                                        @php $currentPhoto = Auth::user()?->personalData?->profile_picture; @endphp
+                                        @if ($currentPhoto)
+                                            <img src="{{ Storage::url($currentPhoto) }}" class="w-full h-full object-cover" alt="Current photo" x-show="!preview">
+                                        @else
+                                            <span x-show="!preview" class="text-gray-400"><i class="fas fa-user text-2xl"></i></span>
+                                        @endif
+                                        <img x-show="preview" :src="preview" class="w-full h-full object-cover" alt="Preview" style="display:none">
+                                    </div>
+                                    <div class="flex-1">
+                                        <input type="file" wire:model="profilePhotoUpload" accept="image/*"
+                                            @change="const f=$event.target.files[0]; if(f){const r=new FileReader();r.onload=e=>preview=e.target.result;r.readAsDataURL(f)}"
+                                            class="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer">
+                                        <p class="mt-1 text-xs text-gray-400">JPG, PNG or GIF · max 2MB</p>
+                                        @error('profilePhotoUpload') <span class="text-red-500 text-xs mt-1">{{ $message }}</span> @enderror
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 @foreach (['birthplace' => 'Birthplace', 'gender' => 'Gender', 'education' => 'Education', 'civil_status' => 'Civil Status', 'religion' => 'Religion', 'email' => 'Login Email', 'phone_no' => 'Phone Number', 'facebook' => 'Facebook'] as $field => $label)
                                     <label class="block {{ in_array($field, ['email', 'facebook'], true) ? 'sm:col-span-2' : '' }}">
@@ -87,14 +110,7 @@
                                 @endforeach
                             </div>
 
-                            <div class="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4 text-sm text-gray-700">
-                                <p class="font-semibold text-emerald-700">What updates here?</p>
-                                <ul class="mt-3 space-y-2 text-sm leading-6">
-                                    <li>• Your basic identity and contact details.</li>
-                                    <li>• The address and phone numbers the cooperative can use to reach you.</li>
-                                    <li>• The login email tied to your account.</li>
-                                </ul>
-                            </div>
+                            
                         </div>
                     </div>
                 </div>

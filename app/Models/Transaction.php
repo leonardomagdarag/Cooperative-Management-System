@@ -17,6 +17,8 @@ class Transaction extends Model
         'amount',
         'transaction_date',
         'status',
+        'proof_of_payment_path',
+        'proof_of_payment_uploaded_at',
         'note',
         'recorded_by'
     ];
@@ -24,6 +26,7 @@ class Transaction extends Model
     protected $casts = [
         'amount' => 'decimal:2',
         'transaction_date' => 'datetime',
+        'proof_of_payment_uploaded_at' => 'datetime',
     ];
 
     protected static function boot()

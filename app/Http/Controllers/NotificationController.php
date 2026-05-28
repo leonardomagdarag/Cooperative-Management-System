@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Notification;
+use App\Services\AuditLogService;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -11,10 +12,12 @@ use Illuminate\Support\Facades\Auth;
 class NotificationController extends Controller
 {
     protected NotificationService $notificationService;
+    protected AuditLogService $auditLogService;
 
-    public function __construct(NotificationService $notificationService)
+    public function __construct(NotificationService $notificationService, AuditLogService $auditLogService)
     {
         $this->notificationService = $notificationService;
+        $this->auditLogService = $auditLogService;
     }
 
     /**
@@ -96,12 +99,38 @@ class NotificationController extends Controller
      */
     public function markAsRead(Notification $notification): JsonResponse
     {
+        $user = Auth::user();
+
         // Ensure the notification belongs to the authenticated user
         if ($notification->user_id !== Auth::id()) {
+            $this->auditLogService->log(
+                'notification.read_denied',
+                'User attempted to mark another user notification as read.',
+                'notification',
+                $notification,
+                $user,
+                [
+                    'notification_id' => $notification->id,
+                    'owner_id' => $notification->user_id,
+                ]
+            );
+
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
         $notification->markAsRead();
+
+        $this->auditLogService->log(
+            'notification.read',
+            'User marked notification as read.',
+            'notification',
+            $notification,
+            $user,
+            [
+                'notification_id' => $notification->id,
+                'type' => $notification->type,
+            ]
+        );
 
         return response()->json(['success' => true]);
     }
@@ -137,13 +166,26 @@ class NotificationController extends Controller
      */
     public function markAllAsRead(): JsonResponse
     {
-        Auth::user()
+        $user = Auth::user();
+
+        $updatedCount = $user
             ->notifications()
             ->unread()
             ->update([
                 'is_read' => true,
                 'read_at' => now(),
             ]);
+
+        $this->auditLogService->log(
+            'notification.read_all',
+            'User marked all notifications as read.',
+            'notification',
+            null,
+            $user,
+            [
+                'updated_count' => (int) $updatedCount,
+            ]
+        );
 
         return response()->json(['success' => true]);
     }
@@ -153,12 +195,38 @@ class NotificationController extends Controller
      */
     public function destroy(Notification $notification): JsonResponse
     {
+        $user = Auth::user();
+
         // Ensure the notification belongs to the authenticated user
         if ($notification->user_id !== Auth::id()) {
+            $this->auditLogService->log(
+                'notification.delete_denied',
+                'User attempted to delete another user notification.',
+                'notification',
+                $notification,
+                $user,
+                [
+                    'notification_id' => $notification->id,
+                    'owner_id' => $notification->user_id,
+                ]
+            );
+
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
         $notification->delete();
+
+        $this->auditLogService->log(
+            'notification.deleted',
+            'User deleted a notification.',
+            'notification',
+            null,
+            $user,
+            [
+                'notification_id' => $notification->id,
+                'type' => $notification->type,
+            ]
+        );
 
         return response()->json(['success' => true]);
     }
@@ -168,10 +236,23 @@ class NotificationController extends Controller
      */
     public function deleteAllRead(): JsonResponse
     {
-        Auth::user()
+        $user = Auth::user();
+
+        $deletedCount = $user
             ->notifications()
             ->read()
             ->delete();
+
+        $this->auditLogService->log(
+            'notification.deleted_read_all',
+            'User deleted all read notifications.',
+            'notification',
+            null,
+            $user,
+            [
+                'deleted_count' => (int) $deletedCount,
+            ]
+        );
 
         return response()->json(['success' => true]);
     }

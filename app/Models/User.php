@@ -2,16 +2,19 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Models\OfficerPermissionOverride;
+use App\Support\PermissionCatalog;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use App\Models\OfficerPermissionOverride;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable, SoftDeletes, HasRoles {
@@ -100,6 +103,39 @@ class User extends Authenticatable
         );
     }
 
+    protected function name(): Attribute
+    {
+        return Attribute::make(
+            get: function (): string {
+                $personalData = $this->personalData;
+
+                if (! $personalData) {
+                    return '';
+                }
+
+                return trim(implode(' ', array_filter([
+                    $personalData->first_name,
+                    $personalData->last_name,
+                ])));
+            },
+        );
+    }
+
+    protected function primaryRole(): Attribute
+    {
+        return Attribute::make(
+            get: function (mixed $value, array $attributes): string {
+                $assignedRole = $this->getRoleNames()->first();
+
+                if (is_string($assignedRole) && $assignedRole !== '') {
+                    return $assignedRole;
+                }
+
+                return (string) ($attributes['role'] ?? 'member');
+            },
+        );
+    }
+
     public function isActive(): bool
     {
         return $this->account_status === 'active';
@@ -108,6 +144,27 @@ class User extends Authenticatable
     public function isTerminated(): bool
     {
         return $this->account_status === 'terminated';
+    }
+
+    public function scopeOfficerUsers(Builder $query): Builder
+    {
+        $legacyOfficerRoles = array_merge(['admin'], PermissionCatalog::officerRoles());
+
+        return $query->where(function (Builder $builder) use ($legacyOfficerRoles) {
+            $builder->where('is_officer', true)
+                ->orWhereIn('role', $legacyOfficerRoles);
+        });
+    }
+
+    public function scopeMemberUsers(Builder $query): Builder
+    {
+        return $query->whereHas('roles', function (Builder $roleQuery) {
+            $roleQuery->where('name', 'member');
+        })
+            ->where(function (Builder $builder) {
+                $builder->where('is_officer', false)
+                    ->orWhereNull('is_officer');
+            });
     }
 
     // eloquent relationships
@@ -166,6 +223,23 @@ class User extends Authenticatable
     public function trustedDevices()
     {
         return $this->hasMany(TrustedDevice::class);
+    }
+
+    public function invalidateOtherSessions(?string $currentSessionId = null): void
+    {
+        if (config('session.driver') !== 'database') {
+            return;
+        }
+
+        $query = DB::connection(config('session.connection'))
+            ->table(config('session.table', 'sessions'))
+            ->where('user_id', $this->getKey());
+
+        if (filled($currentSessionId)) {
+            $query->where('id', '!=', $currentSessionId);
+        }
+
+        $query->delete();
     }
 
     public function permissionOverrides()

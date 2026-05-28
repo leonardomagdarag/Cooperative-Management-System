@@ -10,6 +10,9 @@
 </head>
 
 <body class="bg-white md:bg-gray-100">
+    @php
+        $memberRegistrationEnabled = (bool) data_get($publicContent ?? [], 'registration.online_member_registration_enabled', true);
+    @endphp
 
     <!-- Success Toast Notification -->
     @if (session('success'))
@@ -133,15 +136,17 @@
                         </button>
 
                         <!-- Registration Link -->
-                        <div class="text-center pt-6 mt-6 border-t border-gray-200">
-                            <p class="text-sm text-slate-600 mb-3">Don't have an account?</p>
-                            <a href="{{ route('register_page') }}"
-                                class="inline-flex items-center gap-2 text-emerald-700 hover:text-emerald-800 font-semibold transition-colors">
-                                <i class="fas fa-user-plus"></i>
-                                <span>Create an Account</span>
-                                <i class="fas fa-arrow-right text-sm"></i>
-                            </a>
-                        </div>
+                        @if ($memberRegistrationEnabled)
+                            <div class="text-center pt-6 mt-6 border-t border-gray-200">
+                                <p class="text-sm text-slate-600 mb-3">Don't have an account?</p>
+                                <a href="{{ route('register_page') }}"
+                                    class="inline-flex items-center gap-2 text-emerald-700 hover:text-emerald-800 font-semibold transition-colors">
+                                    <i class="fas fa-user-plus"></i>
+                                    <span>Create an Account</span>
+                                    <i class="fas fa-arrow-right text-sm"></i>
+                                </a>
+                            </div>
+                        @endif
 
                         <!-- Back Button -->
                         <div class="text-center pt-4">

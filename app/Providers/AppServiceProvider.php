@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\Announcement;
 use App\Models\Loan;
 use App\Models\OfficerPermissionOverride;
 use App\Models\PersonalData;
@@ -12,6 +13,7 @@ use App\Policies\MemberPolicy;
 use App\Policies\ReportPolicy;
 use App\Policies\TransactionPolicy;
 use App\Policies\UserPolicy;
+use App\Support\SiteContentCatalog;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\View;
@@ -46,6 +48,15 @@ class AppServiceProvider extends ServiceProvider
 
         View::composer('*', function ($view) {
             $view->with('authUser', Auth::user());
+        });
+
+        View::composer(['public.*', 'components.modals.member-form'], function ($view) {
+            $view->with('publicContent', SiteContentCatalog::editorContent());
+        });
+
+        View::composer('public.*', function ($view) {
+            $view->with('publicNewsItems', Announcement::publicNews()->latest()->get());
+            $view->with('publicEventItems', Announcement::publicEvents()->orderBy('event_date')->get());
         });
     }
 }

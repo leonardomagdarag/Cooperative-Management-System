@@ -61,7 +61,7 @@ class OtpChallengeController extends Controller
             'security.pending_otp_fingerprint',
         ]);
 
-        $intended = (string) $request->session()->pull('security.intended_url', '/member/dashboard');
+        $intended = (string) $request->session()->pull('security.intended_url', route('dashboard', absolute: false));
 
         return redirect()->to($intended)->with('success', 'Security verification successful.');
     }

@@ -6,7 +6,7 @@ class PermissionCatalog
 {
     public static function officerRoles(): array
     {
-        return ['manager', 'secretary', 'loan', 'treasurer'];
+        return ['manager', 'accountant', 'loan', 'secretary'];
     }
 
     public static function groups(): array
@@ -27,6 +27,7 @@ class PermissionCatalog
             'Loans' => [
                 'loans.view',
                 'loans.create',
+                'loans.encode',
                 'loans.update',
                 'loans.approve',
                 'loans.reject',
@@ -37,6 +38,7 @@ class PermissionCatalog
                 'transactions.view-all',
                 'transactions.create',
                 'transactions.update',
+                'transactions.approve',
                 'transactions.void',
                 'transactions.export',
             ],
@@ -65,6 +67,7 @@ class PermissionCatalog
                 'reports.audit',
             ],
             'Officer Management' => [
+                'officers.view',
                 'officers.create',
                 'officers.update',
                 'officers.delete',
@@ -82,9 +85,9 @@ class PermissionCatalog
         return [
             'admin' => 'Administrator',
             'manager' => 'Manager',
-            'secretary' => 'Secretary',
+            'accountant' => 'Accountant',
             'loan' => 'Loan Officer',
-            'treasurer' => 'Treasurer',
+            'secretary' => 'Secretary',
         ];
     }
 
@@ -93,9 +96,9 @@ class PermissionCatalog
         return [
             'admin' => 'Full system access. Can manage all settings, roles, permissions, and officer accounts.',
             'manager' => 'Broad operational oversight across officers, members, services, and reporting.',
-            'secretary' => 'Member recordkeeping, communication, announcements, and day-to-day reporting.',
+            'accountant' => 'Transaction handling, service processing, member onboarding, and financial reporting support.',
             'loan' => 'Loan processing, service transactions, and member loan support.',
-            'treasurer' => 'Cash movement, transaction validation, and financial reporting support.',
+            'secretary' => 'Handles records and communications. Manages member registrations, creates announcements, and exports basic reports.',
         ];
     }
 
@@ -122,6 +125,7 @@ class PermissionCatalog
                 'transactions.view-all',
                 'transactions.create',
                 'transactions.update',
+                'transactions.approve',
                 'transactions.export',
                 'deposits.view',
                 'deposits.create',
@@ -147,21 +151,29 @@ class PermissionCatalog
                 'profile.view',
                 'profile.update',
             ],
-            'secretary' => [
+            'accountant' => [
                 'dashboard.view',
                 'members.view',
                 'members.create',
-                'members.update',
                 'members.view-full-details',
+                'services.view',
+                'services.create',
+                'services.update',
+                'loans.view',
+                'loans.create',
+                'loans.update',
+                'loans.approve',
+                'loans.reject',
+                'loans.disburse',
                 'transactions.view',
                 'transactions.view-all',
-                'deposits.view',
-                'withdrawals.view',
-                'announcements.view',
-                'announcements.create',
-                'announcements.update',
+                'transactions.create',
+                'transactions.update',
+                'transactions.export',
                 'reports.view',
                 'reports.export',
+                'reports.financial',
+                'announcements.view',
                 'settings.view',
                 'notifications.view',
                 'profile.view',
@@ -180,38 +192,25 @@ class PermissionCatalog
                 'loans.approve',
                 'loans.reject',
                 'loans.disburse',
-                'reports.view',
-                'reports.export',
                 'announcements.view',
                 'settings.view',
                 'notifications.view',
                 'profile.view',
                 'profile.update',
             ],
-            'treasurer' => [
+            'secretary' => [
                 'dashboard.view',
                 'members.view',
-                'members.view-full-details',
-                'services.view',
-                'services.create',
-                'services.update',
+                'members.create',
+                'members.update',
+                'loans.view',
                 'transactions.view',
-                'transactions.view-all',
-                'transactions.create',
-                'transactions.update',
                 'transactions.export',
-                'deposits.view',
-                'deposits.create',
-                'deposits.approve',
-                'deposits.reject',
-                'withdrawals.view',
-                'withdrawals.create',
-                'withdrawals.approve',
-                'withdrawals.reject',
                 'reports.view',
                 'reports.export',
-                'reports.financial',
                 'announcements.view',
+                'announcements.create',
+                'announcements.update',
                 'settings.view',
                 'notifications.view',
                 'profile.view',

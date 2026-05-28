@@ -24,7 +24,7 @@ class TreasurerOverview extends Component
 
     public function mount(): void
     {
-        abort_unless(Auth::check() && Auth::user()->hasAnyRole(['admin', 'manager', 'treasurer']), 403);
+        abort_unless(Auth::check() && Auth::user()->hasAnyRole(['admin', 'manager', 'accountant']), 403);
 
         $this->recentTransactions  = new Collection();
         $this->recentExpenses      = new Collection();
@@ -49,7 +49,7 @@ class TreasurerOverview extends Component
         $totalSavings = (float) Account::query()->where('account_type', 'savings')->sum('balance');
 
         $totalShareCapital = (float) Account::query()
-            ->whereIn('account_type', ['share-capital', 'share_capital'])
+            ->where('account_type', 'share-capital')
             ->sum('balance');
 
         $financialThisMonth = $this->financialSummary($start, $end);

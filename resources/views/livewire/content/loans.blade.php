@@ -19,6 +19,16 @@
                     </form>
                 </div>
                 <div class="flex items-center ml-auto space-x-2">
+                    @if ($canEncode)
+                        <button type="button" wire:click="openCreateModal"
+                            class="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-blue-700 border border-transparent rounded-lg hover:bg-blue-800 focus:ring-4 focus:ring-blue-300">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 4v16m8-8H4"></path>
+                            </svg>
+                            Encode Loan
+                        </button>
+                    @endif
                     <button type="button" wire:click="$refresh"
                         class="inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-center text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 focus:ring-4 focus:ring-blue-300"
                         title="Refresh data">
@@ -92,8 +102,11 @@
                                         <td class="p-4 text-sm font-semibold text-gray-900">{{ $loan->loan_number }}</td>
                                     @endif
                                     <td class="p-4 text-base font-medium text-gray-900">
-                                        {{ $loan->account->user->personalData->first_name ?? '' }}
-                                        {{ $loan->account->user->personalData->last_name ?? '' }}
+                                        {{ $loan->user?->personalData?->first_name ?? '' }}
+                                        {{ $loan->user?->personalData?->last_name ?? '' }}
+                                        @if ($loan->user?->user_number)
+                                            <div class="text-xs text-gray-500">{{ $loan->user->user_number }}</div>
+                                        @endif
                                     </td>
                                     <td class="p-4 text-base font-semibold text-gray-900">
                                         ₱{{ number_format($loan->loan_amount, 2) }}</td>
@@ -105,6 +118,12 @@
                                         @if ($loan->loan_status === 'approved')
                                             <span
                                                 class="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded">Approved</span>
+                                        @elseif($loan->loan_status === 'active')
+                                            <span
+                                                class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">Active</span>
+                                        @elseif($loan->loan_status === 'paid_off')
+                                            <span
+                                                class="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded">Paid Off</span>
                                         @elseif($loan->loan_status === 'pending')
                                             <span
                                                 class="bg-yellow-100 text-yellow-800 text-xs font-medium px-2.5 py-0.5 rounded">Pending</span>
@@ -159,6 +178,159 @@
 
     {{-- Details Modal --}}
     @if ($showModal && $selectedLoan)
-        <x-modals.member-loan-detail :loan="$selectedLoan" />
+        <x-modals.member-loan-detail :loan="$selectedLoan" :can-upload-documents="$canUploadDocuments" />
+    @endif
+
+    @if ($showCreateModal)
+        <div class="fixed inset-0 z-50 flex items-center justify-center px-4 py-6 sm:px-6" wire:keydown.escape="closeCreateModal">
+            <div class="absolute inset-0 bg-gray-900/50" wire:click="closeCreateModal"></div>
+
+            <div class="relative w-full max-w-3xl overflow-hidden bg-white rounded-2xl shadow-2xl">
+                <div class="flex items-start justify-between px-6 py-5 border-b border-gray-200">
+                    <div>
+                        <h2 class="text-xl font-semibold text-gray-900">Encode Loan</h2>
+                        <p class="mt-1 text-sm text-gray-500">Create a loan record for a member using the active loan products in the system. This action is restricted to admins with the loan encoding permission.</p>
+                    </div>
+                    <button type="button" wire:click="closeCreateModal" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <form wire:submit="saveEncodedLoan" class="px-6 py-5 space-y-6">
+                    <div>
+                        <label for="loan-member-search" class="block text-sm font-medium text-gray-700">Member</label>
+                        <div class="relative mt-1">
+                            <input id="loan-member-search" type="text" wire:model.live.debounce.300ms="memberSearch"
+                                autocomplete="off"
+                                class="block w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-blue-500"
+                                placeholder="Search by member name or ID">
+
+                            @if ($this->memberSearchResults->isNotEmpty())
+                                <div class="absolute z-10 w-full mt-2 overflow-hidden bg-white border border-gray-200 rounded-lg shadow-lg">
+                                    @foreach ($this->memberSearchResults as $member)
+                                        <button type="button" wire:key="member-option-{{ $member->id }}"
+                                            wire:click="selectMember({{ $member->id }})"
+                                            class="flex items-center justify-between w-full px-4 py-3 text-left hover:bg-gray-50">
+                                            <span class="text-sm font-medium text-gray-900">
+                                                {{ $member->personalData?->first_name ?? '' }} {{ $member->personalData?->last_name ?? '' }}
+                                            </span>
+                                            <span class="text-xs text-gray-500">{{ $member->user_number }}</span>
+                                        </button>
+                                    @endforeach
+                                </div>
+                            @elseif (filled(trim($memberSearch)) && ! $selectedMemberId)
+                                <div class="mt-2 text-sm text-gray-500">No matching members found.</div>
+                            @endif
+                        </div>
+                        @if ($this->selectedMember)
+                            <p class="mt-2 text-sm text-green-700">Selected: {{ $this->selectedMember->personalData?->first_name ?? '' }} {{ $this->selectedMember->personalData?->last_name ?? '' }} ({{ $this->selectedMember->user_number }})</p>
+                        @endif
+                        @error('selectedMemberId')
+                            <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div>
+                            <label for="encoded-loan-product" class="block text-sm font-medium text-gray-700">Loan Product</label>
+                            <select id="encoded-loan-product" wire:model.live="encodedLoanProduct"
+                                class="block w-full px-4 py-3 mt-1 bg-white border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-blue-500">
+                                @foreach ($loanProductOptions as $product)
+                                    <option value="{{ $product['code'] }}">{{ $product['name'] }}</option>
+                                @endforeach
+                            </select>
+                            <p class="mt-2 text-xs text-gray-500">Base type: {{ ucfirst($encodedLoanType) }}</p>
+                            @error('encodedLoanProduct')
+                                <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                            @error('encodedLoanType')
+                                <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <div>
+                            <label for="encoded-loan-status" class="block text-sm font-medium text-gray-700">Status</label>
+                            <select id="encoded-loan-status" wire:model="encodedLoanStatus"
+                                class="block w-full px-4 py-3 mt-1 bg-white border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-blue-500">
+                                <option value="pending">Pending</option>
+                                <option value="approved">Approved</option>
+                                <option value="active">Active</option>
+                                <option value="paid_off">Paid Off</option>
+                            </select>
+                            @error('encodedLoanStatus')
+                                <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <div>
+                            <label for="encoded-payment-frequency" class="block text-sm font-medium text-gray-700">Payment Frequency</label>
+                            <select id="encoded-payment-frequency" wire:model="encodedPaymentFrequency"
+                                class="block w-full px-4 py-3 mt-1 bg-white border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-blue-500">
+                                <option value="weekly">Weekly</option>
+                                <option value="bi-weekly">Bi-weekly</option>
+                                <option value="monthly">Monthly</option>
+                                <option value="quarterly">Quarterly</option>
+                                <option value="annually">Annually</option>
+                            </select>
+                            @error('encodedPaymentFrequency')
+                                <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <div>
+                            <label for="encoded-loan-amount" class="block text-sm font-medium text-gray-700">Loan Amount</label>
+                            <input id="encoded-loan-amount" type="number" min="1" step="0.01" wire:model="encodedLoanAmount"
+                                class="block w-full px-4 py-3 mt-1 bg-white border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-blue-500"
+                                placeholder="0.00">
+                            @error('encodedLoanAmount')
+                                <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <div>
+                            <label for="encoded-interest-rate" class="block text-sm font-medium text-gray-700">Interest Rate (%)</label>
+                            <input id="encoded-interest-rate" type="number" min="0" max="100" step="0.01" wire:model="encodedInterestRate"
+                                class="block w-full px-4 py-3 mt-1 bg-white border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-blue-500"
+                                placeholder="0.00">
+                            @error('encodedInterestRate')
+                                <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <div>
+                            <label for="encoded-loan-term" class="block text-sm font-medium text-gray-700">Term (Months)</label>
+                            <input id="encoded-loan-term" type="number" min="1" max="360" step="1" wire:model="encodedLoanTerm"
+                                class="block w-full px-4 py-3 mt-1 bg-white border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-blue-500"
+                                placeholder="12">
+                            @error('encodedLoanTerm')
+                                <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <div>
+                            <label for="encoded-applied-at" class="block text-sm font-medium text-gray-700">Application Date</label>
+                            <input id="encoded-applied-at" type="date" wire:model="appliedAt"
+                                class="block w-full px-4 py-3 mt-1 bg-white border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-blue-500">
+                            @error('appliedAt')
+                                <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-end pt-2 space-x-3 border-t border-gray-200">
+                        <button type="button" wire:click="closeCreateModal"
+                            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                            class="px-4 py-2 text-sm font-medium text-white bg-blue-700 rounded-lg hover:bg-blue-800 focus:ring-4 focus:ring-blue-300">
+                            Save Loan
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
     @endif
 </div>

@@ -10,6 +10,11 @@
     <title>Membership Registration - Settlers Credit Cooperative</title>
 </head>
 
+@php
+    $termsContent = data_get($publicContent ?? [], 'policies.terms_and_conditions', '');
+    $privacyContent = data_get($publicContent ?? [], 'policies.privacy_policy', '');
+@endphp
+
 <body class="bg-gray-50">
 
     <!-- Success Toast Notification -->
@@ -388,17 +393,27 @@
                 <!-- Terms & Conditions -->
                 <div class="mb-8 p-6 bg-gray-50 border border-gray-200 rounded-lg">
                     <div class="flex items-start gap-3">
-                        <input type="checkbox" id="terms" name="terms" required
+                        <input type="checkbox" id="terms" name="terms" required {{ old('terms') ? 'checked' : '' }}
                             class="w-5 h-5 text-emerald-700 border-gray-300 rounded focus:ring-2 focus:ring-emerald-500 cursor-pointer mt-0.5 shrink-0" />
                         <label for="terms" class="text-sm text-slate-700 cursor-pointer">
-                            I agree to the <a href="#"
-                                class="text-emerald-700 hover:text-emerald-800 font-medium">Terms
-                                and Conditions</a> and <a href="#"
-                                class="text-emerald-700 hover:text-emerald-800 font-medium">Privacy Policy</a> of
-                            Settlers Credit Cooperative. I understand the rights and responsibilities of cooperative
+                            I agree to the
+                            <button type="button" @click.prevent="activePolicyModal = 'terms'"
+                                class="text-emerald-700 hover:text-emerald-800 font-medium underline underline-offset-2">
+                                Terms and Agreement
+                            </button>
+                            and
+                            <button type="button" @click.prevent="activePolicyModal = 'privacy'"
+                                class="text-emerald-700 hover:text-emerald-800 font-medium underline underline-offset-2">
+                                Privacy Policy
+                            </button>
+                            of Settlers Credit Cooperative. I understand the rights and responsibilities of cooperative
                             membership. <span class="text-red-500">*</span>
                         </label>
                     </div>
+                    <p class="mt-3 text-xs text-slate-500">Review both documents before submitting your application.</p>
+                    @error('terms')
+                        <p class="mt-2 text-xs text-red-500">{{ $message }}</p>
+                    @enderror
                 </div>
 
                 <div class="mb-8">
@@ -430,6 +445,8 @@
         </div>
     </section>
 
+    @include('partials.policies.modal', ['termsContent' => $termsContent, 'privacyContent' => $privacyContent])
+
     <script>
         function registrationForm() {
             return {
@@ -437,6 +454,7 @@
                 age: '',
                 showPassword: false,
                 showPasswordConfirm: false,
+                activePolicyModal: null,
                 calculateAge() {
                     if (!this.birthdate) {
                         this.age = '';

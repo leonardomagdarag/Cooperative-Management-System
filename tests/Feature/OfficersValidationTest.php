@@ -20,6 +20,16 @@ beforeEach(function () {
     actingAs(makeAdminUser());
 });
 
+test('officer login tab renders shared password guidance and strength meter', function () {
+    Livewire::test(Officers::class)
+        ->call('addOfficer')
+        ->assertSee('Password guidance')
+        ->assertSee('Strength:')
+        ->assertSeeHtml('id="officer-password-strength-bar"')
+        ->assertSeeHtml('data-password-form="officer"')
+        ->assertSeeHtml('minlength="6"');
+});
+
 test('opening an officer profile closes the add officer modal', function () {
     $officer = User::factory()->create(['role' => 'manager']);
 
@@ -40,6 +50,14 @@ test('officer password rejects predictable name plus digits', function () {
         ->call('validateField', 'form.password')
         ->assertHasErrors(['form.password']);
 });
+
+    test('officer password requires letters and numbers', function () {
+        Livewire::test(Officers::class)
+        ->call('addOfficer')
+        ->set('form.password', 'abcdef')
+        ->call('validateField', 'form.password')
+        ->assertHasErrors(['form.password']);
+    });
 
 test('officer password confirmation errors stay on the confirmation field', function () {
     Livewire::test(Officers::class)

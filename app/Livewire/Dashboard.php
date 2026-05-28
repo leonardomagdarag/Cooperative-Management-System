@@ -22,65 +22,58 @@ class Dashboard extends Component
     ];
 
     #[On('open-notifications-inbox')]
-    public function openNotificationsInbox(): void
+    public function openNotificationsInbox(int $notificationId = 0): void
     {
         $this->updateSection('notifications');
+
+        if ($notificationId > 0) {
+            $this->dispatch('open-notification-modal', notificationId: $notificationId);
+        }
     }
 
-    private function isPermissionManagedRole(string $role): bool
+    private function isPermissionManagedUser($user): bool
     {
-        return in_array($role, ['admin', 'manager', 'loan', 'secretary', 'treasurer'], true);
+        return (bool) ($user && (($user->is_officer ?? false) || $user->hasRole('admin')));
     }
 
     private function getUserSections($user): array
     {
-        $userRole = $user->getRoleNames()->first() ?? 'member';
-        $roleSections = config("settings.sections.{$userRole}", []);
+        $userRole = $user->primary_role;
 
-        // Keep member/inactive/terminated behavior role-based.
-        if (!$this->isPermissionManagedRole($userRole)) {
-            return $roleSections;
+        // Non-officer roles (member, inactive, terminated) keep config-driven sections
+        // as they have no Spatie permissions assigned.
+        if (! $this->isPermissionManagedUser($user)) {
+            return config("settings.sections.{$userRole}", []);
         }
 
-        // Officer/admin/manager sections should be permission-aware.
+        // Officer roles are fully driven by their database permissions (role permissions +
+        // per-officer overrides). The config is no longer consulted so that overrides work
+        // without needing a matching config entry.
         $sectionPermissionMap = [
-            'dashboard' => ['dashboard.view'],
-            'notifications' => ['dashboard.view'],
-            'officers' => ['officers.create', 'officers.update', 'officers.delete', 'officers.manage-permissions'],
-            'members' => ['members.view'],
-            'services' => ['services.view', 'services.create', 'services.update'],
-            'loans' => ['loans.view', 'loans.create', 'loans.update', 'loans.approve', 'loans.reject', 'loans.disburse'],
-            'transactions' => ['transactions.view', 'transactions.create', 'transactions.update', 'transactions.void', 'transactions.export'],
-            'ledger' => ['transactions.view', 'deposits.view', 'withdrawals.view'],
-            'announcements' => ['announcements.view', 'announcements.create', 'announcements.update', 'announcements.delete'],
-            'reports' => ['reports.view', 'reports.export', 'reports.financial', 'reports.audit'],
-            'logs' => ['logs.view', 'logs.export'],
-            'settings' => ['settings.view', 'settings.update'],
-            'loan-products' => ['settings.view', 'settings.update'],
+            'officers'        => ['officers.view', 'officers.create', 'officers.update', 'officers.delete', 'officers.manage-permissions'],
+            'members'         => ['members.view'],
+            'services'        => ['services.view', 'services.create', 'services.update'],
+            'loans'           => ['loans.view', 'loans.create', 'loans.update', 'loans.approve', 'loans.reject', 'loans.disburse'],
+            'ledger'          => ['transactions.view', 'deposits.view', 'withdrawals.view'],
+            'announcements'   => ['announcements.view', 'announcements.create', 'announcements.update', 'announcements.delete'],
+            'reports'         => ['reports.view', 'reports.export', 'reports.financial', 'reports.audit'],
+            'logs'            => ['logs.view', 'logs.export'],
+            'settings'        => ['settings.view', 'settings.update'],
+            'public-content'  => ['settings.view', 'settings.update'],
+            'loan-products'   => ['settings.view', 'settings.update'],
             'role-permissions' => ['settings.view', 'settings.update'],
         ];
 
-        $resolved = [];
-        foreach ($roleSections as $section) {
+        // These sections are always visible for any authenticated officer.
+        $resolved = ['dashboard', 'notifications', 'profile'];
+
+        foreach ($sectionPermissionMap as $section => $permissions) {
+            // Logs are restricted to admin only regardless of permissions.
             if ($section === 'logs' && $userRole !== 'admin') {
                 continue;
             }
 
-            // Dashboard and notifications are always accessible to any authenticated user.
-            if (in_array($section, ['dashboard', 'notifications', 'profile', 'settings'], true)) {
-                $resolved[] = $section;
-                continue;
-            }
-
-            if (!isset($sectionPermissionMap[$section])) {
-                // Permission-managed roles can only access sections with explicit permission mapping.
-                continue;
-            }
-
-            $canAccessSection = collect($sectionPermissionMap[$section])
-                ->some(fn($permission) => $user->can($permission));
-
-            if ($canAccessSection) {
+            if (collect($permissions)->some(fn($permission) => $user->can($permission))) {
                 $resolved[] = $section;
             }
         }
@@ -92,7 +85,7 @@ class Dashboard extends Component
     {
         //get user role
         $user = Auth::user();
-        $userRole = $user->getRoleNames()->first() ?? 'member';
+        $userRole = $user->primary_role;
         $userSections = $this->getUserSections($user);
 
         if (!empty($userSections) && !in_array($this->currentSection, $userSections, true)) {
@@ -104,14 +97,17 @@ class Dashboard extends Component
             'member' => 'overviews.member-overview',
             'admin' => 'overviews.admin-overview',
             'manager' => 'overviews.manager-overview',
-            'loan' => 'overviews.loan-overview',
+            'accountant' => 'overviews.treasurer-overview',
             'secretary' => 'overviews.secretary-overview',
-            'treasurer' => 'overviews.treasurer-overview',
+            'loan' => 'overviews.loan-overview',
         ];
 
-        $currentSectionPath = $this->currentSection === 'dashboard' && isset($sectionMapping[$userRole])
-            ? $sectionMapping[$userRole]
-            : $this->currentSection;
+        if ($this->currentSection === 'dashboard') {
+            $currentSectionPath = $sectionMapping[$userRole]
+                ?? ($this->isPermissionManagedUser($user) ? 'overviews.officer-overview' : $this->currentSection);
+        } else {
+            $currentSectionPath = $this->currentSection;
+        }
 
         return view('livewire.dashboard', [
             'userRole' => $userRole,
@@ -165,6 +161,6 @@ class Dashboard extends Component
         session()->invalidate();
         session()->regenerateToken();
 
-        return redirect()->route('login');
+        return redirect()->route('login_page');
     }
 }

@@ -5,12 +5,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Settlers Credit Cooperative</title>
-    @vite(['resources/css/app.css'])
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 
 <body class="bg-white">
     @include('partials.public.topNavbar')
+
+    @php
+        $homeContent = data_get($publicContent ?? [], 'home', []);
+        $aboutContent = data_get($publicContent ?? [], 'about', []);
+        $newsContent = data_get($publicContent ?? [], 'news', []);
+        $contactContent = data_get($publicContent ?? [], 'contact', []);
+        $memberRegistrationEnabled = (bool) data_get($publicContent ?? [], 'registration.online_member_registration_enabled', true);
+        $newsItems = $publicNewsItems->take(6);
+    @endphp
 
     <!-- Hero Section -->
     <section class="relative min-h-screen flex items-center justify-center overflow-hidden pt-20">
@@ -30,7 +39,7 @@
                 Credit Cooperative
             </h1>
             <p class="text-lg md:text-xl text-gray-100 mb-12 max-w-3xl mx-auto">
-                {!! config('content.home.hero_subtitle') !!}
+                {!! data_get($homeContent, 'hero_subtitle') !!}
             </p>
             <x-button-public label="Learn more" icon="fas fa-arrow-down ml-2" href="#about"
                 extraClass="animate_animated animate__bounce" />
@@ -44,10 +53,10 @@
                 <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">About Us</h2>
                 <div class="w-20 h-1 bg-emerald-700 mx-auto rounded-full mb-8"></div>
                 <p class="text-lg text-gray-700 leading-relaxed mb-6 text-justify">
-                    {!! config('content.about.about1') !!}
+                    {!! data_get($aboutContent, 'about1') !!}
                 </p>
                 <p class="text-lg text-gray-700 leading-relaxed mb-8 text-justify">
-                    {!! config('content.about.about2') !!}
+                    {!! data_get($aboutContent, 'about2') !!}
                 </p>
 
                 <!-- Stats -->
@@ -55,28 +64,28 @@
                     <div
                         class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
                         <div class="text-3xl font-bold text-slate-700 mb-2">
-                            {!! config('content.home.active_members') !!}
+                            {!! data_get($homeContent, 'active_members') !!}
                         </div>
                         <div class="text-sm text-gray-600">Active Members</div>
                     </div>
                     <div
                         class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
                         <div class="text-3xl font-bold text-slate-700 mb-2">
-                            {!! config('content.home.total_assets') !!}
+                            {!! data_get($homeContent, 'total_assets') !!}
                         </div>
                         <div class="text-sm text-gray-600">Total Assets</div>
                     </div>
                     <div
                         class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
                         <div class="text-3xl font-bold text-slate-700 mb-2">
-                            {!! config('content.home.years_service') !!}
+                            {!! data_get($homeContent, 'years_service') !!}
                         </div>
                         <div class="text-sm text-gray-600">Years of Service</div>
                     </div>
                     <div
                         class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
                         <div class="text-3xl font-bold text-slate-700 mb-2">
-                            {!! config('content.home.service_done') !!}
+                            {!! data_get($homeContent, 'service_done') !!}
                         </div>
                         <div class="text-sm text-gray-600">Services Done</div>
                     </div>
@@ -99,7 +108,7 @@
                     </div>
                     <h3 class="text-2xl font-bold text-gray-900 mb-4">Our Mission</h3>
                     <p class="text-gray-700 leading-relaxed">
-                        {!! config('content.about.mission') !!}
+                        {!! data_get($aboutContent, 'mission') !!}
                     </p>
                 </div>
                 <div class="bg-white border border-gray-200 rounded-2xl p-8 shadow-sm hover:shadow-md transition-all">
@@ -108,7 +117,7 @@
                     </div>
                     <h3 class="text-2xl font-bold text-gray-900 mb-4">Our Vision</h3>
                     <p class="text-gray-700 leading-relaxed">
-                        {!! config('content.about.vision') !!}
+                        {!! data_get($aboutContent, 'vision') !!}
                     </p>
                 </div>
             </div>
@@ -159,7 +168,7 @@
                     </div>
                 </div>
                 <div class="mt-10 text-center">
-                    <a href="{{ route('register_page') }}"
+                    <a href="{{ $memberRegistrationEnabled ? route('register_page') : '#Contact' }}"
                         class="inline-flex items-center px-6 py-3 bg-emerald-700 hover:bg-emerald-600 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all transform hover:scale-102">
                         Join Now
                         <i class="fas fa-user-plus ml-2"></i>
@@ -180,56 +189,54 @@
 
             <!-- Grid of News Cards -->
             <div class="grid md:grid-cols-3 gap-6 mb-12">
-                @foreach (config('content.news.news_items') as $index => $newsItem)
-                    @if ($index < 6)
-                        <!-- News Card {{ $index + 1 }} -->
-                        <a href="{{ route('news_page') }}"
-                            class="group bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all">
-                            <!-- Category Header -->
+                @foreach ($newsItems as $newsItem)
+                    <a href="{{ route('news_page') }}"
+                        class="group bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col">
+                        {{-- Fixed-height image / colour banner --}}
+                        <div class="h-40 w-full shrink-0 overflow-hidden relative
+                            @if ($newsItem->image_path) bg-gray-200
+                            @elseif ($newsItem->category === 'Achievement') bg-emerald-700
+                            @elseif ($newsItem->category === 'Update') bg-blue-700
+                            @else bg-slate-700 @endif">
+                            @if ($newsItem->image_path)
+                                <img src="{{ asset('storage/' . $newsItem->image_path) }}"
+                                    alt="{{ $newsItem->title }}"
+                                    class="w-full h-full object-cover">
+                            @else
+                                <div class="absolute inset-0 flex items-center justify-center">
+                                    <i class="fas fa-{{ $newsItem->type === 'event' ? 'calendar-alt' : 'bullhorn' }} text-5xl text-white opacity-20"></i>
+                                </div>
+                            @endif
+                        </div>
+
+                        <div class="p-6 flex flex-col flex-1">
+                            <div class="flex items-center justify-between mb-4">
+                                <span
+                                    class="px-3 py-1 rounded-full text-xs font-semibold @if ($newsItem->category === 'Achievement') bg-emerald-100 text-emerald-700 @elseif($newsItem->category === 'Update') bg-blue-100 text-blue-700 @else bg-slate-100 text-slate-700 @endif">
+                                    {{ $newsItem->category ?? $newsItem->type_label }}
+                                </span>
+                                <span class="text-xs text-gray-500">
+                                    <i class="fas fa-calendar mr-1"></i>{{ $newsItem->created_at->format('M d, Y') }}
+                                </span>
+                            </div>
+
+                            <h3
+                                class="text-xl font-bold text-gray-900 mb-3 line-clamp-2 group-hover:text-slate-700 transition-colors">
+                                {{ $newsItem->title }}
+                            </h3>
+
+                            <p class="text-sm text-gray-600 leading-relaxed line-clamp-3 mb-4 flex-1">
+                                {{ $newsItem->content }}
+                            </p>
+
                             <div
-                                class="h-1 
-                            @if ($newsItem['category'] === 'Announcement') bg-slate-700
-                            @elseif($newsItem['category'] === 'Achievement') bg-emerald-700
-                            @else bg-gray-700 @endif">
+                                class="flex items-center text-slate-700 font-semibold text-sm group-hover:text-slate-800">
+                                Read more
+                                <i
+                                    class="fas fa-arrow-right ml-2 transform group-hover:translate-x-1 transition-transform"></i>
                             </div>
-
-                            <div class="p-6">
-                                <!-- Category Badge & Date -->
-                                <div class="flex items-center justify-between mb-4">
-                                    <span
-                                        class="px-3 py-1 
-                                    @if ($newsItem['category'] === 'Announcement') bg-slate-100 text-slate-700
-                                    @elseif($newsItem['category'] === 'Achievement') bg-emerald-100 text-emerald-700
-                                    @else bg-gray-100 text-gray-700 @endif
-                                    rounded-full text-xs font-semibold">
-                                        {{ $newsItem['category'] }}
-                                    </span>
-                                    <span class="text-xs text-gray-500">
-                                        <i class="fas fa-calendar mr-1"></i>{{ $newsItem['date'] }}
-                                    </span>
-                                </div>
-
-                                <!-- Title -->
-                                <h3
-                                    class="text-xl font-bold text-gray-900 mb-3 line-clamp-2 group-hover:text-slate-700 transition-colors">
-                                    {{ $newsItem['title'] }}
-                                </h3>
-
-                                <!-- Description -->
-                                <p class="text-sm text-gray-600 leading-relaxed line-clamp-3 mb-4">
-                                    {{ $newsItem['description'] }}
-                                </p>
-
-                                <!-- Read More -->
-                                <div
-                                    class="flex items-center text-slate-700 font-semibold text-sm group-hover:text-slate-800">
-                                    Read more
-                                    <i
-                                        class="fas fa-arrow-right ml-2 transform group-hover:translate-x-1 transition-transform"></i>
-                                </div>
-                            </div>
-                        </a>
-                    @endif
+                        </div>
+                    </a>
                 @endforeach
             </div>
 
@@ -398,7 +405,7 @@
                                 <div>
                                     <h4 class="font-semibold text-gray-900 mb-1">Address</h4>
                                     <a href="#googlemaps" class="text-slate-700 hover:text-slate-900">
-                                        {!! config('content.contact.address') !!}
+                                        {!! data_get($contactContent, 'address') !!}
                                     </a>
                                 </div>
                             </div>
@@ -409,7 +416,7 @@
                                 </div>
                                 <div>
                                     <h4 class="font-semibold text-gray-900 mb-1">Phone Numbers</h4>
-                                    <p class="text-gray-600">{!! config('content.contact.phone') !!}</p>
+                                    <p class="text-gray-600">{!! data_get($contactContent, 'phone') !!}</p>
                                 </div>
                             </div>
                             <div class="flex items-center gap-4">
@@ -420,11 +427,11 @@
                                 <div>
                                     <h4 class="font-semibold text-gray-900 mb-1">Email</h4>
                                     <a href="#gmail" class="text-slate-700 hover:text-slate-900">
-                                        {!! config('content.contact.email') !!}
+                                        {!! data_get($contactContent, 'email') !!}
                                     </a>
                                 </div>
                             </div>
-                            {{-- <div class="flex items-center gap-4">
+                            <div class="flex items-center gap-4">
                                 <div
                                     class="w-12 h-12 bg-cyan-500 rounded-full flex items-center justify-center shrink-0">
                                     <i class="fas fa-clock text-white"></i>
@@ -432,17 +439,25 @@
                                 <div>
                                     <h4 class="font-semibold text-gray-900 mb-1">Office Hours</h4>
                                     <p class="text-gray-600">
-                                        {!! config('content.contact.office_hours') !!}
+                                        {!! data_get($contactContent, 'office_hours') !!}
                                     </p>
                                 </div>
-                            </div> --}}
+                            </div>
                         </div>
                     </div>
 
                     <!-- Map Placeholder -->
-                    <div class="bg-gray-200 rounded-3xl h-64 flex items-center justify-center">
-                        <p class="text-gray-500">Map Location</p>
-                    </div>
+                    @if (filled(data_get($contactContent, 'map_embed')))
+                        <div class="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
+                            <iframe src="{{ data_get($contactContent, 'map_embed') }}" class="h-64 w-full"
+                                style="border:0;" allowfullscreen loading="lazy"
+                                referrerpolicy="no-referrer-when-downgrade"></iframe>
+                        </div>
+                    @else
+                        <div class="bg-gray-200 rounded-3xl h-64 flex items-center justify-center">
+                            <p class="text-gray-500">Map Location</p>
+                        </div>
+                    @endif
                 </div>
             </div>
         </div>

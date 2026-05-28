@@ -207,127 +207,66 @@
                                 $memberId = $member->personalData?->memberId;
                             @endphp
 
-                            <div class="grid grid-cols-1 gap-4">
-                                {{-- National ID --}}
-                                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                                    <div class="flex-1">
-                                        <span class="text-sm font-medium text-gray-600">National ID:</span>
-                                        <p class="text-gray-800 font-mono font-medium mt-1">
-                                            @if ($memberId?->national_id)
-                                                @if ($canViewFullId)
-                                                    {{ $memberId->national_id }}
+                            <div class="grid grid-cols-1 gap-3">
+                                @foreach ([
+                                    ['label' => 'National ID (PhilSys)', 'field' => 'national_id', 'photo' => 'national_id_photo'],
+                                    ['label' => 'TIN', 'field' => 'tin', 'photo' => 'tin_photo'],
+                                    ['label' => 'SSS Number', 'field' => 'sss', 'photo' => 'sss_photo'],
+                                    ['label' => 'PhilHealth Number', 'field' => 'philhealth', 'photo' => 'philhealth_photo'],
+                                    ['label' => 'Barangay ID', 'field' => 'barangay_id', 'photo' => 'barangay_id_photo'],
+                                ] as $idRow)
+                                    @php
+                                        $fieldVal = $memberId?->{$idRow['field']};
+                                        $photoVal = $memberId?->{$idRow['photo']};
+                                    @endphp
+                                    <div class="grid grid-cols-2 gap-4 items-center p-4 bg-gray-50 rounded-lg" x-data="{ lightbox: false }">
+                                        {{-- Left: ID number --}}
+                                        <div>
+                                            <span class="text-sm font-medium text-gray-600">{{ $idRow['label'] }}:</span>
+                                            <p class="text-gray-800 font-mono font-medium mt-1">
+                                                @if ($fieldVal)
+                                                    @if ($canViewFullId)
+                                                        {{ $fieldVal }}
+                                                    @else
+                                                        ********{{ substr($fieldVal, -3) }}
+                                                    @endif
                                                 @else
-                                                    ********{{ substr($memberId->national_id, -3) }}
+                                                    <span class="text-gray-400 font-normal">N/A</span>
                                                 @endif
-                                            @else
-                                                N/A
-                                            @endif
-                                        </p>
-                                    </div>
-                                    @if ($canViewFullId && $memberId?->national_id)
-                                        <button
-                                            class="ml-4 px-3 py-1 text-sm bg-cyan-600 text-white rounded hover:bg-cyan-700 transition-colors">
-                                            View ID Picture
-                                        </button>
-                                    @endif
-                                </div>
+                                            </p>
+                                        </div>
 
-                                {{-- TIN --}}
-                                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                                    <div class="flex-1">
-                                        <span class="text-sm font-medium text-gray-600">Tax Identification Number
-                                            (TIN):</span>
-                                        <p class="text-gray-800 font-mono font-medium mt-1">
-                                            @if ($memberId?->tin)
-                                                @if ($canViewFullId)
-                                                    {{ $memberId->tin }}
-                                                @else
-                                                    ********{{ substr($memberId->tin, -3) }}
-                                                @endif
-                                            @else
-                                                N/A
-                                            @endif
-                                        </p>
-                                    </div>
-                                    @if ($canViewFullId && $memberId?->tin)
-                                        <button
-                                            class="ml-4 px-3 py-1 text-sm bg-cyan-600 text-white rounded hover:bg-cyan-700 transition-colors">
-                                            View ID Picture
-                                        </button>
-                                    @endif
-                                </div>
+                                        {{-- Right: ID photo thumbnail + lightbox --}}
+                                        <div class="flex items-center justify-end">
+                                            @if ($canViewFullId && $photoVal)
+                                                <div>
+                                                    <img src="{{ Storage::url($photoVal) }}"
+                                                        alt="{{ $idRow['label'] }} photo"
+                                                        @click="lightbox = true"
+                                                        class="h-14 w-24 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity shadow-sm">
 
-                                {{-- SSS --}}
-                                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                                    <div class="flex-1">
-                                        <span class="text-sm font-medium text-gray-600">SSS Number:</span>
-                                        <p class="text-gray-800 font-mono font-medium mt-1">
-                                            @if ($memberId?->sss)
-                                                @if ($canViewFullId)
-                                                    {{ $memberId->sss }}
-                                                @else
-                                                    ********{{ substr($memberId->sss, -3) }}
-                                                @endif
-                                            @else
-                                                N/A
+                                                    {{-- Lightbox --}}
+                                                    <div x-show="lightbox" x-cloak @click="lightbox = false"
+                                                        class="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4"
+                                                        x-transition>
+                                                        <img src="{{ Storage::url($photoVal) }}"
+                                                            alt="{{ $idRow['label'] }} photo full"
+                                                            class="max-w-full max-h-full rounded-lg shadow-2xl"
+                                                            @click.stop>
+                                                        <button @click="lightbox = false"
+                                                            class="absolute top-4 right-4 text-white/80 hover:text-white text-2xl">
+                                                            <i class="fas fa-times"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            @elseif ($canViewFullId)
+                                                <div class="h-14 w-24 rounded-lg bg-gray-100 border border-dashed border-gray-300 flex items-center justify-center">
+                                                    <i class="fas fa-id-card text-gray-300 text-xl"></i>
+                                                </div>
                                             @endif
-                                        </p>
+                                        </div>
                                     </div>
-                                    @if ($canViewFullId && $memberId?->sss)
-                                        <button
-                                            class="ml-4 px-3 py-1 text-sm bg-cyan-600 text-white rounded hover:bg-cyan-700 transition-colors">
-                                            View ID Picture
-                                        </button>
-                                    @endif
-                                </div>
-
-                                {{-- PhilHealth --}}
-                                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                                    <div class="flex-1">
-                                        <span class="text-sm font-medium text-gray-600">PhilHealth Number:</span>
-                                        <p class="text-gray-800 font-mono font-medium mt-1">
-                                            @if ($memberId?->philhealth)
-                                                @if ($canViewFullId)
-                                                    {{ $memberId->philhealth }}
-                                                @else
-                                                    ********{{ substr($memberId->philhealth, -3) }}
-                                                @endif
-                                            @else
-                                                N/A
-                                            @endif
-                                        </p>
-                                    </div>
-                                    @if ($canViewFullId && $memberId?->philhealth)
-                                        <button
-                                            class="ml-4 px-3 py-1 text-sm bg-cyan-600 text-white rounded hover:bg-cyan-700 transition-colors">
-                                            View ID Picture
-                                        </button>
-                                    @endif
-                                </div>
-
-                                {{-- Barangay ID --}}
-                                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                                    <div class="flex-1">
-                                        <span class="text-sm font-medium text-gray-600">Barangay ID:</span>
-                                        <p class="text-gray-800 font-mono font-medium mt-1">
-                                            @if ($memberId?->barangay_id)
-                                                @if ($canViewFullId)
-                                                    {{ $memberId->barangay_id }}
-                                                @else
-                                                    ********{{ substr($memberId->barangay_id, -3) }}
-                                                @endif
-                                            @else
-                                                N/A
-                                            @endif
-                                        </p>
-                                    </div>
-                                    @if ($canViewFullId && $memberId?->barangay_id)
-                                        <button
-                                            class="ml-4 px-3 py-1 text-sm bg-cyan-600 text-white rounded hover:bg-cyan-700 transition-colors">
-                                            View ID Picture
-                                        </button>
-                                    @endif
-                                </div>
+                                @endforeach
                             </div>
                         </div>
 
@@ -378,7 +317,7 @@
                             @php
                                 $savingsAccount = $member->accounts?->where('account_type', 'savings')->first();
                                 $shareCapitalAccount = $member->accounts
-                                    ?->where('account_type', 'share_capital')
+                                    ?->where('account_type', 'share-capital')
                                     ->first();
                             @endphp
 
@@ -591,13 +530,158 @@
 
                 {{-- Documents Tab --}}
                 @if ($activeTab === 'documents')
-                    <div class="text-center py-12">
-                        <svg class="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor"
-                            viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        <p class="text-gray-600">Document management coming soon</p>
+                    @php $docMemberId = $member->personalData?->memberId; @endphp
+                    <div class="space-y-6">
+                        {{-- Profile Photo --}}
+                        <div>
+                            <h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">Profile Photo</h4>
+                            @if ($member->personalData?->profile_picture)
+                                <div class="flex items-center gap-4">
+                                    <img src="{{ Storage::url($member->personalData->profile_picture) }}"
+                                        alt="Profile photo"
+                                        class="w-32 h-32 rounded-full object-cover border-2 border-gray-200 shadow-sm">
+                                    <div>
+                                        <p class="text-sm text-gray-600">Profile photo on file</p>
+                                        <a href="{{ Storage::url($member->personalData->profile_picture) }}" target="_blank"
+                                            class="mt-2 inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800">
+                                            <i class="fas fa-external-link-alt text-xs"></i> View full size
+                                        </a>
+                                    </div>
+                                </div>
+                            @else
+                                <div class="flex items-center gap-3 text-gray-400 py-4">
+                                    <div class="w-16 h-16 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center">
+                                        <i class="fas fa-user text-2xl"></i>
+                                    </div>
+                                    <p class="text-sm">No profile photo uploaded</p>
+                                </div>
+                            @endif
+                        </div>
+
+                        {{-- Government ID Photos --}}
+                        <div>
+                            <h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">Government ID Photos</h4>
+                            @php
+                                $idPhotoRows = [
+                                    ['label' => 'National ID (PhilSys)', 'photo' => $docMemberId?->national_id_photo],
+                                    ['label' => 'TIN', 'photo' => $docMemberId?->tin_photo],
+                                    ['label' => 'SSS', 'photo' => $docMemberId?->sss_photo],
+                                    ['label' => 'PhilHealth', 'photo' => $docMemberId?->philhealth_photo],
+                                    ['label' => 'Barangay ID', 'photo' => $docMemberId?->barangay_id_photo],
+                                ];
+                                $hasAnyIdPhoto = collect($idPhotoRows)->contains(fn($r) => !empty($r['photo']));
+                            @endphp
+                            @if ($hasAnyIdPhoto)
+                                <div class="grid grid-cols-1 gap-3">
+                                    @foreach ($idPhotoRows as $row)
+                                        @if ($row['photo'])
+                                            <div class="grid grid-cols-2 gap-4 items-center p-3 bg-gray-50 rounded-lg" x-data="{ lightbox: false }">
+                                                <p class="text-sm font-medium text-gray-700">{{ $row['label'] }}</p>
+                                                <div class="flex items-center gap-3">
+                                                    <img src="{{ Storage::url($row['photo']) }}"
+                                                        alt="{{ $row['label'] }} photo"
+                                                        @click="lightbox = true"
+                                                        class="h-14 w-24 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity shadow-sm">
+                                                    <a href="{{ Storage::url($row['photo']) }}" target="_blank"
+                                                        class="text-xs text-blue-600 hover:text-blue-800">
+                                                        <i class="fas fa-external-link-alt"></i>
+                                                    </a>
+
+                                                    {{-- Lightbox --}}
+                                                    <div x-show="lightbox" x-cloak @click="lightbox = false"
+                                                        class="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4"
+                                                        x-transition>
+                                                        <img src="{{ Storage::url($row['photo']) }}"
+                                                            alt="{{ $row['label'] }} photo full"
+                                                            class="max-w-full max-h-full rounded-lg shadow-2xl"
+                                                            @click.stop>
+                                                        <button @click="lightbox = false"
+                                                            class="absolute top-4 right-4 text-white/80 hover:text-white text-2xl">
+                                                            <i class="fas fa-times"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        @endif
+                                    @endforeach
+                                </div>
+                            @else
+                                <div class="flex items-center gap-3 text-gray-400 py-4">
+                                    <div class="w-20 h-14 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center">
+                                        <i class="fas fa-id-card text-2xl"></i>
+                                    </div>
+                                    <p class="text-sm">No ID photos uploaded</p>
+                                </div>
+                            @endif
+                        </div>
+
+                        {{-- Other Member Documents --}}
+                        <div>
+                            <h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">Other Member Documents</h4>
+                            @php
+                                $otherDocuments = [
+                                    ['label' => 'Proof of Registration', 'path' => $docMemberId?->proof_of_registration_path],
+                                    ['label' => 'Other Supporting Document', 'path' => $docMemberId?->other_document_path],
+                                ];
+                                $hasOtherDocuments = collect($otherDocuments)->contains(fn($document) => !empty($document['path']));
+                            @endphp
+                            @if ($hasOtherDocuments)
+                                <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                                    @foreach ($otherDocuments as $document)
+                                        @if ($document['path'])
+                                            @php
+                                                $isImage = \Illuminate\Support\Str::endsWith(strtolower($document['path']), ['.jpg', '.jpeg', '.png', '.gif', '.webp']);
+                                            @endphp
+                                            <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm" x-data="{ lightbox: false }">
+                                                <div class="flex items-start gap-4">
+                                                    @if ($isImage)
+                                                        <img src="{{ Storage::url($document['path']) }}" alt="{{ $document['label'] }}"
+                                                            @click="lightbox = true"
+                                                            class="h-20 w-20 rounded-lg object-cover border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity">
+                                                    @else
+                                                        <div class="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border border-red-100 bg-red-50 text-red-500">
+                                                            <svg class="h-8 w-8" fill="currentColor" viewBox="0 0 24 24">
+                                                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 1.5L18.5 9H13V3.5zM6 20V4h5v7h7v9H6z" />
+                                                            </svg>
+                                                        </div>
+                                                    @endif
+
+                                                    <div class="min-w-0 flex-1">
+                                                        <p class="text-sm font-medium text-gray-800">{{ $document['label'] }}</p>
+                                                        <p class="mt-1 truncate text-xs text-gray-500">{{ basename($document['path']) }}</p>
+                                                        <a href="{{ Storage::url($document['path']) }}" target="_blank"
+                                                            class="mt-3 inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800">
+                                                            <i class="fas fa-external-link-alt text-xs"></i>
+                                                            Open document
+                                                        </a>
+                                                    </div>
+                                                </div>
+
+                                                @if ($isImage)
+                                                    <div x-show="lightbox" x-cloak @click="lightbox = false"
+                                                        class="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4"
+                                                        x-transition>
+                                                        <img src="{{ Storage::url($document['path']) }}" alt="{{ $document['label'] }} full"
+                                                            class="max-w-full max-h-full rounded-lg shadow-2xl" @click.stop>
+                                                        <button @click="lightbox = false"
+                                                            class="absolute top-4 right-4 text-white/80 hover:text-white text-2xl">
+                                                            <i class="fas fa-times"></i>
+                                                        </button>
+                                                    </div>
+                                                @endif
+                                            </div>
+                                        @endif
+                                    @endforeach
+                                </div>
+                            @else
+                                <div class="flex items-center gap-3 text-gray-400 py-4">
+                                    <div class="w-20 h-14 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center">
+                                        <i class="fas fa-file-alt text-2xl"></i>
+                                    </div>
+                                    <p class="text-sm">No additional documents uploaded</p>
+                                </div>
+                            @endif
+                        </div>
                     </div>
                 @endif
             </div>
@@ -608,7 +692,7 @@
                 <div class="flex items-center">
                     @if (Auth::user()->can('members.update'))
                         <label class="inline-flex items-center cursor-pointer">
-                            <input type="checkbox" wire:model.live="member.special_loan_eligible"
+                            <input type="checkbox" @checked($member->special_loan_eligible)
                                 wire:change="toggleSpecialLoanEligibility('{{ $member->id }}')"
                                 class="sr-only peer">
                             <div

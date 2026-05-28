@@ -114,7 +114,7 @@
                                         </td>
                                         <td class="p-4 text-base font-normal text-gray-900 whitespace-nowrap">
                                             <span
-                                                class="bg-purple-100 text-purple-800 text-xs font-medium px-2.5 py-0.5 rounded">{{ ucfirst($officer->role) }}</span>
+                                                class="bg-purple-100 text-purple-800 text-xs font-medium px-2.5 py-0.5 rounded">{{ ucfirst($officer->primary_role) }}</span>
                                         </td>
                                         <td class="p-4 text-base font-normal text-gray-900 whitespace-nowrap">
                                             @if (($officer->account_status ?? 'active') === 'active')
@@ -171,7 +171,8 @@
         {{-- Edit/Add Officer Modal --}}
         @if ($showEditModal)
             <x-modals.officer-form wire:key="officer-form-{{ $modalKey }}" :officer="$isEdit && $selectedOfficer ? $selectedOfficer : null" :isEdit="$isEdit"
-                :tabErrors="$tabErrors" />
+                :tabErrors="$tabErrors" :roleKeys="$assignableRoleKeys" :adminRole="$adminRoleKey" :roleDisplayNames="$assignableRoleDisplayNames" :roleDescriptions="$assignableRoleDescriptions"
+                :rolePermissionMap="$assignableRolePermissions" :allGroups="$rolePermissionGroups" />
         @endif
 
         {{-- Delete Confirmation Modal --}}
@@ -235,11 +236,16 @@
             @php
                 $permOfficer = \App\Models\User::with('personalData')->find($selectedOfficerForPermissions);
                 $permName = $permOfficer
-                    ? trim(($permOfficer->personalData?->first_name ?? '') . ' ' . ($permOfficer->personalData?->last_name ?? ''))
+                    ? trim(
+                        ($permOfficer->personalData?->first_name ?? '') .
+                            ' ' .
+                            ($permOfficer->personalData?->last_name ?? ''),
+                    )
                     : '';
-                $permName = $permName ?: ($permOfficer?->email ?? 'Officer');
+                $permName = $permName ?: $permOfficer?->email ?? 'Officer';
                 $permRole = $permOfficer
-                    ? (\App\Support\PermissionCatalog::roleDisplayNames()[$permOfficer->role] ?? ucfirst($permOfficer->role))
+                    ? \App\Support\PermissionCatalog::roleDisplayNames()[$permOfficer->primary_role] ??
+                        ucfirst($permOfficer->primary_role)
                     : '';
             @endphp
             <div x-data="{ show: false }" x-init="setTimeout(() => show = true, 10)" x-show="show"
@@ -255,8 +261,7 @@
                 {{-- Modal content --}}
                 <div class="relative z-10 mx-auto my-6 w-full max-w-4xl"
                     x-transition:enter="transition ease-out duration-200 delay-75"
-                    x-transition:enter-start="opacity-0 scale-95"
-                    x-transition:enter-end="opacity-100 scale-100">
+                    x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100">
                     <div class="relative flex max-h-[90vh] flex-col rounded-xl bg-white shadow-2xl">
                         {{-- Modal header --}}
                         <div
@@ -288,8 +293,7 @@
 
                         {{-- Modal body --}}
                         <div class="flex-1 overflow-y-auto p-6">
-                            <livewire:content.officer-override-manager :officerId="$selectedOfficerForPermissions"
-                                :key="'officer-override-manager-' . $selectedOfficerForPermissions" />
+                            <livewire:content.officer-override-manager :officerId="$selectedOfficerForPermissions" :key="'officer-override-manager-' . $selectedOfficerForPermissions" />
                         </div>
 
                         {{-- Modal footer --}}
@@ -300,14 +304,13 @@
                                 class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-gray-200">
                                 Close
                             </button>
-                            <button type="button"
-                                x-data="{ dirty: false }"
-                                x-on:permission-dirty.window="dirty = $event.detail.dirty"
-                                :disabled="!dirty"
+                            <button type="button" x-data="{ dirty: false }"
+                                x-on:permission-dirty.window="dirty = $event.detail.dirty" :disabled="!dirty"
                                 @click="$wire.dispatchTo('content.officer-override-manager', 'do-save')"
                                 :class="dirty
-                                    ? 'bg-cyan-600 text-white hover:bg-cyan-700 focus:ring-cyan-300 cursor-pointer'
-                                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'"
+                                    ?
+                                    'bg-cyan-600 text-white hover:bg-cyan-700 focus:ring-cyan-300 cursor-pointer' :
+                                    'bg-gray-100 text-gray-400 cursor-not-allowed'"
                                 class="inline-flex items-center gap-1.5 rounded-lg px-5 py-2 text-sm font-semibold transition-colors focus:outline-none focus:ring-4">
                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.5"
                                     viewBox="0 0 24 24">

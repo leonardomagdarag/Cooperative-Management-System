@@ -13,6 +13,11 @@ class Ledger extends Component
 {
     use WithPagination;
 
+    private function ensureCanManageTransactions(): void
+    {
+        abort_unless(Auth::user()?->can('transactions.update'), 403);
+    }
+
     // Search and filters
     public $search = '';
 
@@ -98,6 +103,8 @@ class Ledger extends Component
 
     public function addTransaction()
     {
+        $this->ensureCanManageTransactions();
+
         $this->editForm = [
             'id' => null,
             'transaction_type' => 'deposit',
@@ -114,6 +121,8 @@ class Ledger extends Component
      */
     public function editTransaction($transactionId)
     {
+        $this->ensureCanManageTransactions();
+
         $transaction = Transaction::find($transactionId);
 
         if ($transaction) {
@@ -135,6 +144,8 @@ class Ledger extends Component
      */
     public function saveTransaction()
     {
+        $this->ensureCanManageTransactions();
+
         $rules = [
             'editForm.transaction_type' => 'required|in:deposit,withdrawal,loan_payment,loan_disbursement,fee',
             'editForm.amount' => 'required|numeric|min:0.01',
@@ -175,8 +186,9 @@ class Ledger extends Component
             }
 
             $this->closeEditModal();
-        } catch (\Exception $e) {
-            session()->flash('error', 'An error occurred: ' . $e->getMessage());
+        } catch (\Throwable $e) {
+            report($e);
+            session()->flash('error', 'The action could not be completed. Please try again.');
         }
     }
 
@@ -229,8 +241,7 @@ class Ledger extends Component
      */
     public function render()
     {
-        logger('trying to render...');
-        $canEdit = Auth::user()->can('transactions.update');
+        $canEdit = (bool) Auth::user()?->can('transactions.update');
 
         $query = Transaction::with(['account.user.personalData', 'loan.user.personalData', 'recordedBy']);
 
@@ -279,8 +290,6 @@ class Ledger extends Component
         // Paginate results
         $perPage = 10;
         $transactions = $query->paginate($perPage);
-
-        logger('Successfully rendered with ' . $transactions->total() . ' transactions');
 
         $dailySummary = $this->dailySummary;
 
@@ -404,14 +413,17 @@ class Ledger extends Component
      */
     public function deleteTransaction($transactionId)
     {
+        $this->ensureCanManageTransactions();
+
         try {
             $transaction = Transaction::find($transactionId);
             if ($transaction) {
                 $transaction->delete();
                 session()->flash('message', 'Transaction deleted successfully.');
             }
-        } catch (\Exception $e) {
-            session()->flash('error', 'An error occurred: ' . $e->getMessage());
+        } catch (\Throwable $e) {
+            report($e);
+            session()->flash('error', 'The action could not be completed. Please try again.');
         }
     }
 }

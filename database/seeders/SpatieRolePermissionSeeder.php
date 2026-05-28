@@ -38,6 +38,7 @@ class SpatieRolePermissionSeeder extends Seeder
             // Loans
             'loans.view',
             'loans.create',
+            'loans.encode',
             'loans.update',
             'loans.approve',
             'loans.reject',
@@ -48,6 +49,7 @@ class SpatieRolePermissionSeeder extends Seeder
             'transactions.view-all',
             'transactions.create',
             'transactions.update',
+            'transactions.approve',
             'transactions.void',
             'transactions.export',
 
@@ -82,6 +84,7 @@ class SpatieRolePermissionSeeder extends Seeder
             'logs.export',
 
             // Officer/Staff Management
+            'officers.view',
             'officers.create',
             'officers.update',
             'officers.delete',
@@ -103,17 +106,22 @@ class SpatieRolePermissionSeeder extends Seeder
 
         $allPermissions = Permission::query()->pluck('name')->all();
 
+        User::query()
+            ->where('role', 'treasurer')
+            ->update(['role' => 'accountant']);
+
         // === DEFINE ROLES ===
         $officerPresets = PermissionCatalog::rolePresets();
+        $officerRoleNames = array_merge(['admin'], PermissionCatalog::officerRoles());
         $rolePermissions = [
             // Super admin: all permissions
             'admin' => $allPermissions,
 
             // Officer roles receive their default permissions via Spatie roles.
-            'manager'   => $officerPresets['manager'],
+            'manager' => $officerPresets['manager'],
+            'accountant' => $officerPresets['accountant'],
+            'loan' => $officerPresets['loan'],
             'secretary' => $officerPresets['secretary'],
-            'loan'      => $officerPresets['loan'],
-            'treasurer' => $officerPresets['treasurer'],
             'developer' => [],
 
             // Regular members: limited self-service permissions
@@ -160,79 +168,68 @@ class SpatieRolePermissionSeeder extends Seeder
 
         // === ASSIGN ROLES & PERMISSIONS TO EXISTING USERS ===
 
-        // 1. Assign 'admin' role to users with role='admin'
+        // 1. Keep active members on the member role and outside officer flows.
         User::query()
-            ->where('role', 'admin')
+            ->memberUsers()
             ->chunk(100, function ($users) {
                 foreach ($users as $user) {
                     $user->account_status = 'active';
-                    $user->save();
-                    $user->syncRoles(['admin']);
-                }
-            });
-
-        // 2. Assign 'member' role to users with role='member'
-        User::query()
-            ->where('role', 'member')
-            ->chunk(100, function ($users) {
-                foreach ($users as $user) {
-                    $user->account_status = 'active';
+                    $user->is_officer = false;
                     $user->save();
                     $user->syncRoles(['member']);
                 }
             });
 
-        // 3. Assign route roles to officer personas.
+        // 2. Preserve the developer role for local/dev accounts.
         User::query()
-            ->where(function ($query) {
-                foreach (PermissionCatalog::officerRoles() as $index => $roleName) {
-                    if ($index === 0) {
-                        $query->where('role', $roleName);
-                        continue;
-                    }
-
-                    $query->orWhere('role', $roleName);
-                }
-            })
+            ->where('role', 'developer')
             ->chunk(100, function ($users) {
                 foreach ($users as $user) {
                     $user->account_status = 'active';
+                    $user->is_officer = false;
                     $user->save();
-                    $user->syncRoles([$user->role]);
+                    $user->syncRoles(['developer']);
+                }
+            });
+
+        // 3. Resolve officer identities from their existing Spatie roles first,
+        // falling back to the legacy role column only when bootstrapping old data.
+        User::query()
+            ->with('roles')
+            ->officerUsers()
+            ->chunk(100, function ($users) use ($officerRoleNames) {
+                foreach ($users as $user) {
+                    $resolvedRole = $user->getRoleNames()->first();
+
+                    if (! is_string($resolvedRole) || ! in_array($resolvedRole, $officerRoleNames, true)) {
+                        $legacyRole = $user->getRawOriginal('role');
+                        $resolvedRole = is_string($legacyRole) && in_array($legacyRole, $officerRoleNames, true)
+                            ? $legacyRole
+                            : null;
+                    }
+
+                    if (! is_string($resolvedRole) || $resolvedRole === '') {
+                        continue;
+                    }
+
+                    $user->account_status = 'active';
+                    $user->is_officer = true;
+                    $user->save();
+                    $user->syncRoles([$resolvedRole]);
+                    $user->syncPermissions([]);
                 }
             });
 
         // 4. Keep lifecycle status users out of active routes.
         User::query()
             ->where('role', 'terminated')
-            ->update(['account_status' => 'terminated']);
+            ->update(['account_status' => 'terminated', 'is_officer' => false]);
 
         User::query()
             ->where('role', 'inactive')
-            ->update(['account_status' => 'inactive']);
+            ->update(['account_status' => 'inactive', 'is_officer' => false]);
 
-        // === CLEAR DIRECT USER PERMISSIONS FOR OFFICERS ===
-        // Permissions are now role-based. Remove any individually assigned
-        // permissions from officer users so only role grants apply.
-        // Per-officer exceptions use the officer_permission_overrides table.
-        User::query()
-            ->where(function ($query) {
-                foreach (PermissionCatalog::officerRoles() as $index => $roleName) {
-                    if ($index === 0) {
-                        $query->where('role', $roleName);
-                        continue;
-                    }
-
-                    $query->orWhere('role', $roleName);
-                }
-            })
-            ->chunk(100, function ($users) {
-                foreach ($users as $user) {
-                    $user->is_officer = true;
-                    $user->save();
-                    $user->syncPermissions([]);
-                }
-            });
+        Role::query()->where('name', 'treasurer')->delete();
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
     }

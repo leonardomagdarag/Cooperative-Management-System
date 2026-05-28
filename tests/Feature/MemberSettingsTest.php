@@ -1,7 +1,10 @@
 <?php
 
 use App\Livewire\Content\Settings;
+use App\Models\TrustedDevice;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
 use function Pest\Laravel\actingAs;
@@ -68,4 +71,61 @@ test('member profile settings can update their contact and personal data', funct
         ->and($user->personalData->first_name)->toBe('Updated')
         ->and($user->personalData->last_name)->toBe('Member')
         ->and($user->personalData->contact->phone_no)->toBe('09171234567');
+});
+
+test('member password change invalidates other active sessions and trusted devices', function () {
+    $user = auth()->user();
+    $currentSessionId = 'member-current-session';
+    $otherSessionId = 'member-other-session';
+    $originalRememberToken = (string) $user->remember_token;
+
+    session()->setId($currentSessionId);
+    session()->start();
+
+    DB::table('sessions')->insert([
+        [
+            'id' => $currentSessionId,
+            'user_id' => $user->id,
+            'ip_address' => '127.0.0.1',
+            'user_agent' => 'Current session',
+            'payload' => '',
+            'last_activity' => now()->timestamp,
+        ],
+        [
+            'id' => $otherSessionId,
+            'user_id' => $user->id,
+            'ip_address' => '127.0.0.2',
+            'user_agent' => 'Other session',
+            'payload' => '',
+            'last_activity' => now()->timestamp,
+        ],
+    ]);
+
+    $trustedDevice = TrustedDevice::query()->create([
+        'user_id' => $user->id,
+        'fingerprint' => 'member-device-fingerprint',
+        'device_label' => 'Member browser',
+        'last_ip_address' => '127.0.0.2',
+        'user_agent' => 'Other session browser',
+        'trusted_until' => now()->addDays(30),
+        'last_used_at' => now(),
+        'is_active' => true,
+    ]);
+
+    Livewire::test(Settings::class)
+        ->set('passwordForm.current_password', 'password')
+        ->set('passwordForm.password', 'new-strong-password')
+        ->set('passwordForm.password_confirmation', 'new-strong-password')
+        ->call('changePassword')
+        ->assertHasNoErrors();
+
+    $user->refresh();
+    $trustedDevice->refresh();
+
+    expect(Hash::check('new-strong-password', $user->password))->toBeTrue()
+        ->and($user->remember_token)->not->toBe($originalRememberToken)
+        ->and(DB::table('sessions')->where('id', $otherSessionId)->exists())->toBeFalse()
+        ->and(DB::table('sessions')->where('user_id', $user->id)->count())->toBeLessThanOrEqual(1)
+        ->and(auth()->id())->toBe($user->id)
+        ->and($trustedDevice->is_active)->toBeFalse();
 });

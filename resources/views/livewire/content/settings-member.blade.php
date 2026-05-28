@@ -19,25 +19,6 @@
             </p>
         </div>
 
-        <div class="px-6 py-5 bg-white">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="rounded-xl border border-emerald-100 bg-emerald-50/70 p-4">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-emerald-600">Profile</p>
-                    <p class="mt-2 text-sm text-gray-700">Update your contact details, address, and personal
-                        information.</p>
-                </div>
-                <div class="rounded-xl border border-cyan-100 bg-cyan-50/70 p-4">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-cyan-600">Privacy</p>
-                    <p class="mt-2 text-sm text-gray-700">See who can access your data and what the cooperative does
-                        with it.</p>
-                </div>
-                <div class="rounded-xl border border-amber-100 bg-amber-50/70 p-4">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-amber-600">Security</p>
-                    <p class="mt-2 text-sm text-gray-700">Change your password, review trusted devices, or close your
-                        account.</p>
-                </div>
-            </div>
-        </div>
     </div>
 
     <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
@@ -119,15 +100,7 @@
                                 @endforeach
                             </div>
 
-                            <div
-                                class="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4 text-sm text-gray-700">
-                                <p class="font-semibold text-emerald-700">What updates here?</p>
-                                <ul class="mt-3 space-y-2 text-sm leading-6">
-                                    <li>• Your basic identity and contact details.</li>
-                                    <li>• The address and phone numbers the cooperative can use to reach you.</li>
-                                    <li>• The login email tied to your account.</li>
-                                </ul>
-                            </div>
+                            
                         </div>
                     </div>
 

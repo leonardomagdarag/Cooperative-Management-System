@@ -36,7 +36,7 @@ class Overview extends Component
 
         // Get savings and share capital accounts
         $this->savingsAccount = $member->accounts?->where('account_type', 'savings')->first();
-        $this->shareCapitalAccount = $member->accounts?->where('account_type', 'share_capital')->first();
+        $this->shareCapitalAccount = $member->accounts?->where('account_type', 'share-capital')->first();
 
         // Calculate totals
         $this->totalSavings = $this->savingsAccount?->balance ?? 0;

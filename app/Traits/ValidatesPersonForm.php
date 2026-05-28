@@ -2,6 +2,8 @@
 
 namespace App\Traits;
 
+use App\Support\PersonPasswordPolicy;
+
 /**
  * Shared person-form validation helpers used by Members and Officers components.
  *
@@ -11,6 +13,28 @@ namespace App\Traits;
  */
 trait ValidatesPersonForm
 {
+    protected function getPersonNameTokens(): array
+    {
+        return PersonPasswordPolicy::normalizedNameTokens([
+            $this->form['first_name'] ?? '',
+            $this->form['mid_name'] ?? '',
+            $this->form['last_name'] ?? '',
+        ]);
+    }
+
+    protected function passwordLooksTooPredictable(string $password): bool
+    {
+        return PersonPasswordPolicy::looksPredictable($password, $this->getPersonNameTokens());
+    }
+
+    protected function getPasswordValidationRules(): array
+    {
+        return [
+            'form.password' => PersonPasswordPolicy::passwordRules($this->isEdit, $this->getPersonNameTokens()),
+            'form.password_confirmation' => PersonPasswordPolicy::confirmationRules($this->isEdit),
+        ];
+    }
+
     /**
      * Centralized validation messages for all person-form fields.
      * Covers the superset of both Members and Officers fields; unused keys are harmless.
@@ -43,12 +67,12 @@ trait ValidatesPersonForm
             'form.role.required'       => 'System role is required.',
             // Password
             'form.password.required'              => 'Password is required.',
-            'form.password.min'                   => 'Password must be at least 6 characters.',
+            'form.password.min'                   => 'Password must be at least ' . PersonPasswordPolicy::MIN_LENGTH . ' characters.',
             'form.password.regex'                 => 'Password must include both letters and numbers.',
-            'form.password.confirmed'             => 'Password confirmation does not match.',
-            'form.password_confirmation.required' => 'Please confirm your password.',
+            'form.password.confirmed'             => PersonPasswordPolicy::confirmationMismatchMessage(),
+            'form.password_confirmation.required' => PersonPasswordPolicy::confirmationRequiredMessage(),
             'form.password_confirmation.required_with' => 'Please confirm your password.',
-            'form.password_confirmation.same'     => 'Password confirmation does not match.',
+            'form.password_confirmation.same'     => PersonPasswordPolicy::confirmationMismatchMessage(),
             'form.current_password.required'      => 'Current password is required.',
             'form.current_password.current_password' => 'The current password is incorrect.',
         ];

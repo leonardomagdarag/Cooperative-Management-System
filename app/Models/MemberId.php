@@ -10,10 +10,18 @@ class MemberId extends Model
     use HasFactory;
 
     protected $fillable = [
+        'national_id',
+        'national_id_photo',
         'tin',
+        'tin_photo',
         'sss',
+        'sss_photo',
         'philhealth',
-        'barangay_id'
+        'philhealth_photo',
+        'barangay_id',
+        'barangay_id_photo',
+        'proof_of_registration_path',
+        'other_document_path',
     ];
 
     // Relationships

@@ -124,24 +124,8 @@ class History extends Component
 
         $transactions = $query->paginate(15);
 
-        // Calculate summary statistics
-        $totalDeposits = Transaction::whereIn('account_id', $userAccounts)
-            ->where('transaction_type', 'deposit')
-            ->sum('amount');
-        
-        $totalWithdrawals = Transaction::whereIn('account_id', $userAccounts)
-            ->where('transaction_type', 'withdrawal')
-            ->sum('amount');
-        
-        $totalLoanPayments = Transaction::whereIn('account_id', $userAccounts)
-            ->where('transaction_type', 'loan_payment')
-            ->sum('amount');
-
         return view('livewire.content.history', [
             'transactions' => $transactions,
-            'totalDeposits' => $totalDeposits,
-            'totalWithdrawals' => $totalWithdrawals,
-            'totalLoanPayments' => $totalLoanPayments,
         ]);
     }
 }

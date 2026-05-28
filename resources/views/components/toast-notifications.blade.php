@@ -1,16 +1,54 @@
 {{-- Toast Notifications Component --}}
+<template x-teleport="body">
 <div x-data="{
     toasts: [],
     add(message, type = 'success') {
-        const id = Date.now();
+        if (! message) {
+            return;
+        }
+
+        const id = Date.now() + Math.random();
         this.toasts.push({ id, message, type });
         setTimeout(() => this.remove(id), 3000);
+    },
+    normalize(payload, fallbackType = 'success') {
+        const detail = payload?.detail ?? payload ?? {};
+        const normalized = Array.isArray(detail)
+            ? (detail[0] ?? {})
+            : (typeof detail === 'object' && detail !== null && Object.prototype.hasOwnProperty.call(detail, 0)
+                ? (detail[0] ?? {})
+                : detail);
+        const message = typeof normalized === 'string' ? normalized : normalized.message;
+        const type = typeof normalized === 'object' && normalized !== null ? (normalized.type ?? fallbackType) : fallbackType;
+
+        if (! message) {
+            return null;
+        }
+
+        return {
+            message,
+            type,
+        };
+    },
+    addFromPayload(payload, fallbackType = 'success') {
+        const toast = this.normalize(payload, fallbackType);
+
+        if (! toast) {
+            return;
+        }
+
+        this.add(toast.message, toast.type);
     },
     remove(id) {
         this.toasts = this.toasts.filter(toast => toast.id !== id);
     }
-}" x-on:toast.window="add($event.detail.message, $event.detail.type)"
-    class="fixed top-4 right-4 z-50 space-y-2">
+}" x-on:toast.window="addFromPayload($event.detail)"
+    x-on:success.window="addFromPayload($event.detail, 'success')"
+    x-on:error.window="addFromPayload($event.detail, 'error')"
+    x-on:warning.window="addFromPayload($event.detail, 'warning')"
+    x-on:info.window="addFromPayload($event.detail, 'info')"
+    class="fixed top-4 right-4 space-y-2 pointer-events-none"
+    style="z-index: 2147483647;">
     <template x-for="toast in toasts" :key="toast.id">
         <div x-show="true" x-transition:enter="transition ease-out duration-300"
             x-transition:enter-start="opacity-0 transform translate-x-full"
@@ -18,7 +56,7 @@
             x-transition:leave="transition ease-in duration-200"
             x-transition:leave-start="opacity-100 transform translate-x-0"
             x-transition:leave-end="opacity-0 transform translate-x-full" @click="remove(toast.id)"
-            class="flex items-center gap-3 min-w-[320px] max-w-md p-4 rounded-lg shadow-lg cursor-pointer backdrop-blur-sm"
+            class="pointer-events-auto flex items-center gap-3 min-w-[320px] max-w-md p-4 rounded-lg shadow-lg cursor-pointer backdrop-blur-sm"
             :class="{
                 'bg-gradient-to-r from-emerald-500/90 to-cyan-500/90 text-white': toast.type === 'success',
                 'bg-gradient-to-r from-red-500/90 to-pink-500/90 text-white': toast.type === 'error',
@@ -68,6 +106,7 @@
         </div>
     </template>
 </div>
+</template>
 
 {{-- Helper script to trigger toasts from Livewire --}}
 @script
@@ -106,11 +145,6 @@
                 }));
             }
         };
-
-        // Listen for Livewire flash messages
-        Livewire.on('toast', (event) => {
-            window.toast[event.type || 'success'](event.message);
-        });
 
         // Detect session expiry / auth failures on any Livewire request
         Livewire.hook('request', ({

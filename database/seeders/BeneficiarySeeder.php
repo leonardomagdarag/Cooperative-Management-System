@@ -10,8 +10,8 @@ class BeneficiarySeeder extends Seeder
 {
     public function run(): void
     {
-        // Get all users with role 'member'
-        $members = User::where('role', 'member')->get();
+        // Get all member users from the shared role scope.
+        $members = User::query()->memberUsers()->get();
 
         // Create 1-3 beneficiaries for 60% of members
         foreach ($members->random(min(15, $members->count())) as $member) {

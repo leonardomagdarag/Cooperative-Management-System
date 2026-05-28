@@ -84,6 +84,15 @@
                                             </span>
                                         </div>
                                     @endif
+                                    @if ($transaction->transaction_type === 'deposit' && $transaction->proof_of_payment_path)
+                                        <div class="col-span-2">
+                                            <span class="text-gray-600">Proof of Payment:</span>
+                                            <a href="{{ \Illuminate\Support\Facades\Storage::url($transaction->proof_of_payment_path) }}" target="_blank"
+                                                class="ml-2 inline-flex items-center text-sm font-semibold text-blue-600 hover:text-blue-700">
+                                                View uploaded proof
+                                            </a>
+                                        </div>
+                                    @endif
                                     @if ($transaction->note)
                                         <div class="col-span-2">
                                             <span class="text-gray-600">Note:</span>
