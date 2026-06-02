@@ -641,14 +641,6 @@ class Members extends Component
      */
     public function editMember($userId)
     {
-        Log::info('=== EDIT MEMBER CALLED ===', [
-            'userId' => $userId,
-            'currentIsEdit' => $this->isEdit,
-            'currentEditingMemberId' => $this->editingMemberId,
-            'currentShowEditModal' => $this->showEditModal,
-            'formHasData' => ! empty($this->form),
-        ]);
-
         $this->resetValidation();
         $this->closeExportModal();
         $this->isEdit = true;
@@ -734,14 +726,6 @@ class Members extends Component
         $this->philhealthPhoto = null;
         $this->barangayIdPhoto = null;
         $this->showEditModal = true;
-
-        Log::info('=== EDIT MEMBER FORM POPULATED ===', [
-            'formId' => $this->form['id'] ?? 'no-id',
-            'formFirstName' => $this->form['first_name'] ?? 'no-name',
-            'showEditModal' => $this->showEditModal,
-            'isEdit' => $this->isEdit,
-            'editingMemberId' => $this->editingMemberId,
-        ]);
     }
 
     /**
@@ -750,17 +734,6 @@ class Members extends Component
     public function saveMember()
     {
         $this->form['email'] = User::normalizeEmail($this->form['email'] ?? null);
-
-        Log::info('=== SAVE MEMBER CALLED ===', [
-            'isEdit' => $this->isEdit,
-            'editingMemberId' => $this->editingMemberId,
-            'formId' => $this->form['id'] ?? 'no-id',
-            'formFirstName' => $this->form['first_name'] ?? 'no-name',
-            'formLastName' => $this->form['last_name'] ?? 'no-name',
-            'formEmail' => $this->form['email'] ?? 'no-email',
-            'showEditModal' => $this->showEditModal,
-            'formKeys' => array_keys($this->form),
-        ]);
 
         // Get validation rules and add beneficiaries rules
         $rules = $this->getValidationRules();
@@ -783,11 +756,6 @@ class Members extends Component
 
         $this->validate($rules, $this->getCustomMessages());
         $this->updateTabErrors();
-
-        Log::info('=== VALIDATION PASSED ===', [
-            'isEdit' => $this->isEdit,
-            'formId' => $this->form['id'] ?? 'no-id',
-        ]);
 
         // Use transaction to ensure all related records are created/updated atomically
         DB::beginTransaction();
@@ -986,11 +954,6 @@ class Members extends Component
                     ]
                 );
 
-                Log::info('=== MEMBER UPDATE COMPLETED ===', [
-                    'memberId' => $member->id,
-                    'email' => $this->form['email'],
-                ]);
-
                 // Dispatch toast notification
                 $this->dispatch('toast', ['message' => 'Member updated successfully!', 'type' => 'success']);
             } else {
@@ -1133,16 +1096,8 @@ class Members extends Component
                     ]
                 );
 
-                // Send welcome email to new member
-                try {
-                    $this->sendWelcomeEmail($user, $this->form['password']);
-                } catch (\Exception $e) {
-                    Log::error('Failed to send welcome email', [
-                        'user_id' => $user->id,
-                        'error' => $e->getMessage(),
-                    ]);
-                    // Continue even if email fails
-                }
+                $welcomeEmailUser = $user;
+                $welcomeEmailPassword = $this->form['password'];
 
                 // Dispatch toast notification
                 $this->dispatch('toast', ['message' => 'Member created successfully!', 'type' => 'success']);
@@ -1150,9 +1105,9 @@ class Members extends Component
 
             DB::commit();
 
-            Log::info('=== DB COMMIT SUCCESSFUL ===', [
-                'memberId' => $this->form['id'] ?? 'new',
-            ]);
+            if (isset($welcomeEmailUser, $welcomeEmailPassword)) {
+                $this->sendWelcomeEmailAfterResponse($welcomeEmailUser, $welcomeEmailPassword);
+            }
 
             $this->dispatch('member-saved');
             $this->closeEditModal();
@@ -1175,13 +1130,6 @@ class Members extends Component
      */
     public function closeEditModal()
     {
-        Log::info('=== CLOSE EDIT MODAL CALLED ===', [
-            'previousShowEditModal' => $this->showEditModal,
-            'previousIsEdit' => $this->isEdit,
-            'previousEditingMemberId' => $this->editingMemberId,
-            'formHadData' => ! empty($this->form),
-        ]);
-
         $this->showEditModal = false;
         $this->form = [];
         $this->isEdit = false;
@@ -1194,13 +1142,6 @@ class Members extends Component
         $this->barangayIdPhoto = null;
         // Keep modalKey as-is to prevent issues with next modal open
         $this->resetValidation();
-
-        Log::info('=== CLOSE EDIT MODAL COMPLETED ===', [
-            'showEditModal' => $this->showEditModal,
-            'isEdit' => $this->isEdit,
-            'editingMemberId' => $this->editingMemberId,
-            'formIsEmpty' => empty($this->form),
-        ]);
     }
 
     /**
@@ -1466,6 +1407,24 @@ class Members extends Component
     /**
      * Send welcome email to new member
      */
+    private function sendWelcomeEmailAfterResponse(User $user, string $plainPassword): void
+    {
+        if (app()->runningUnitTests()) {
+            return;
+        }
+
+        app()->terminating(function () use ($user, $plainPassword) {
+            try {
+                $this->sendWelcomeEmail($user, $plainPassword);
+            } catch (\Exception $e) {
+                Log::error('Failed to send welcome email', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        });
+    }
+
     private function sendWelcomeEmail($user, $plainPassword)
     {
         $mail = new PHPMailer(true);
@@ -1478,6 +1437,7 @@ class Members extends Component
         $mail->Password   = env('MAIL_PASSWORD');
         $mail->SMTPSecure = env('MAIL_ENCRYPTION', 'tls');
         $mail->Port       = env('MAIL_PORT', 587);
+        $mail->Timeout    = (int) env('MAIL_TIMEOUT', 5);
 
         // Recipients
         $mail->setFrom(env('MAIL_FROM_ADDRESS'), env('MAIL_FROM_NAME'));
