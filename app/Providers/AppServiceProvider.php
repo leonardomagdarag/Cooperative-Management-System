@@ -17,7 +17,6 @@ use App\Support\SiteContentCatalog;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\View;
-use Illuminate\Support\Facades\Auth;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -45,10 +44,6 @@ class AppServiceProvider extends ServiceProvider
 
         Gate::define('reports.view', [ReportPolicy::class, 'viewAny']);
         Gate::define('reports.export', [ReportPolicy::class, 'export']);
-
-        View::composer('*', function ($view) {
-            $view->with('authUser', Auth::user());
-        });
 
         View::composer(['public.*', 'components.modals.member-form'], function ($view) {
             $view->with('publicContent', SiteContentCatalog::editorContent());

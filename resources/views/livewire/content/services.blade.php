@@ -102,7 +102,7 @@
         </div>
 
         {{-- Pending Withdrawals Section (Member View) --}}
-        @if (!$isTreasurerMode && $this->pendingWithdrawals->count() > 0)
+        @if (!$isTreasurerMode && $pendingWithdrawals->count() > 0)
             <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-orange-500">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-lg font-bold text-gray-900">
@@ -110,13 +110,13 @@
                         Pending Withdrawal Requests
                     </h3>
                     <span class="px-3 py-1 bg-orange-100 text-orange-800 text-sm font-semibold rounded-full">
-                        {{ $this->pendingWithdrawals->count() }}
-                        {{ $this->pendingWithdrawals->count() === 1 ? 'Request' : 'Requests' }}
+                        {{ $pendingWithdrawals->count() }}
+                        {{ $pendingWithdrawals->count() === 1 ? 'Request' : 'Requests' }}
                     </span>
                 </div>
 
                 <div class="space-y-3">
-                    @foreach ($this->pendingWithdrawals as $withdrawal)
+                    @foreach ($pendingWithdrawals as $withdrawal)
                         <div
                             class="flex items-center justify-between p-4 bg-orange-50 rounded-lg border border-orange-200">
                             <div class="flex-1">

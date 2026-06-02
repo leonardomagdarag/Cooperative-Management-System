@@ -7,6 +7,7 @@ use App\Models\Loan;
 use App\Models\LoanProduct;
 use App\Models\SystemSetting;
 use App\Models\Transaction;
+use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
@@ -2027,16 +2028,21 @@ class Services extends Component
     {
         $currentUser = Auth::user();
 
-        // Get target user based on mode
+        $selectedMember = $this->selectedMemberId
+            ? User::with(['accounts', 'loans', 'personalData'])->find($this->selectedMemberId)
+            : null;
+
         $targetUser = $this->isActingForMember()
-            ? \App\Models\User::find($this->selectedMemberId)
-            : $currentUser;
+            ? $selectedMember
+            : $currentUser?->loadMissing(['accounts', 'loans', 'personalData']);
 
         $hideSelectedMemberFinancials = $this->isLoanOfficerFocusedMode($currentUser);
 
-        $savingsAccount = $targetUser?->accounts()->where('account_type', 'savings')->first();
-        $shareCapitalAccount = $targetUser?->accounts()->where('account_type', 'share-capital')->first();
-        $activeLoans = $targetUser?->loans()->whereIn('loan_status', ['approved', 'active'])->get() ?? collect();
+        $accounts = $targetUser?->accounts ?? collect();
+        $loans = $targetUser?->loans ?? collect();
+        $savingsAccount = $accounts->firstWhere('account_type', 'savings');
+        $shareCapitalAccount = $accounts->firstWhere('account_type', 'share-capital');
+        $activeLoans = $loans->whereIn('loan_status', ['approved', 'active']);
 
         if ($hideSelectedMemberFinancials) {
             $savingsAccount = null;
@@ -2049,35 +2055,45 @@ class Services extends Component
         // For members: only count their own pending requests
         // For approvers/admins: count all pending requests if viewing approval section
         if ($canApproveTransactions) {
-            $pendingRequests = Transaction::whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_payment'])
-                ->where('status', 'pending')
-                ->count();
+            $pendingTransactionsQuery = Transaction::whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_payment'])
+                ->where('status', 'pending');
 
-            // Get all pending transactions for approval view
-            $pendingTransactions = Transaction::with(['account.user.personalData', 'loan'])
-                ->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_payment'])
-                ->where('status', 'pending')
-                ->orderBy('created_at', 'desc')
-                ->get();
+            $pendingRequests = (clone $pendingTransactionsQuery)->count();
+
+            $pendingTransactions = $this->activeService === 'approve'
+                ? $pendingTransactionsQuery
+                    ->with(['account.user.personalData', 'loan'])
+                    ->orderBy('created_at', 'desc')
+                    ->get()
+                : collect();
         } else {
-            $pendingRequests = $targetUser ? Transaction::whereIn('account_id', $targetUser->accounts->pluck('id'))
-                ->whereIn('transaction_type', ['deposit', 'withdrawal'])
-                ->where('status', 'pending')
-                ->count() : 0;
+            $accountIds = $accounts->pluck('id');
+            $pendingRequests = $accountIds->isNotEmpty()
+                ? Transaction::whereIn('account_id', $accountIds)
+                    ->whereIn('transaction_type', ['deposit', 'withdrawal'])
+                    ->where('status', 'pending')
+                    ->count()
+                : 0;
 
             $pendingTransactions = collect();
         }
 
+        $pendingWithdrawals = $accounts->isNotEmpty()
+            ? Transaction::whereIn('account_id', $accounts->pluck('id'))
+                ->where('transaction_type', 'withdrawal')
+                ->where('status', 'pending')
+                ->orderBy('created_at', 'desc')
+                ->get()
+            : collect();
+
         // Get members list for roles that can process services on behalf of members.
         $members = collect();
-        if ($this->canManageMemberServices) {
-            $members = \App\Models\User::query()->memberUsers()
+        if ($this->canManageMemberServices && strlen(trim($this->memberSearch)) >= 2) {
+            $members = User::query()->memberUsers()
                 ->with('personalData')
-                ->when($this->memberSearch, function ($query) {
-                    $query->whereHas('personalData', function ($q) {
-                        $q->where('first_name', 'like', '%' . $this->memberSearch . '%')
-                            ->orWhere('last_name', 'like', '%' . $this->memberSearch . '%');
-                    });
+                ->whereHas('personalData', function ($q) {
+                    $q->where('first_name', 'like', '%' . $this->memberSearch . '%')
+                        ->orWhere('last_name', 'like', '%' . $this->memberSearch . '%');
                 })
                 ->limit(10)
                 ->get();
@@ -2087,16 +2103,20 @@ class Services extends Component
         $reviewableLoans = collect();
         $pendingLoanReviews = 0;
         if ($this->isLoanReviewMode) {
-            $reviewableLoans = Loan::with(['user.personalData', 'reviewer', 'groupMembers.personalData'])
-                ->where('loan_status', 'pending')
+            $reviewableLoansQuery = Loan::where('loan_status', 'pending')
                 ->where(function ($q) {
                     $q->whereNull('review_status')
                         ->orWhereIn('review_status', ['under_review', 'endorsed_for_approval']);
-                })
-                ->orderBy('applied_at', 'asc')
-                ->get();
+                });
 
-            $pendingLoanReviews = $reviewableLoans->count();
+            $pendingLoanReviews = (clone $reviewableLoansQuery)->count();
+
+            $reviewableLoans = $this->activeService === 'loan-review'
+                ? $reviewableLoansQuery
+                    ->with(['user.personalData', 'reviewer', 'groupMembers.personalData'])
+                    ->orderBy('applied_at', 'asc')
+                    ->get()
+                : collect();
         }
 
         return view('livewire.content.services', [
@@ -2105,12 +2125,13 @@ class Services extends Component
             'activeLoans' => $activeLoans,
             'pendingRequests' => $pendingRequests,
             'pendingTransactions'  => $pendingTransactions,
+            'pendingWithdrawals'   => $pendingWithdrawals,
             'members'              => $members,
             'reviewableLoans'      => $reviewableLoans,
             'pendingLoanReviews'   => $pendingLoanReviews,
             'availableServices'    => $this->allowedServicesForCurrentUser($currentUser),
             'hideSelectedMemberFinancials' => $hideSelectedMemberFinancials,
-            'selectedMember'       => $this->selectedMemberId ? \App\Models\User::with('personalData')->find($this->selectedMemberId) : null,
+            'selectedMember'       => $selectedMember,
         ]);
     }
 }
