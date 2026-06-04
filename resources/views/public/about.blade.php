@@ -8,7 +8,7 @@
     <title>About Us - Settlers Credit Cooperative</title>
 </head>
 
-<body class="bg-white">
+<body class="public-page">
     @include('partials.public.topNavbar')
 
     @php
@@ -40,22 +40,19 @@
     @endphp
 
     <!-- Hero Header Section -->
-    <section class="relative pt-32 pb-20 px-4 overflow-hidden bg-gradient-to-b from-slate-900 to-slate-800">
+    <section class="relative overflow-hidden bg-slate-950 px-4 pb-20 pt-32">
         {{-- Subtle grid overlay --}}
         <div
             class="pointer-events-none absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.03%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')] opacity-60">
         </div>
         {{-- Emerald glow --}}
-        <div
-            class="pointer-events-none absolute -top-32 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-emerald-700/20 blur-3xl">
-        </div>
 
-        <div class="relative max-w-4xl mx-auto text-center">
+        <div class="relative mx-auto max-w-4xl text-center">
             <span
                 class="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-1.5 text-sm font-semibold text-emerald-300">
                 <i class="fas fa-leaf text-xs"></i> Our Cooperative Story
             </span>
-            <h1 class="text-4xl md:text-6xl font-bold text-white mb-6 leading-tight tracking-tight">About Us</h1>
+            <h1 class="text-4xl md:text-6xl font-extrabold text-white mb-6 leading-tight tracking-tight">About Us</h1>
             <div class="w-16 h-1 bg-emerald-400 mx-auto rounded-full mb-8"></div>
             <p class="text-lg md:text-xl text-gray-300 leading-relaxed max-w-3xl mx-auto">
                 {!! data_get($aboutContent, 'about1') !!}
@@ -64,15 +61,15 @@
     </section>
 
     <!-- History Section -->
-    <section class="py-20 px-4 bg-white">
-        <div class="max-w-6xl mx-auto">
+    <section class="public-section bg-white">
+        <div class="public-shell">
             <div class="grid md:grid-cols-2 gap-14 items-center">
                 <div>
                     <span
                         class="mb-4 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
                         <i class="fas fa-history text-xs"></i> Our Journey
                     </span>
-                    <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4 leading-tight">Our History</h2>
+                    <h2 class="public-heading text-3xl md:text-5xl mb-4">Our History</h2>
                     <div class="w-12 h-1 bg-emerald-600 rounded-full mb-6"></div>
                     <div class="space-y-5 text-base text-gray-600 leading-relaxed">
                         <p>{!! data_get($aboutContent, 'about2') !!}</p>
@@ -90,8 +87,8 @@
     </section>
 
     <!-- Mission, Vision & Values Section -->
-    <section class="py-20 px-4 bg-slate-900">
-        <div class="max-w-6xl mx-auto">
+    <section class="public-section bg-slate-950">
+        <div class="public-shell">
             <div class="text-center mb-14">
                 <span
                     class="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
@@ -163,8 +160,8 @@
 
     @if ($boardVisible && $boardCards->isNotEmpty())
         <!-- Board of Directors Section -->
-        <section class="py-20 px-4 bg-white">
-            <div class="max-w-6xl mx-auto">
+        <section class="public-section bg-white">
+            <div class="public-shell">
                 <div class="text-center mb-14">
                     <span
                         class="mb-4 inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
@@ -186,7 +183,7 @@
                                 : null;
                         @endphp
                         <article
-                            class="group overflow-hidden rounded-2xl bg-white border border-gray-200 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-emerald-200">
+                            class="group public-card public-card-hover overflow-hidden">
                             <div class="relative">
                                 @if ($imageSrc)
                                     <img src="{{ $imageSrc }}" alt="{{ $member['name'] ?? 'Board member' }}"
@@ -220,8 +217,8 @@
 
     @if ($officersVisible && $officerCards->isNotEmpty())
         <!-- Officers Section -->
-        <section class="py-20 px-4 bg-gray-50">
-            <div class="max-w-6xl mx-auto">
+        <section class="public-section public-section-soft">
+            <div class="public-shell">
                 <div class="text-center mb-14">
                     <span
                         class="mb-4 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
@@ -243,7 +240,7 @@
                                 : null;
                         @endphp
                         <article
-                            class="group overflow-hidden rounded-2xl bg-white border border-gray-200 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-emerald-200">
+                            class="group public-card public-card-hover overflow-hidden">
                             <div class="relative">
                                 @if ($imageSrc)
                                     <img src="{{ $imageSrc }}" alt="{{ $officer['name'] ?? 'Officer' }}"
@@ -276,8 +273,8 @@
     @endif
 
     <!-- Member Statements Section -->
-    <section class="py-20 px-4 bg-white">
-        <div class="max-w-6xl mx-auto">
+    <section class="public-section bg-white">
+        <div class="public-shell">
             <div class="text-center mb-14">
                 <span
                     class="mb-4 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
@@ -291,7 +288,7 @@
             <div class="grid md:grid-cols-3 gap-6">
                 @foreach ($statementCards as $statement)
                     <div
-                        class="relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 p-8 shadow-sm transition-all hover:shadow-md">
+                        class="public-card public-card-hover relative overflow-hidden p-8">
                         <div
                             class="absolute -top-3 -left-3 text-[7rem] leading-none font-serif font-bold text-emerald-100 select-none pointer-events-none">
                             &ldquo;</div>
@@ -320,7 +317,7 @@
 
     <!-- CTA Section -->
     <section
-        class="py-20 px-4 bg-gradient-to-br from-emerald-700 via-emerald-600 to-cyan-700 relative overflow-hidden">
+        class="public-section px-4 bg-emerald-800 relative overflow-hidden">
         <div
             class="pointer-events-none absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.05%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')]">
         </div>
@@ -331,11 +328,11 @@
             </p>
             <div class="flex flex-col sm:flex-row gap-4 justify-center">
                 <a href="{{ route('home_page') }}#Contact"
-                    class="inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-white text-emerald-700 font-semibold rounded-xl shadow-md hover:shadow-xl hover:-translate-y-0.5 transition-all">
+                    class="public-btn bg-white text-emerald-700 shadow-md hover:bg-emerald-50">
                     <i class="fas fa-envelope text-sm"></i> Contact Us
                 </a>
                 <a href="{{ route('login') }}"
-                    class="inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-transparent border-2 border-white/70 text-white font-semibold rounded-xl hover:bg-white/10 hover:border-white hover:-translate-y-0.5 transition-all">
+                    class="public-btn public-btn-secondary">
                     <i class="fas fa-sign-in-alt text-sm"></i> Member Login
                 </a>
             </div>

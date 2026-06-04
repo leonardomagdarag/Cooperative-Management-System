@@ -8,9 +8,13 @@
     <title>Verify Login - Settlers Credit Cooperative</title>
 </head>
 
-<body class="bg-gray-50 min-h-screen flex items-center justify-center p-6">
-    <div class="w-full max-w-md bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
-        <h1 class="text-2xl font-bold text-slate-800 mb-2">Security Verification</h1>
+<body class="public-page public-auth-panel min-h-screen flex items-center justify-center p-6">
+    <div class="public-card w-full max-w-md p-8">
+        <div class="mb-5 flex justify-center">
+            <img src="{{ asset('images/Logo.png') }}" alt="Settlers Logo"
+                class="h-14 w-14 rounded-full object-cover shadow-sm">
+        </div>
+        <h1 class="text-2xl font-extrabold text-slate-900 mb-2 text-center">Security Verification</h1>
         <p class="text-sm text-slate-600 mb-6">Enter the 6-digit code sent to your email to continue.</p>
 
         @if (session('success'))
@@ -31,12 +35,12 @@
                 <label for="otp" class="block text-sm font-medium text-slate-700 mb-2">One-Time Code</label>
                 <input id="otp" name="otp" type="text" inputmode="numeric" maxlength="6"
                     pattern="[0-9]{6}" autocomplete="one-time-code"
-                    class="w-full rounded-lg border border-gray-300 px-4 py-3 text-lg tracking-[0.3em] focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    class="public-input text-center text-lg tracking-[0.3em]"
                     placeholder="000000" required>
             </div>
 
             <button type="submit"
-                class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-3 rounded-lg transition-colors">
+                class="public-btn public-btn-primary w-full">
                 Verify and Continue
             </button>
         </form>

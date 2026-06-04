@@ -9,7 +9,7 @@
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 
-<body class="bg-white">
+<body class="public-page">
     @include('partials.public.topNavbar')
 
     @php
@@ -22,87 +22,94 @@
     @endphp
 
     <!-- Hero Section -->
-    <section class="relative min-h-screen flex items-center justify-center overflow-hidden pt-20">
+    <section class="relative flex min-h-[92vh] items-center overflow-hidden pt-24">
 
         <!-- Background Image -->
         <div class="absolute inset-0 z-0">
             {{-- Image --}}
             <img src="{{ asset('images/hero_banner.jpg') }}" alt="Hero background" class="w-full h-full object-cover"
                 fetchpriority="high" decoding="async">
-            <!-- Solid Overlay -->
-            <div class="absolute inset-0 bg-slate-900/50"></div>
+            <div class="absolute inset-0 public-gradient-hero"></div>
         </div>
 
-        <div class="relative z-10 text-center px-4 py-20 max-w-6xl mx-auto">
-            <h1 class="text-4xl md:text-6xl font-bold text-white mb-6 leading-tight animate_animated animate_fadeInUp">
-                <span class="text-white">Settlers</span><br>
-                Credit Cooperative
+        <div class="public-shell relative z-10 py-20">
+            <div class="max-w-3xl">
+                <span class="mb-6 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/12 px-4 py-2 text-sm font-semibold text-white backdrop-blur">
+                    <i class="fas fa-seedling text-emerald-200"></i>
+                    Community-first financial services
+                </span>
+            <h1 class="mb-6 text-5xl font-extrabold leading-tight text-white md:text-7xl">
+                Settlers Credit Cooperative
             </h1>
-            <p class="text-lg md:text-xl text-gray-100 mb-12 max-w-3xl mx-auto">
+            <p class="mb-8 max-w-2xl text-lg leading-8 text-white/90 md:text-xl">
                 {!! data_get($homeContent, 'hero_subtitle') !!}
             </p>
-            <x-button-public label="Learn more" icon="fas fa-arrow-down ml-2" href="#about"
-                extraClass="animate_animated animate__bounce" />
+                <div class="flex flex-col gap-3 sm:flex-row">
+                    <x-button-public label="Explore membership" icon="fas fa-arrow-down" href="#about" />
+                    <a href="{{ $memberRegistrationEnabled ? route('register_page') : '#Contact' }}"
+                        class="public-btn public-btn-secondary">
+                        Join now
+                        <i class="fas fa-user-plus"></i>
+                    </a>
+                </div>
+            </div>
         </div>
     </section>
 
     <!-- About Preview Section -->
-    <section id="about" class="py-16 px-4 bg-white">
-        <div class="max-w-2xl mx-auto">
-            <div class="text-center">
-                <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">About Us</h2>
-                <div class="w-20 h-1 bg-emerald-700 mx-auto rounded-full mb-8"></div>
-                <p class="text-lg text-gray-700 leading-relaxed mb-6 text-justify">
+    <section id="about" class="public-section bg-white">
+        <div class="public-shell">
+            <div class="mx-auto max-w-3xl text-center">
+                <span class="public-eyebrow mb-4"><i class="fas fa-leaf"></i> About the cooperative</span>
+                <h2 class="public-heading mb-5 text-3xl md:text-5xl">Built around member progress</h2>
+                <p class="public-copy mb-5 text-lg text-left md:text-center">
                     {!! data_get($aboutContent, 'about1') !!}
                 </p>
-                <p class="text-lg text-gray-700 leading-relaxed mb-8 text-justify">
+                <p class="public-copy mb-8 text-lg text-left md:text-center">
                     {!! data_get($aboutContent, 'about2') !!}
                 </p>
+            </div>
 
                 <!-- Stats -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mt-16 mb-16">
-                    <div
-                        class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
-                        <div class="text-3xl font-bold text-slate-700 mb-2">
+                <div class="my-14 grid grid-cols-2 gap-4 md:grid-cols-4">
+                    <div class="public-card public-card-hover p-6">
+                        <div class="mb-2 text-3xl font-extrabold text-emerald-700">
                             {!! data_get($homeContent, 'active_members') !!}
                         </div>
-                        <div class="text-sm text-gray-600">Active Members</div>
+                        <div class="text-sm font-medium text-slate-600">Active Members</div>
                     </div>
-                    <div
-                        class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
-                        <div class="text-3xl font-bold text-slate-700 mb-2">
+                    <div class="public-card public-card-hover p-6">
+                        <div class="mb-2 text-3xl font-extrabold text-emerald-700">
                             {!! data_get($homeContent, 'total_assets') !!}
                         </div>
-                        <div class="text-sm text-gray-600">Total Assets</div>
+                        <div class="text-sm font-medium text-slate-600">Total Assets</div>
                     </div>
-                    <div
-                        class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
-                        <div class="text-3xl font-bold text-slate-700 mb-2">
+                    <div class="public-card public-card-hover p-6">
+                        <div class="mb-2 text-3xl font-extrabold text-emerald-700">
                             {!! data_get($homeContent, 'years_service') !!}
                         </div>
-                        <div class="text-sm text-gray-600">Years of Service</div>
+                        <div class="text-sm font-medium text-slate-600">Years of Service</div>
                     </div>
-                    <div
-                        class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
-                        <div class="text-3xl font-bold text-slate-700 mb-2">
+                    <div class="public-card public-card-hover p-6">
+                        <div class="mb-2 text-3xl font-extrabold text-emerald-700">
                             {!! data_get($homeContent, 'service_done') !!}
                         </div>
-                        <div class="text-sm text-gray-600">Services Done</div>
+                        <div class="text-sm font-medium text-slate-600">Services Done</div>
                     </div>
                 </div>
 
+            <div class="text-center">
                 <x-button-public label="Learn more about us" icon="fas fa-arrow-right ml-2"
                     href="{{ route('about_page') }}" />
             </div>
-
         </div>
     </section>
 
     <!-- Mission & Vision Section -->
-    <section class="py-16 px-4 bg-gray-50">
-        <div class="max-w-6xl mx-auto">
+    <section class="public-section public-section-soft">
+        <div class="public-shell">
             <div class="grid md:grid-cols-2 gap-8">
-                <div class="bg-white border border-gray-200 rounded-2xl p-8 shadow-sm hover:shadow-md transition-all">
+                <div class="public-card public-card-hover p-8">
                     <div class="w-14 h-14 bg-emerald-700 rounded-xl flex items-center justify-center mb-6">
                         <i class="fas fa-bullseye text-2xl text-white"></i>
                     </div>
@@ -111,7 +118,7 @@
                         {!! data_get($aboutContent, 'mission') !!}
                     </p>
                 </div>
-                <div class="bg-white border border-gray-200 rounded-2xl p-8 shadow-sm hover:shadow-md transition-all">
+                <div class="public-card public-card-hover p-8">
                     <div class="w-14 h-14 bg-slate-700 rounded-xl flex items-center justify-center mb-6">
                         <i class="fas fa-eye text-2xl text-white"></i>
                     </div>
@@ -125,43 +132,43 @@
     </section>
 
     <!-- Membership Requirements Section -->
-    <section class="py-16 px-4 bg-white">
-        <div class="max-w-4xl mx-auto">
+    <section class="public-section bg-white">
+        <div class="public-shell max-w-4xl">
             <div class="text-center mb-12">
-                <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Membership Requirements</h2>
-                <div class="w-20 h-1 bg-emerald-700 mx-auto rounded-full mb-6"></div>
-                <p class="text-lg text-gray-600">Join our growing community of members</p>
+                <span class="public-eyebrow mb-4"><i class="fas fa-id-card"></i> Membership</span>
+                <h2 class="public-heading mb-4 text-3xl md:text-5xl">Ready when you are</h2>
+                <p class="public-copy text-lg">Join our growing community of members</p>
             </div>
-            <div class="bg-gray-50 border border-gray-200 rounded-2xl p-8 md:p-10 shadow-sm">
+            <div class="public-card p-8 md:p-10">
                 <div class="space-y-6">
                     <div class="flex items-start gap-4">
                         <div
-                            class="shrink-0 w-10 h-10 bg-slate-700 text-white rounded-full flex items-center justify-center font-bold">
+                            class="shrink-0 w-10 h-10 bg-emerald-700 text-white rounded-full flex items-center justify-center font-bold">
                             1</div>
                         <p class="text-lg text-gray-800 pt-1">Must be at least 18 years old</p>
                     </div>
                     <div class="flex items-start gap-4">
                         <div
-                            class="shrink-0 w-10 h-10 bg-slate-700 text-white rounded-full flex items-center justify-center font-bold">
+                            class="shrink-0 w-10 h-10 bg-emerald-700 text-white rounded-full flex items-center justify-center font-bold">
                             2</div>
                         <p class="text-lg text-gray-800 pt-1">Proof of residence in the service area</p>
                     </div>
                     <div class="flex items-start gap-4">
                         <div
-                            class="shrink-0 w-10 h-10 bg-slate-700 text-white rounded-full flex items-center justify-center font-bold">
+                            class="shrink-0 w-10 h-10 bg-emerald-700 text-white rounded-full flex items-center justify-center font-bold">
                             3</div>
                         <p class="text-lg text-gray-800 pt-1">Valid identification (e.g., driver's license, passport)
                         </p>
                     </div>
                     <div class="flex items-start gap-4">
                         <div
-                            class="shrink-0 w-10 h-10 bg-slate-700 text-white rounded-full flex items-center justify-center font-bold">
+                            class="shrink-0 w-10 h-10 bg-emerald-700 text-white rounded-full flex items-center justify-center font-bold">
                             4</div>
                         <p class="text-lg text-gray-800 pt-1">Initial deposit to open a savings account</p>
                     </div>
                     <div class="flex items-start gap-4">
                         <div
-                            class="shrink-0 w-10 h-10 bg-slate-700 text-white rounded-full flex items-center justify-center font-bold">
+                            class="shrink-0 w-10 h-10 bg-emerald-700 text-white rounded-full flex items-center justify-center font-bold">
                             5</div>
                         <p class="text-lg text-gray-800 pt-1">Agreement to abide by the cooperative's bylaws and
                             policies</p>
@@ -169,7 +176,7 @@
                 </div>
                 <div class="mt-10 text-center">
                     <a href="{{ $memberRegistrationEnabled ? route('register_page') : '#Contact' }}"
-                        class="inline-flex items-center px-6 py-3 bg-emerald-700 hover:bg-emerald-600 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all transform hover:scale-102">
+                        class="public-btn public-btn-primary">
                         Join Now
                         <i class="fas fa-user-plus ml-2"></i>
                     </a>
@@ -179,19 +186,19 @@
     </section>
 
     <!-- News and Announcements Section -->
-    <section class="py-16 px-4 bg-gray-50">
-        <div class="max-w-6xl mx-auto">
+    <section class="public-section public-section-soft">
+        <div class="public-shell">
             <div class="text-center mb-12">
-                <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">News & Announcements</h2>
-                <div class="w-20 h-1 bg-emerald-700 mx-auto rounded-full mb-6"></div>
-                <p class="text-lg text-gray-600">Stay updated with our latest news and updates</p>
+                <span class="public-eyebrow mb-4"><i class="fas fa-newspaper"></i> Updates</span>
+                <h2 class="public-heading mb-4 text-3xl md:text-5xl">News & Announcements</h2>
+                <p class="public-copy text-lg">Stay updated with our latest news and updates</p>
             </div>
 
             <!-- Grid of News Cards -->
             <div class="grid md:grid-cols-3 gap-6 mb-12">
                 @foreach ($newsItems as $newsItem)
                     <a href="{{ route('news_page') }}"
-                        class="group bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col">
+                        class="group public-card public-card-hover overflow-hidden flex flex-col">
                         {{-- Fixed-height image / colour banner --}}
                         <div class="h-40 w-full shrink-0 overflow-hidden relative
                             @if ($newsItem->image_path) bg-gray-200
@@ -243,7 +250,7 @@
             <!-- View All Button -->
             <div class="text-center">
                 <a href="{{ route('news_page') }}"
-                    class="inline-flex items-center px-6 py-3 bg-emerald-700 hover:bg-emerald-600 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all transform hover:scale-102">
+                    class="public-btn public-btn-primary">
                     View All News & Events
                     <i class="fas fa-newspaper ml-2"></i>
                 </a>
@@ -316,16 +323,16 @@
     --}}
 
     <!-- Contact Section -->
-    <section id="Contact" class="py-16 px-4 bg-white">
-        <div class="max-w-6xl mx-auto">
+    <section id="Contact" class="public-section bg-white">
+        <div class="public-shell">
             <div class="text-center mb-12">
-                <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Get In Touch</h2>
-                <div class="w-20 h-1 bg-emerald-700 mx-auto rounded-full mb-6"></div>
-                <p class="text-lg text-gray-600">We're here to help you achieve your financial goals</p>
+                <span class="public-eyebrow mb-4"><i class="fas fa-envelope"></i> Contact</span>
+                <h2 class="public-heading mb-4 text-3xl md:text-5xl">Get In Touch</h2>
+                <p class="public-copy text-lg">We're here to help you achieve your financial goals</p>
             </div>
             <div class="grid md:grid-cols-2 gap-12">
                 <!-- Contact Form -->
-                <div class="bg-gray-50 border border-gray-200 rounded-2xl p-8 shadow-sm">
+                <div class="public-card p-8">
                     <h3 class="text-2xl text-center font-bold text-gray-900 mb-8">Send us a Message</h3>
                     @if (session('success'))
                         <div
@@ -347,7 +354,7 @@
                                 Name</label>
                             <input type="text" name="name" id="name" required
                                 value="{{ old('name') }}"
-                                class="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all">
+                                class="public-input">
                             @error('name')
                                 <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
                             @enderror
@@ -357,7 +364,7 @@
                                 Email</label>
                             <input type="email" name="email" id="email" required
                                 value="{{ old('email') }}"
-                                class="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all">
+                                class="public-input">
                             @error('email')
                                 <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
                             @enderror
@@ -366,7 +373,7 @@
                             <label for="message" class="block text-sm font-medium text-gray-700 mb-2">Your
                                 Message</label>
                             <textarea name="message" id="message" rows="4" required
-                                class="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all resize-none">{{ old('message') }}</textarea>
+                                class="public-input resize-none">{{ old('message') }}</textarea>
                             @error('message')
                                 <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
                             @enderror
@@ -384,7 +391,7 @@
                             @enderror
                         </div>
                         <button type="submit" id="contactSubmitBtn"
-                            class="w-full px-6 py-3 bg-emerald-700 hover:bg-emerald-600 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all transform active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
+                            class="public-btn public-btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
                             disabled>
                             Send Message
                             <i class="fas fa-paper-plane ml-2"></i>
@@ -394,7 +401,7 @@
 
                 <!-- Contact Information -->
                 <div>
-                    <div class="bg-gray-50 border border-gray-200 rounded-2xl p-8 shadow-sm mb-3">
+                    <div class="public-card p-8 mb-3">
                         <h3 class="text-2xl font-bold text-center text-gray-900 mb-6">Contact Information</h3>
                         <div class="space-y-8">
                             <div class="flex items-center gap-4">

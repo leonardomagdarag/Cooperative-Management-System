@@ -8,7 +8,7 @@
     <title>News & Events - Settlers Credit Cooperative</title>
 </head>
 
-<body class="bg-white">
+<body class="public-page">
     @include('partials.public.topNavbar')
 
     @php
@@ -22,25 +22,27 @@
     @endphp
 
     <!-- Hero Header Section -->
-    <section class="relative pt-32 pb-16 px-4 bg-gray-50 overflow-hidden">
+    <section class="relative overflow-hidden bg-slate-950 px-4 pb-16 pt-32">
         <div class="relative max-w-4xl mx-auto text-center">
-            <h1 class="text-4xl md:text-5xl font-bold text-gray-900 mb-6">News & Events</h1>
-            <div class="w-20 h-1 bg-emerald-700 mx-auto rounded-full mb-8"></div>
-            <p class="text-xl text-gray-700 leading-relaxed">
+            <span class="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-1.5 text-sm font-semibold text-emerald-300">
+                <i class="fas fa-newspaper text-xs"></i> Cooperative updates
+            </span>
+            <h1 class="text-4xl md:text-6xl font-extrabold text-white mb-6">News & Events</h1>
+            <p class="text-xl text-slate-300 leading-relaxed">
                 {{ data_get($newsContent, 'hero_description') }}
             </p>
         </div>
     </section>
 
     <!-- News & Announcements Section -->
-    <section class="py-16 px-4 bg-white">
-        <div class="max-w-6xl mx-auto">
+    <section class="public-section bg-white">
+        <div class="public-shell">
             <div class="mb-12">
                 <div class="flex items-center gap-4 mb-6">
                     <div class="w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center">
                         <i class="fas fa-newspaper text-white text-xl"></i>
                     </div>
-                    <h2 class="text-3xl md:text-4xl font-bold text-gray-900">Latest News & Announcements</h2>
+                    <h2 class="public-heading text-3xl md:text-5xl">Latest News & Announcements</h2>
                 </div>
                 <div class="w-28 h-1 bg-emerald-700 rounded-full"></div>
             </div>
@@ -48,7 +50,7 @@
             <div class="space-y-6">
                 @forelse ($newsItems as $newsItem)
                     <div
-                        class="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+                        class="public-card public-card-hover overflow-hidden">
                         <div class="md:flex">
                             {{-- Fixed-size image / colour panel --}}
                             <div
@@ -109,14 +111,14 @@
         ];
         $bgColors = ['bg-slate-700', 'bg-emerald-700', 'bg-cyan-700', 'bg-indigo-700'];
     @endphp
-    <section class="py-16 px-4 bg-gray-50">
-        <div class="max-w-6xl mx-auto">
+    <section class="public-section public-section-soft">
+        <div class="public-shell">
             <div class="mb-12">
                 <div class="flex items-center gap-4 mb-6">
                     <div class="w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center">
                         <i class="fas fa-calendar-check text-white text-xl"></i>
                     </div>
-                    <h2 class="text-3xl md:text-4xl font-bold text-slate-800">Events</h2>
+                    <h2 class="public-heading text-3xl md:text-5xl">Events</h2>
                 </div>
                 <div class="w-24 h-1 bg-emerald-700 rounded"></div>
                 <p class="mt-6 max-w-4xl text-base text-gray-600">
@@ -133,7 +135,7 @@
                     @foreach ($upcoming as $i => $event)
                         @php $bg = $bgColors[$i % count($bgColors)]; @endphp
                         <div
-                            class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all border border-gray-200 flex flex-col">
+                            class="public-card public-card-hover overflow-hidden flex flex-col">
                             {{-- Fixed-height image / colour banner --}}
                             <div class="h-48 shrink-0 relative overflow-hidden {{ $event->image_path ? 'bg-gray-200' : $bg }}">
                                 @if ($event->image_path)
@@ -194,7 +196,7 @@
                 <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                     @foreach ($past as $event)
                         <div
-                            class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all border border-gray-200 opacity-90 flex flex-col">
+                            class="public-card public-card-hover overflow-hidden opacity-90 flex flex-col">
                             {{-- Fixed-height image / grey banner --}}
                             <div class="h-48 shrink-0 relative overflow-hidden {{ $event->image_path ? 'bg-gray-300' : 'bg-gray-400' }}">
                                 @if ($event->image_path)
@@ -247,9 +249,9 @@
     </section>
 
     <!-- Newsletter Subscription Section -->
-    <section class="py-16 px-4 bg-white">
-        <div class="max-w-4xl mx-auto text-center">
-            <div class="bg-gray-50 border border-gray-200 rounded-2xl p-10 shadow-sm">
+    <section class="public-section bg-white">
+        <div class="mx-auto max-w-4xl px-4 text-center">
+            <div class="public-card p-10">
                 <div class="inline-block p-4 bg-white rounded-full shadow-md mb-6">
                     <i class="fas fa-envelope-open-text text-3xl text-emerald-700"></i>
                 </div>
@@ -262,11 +264,11 @@
                 <div class="max-w-md mx-auto mb-6">
                     <div class="flex flex-col gap-4">
                         <input type="text" placeholder="Your full name"
-                            class="w-full px-6 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all">
+                            class="public-input">
                         <input type="email" placeholder="Your email address"
-                            class="w-full px-6 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all">
+                            class="public-input">
                         <button
-                            class="w-full px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all">
+                            class="public-btn public-btn-primary w-full">
                             Subscribe Now
                             <i class="fas fa-paper-plane ml-2"></i>
                         </button>

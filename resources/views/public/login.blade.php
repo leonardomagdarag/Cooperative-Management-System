@@ -9,7 +9,7 @@
     <title>Login - Settlers Credit Cooperative</title>
 </head>
 
-<body class="bg-white md:bg-gray-100">
+<body class="public-page">
     @php
         $memberRegistrationEnabled = (bool) data_get($publicContent ?? [], 'registration.online_member_registration_enabled', true);
     @endphp
@@ -50,15 +50,19 @@
         </div>
     @endif
 
-    <section class="min-h-screen flex items-center justify-center px-6 py-8 bg-gray-50">
+    <section class="public-auth-panel flex items-center justify-center px-6 py-8">
         <!-- Login Container -->
-        <div class="bg-white rounded-2xl shadow-lg overflow-hidden max-w-md w-full border border-gray-200">
+        <div class="public-card overflow-hidden max-w-md w-full">
             <!-- Login Form Section -->
             <div class="p-8" id="loginContainer">
                 <div class="max-w-md mx-auto">
                     <!-- Header -->
                     <div class="mb-8 text-center">
-                        <h1 class="text-3xl md:text-4xl font-bold text-slate-800 mb-2">Sign In</h1>
+                        <div class="mb-5 flex justify-center">
+                            <img src="{{ asset('images/Logo.png') }}" alt="Settlers Logo"
+                                class="h-16 w-16 rounded-full object-cover shadow-sm">
+                        </div>
+                        <h1 class="text-3xl md:text-4xl font-extrabold text-slate-900 mb-2">Welcome back</h1>
                         <p class="text-sm md:text-base text-slate-600">
                             Enter your credentials to access your account
                         </p>
@@ -74,7 +78,7 @@
                             </label>
                             <div class="relative">
                                 <input type="email" id="email" name="email"
-                                    class="w-full px-4 py-3.5 bg-gray-50 border-0 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all text-sm"
+                                    class="public-input text-sm"
                                     placeholder="Enter your email" required />
                             </div>
 
@@ -87,7 +91,7 @@
                             </label>
                             <div class="relative">
                                 <input type="password" id="password" name="password"
-                                    class="w-full px-4 py-3.5 pr-12 bg-gray-50 border-0 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all text-sm"
+                                    class="public-input pr-12 text-sm"
                                     placeholder="Enter your password" required />
                                 <button type="button" onclick="togglePassword()"
                                     class="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors">
@@ -131,7 +135,7 @@
 
                         <!-- Login Button -->
                         <button type="submit"
-                            class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-3 px-6 rounded-lg focus:ring-2 focus:ring-emerald-500 transition-all shadow-md hover:shadow-lg">
+                            class="public-btn public-btn-primary w-full">
                             Sign in
                         </button>
 

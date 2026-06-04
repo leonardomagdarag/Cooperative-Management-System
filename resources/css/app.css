@@ -2,6 +2,8 @@
 @import '@fortawesome/fontawesome-free/css/all.min.css';
 @import 'animate.css';
 
+@import '@fontsource-variable/outfit';
+
 @layer utilities {
     @keyframes shrink {
         from {
@@ -32,4 +34,147 @@
     /* emerald-600 */
     --color-accent-light: rgb(16 185 129);
     /* emerald-500 */
+    --public-ink: #13201a;
+    --public-muted: #64736d;
+    --public-line: #dbe7e1;
+    --public-surface: #ffffff;
+    --public-soft: #f4f8f5;
+    --public-accent: #047857;
+    --public-accent-dark: #065f46;
+    --public-gold: #d4a017;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+.public-page {
+    font-family: 'Outfit Variable', ui-sans-serif, system-ui, sans-serif;
+    color: var(--public-ink);
+    background:
+        linear-gradient(180deg, rgba(244, 248, 245, 0.92), rgba(255, 255, 255, 0.96) 28rem),
+        var(--public-surface);
+}
+
+.public-shell {
+    width: min(1120px, calc(100% - 2rem));
+    margin-inline: auto;
+}
+
+.public-section {
+    padding-block: clamp(4rem, 7vw, 6.5rem);
+}
+
+.public-section-soft {
+    background:
+        radial-gradient(circle at top left, rgba(4, 120, 87, 0.08), transparent 22rem),
+        var(--public-soft);
+}
+
+.public-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid rgba(4, 120, 87, 0.16);
+    border-radius: 999px;
+    background: rgba(4, 120, 87, 0.08);
+    color: var(--public-accent-dark);
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+.public-heading {
+    color: var(--public-ink);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: 0;
+}
+
+.public-copy {
+    color: var(--public-muted);
+    line-height: 1.75;
+}
+
+.public-card {
+    border: 1px solid var(--public-line);
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 12px 34px rgba(19, 32, 26, 0.08);
+}
+
+.public-card-hover {
+    transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.public-card-hover:hover {
+    transform: translateY(-3px);
+    border-color: rgba(4, 120, 87, 0.24);
+    box-shadow: 0 18px 44px rgba(19, 32, 26, 0.12);
+}
+
+.public-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.625rem;
+    border-radius: 0.75rem;
+    padding: 0.875rem 1.25rem;
+    font-weight: 700;
+    line-height: 1;
+    transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease, border-color 160ms ease;
+}
+
+.public-btn:hover {
+    transform: translateY(-1px);
+}
+
+.public-btn-primary {
+    background: var(--public-accent);
+    color: #fff;
+    box-shadow: 0 12px 24px rgba(4, 120, 87, 0.2);
+}
+
+.public-btn-primary:hover {
+    background: var(--public-accent-dark);
+    box-shadow: 0 16px 30px rgba(4, 120, 87, 0.24);
+}
+
+.public-btn-secondary {
+    border: 1px solid rgba(255, 255, 255, 0.56);
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.public-btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+.public-input {
+    width: 100%;
+    border: 1px solid var(--public-line);
+    border-radius: 0.75rem;
+    background: #fff;
+    padding: 0.875rem 1rem;
+    outline: none;
+    transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.public-input:focus {
+    border-color: rgba(4, 120, 87, 0.58);
+    box-shadow: 0 0 0 4px rgba(4, 120, 87, 0.12);
+}
+
+.public-gradient-hero {
+    background:
+        linear-gradient(90deg, rgba(10, 28, 22, 0.82), rgba(10, 28, 22, 0.48), rgba(10, 28, 22, 0.34)),
+        linear-gradient(180deg, rgba(4, 120, 87, 0.08), rgba(15, 23, 42, 0.18));
+}
+
+.public-auth-panel {
+    min-height: 100vh;
+    background:
+        linear-gradient(120deg, rgba(10, 28, 22, 0.78), rgba(10, 28, 22, 0.36)),
+        url('/images/hero_banner.jpg') center / cover no-repeat;
 }

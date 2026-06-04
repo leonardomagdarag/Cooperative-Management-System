@@ -10,14 +10,14 @@
     <title>Forgot Password - Step 1 - Settlers Credit Cooperative</title>
 </head>
 
-<body class="bg-gray-100 min-h-screen">
-    <section class="min-h-screen flex items-center justify-center px-6 py-6">
+<body class="public-page min-h-screen">
+    <section class="public-auth-panel flex items-center justify-center px-6 py-6">
         <!-- Centered Container -->
-        <div class="bg-white rounded-2xl shadow-lg overflow-hidden max-w-2xl w-full p-6 md:p-8">
+        <div class="public-card overflow-hidden max-w-2xl w-full p-6 md:p-8">
 
             <!-- Header -->
             <div class="text-center mb-5">
-                <div class="inline-flex items-center justify-center w-14 h-14 bg-gray-100 rounded-2xl mb-3">
+                <div class="inline-flex items-center justify-center w-14 h-14 bg-emerald-50 rounded-2xl mb-3">
                     <i class="fas fa-envelope text-2xl text-slate-700"></i>
                 </div>
                 <h1 class="text-2xl md:text-3xl font-bold text-slate-800 mb-2">Forgot Password?</h1>
@@ -102,7 +102,7 @@
                             <i class="fas fa-envelope text-slate-400"></i>
                         </div>
                         <input type="email" id="email" name="email" value="{{ old('email') }}"
-                            class="w-full pl-12 pr-4 py-3.5 bg-slate-50 border-0 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all @error('email') ring-2 ring-red-500 @enderror"
+                            class="public-input pl-12 @error('email') ring-2 ring-red-500 @enderror"
                             placeholder="Enter your registered email" required autofocus />
                     </div>
                     @error('email')
@@ -139,7 +139,7 @@
 
                 <!-- Submit Button -->
                 <button type="submit" id="forgotPasswordSubmitBtn"
-                    class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-3 px-6 rounded-lg transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="public-btn public-btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled>
                     <span class="flex items-center justify-center gap-2">
                         <i class="fas fa-paper-plane"></i>
