@@ -8,7 +8,7 @@
 @endphp
 
 <nav id="navbar"
-    class="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md shadow-lg transition-all duration-300"
+    class="fixed top-0 left-0 right-0 z-50 border-b border-emerald-900/10 bg-white/90 backdrop-blur-xl shadow-sm transition-all duration-300"
     style="--navbar-height: 5rem;">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div id="nav-container" class="flex justify-between items-center transition-all duration-300"
@@ -22,10 +22,10 @@
                         width="48" height="48" decoding="async">
                 </div>
                 <div id="logo-text" class="transition-all duration-300">
-                    <h1 id="logo-heading" class="font-bold text-slate-800 transition-all duration-300"
+                    <h1 id="logo-heading" class="font-extrabold text-slate-900 transition-all duration-300"
                         style="font-size: 1.25rem; line-height: 1.75rem;">
                         Settlers</h1>
-                    <p id="logo-subtitle" class="text-xs text-gray-600 transition-all duration-300" style="opacity: 1;">
+                    <p id="logo-subtitle" class="text-xs font-medium text-emerald-700 transition-all duration-300" style="opacity: 1;">
                         Credit Cooperative</p>
                 </div>
             </div>
@@ -55,7 +55,7 @@
                     </a>
                 </div>
                 <a href="{{ route('login') }}"
-                    class="ml-4 px-6 py-2.5 bg-emerald-700 hover:bg-emerald-600 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all transform hover:scale-102">
+                    class="public-btn public-btn-primary ml-4 px-5 py-2.5">
                     <i class="fas fa-sign-in-alt mr-2"></i>Login
                 </a>
             </div>
@@ -74,7 +74,7 @@
     </div>
 
     <!-- Mobile Menu -->
-    <div id="mobile-menu" class="hidden lg:hidden bg-white border-t border-gray-200">
+    <div id="mobile-menu" class="hidden lg:hidden border-t border-emerald-900/10 bg-white/95 shadow-lg backdrop-blur-xl">
         <div class="px-4 py-4 space-y-2">
             <a href="{{ route('home_page') }}"
                 class="block rounded-xl border-l-4 px-4 py-3 font-semibold transition-all {{ request()->routeIs('home_page') ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-transparent text-gray-700 hover:border-emerald-500 hover:bg-emerald-50/70 hover:text-emerald-700' }}">
@@ -97,7 +97,7 @@
                 <i class="fas fa-envelope mr-3"></i>Contact
             </a>
             <a href="{{ route('login') }}"
-                class="block px-4 py-3 bg-emerald-700 text-white font-semibold rounded-lg shadow-md text-center hover:bg-emerald-600 transition-all">
+                class="public-btn public-btn-primary w-full">
                 <i class="fas fa-sign-in-alt mr-2"></i>Login
             </a>
         </div>

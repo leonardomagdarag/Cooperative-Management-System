@@ -28,18 +28,18 @@
     </style>
 </head>
 
-<body class="bg-gray-100 min-h-screen">
-    <section class="min-h-screen flex items-center justify-center px-6 py-6" x-data="{
+<body class="public-page min-h-screen">
+    <section class="public-auth-panel flex items-center justify-center px-6 py-6" x-data="{
         step: 2,
         verifying: false,
         tokenError: ''
     }">
         <!-- Centered Container -->
-        <div class="bg-white rounded-2xl shadow-lg overflow-hidden max-w-2xl w-full p-6 md:p-8">
+        <div class="public-card overflow-hidden max-w-2xl w-full p-6 md:p-8">
 
             <!-- Header -->
             <div class="text-center mb-5">
-                <div class="inline-flex items-center justify-center w-14 h-14 bg-gray-100 rounded-2xl mb-3">
+                <div class="inline-flex items-center justify-center w-14 h-14 bg-emerald-50 rounded-2xl mb-3">
                     <i class="fas fa-key text-2xl text-slate-700"></i>
                 </div>
                 <h1 class="text-2xl md:text-3xl font-bold text-slate-800 mb-2">Reset Password</h1>
@@ -188,7 +188,7 @@
                         </label>
                         <div class="relative">
                             <input type="number" id="token" name="token" maxlength="6" x-ref="tokenInput"
-                                class="code-input w-full px-4 py-3.5 bg-slate-50 border-0 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                                class="code-input public-input"
                                 :class="tokenError ? 'ring-2 ring-red-500' : ''" placeholder="000000" required
                                 @input="tokenError = ''" />
                         </div>
@@ -217,7 +217,7 @@
 
                     <!-- Next Button -->
                     <button type="submit" :disabled="verifying"
-                        class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-3 px-6 rounded-lg transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                        class="public-btn public-btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed">
                         <span class="flex items-center justify-center gap-2">
                             <i class="fas fa-spinner fa-spin" x-show="verifying"></i>
                             <span x-text="verifying ? 'Verifying Code...' : 'Continue to Password Reset'"></span>
@@ -249,7 +249,7 @@
                                 <i class="fas fa-lock text-slate-400"></i>
                             </div>
                             <input type="password" id="password" name="password"
-                                class="w-full pl-12 pr-12 py-3.5 bg-slate-50 border-0 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all @error('password') ring-2 ring-red-500 @enderror"
+                                class="public-input pl-12 pr-12 @error('password') ring-2 ring-red-500 @enderror"
                                 placeholder="Enter new password" :required="step === 3" />
                             <button type="button" onclick="togglePassword('password', 'toggleIcon1')"
                                 class="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors">
@@ -274,7 +274,7 @@
                                 <i class="fas fa-lock text-slate-400"></i>
                             </div>
                             <input type="password" id="password_confirmation" name="password_confirmation"
-                                class="w-full pl-12 pr-12 py-3.5 bg-slate-50 border-0 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all"
+                                class="public-input pl-12 pr-12"
                                 placeholder="Re-enter new password" :required="step === 3" />
                             <button type="button" onclick="togglePassword('password_confirmation', 'toggleIcon2')"
                                 class="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors">
@@ -285,7 +285,7 @@
 
                     <!-- Submit Button -->
                     <button type="submit"
-                        class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-3 px-6 rounded-lg transition-all shadow-md hover:shadow-lg mt-4">
+                        class="public-btn public-btn-primary w-full mt-4">
                         <span class="flex items-center justify-center gap-2">
                             <i class="fas fa-check"></i>
                             Reset Password

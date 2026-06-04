@@ -15,7 +15,7 @@
     $privacyContent = data_get($publicContent ?? [], 'policies.privacy_policy', '');
 @endphp
 
-<body class="bg-gray-50">
+<body class="public-page">
 
     <!-- Success Toast Notification -->
     @if (session('success'))
@@ -92,14 +92,18 @@
                     <i class="fas fa-arrow-left"></i>
                     <span class="font-medium">Back to Home</span>
                 </a>
-                <h1 class="text-3xl md:text-4xl font-bold text-slate-800 mb-2">Membership Application</h1>
+                <div class="mb-4 flex justify-center">
+                    <img src="{{ asset('images/Logo.png') }}" alt="Settlers Logo"
+                        class="h-16 w-16 rounded-full object-cover shadow-sm">
+                </div>
+                <h1 class="text-3xl md:text-5xl font-extrabold text-slate-900 mb-2">Membership Application</h1>
                 <p class="text-base text-slate-600">
                     Join Settlers Credit Cooperative and become part of our growing community
                 </p>
             </div>
 
             <!-- Membership Requirements Card -->
-            <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-8">
+            <div class="public-card p-6 mb-8">
                 <div class="flex items-start gap-4 mb-4">
                     <div class="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center shrink-0">
                         <i class="fas fa-info-circle text-emerald-700 text-lg"></i>
@@ -125,7 +129,7 @@
             </div>
 
             <!-- Registration Form -->
-            <form class="bg-white rounded-2xl shadow-sm border border-gray-200 p-8" action="{{ route('register') }}"
+            <form class="public-card p-8" action="{{ route('register') }}"
                 method="POST" x-data="registrationForm()">
                 @csrf
 
@@ -146,7 +150,7 @@
                                 </label>
                                 <input type="text" id="first_name" name="first_name" required
                                     value="{{ old('first_name') }}"
-                                    class="w-full px-4 py-2.5 bg-gray-50 border @error('first_name') border-red-500 @else border-gray-300 @enderror rounded-lg focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all text-sm"
+                                    class="public-input py-2.5 text-sm @error('first_name') border-red-500 @enderror"
                                     placeholder="Juan" />
                                 @error('first_name')
                                     <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
@@ -158,7 +162,7 @@
                                 </label>
                                 <input type="text" id="middle_name" name="middle_name"
                                     value="{{ old('middle_name') }}"
-                                    class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all text-sm"
+                                    class="public-input py-2.5 text-sm"
                                     placeholder="Santos" />
                             </div>
                             <div>
@@ -167,7 +171,7 @@
                                 </label>
                                 <input type="text" id="last_name" name="last_name" required
                                     value="{{ old('last_name') }}"
-                                    class="w-full px-4 py-2.5 bg-gray-50 border @error('last_name') border-red-500 @else border-gray-300 @enderror rounded-lg focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all text-sm"
+                                    class="public-input py-2.5 text-sm @error('last_name') border-red-500 @enderror"
                                     placeholder="Dela Cruz" />
                                 @error('last_name')
                                     <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
@@ -182,7 +186,7 @@
                                     Gender <span class="text-red-500">*</span>
                                 </label>
                                 <select id="gender" name="gender" required
-                                    class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all text-sm">
+                                    class="public-input py-2.5 text-sm">
                                     <option value="">Select Gender</option>
                                     <option value="Male" {{ old('gender') == 'Male' ? 'selected' : '' }}>Male
                                     </option>
@@ -198,14 +202,14 @@
                                 </label>
                                 <input type="date" id="birthdate" name="birthdate" required x-model="birthdate"
                                     value="{{ old('birthdate') }}" @change="calculateAge"
-                                    class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all text-sm" />
+                                    class="public-input py-2.5 text-sm" />
                             </div>
                             <div>
                                 <label for="age" class="block text-sm font-medium text-slate-700 mb-2">
                                     Age <span class="text-red-500">*</span>
                                 </label>
                                 <input type="number" id="age" name="age" readonly x-model="age"
-                                    class="w-full px-4 py-2.5 bg-gray-100 border border-gray-300 rounded-lg text-sm cursor-not-allowed"
+                                    class="public-input py-2.5 bg-slate-100 text-sm cursor-not-allowed"
                                     placeholder="Auto-calculated" />
                             </div>
                         </div>
@@ -218,7 +222,7 @@
                                 </label>
                                 <input type="tel" id="phone" name="phone" required
                                     value="{{ old('phone') }}"
-                                    class="w-full px-4 py-2.5 bg-gray-50 border @error('phone') border-red-500 @else border-gray-300 @enderror rounded-lg focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all text-sm"
+                                    class="public-input py-2.5 text-sm @error('phone') border-red-500 @enderror"
                                     placeholder="09171234567" />
                                 @error('phone')
                                     <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
@@ -230,7 +234,7 @@
                                 </label>
                                 <input type="email" id="email" name="email" required
                                     value="{{ old('email') }}"
-                                    class="w-full px-4 py-2.5 bg-gray-50 border @error('email') border-red-500 @else border-gray-300 @enderror rounded-lg focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all text-sm"
+                                    class="public-input py-2.5 text-sm @error('email') border-red-500 @enderror"
                                     placeholder="juan.delacruz@email.com" />
                                 @error('email')
                                     <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
@@ -244,7 +248,7 @@
                                 Complete Address <span class="text-red-500">*</span>
                             </label>
                             <textarea id="address" name="address" rows="3" required
-                                class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all text-sm"
+                                class="public-input py-2.5 text-sm"
                                 placeholder="House No., Street, Barangay, City/Municipality, Province">{{ old('address') }}</textarea>
                         </div>
                     </div>
@@ -266,7 +270,7 @@
                                 </label>
                                 <input type="text" id="occupation" name="occupation" required
                                     value="{{ old('occupation') }}"
-                                    class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all text-sm"
+                                    class="public-input py-2.5 text-sm"
                                     placeholder="e.g., Teacher, Engineer, Business Owner" />
                             </div>
                             <div>
@@ -274,7 +278,7 @@
                                     Monthly Income <span class="text-red-500">*</span>
                                 </label>
                                 <select id="monthly_income" name="monthly_income" required
-                                    class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all text-sm">
+                                    class="public-input py-2.5 text-sm">
                                     <option value="">Select Income Range</option>
                                     <option value="Below 10000"
                                         {{ old('monthly_income') == 'Below 10000' ? 'selected' : '' }}>Below ₱10,000
@@ -319,7 +323,7 @@
                                     Membership Type <span class="text-red-500">*</span>
                                 </label>
                                 <select id="membership_type" name="membership_type" required
-                                    class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all text-sm">
+                                    class="public-input py-2.5 text-sm">
                                     <option value="">Select Type</option>
                                     <option value="Regular"
                                         {{ old('membership_type') == 'Regular' ? 'selected' : '' }}>
@@ -335,7 +339,7 @@
                                 </label>
                                 <input type="text" id="referred_by" name="referred_by"
                                     value="{{ old('referred_by') }}"
-                                    class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all text-sm"
+                                    class="public-input py-2.5 text-sm"
                                     placeholder="Name of referring member" />
                             </div>
                         </div>
@@ -359,7 +363,7 @@
                                 <div class="relative">
                                     <input :type="showPassword ? 'text' : 'password'" id="password" name="password"
                                         required
-                                        class="w-full px-4 py-2.5 pr-12 bg-gray-50 border @error('password') border-red-500 @else border-gray-300 @enderror rounded-lg focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all text-sm"
+                                        class="public-input py-2.5 pr-12 text-sm @error('password') border-red-500 @enderror"
                                         placeholder="Minimum 8 characters" />
                                     <button type="button" @click="showPassword = !showPassword"
                                         class="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors">
@@ -378,7 +382,7 @@
                                 <div class="relative">
                                     <input :type="showPasswordConfirm ? 'text' : 'password'" id="password_confirmation"
                                         name="password_confirmation" required
-                                        class="w-full px-4 py-2.5 pr-12 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition-all text-sm"
+                                        class="public-input py-2.5 pr-12 text-sm"
                                         placeholder="Re-enter password" />
                                     <button type="button" @click="showPasswordConfirm = !showPasswordConfirm"
                                         class="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors">
@@ -431,7 +435,7 @@
                 <!-- Submit Button -->
                 <div class="flex flex-col sm:flex-row gap-4">
                     <button type="submit" id="registerSubmitBtn"
-                        class="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-3.5 px-6 rounded-lg focus:ring-2 focus:ring-emerald-500 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        class="public-btn public-btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled>
                         <i class="fas fa-user-plus mr-2"></i>
                         Submit Application

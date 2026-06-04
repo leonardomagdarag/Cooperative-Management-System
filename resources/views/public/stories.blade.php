@@ -8,15 +8,17 @@
     <title>Member Stories - Settlers Credit Cooperative</title>
 </head>
 
-<body class="bg-white">
+<body class="public-page">
     @include('partials.public.topNavbar')
 
     <!-- Hero Header Section -->
-    <section class="relative pt-32 pb-16 px-4 bg-gray-50 overflow-hidden">
+    <section class="relative overflow-hidden bg-slate-950 px-4 pb-16 pt-32">
         <div class="relative max-w-4xl mx-auto text-center ">
-            <h1 class="text-4xl md:text-5xl font-bold text-gray-900 mb-6 ">Member Stories</h1>
-            <div class="w-20 h-1 bg-emerald-700 mx-auto rounded-full mb-8"></div>
-            <p class="text-xl text-gray-700 leading-relaxed">
+            <span class="public-eyebrow mb-5 border-emerald-400/30 bg-emerald-500/10 text-emerald-300">
+                <i class="fas fa-quote-right"></i> Member experiences
+            </span>
+            <h1 class="text-4xl md:text-6xl font-extrabold text-white mb-6 ">Member Stories</h1>
+            <p class="text-xl text-slate-300 leading-relaxed">
                 Discover how Settlers Credit Cooperative has made a difference in the lives of our members through
                 financial empowerment and community support.
             </p>
@@ -24,12 +26,12 @@
     </section>
 
     <!-- Featured Story Section -->
-    <section class="py-16 px-4 bg-white">
-        <div class="max-w-6xl mx-auto">
+    <section class="public-section bg-white">
+        <div class="public-shell">
             <div class="inline-block px-4 py-2 bg-gray-100 text-slate-700 rounded-full text-sm font-semibold mb-8">
                 Featured Story
             </div>
-            <div class="bg-gray-50 border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+            <div class="public-card overflow-hidden">
                 <div class="md:flex">
                     <div class="md:w-1/2 h-96 bg-slate-700 relative overflow-hidden">
                         <div class="absolute inset-0 flex items-center justify-center">
@@ -69,17 +71,16 @@
     </section>
 
     <!-- Stories Grid Section -->
-    <section class="py-16 px-4 bg-gray-50">
-        <div class="max-w-6xl mx-auto">
+    <section class="public-section public-section-soft">
+        <div class="public-shell">
             <div class="text-center mb-12">
-                <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">More Success Stories</h2>
-                <div class="w-20 h-1 bg-emerald-700 mx-auto rounded-full"></div>
+                <h2 class="public-heading text-3xl md:text-5xl mb-4">More Success Stories</h2>
             </div>
 
             <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
                 <!-- Story Card 1 -->
                 <div
-                    class="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+                    class="public-card public-card-hover overflow-hidden">
                     <div class="h-56 bg-slate-700 relative overflow-hidden">
                         <div class="absolute inset-0 flex items-center justify-center">
                             <i class="fas fa-store text-7xl text-white opacity-20"></i>
@@ -109,7 +110,7 @@
 
                 <!-- Story Card 2 -->
                 <div
-                    class="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+                    class="public-card public-card-hover overflow-hidden">
                     <div class="h-56 bg-emerald-700 relative overflow-hidden">
                         <div class="absolute inset-0 flex items-center justify-center">
                             <i class="fas fa-graduation-cap text-7xl text-white opacity-20"></i>
@@ -138,7 +139,7 @@
 
                 <!-- Story Card 3 -->
                 <div
-                    class="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+                    class="public-card public-card-hover overflow-hidden">
                     <div class="h-56 bg-slate-700 relative overflow-hidden">
                         <div class="absolute inset-0 flex items-center justify-center">
                             <i class="fas fa-piggy-bank text-8xl text-white opacity-20"></i>
@@ -167,7 +168,7 @@
 
                 <!-- Story Card 4 -->
                 <div
-                    class="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+                    class="public-card public-card-hover overflow-hidden">
                     <div class="h-56 bg-emerald-700 relative overflow-hidden">
                         <div class="absolute inset-0 flex items-center justify-center">
                             <i class="fas fa-car text-7xl text-white opacity-20"></i>
@@ -196,7 +197,7 @@
 
                 <!-- Story Card 5 -->
                 <div
-                    class="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+                    class="public-card public-card-hover overflow-hidden">
                     <div class="h-56 bg-slate-700 relative overflow-hidden">
                         <div class="absolute inset-0 flex items-center justify-center">
                             <i class="fas fa-hands-helping text-7xl text-white opacity-20"></i>
@@ -225,7 +226,7 @@
 
                 <!-- Story Card 6 -->
                 <div
-                    class="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+                    class="public-card public-card-hover overflow-hidden">
                     <div class="h-56 bg-emerald-700 relative overflow-hidden">
                         <div class="absolute inset-0 flex items-center justify-center">
                             <i class="fas fa-seedling text-7xl text-white opacity-20"></i>
@@ -256,16 +257,15 @@
     </section>
 
     <!-- Testimonials Section -->
-    <section class="py-20 px-4 bg-white">
-        <div class="max-w-6xl mx-auto">
+    <section class="public-section bg-white">
+        <div class="public-shell">
             <div class="text-center mb-16">
-                <h2 class="text-4xl md:text-5xl font-bold text-gray-900 mb-4">What Our Members Say</h2>
-                <div class="w-20 h-1 bg-emerald-700 mx-auto rounded"></div>
+                <h2 class="public-heading text-4xl md:text-5xl mb-4">What Our Members Say</h2>
             </div>
 
             <div class="grid md:grid-cols-2 gap-8">
                 <!-- Testimonial 1 -->
-                <div class="bg-gray-50 border border-gray-200 rounded-2xl p-8 shadow-sm">
+                <div class="public-card p-8">
                     <div class="flex gap-2 mb-4">
                         <i class="fas fa-star text-yellow-400"></i>
                         <i class="fas fa-star text-yellow-400"></i>
@@ -290,7 +290,7 @@
                 </div>
 
                 <!-- Testimonial 2 -->
-                <div class="bg-gray-50 border border-gray-200 rounded-2xl p-8 shadow-sm">
+                <div class="public-card p-8">
                     <div class="flex gap-2 mb-4">
                         <i class="fas fa-star text-yellow-400"></i>
                         <i class="fas fa-star text-yellow-400"></i>
@@ -317,7 +317,7 @@
     </section>
 
     <!-- CTA Section -->
-    <section class="py-16 px-4 bg-emerald-700">
+    <section class="public-section px-4 bg-emerald-800">
         <div class="max-w-4xl mx-auto text-center text-white">
             <h2 class="text-3xl md:text-4xl font-bold mb-6">Share Your Story</h2>
             <p class="text-lg mb-8">
@@ -326,12 +326,12 @@
             </p>
             <div class="flex flex-col sm:flex-row gap-4 justify-center">
                 <a href="{{ route('home_page') }}#Contact"
-                    class="px-6 py-3 bg-white text-emerald-700 font-semibold rounded-lg shadow-md hover:shadow-lg transition-all">
+                    class="public-btn bg-white text-emerald-700 shadow-md hover:bg-emerald-50">
                     Submit Your Story
                     <i class="fas fa-pen ml-2"></i>
                 </a>
                 <a href="{{ route('home_page') }}"
-                    class="px-6 py-3 bg-transparent border-2 border-white text-white font-semibold rounded-lg shadow-md hover:bg-white hover:text-emerald-700 transition-all">
+                    class="public-btn public-btn-secondary">
                     Back to Home
                     <i class="fas fa-home ml-2"></i>
                 </a>
