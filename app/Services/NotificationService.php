@@ -2,6 +2,9 @@
 
 namespace App\Services;
 
+use App\Jobs\SendAnnouncementEmailJob;
+use App\Jobs\SendEmailJob;
+use App\Jobs\SendSecurityAlertJob;
 use App\Mail\AnnouncementNotification as AnnouncementMail;
 use App\Mail\LoanDueNotification;
 use App\Mail\LoanStatusNotification;
@@ -15,6 +18,8 @@ use App\Models\Transaction;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class NotificationService
 {
@@ -26,6 +31,33 @@ class NotificationService
     private function routeIfExists(string $routeName, string $fallback, array $parameters = []): string
     {
         return Route::has($routeName) ? route($routeName, $parameters) : $fallback;
+    }
+
+    /**
+     * Safely dispatch an email job with sync fallback.
+     */
+    private function safeSendEmail(string $toEmail, $mailable, string $tag = 'email.sent'): void
+    {
+        if (! $toEmail || config('mail.default') === 'log') {
+            return;
+        }
+
+        try {
+            SendEmailJob::dispatch($toEmail, $mailable, $tag);
+        } catch (Throwable $e) {
+            Log::warning("Failed to dispatch email job, falling back to sync: {$e->getMessage()}");
+            try {
+                Mail::to($toEmail)->send($mailable);
+            } catch (Throwable $e2) {
+                Log::error("Sync email fallback also failed for {$toEmail}: {$e2->getMessage()}");
+                app(AuditLogService::class)->log(
+                    'email.failed',
+                    "Both async and sync email failed for {$toEmail}: {$e2->getMessage()}",
+                    'email', null, null,
+                    ['to' => $toEmail, 'mailable' => get_class($mailable)]
+                );
+            }
+        }
     }
 
     /**
@@ -84,28 +116,20 @@ class NotificationService
     {
         $visibility = (array) ($announcement->visibility ?? ['members']);
 
-        // 'public' means website visitors — no registered users to notify.
-        // Build the target user set based on the remaining visibility values.
         if (in_array('everyone', $visibility, true)) {
             $users = User::all();
         } else {
             $userIds = collect();
 
             if (in_array('members', $visibility, true)) {
-                $userIds = $userIds->merge(
-                    User::role('member')->pluck('id')
-                );
+                $userIds = $userIds->merge(User::role('member')->pluck('id'));
             }
 
             if (in_array('officers', $visibility, true)) {
-                // Officers = all staff roles (everyone except members / inactive / terminated).
                 $officerRoles = ['admin', 'manager', 'secretary', 'accountant', 'loan', 'developer'];
-                $userIds = $userIds->merge(
-                    User::role($officerRoles)->pluck('id')
-                );
+                $userIds = $userIds->merge(User::role($officerRoles)->pluck('id'));
             }
 
-            // 'public' only → no registered users; skip notifications.
             if ($userIds->isEmpty()) {
                 return;
             }
@@ -123,11 +147,20 @@ class NotificationService
             $announcement
         );
 
-        // Send email notification
         if ($sendEmail && config('mail.default') !== 'log') {
-            foreach ($users as $user) {
-                if ($user->email) {
-                    Mail::to($user->email)->queue(new AnnouncementMail($announcement));
+            $userIds = $users->filter(fn ($u) => $u->email)->pluck('id')->toArray();
+            if (! empty($userIds)) {
+                try {
+                    $batch = \Illuminate\Support\Facades\Bus::batch(
+                        array_map(
+                            fn ($userId) => new SendAnnouncementEmailJob($announcement, $userId),
+                            $userIds
+                        )
+                    )->name('announcement-emails')->dispatch();
+
+                    Log::info("Announcement email batch dispatched for {$batch->total()} users");
+                } catch (Throwable $e) {
+                    Log::error("Failed to dispatch announcement email batch: {$e->getMessage()}");
                 }
             }
         }
@@ -154,9 +187,11 @@ class NotificationService
             $loan
         );
 
-        // Send email notification
-        if ($sendEmail && config('mail.default') !== 'log' && $loan->user->email) {
-            Mail::to($loan->user->email)->queue(new LoanDueNotification($loan, $daysRemaining, false));
+        if ($sendEmail) {
+            $this->safeSendEmail(
+                $loan->user->email,
+                new LoanDueNotification($loan, $daysRemaining, false)
+            );
         }
     }
 
@@ -175,9 +210,11 @@ class NotificationService
             $loan
         );
 
-        // Send email notification
-        if ($sendEmail && config('mail.default') !== 'log' && $loan->user->email) {
-            Mail::to($loan->user->email)->queue(new LoanDueNotification($loan, 0, true));
+        if ($sendEmail) {
+            $this->safeSendEmail(
+                $loan->user->email,
+                new LoanDueNotification($loan, 0, true)
+            );
         }
     }
 
@@ -196,9 +233,11 @@ class NotificationService
             $loan
         );
 
-        // Send email notification
-        if ($sendEmail && config('mail.default') !== 'log' && $loan->user->email) {
-            Mail::to($loan->user->email)->queue(new LoanStatusNotification($loan, 'approved'));
+        if ($sendEmail) {
+            $this->safeSendEmail(
+                $loan->user->email,
+                new LoanStatusNotification($loan, 'approved')
+            );
         }
     }
 
@@ -222,9 +261,11 @@ class NotificationService
             $loan
         );
 
-        // Send email notification
-        if ($sendEmail && config('mail.default') !== 'log' && $loan->user->email) {
-            Mail::to($loan->user->email)->queue(new LoanStatusNotification($loan, 'rejected', $reason));
+        if ($sendEmail) {
+            $this->safeSendEmail(
+                $loan->user->email,
+                new LoanStatusNotification($loan, 'rejected', $reason)
+            );
         }
     }
 
@@ -259,9 +300,11 @@ class NotificationService
             $withdrawal
         );
 
-        // Send email notification
-        if ($sendEmail && config('mail.default') !== 'log' && $withdrawal->user->email) {
-            Mail::to($withdrawal->user->email)->queue(new WithdrawalStatusNotification($withdrawal, 'approved'));
+        if ($sendEmail) {
+            $this->safeSendEmail(
+                $withdrawal->user->email,
+                new WithdrawalStatusNotification($withdrawal, 'approved')
+            );
         }
     }
 
@@ -285,38 +328,26 @@ class NotificationService
             $withdrawal
         );
 
-        // Send email notification
-        if ($sendEmail && config('mail.default') !== 'log' && $withdrawal->user->email) {
-            Mail::to($withdrawal->user->email)->queue(new WithdrawalStatusNotification($withdrawal, 'rejected', $reason));
+        if ($sendEmail) {
+            $this->safeSendEmail(
+                $withdrawal->user->email,
+                new WithdrawalStatusNotification($withdrawal, 'rejected', $reason)
+            );
         }
     }
 
     /**
      * Create an in-app activity notification for account actions.
      */
-    public function notifyAccountActivity(
-        User $user,
-        string $title,
-        string $message,
-        string $priority = 'normal'
-    ): void {
-        $this->create(
-            $user,
-            'general',
-            $title,
-            $message,
-            $priority,
-            '/notifications'
-        );
+    public function notifyAccountActivity(User $user, string $title, string $message, string $priority = 'normal'): void
+    {
+        $this->create($user, 'general', $title, $message, $priority, '/notifications');
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Loan review lifecycle notifications (officer review stage)
+    // Loan review lifecycle notifications
     // ─────────────────────────────────────────────────────────────────────────
 
-    /**
-     * Notify member that their loan application is now being reviewed by an officer.
-     */
     public function notifyLoanUnderReview(Loan $loan): void
     {
         $this->create(
@@ -330,9 +361,6 @@ class NotificationService
         );
     }
 
-    /**
-     * Notify member that their loan application has been endorsed for final approval.
-     */
     public function notifyLoanEndorsedForApproval(Loan $loan): void
     {
         $this->create(
@@ -346,9 +374,6 @@ class NotificationService
         );
     }
 
-    /**
-     * Notify member that their loan application was rejected during officer review.
-     */
     public function notifyLoanReviewRejected(Loan $loan, string $reason = '', bool $sendEmail = true): void
     {
         $message = "Your loan application {$loan->loan_number} has been rejected during review.";
@@ -366,14 +391,18 @@ class NotificationService
             $loan
         );
 
-        if ($sendEmail && config('mail.default') !== 'log' && $loan->user?->email) {
-            Mail::to($loan->user->email)->queue(new LoanStatusNotification($loan, 'rejected', $reason));
+        if ($sendEmail) {
+            $this->safeSendEmail(
+                $loan->user?->email,
+                new LoanStatusNotification($loan, 'rejected', $reason)
+            );
         }
     }
 
-    /**
-     * Create security alert for a new sign-in from an unfamiliar IP.
-     */
+    // ─────────────────────────────────────────────────────────────────────────
+    // Security alert notifications
+    // ─────────────────────────────────────────────────────────────────────────
+
     public function notifyNewLogin(User $user, string $ipAddress, bool $sendEmail = true): void
     {
         $this->create(
@@ -385,16 +414,15 @@ class NotificationService
             '/notifications'
         );
 
-        if ($sendEmail && config('mail.default') !== 'log' && $user->email) {
-            Mail::to($user->email)->queue(new SecurityAlert($user, 'new_login', [
-                'ip_address' => $ipAddress,
-            ]));
+        if ($sendEmail) {
+            try {
+                SendSecurityAlertJob::dispatch($user->id, 'new_login', ['ip_address' => $ipAddress]);
+            } catch (Throwable $e) {
+                Log::warning("Failed to dispatch security alert job: {$e->getMessage()}");
+            }
         }
     }
 
-    /**
-     * Create security alert for failed login attempts
-     */
     public function notifyFailedLogins(User $user, int $attempts, string $ipAddress, bool $sendEmail = true): void
     {
         $this->create(
@@ -406,18 +434,18 @@ class NotificationService
             '/notifications'
         );
 
-        // Send email notification
-        if ($sendEmail && config('mail.default') !== 'log' && $user->email) {
-            Mail::to($user->email)->queue(new SecurityAlert($user, 'failed_login', [
-                'attempts' => $attempts,
-                'ip_address' => $ipAddress,
-            ]));
+        if ($sendEmail) {
+            try {
+                SendSecurityAlertJob::dispatch($user->id, 'failed_login', [
+                    'attempts' => $attempts,
+                    'ip_address' => $ipAddress,
+                ]);
+            } catch (Throwable $e) {
+                Log::warning("Failed to dispatch security alert job: {$e->getMessage()}");
+            }
         }
     }
 
-    /**
-     * Create security alert for password change
-     */
     public function notifyPasswordChanged(User $user, bool $sendEmail = true): void
     {
         $this->create(
@@ -429,15 +457,15 @@ class NotificationService
             '/notifications'
         );
 
-        // Send email notification
-        if ($sendEmail && config('mail.default') !== 'log' && $user->email) {
-            Mail::to($user->email)->queue(new SecurityAlert($user, 'password_changed'));
+        if ($sendEmail) {
+            try {
+                SendSecurityAlertJob::dispatch($user->id, 'password_changed');
+            } catch (Throwable $e) {
+                Log::warning("Failed to dispatch security alert job: {$e->getMessage()}");
+            }
         }
     }
 
-    /**
-     * Create security alert for email change
-     */
     public function notifyEmailChanged(User $user, string $newEmail, bool $sendEmail = true): void
     {
         $this->create(
@@ -449,17 +477,15 @@ class NotificationService
             '/notifications'
         );
 
-        // Send email notification (to old email for security)
-        if ($sendEmail && config('mail.default') !== 'log' && $user->email) {
-            Mail::to($user->email)->queue(new SecurityAlert($user, 'email_changed', [
-                'new_email' => $newEmail,
-            ]));
+        if ($sendEmail) {
+            try {
+                SendSecurityAlertJob::dispatch($user->id, 'email_changed', ['new_email' => $newEmail]);
+            } catch (Throwable $e) {
+                Log::warning("Failed to dispatch security alert job: {$e->getMessage()}");
+            }
         }
     }
 
-    /**
-     * Create email verification notification
-     */
     public function notifyEmailVerification(User $user): void
     {
         $this->create(

@@ -10,9 +10,7 @@ use App\Http\Controllers\PasswordController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\DashboardController;
-use App\Livewire\Content\Dashboards\MemberLoans;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
 // === Public Routes ===
@@ -129,6 +127,11 @@ Route::middleware(['auth', 'otp.verified'])->group(function () {
             return redirect()->route('dashboard', $request->query());
         })->name($legacyName);
     }
-
-    Route::middleware('role:member')->get('/member/loans', MemberLoans::class)->name('member.loans');
 });
+
+// === SPA Catch-All ===
+// Serve the React app for any non-API, non-asset routes.
+// This must be AFTER all other routes.
+Route::get('/{path?}', function () {
+    return view('react');
+})->where('path', '.*')->name('react.spa');
