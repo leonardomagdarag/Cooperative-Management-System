@@ -3,8 +3,8 @@
     @php
         $canViewMemberId = Auth::user()->can('members.view-full-details');
     @endphp
-    {{-- Auto-refresh every 20 seconds; paused while modals are open --}}
-    <div x-data="{ showModal: @entangle('showModal'), showEditModal: @entangle('showEditModal'), showExportModal: @entangle('showExportModal') }" x-show="!showModal && !showEditModal && !showExportModal" wire:poll.visible.20s aria-hidden="true"
+    {{-- Auto-refresh occasionally; paused while modals are open --}}
+    <div x-data="{ showModal: @entangle('showModal'), showEditModal: @entangle('showEditModal'), showExportModal: @entangle('showExportModal') }" x-show="!showModal && !showEditModal && !showExportModal" wire:poll.visible.60s aria-hidden="true"
         class="w-px h-px opacity-0 pointer-events-none"></div>
 
     <div>

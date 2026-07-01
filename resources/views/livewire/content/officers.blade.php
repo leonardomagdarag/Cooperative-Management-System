@@ -1,7 +1,7 @@
 {{-- Single root element required by Livewire --}}
 <div>
-    {{-- Auto-refresh every 20 seconds, but only when modals are closed --}}
-    <div @if (!$showModal && !$showEditModal) wire:poll.20s @endif>
+    {{-- Auto-refresh occasionally, but only when modals are closed --}}
+    <div @if (!$showModal && !$showEditModal) wire:poll.visible.60s @endif>
         <div class="p-4 bg-white block sm:flex items-center justify-between border-b border-gray-200 lg:mt-1.5">
             <div class="w-full mb-1">
                 <div class="mb-4">

@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Services\AuditLogService;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -37,6 +38,19 @@ class Dashboard extends Component
     }
 
     private function getUserSections($user): array
+    {
+        if (! $user) {
+            return [];
+        }
+
+        return Cache::remember(
+            "dashboard.sections.user.{$user->id}",
+            now()->addMinute(),
+            fn() => $this->resolveUserSections($user)
+        );
+    }
+
+    private function resolveUserSections($user): array
     {
         $userRole = $user->primary_role;
 

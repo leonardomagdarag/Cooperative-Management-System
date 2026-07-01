@@ -1,5 +1,5 @@
-{{-- Auto-refresh every 20 seconds --}}
-<div wire:poll.20s>
+{{-- Auto-refresh occasionally --}}
+<div wire:poll.visible.60s>
     <div class="p-4 bg-white block sm:flex items-center justify-between border-b border-gray-200 lg:mt-1.5">
         <div class="w-full mb-1">
             <div class="mb-4">
