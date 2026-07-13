@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 
@@ -16,9 +18,16 @@ type LoginForm = z.infer<typeof loginSchema>;
 export default function LoginPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [loginError, setLoginError] = useState('');
     const { login } = useAuth();
     const { addToast } = useToast();
     const navigate = useNavigate();
+
+    const { data: pc } = useQuery({
+        queryKey: ['public-content'],
+        queryFn: () => api.get('/api/public-content'),
+    });
+    const registrationEnabled = pc?.data?.form?.registration?.online_member_registration_enabled !== false;
 
     const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>({
         resolver: zodResolver(loginSchema),
@@ -26,11 +35,13 @@ export default function LoginPage() {
 
     const onSubmit = async (data: LoginForm) => {
         setIsSubmitting(true);
+        setLoginError('');
         try {
             await login(data.email, data.password);
             navigate('/dashboard');
         } catch (err: any) {
             const message = err.response?.data?.message || 'Login failed. Please try again.';
+            setLoginError(message);
             addToast(message, 'error');
         } finally {
             setIsSubmitting(false);
@@ -38,69 +49,103 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-8">
-            <div className="w-full max-w-md">
-                <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-lg">
-                    <div className="mb-8 text-center">
-                        <div className="mb-5 flex justify-center">
-                            <img src="/images/Logo.png" alt="Logo" className="h-16 w-16 rounded-full object-cover shadow-sm" />
-                        </div>
-                        <h1 className="text-3xl font-extrabold text-slate-900">Welcome back</h1>
-                        <p className="mt-2 text-sm text-slate-600">Enter your credentials to access your account</p>
-                    </div>
-
-                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
-                            <input
-                                type="email"
-                                {...register('email')}
-                                className="w-full rounded-xl border-0 bg-slate-50 px-4 py-3.5 text-sm ring-1 ring-slate-200 transition-all focus:bg-white focus:ring-2 focus:ring-emerald-500"
-                                placeholder="Enter your email"
-                            />
-                            {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email.message}</p>}
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
-                            <div className="relative">
-                                <input
-                                    type={showPassword ? 'text' : 'password'}
-                                    {...register('password')}
-                                    className="w-full rounded-xl border-0 bg-slate-50 px-4 py-3.5 pr-12 text-sm ring-1 ring-slate-200 transition-all focus:bg-white focus:ring-2 focus:ring-emerald-500"
-                                    placeholder="Enter your password"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400 hover:text-slate-600"
-                                >
-                                    <i className={`fas fa-eye${showPassword ? '-slash' : ''}`}></i>
-                                </button>
+        <div className="public-page">
+            <section className="public-auth-panel flex items-center justify-center px-6 py-8">
+                <div className="public-card overflow-hidden max-w-md w-full">
+                    <div className="p-8">
+                        <div className="max-w-md mx-auto">
+                            <div className="mb-8 text-center">
+                                <div className="mb-5 flex justify-center">
+                                    <img src="/images/Logo.png" alt="Settlers Logo" className="h-16 w-16 rounded-full object-cover shadow-sm" />
+                                </div>
+                                <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-2">Welcome back</h1>
+                                <p className="text-sm md:text-base text-slate-600">
+                                    Enter your credentials to access your account
+                                </p>
                             </div>
-                            {errors.password && <p className="mt-1 text-xs text-red-500">{errors.password.message}</p>}
-                        </div>
 
-                        <div className="flex items-center justify-between text-sm">
-                            <label className="flex items-center gap-2">
-                                <input type="checkbox" className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
-                                <span className="text-slate-600">Remember me</span>
-                            </label>
-                            <Link to="/forgot-password" className="font-medium text-emerald-600 hover:text-emerald-700">
-                                Forgot password?
-                            </Link>
-                        </div>
+                            <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+                                <div>
+                                    <label htmlFor="email" className="block text-xs md:text-sm font-medium text-slate-500 mb-2">Email</label>
+                                    <input
+                                        type="email"
+                                        id="email"
+                                        {...register('email')}
+                                        className="public-input text-sm"
+                                        placeholder="Enter your email"
+                                    />
+                                    {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email.message}</p>}
+                                </div>
 
-                        <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className="w-full rounded-lg bg-emerald-700 px-6 py-3 font-semibold text-white shadow-md transition-all hover:bg-emerald-800 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            {isSubmitting ? 'Signing in...' : 'Sign in'}
-                        </button>
-                    </form>
+                                <div>
+                                    <label htmlFor="password" className="block text-xs md:text-sm font-medium text-slate-500 mb-2">Password</label>
+                                    <div className="relative">
+                                        <input
+                                            type={showPassword ? 'text' : 'password'}
+                                            id="password"
+                                            {...register('password')}
+                                            className="public-input pr-12 text-sm"
+                                            placeholder="Enter your password"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                                        >
+                                            <i className={`fas fa-eye${showPassword ? '-slash' : ''}`}></i>
+                                        </button>
+                                    </div>
+                                    {errors.password && <p className="mt-1 text-xs text-red-500">{errors.password.message}</p>}
+                                </div>
+
+                                {loginError && (
+                                    <div className="p-4 bg-red-50 border-l-4 border-red-500 rounded-r-lg">
+                                        <div className="flex items-center gap-3">
+                                            <i className="fas fa-exclamation-circle text-red-500 text-xl shrink-0"></i>
+                                            <p className="text-sm font-medium text-red-800">{loginError}</p>
+                                            <button type="button" onClick={() => setLoginError('')} className="shrink-0 text-red-400 hover:text-red-600 transition-colors ml-auto">
+                                                <i className="fas fa-times"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="flex items-center justify-between flex-wrap gap-2 pt-2">
+                                    <label className="flex items-center">
+                                        <input type="checkbox" className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer" />
+                                        <span className="ml-2 text-sm text-slate-600 cursor-pointer select-none">Remember me</span>
+                                    </label>
+                                    <Link to="/forgot-password" className="text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors">
+                                        Forgot password?
+                                    </Link>
+                                </div>
+
+                                <button type="submit" disabled={isSubmitting} className="public-btn public-btn-primary w-full">
+                                    {isSubmitting ? 'Signing in...' : 'Sign in'}
+                                </button>
+
+                                {registrationEnabled && (
+                                    <div className="text-center pt-6 mt-6 border-t border-gray-200">
+                                        <p className="text-sm text-slate-600 mb-3">Don't have an account?</p>
+                                        <Link to="/register" className="inline-flex items-center gap-2 text-emerald-700 hover:text-emerald-800 font-semibold transition-colors">
+                                            <i className="fas fa-user-plus"></i>
+                                            <span>Create an Account</span>
+                                            <i className="fas fa-arrow-right text-sm"></i>
+                                        </Link>
+                                    </div>
+                                )}
+
+                                <div className="text-center pt-4">
+                                    <Link to="/" className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors group">
+                                        <i className="fas fa-arrow-left text-sm group-hover:-translate-x-1 transition-transform"></i>
+                                        <span className="font-medium">Back to Home</span>
+                                    </Link>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
                 </div>
-            </div>
+            </section>
         </div>
     );
 }

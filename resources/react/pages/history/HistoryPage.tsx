@@ -10,7 +10,7 @@ export default function HistoryPage() {
     const [page, setPage] = useState(1);
     const [direction, setDirection] = useState('desc');
 
-    const { data, isLoading } = useQuery({
+    const { data, isLoading, refetch } = useQuery({
         queryKey: ['history', category, status, dateFilter, search, page, direction],
         queryFn: () => getHistory({
             category: category === 'all' ? undefined : category,
@@ -32,7 +32,7 @@ export default function HistoryPage() {
             case 'withdrawal': return 'bg-red-100 text-red-700';
             case 'loan_payment': return 'bg-blue-100 text-blue-700';
             case 'loan_disbursement': return 'bg-amber-100 text-amber-700';
-            default: return 'bg-slate-100 text-slate-700';
+            default: return 'bg-gray-100 text-gray-700';
         }
     };
 
@@ -41,108 +41,123 @@ export default function HistoryPage() {
             case 'completed': case 'approved': return 'bg-emerald-100 text-emerald-700';
             case 'pending': return 'bg-amber-100 text-amber-700';
             case 'rejected': return 'bg-red-100 text-red-700';
-            default: return 'bg-slate-100 text-slate-700';
+            default: return 'bg-gray-100 text-gray-700';
+        }
+    };
+
+    const getTypeIcon = (type: string) => {
+        switch (type) {
+            case 'deposit': return 'fas fa-plus-circle text-emerald-600';
+            case 'withdrawal': return 'fas fa-minus-circle text-red-600';
+            case 'loan_payment': return 'fas fa-hand-holding-usd text-blue-600';
+            case 'loan_disbursement': return 'fas fa-file-invoice-dollar text-amber-600';
+            default: return 'fas fa-receipt text-gray-600';
         }
     };
 
     return (
         <div className="space-y-6">
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Transaction History</h1>
-
-            {/* Filters */}
-            <div className="flex flex-wrap gap-3">
-                <input
-                    type="text"
-                    placeholder="Search transactions..."
-                    value={search}
-                    onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
-                />
-                <select value={category} onChange={e => { setCategory(e.target.value); setPage(1); }} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800">
-                    <option value="all">All Types</option>
-                    <option value="deposit">Deposits</option>
-                    <option value="withdrawal">Withdrawals</option>
-                    <option value="loan_payment">Loan Payments</option>
-                    <option value="loan_disbursement">Loan Disbursements</option>
-                </select>
-                <select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800">
-                    <option value="all">All Status</option>
-                    <option value="pending">Pending</option>
-                    <option value="completed">Completed</option>
-                    <option value="approved">Approved</option>
-                    <option value="rejected">Rejected</option>
-                </select>
-                <select value={dateFilter} onChange={e => { setDateFilter(e.target.value); setPage(1); }} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800">
-                    <option value="all">All Time</option>
-                    <option value="today">Today</option>
-                    <option value="week">This Week</option>
-                    <option value="month">This Month</option>
-                    <option value="year">This Year</option>
-                </select>
-                <button
-                    onClick={() => setDirection(d => d === 'desc' ? 'asc' : 'desc')}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700"
-                >
-                    <i className={`fas fa-sort-${direction === 'desc' ? 'down' : 'up'} mr-1`}></i>
-                    {direction === 'desc' ? 'Newest' : 'Oldest'}
-                </button>
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="flex items-center justify-between">
+                    <h1 className="text-2xl font-bold text-gray-900">Transaction History</h1>
+                    <button
+                        onClick={() => refetch()}
+                        className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+                    >
+                        <i className="fas fa-sync-alt mr-1"></i> Refresh
+                    </button>
+                </div>
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <input
+                        type="text"
+                        placeholder="Search transactions..."
+                        value={search}
+                        onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                        className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none"
+                    />
+                    <select value={dateFilter} onChange={e => { setDateFilter(e.target.value); setPage(1); }} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none">
+                        <option value="all">All Time</option>
+                        <option value="today">Today</option>
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="year">This Year</option>
+                    </select>
+                    <select value={category} onChange={e => { setCategory(e.target.value); setPage(1); }} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none">
+                        <option value="all">All Types</option>
+                        <option value="deposit">Deposits</option>
+                        <option value="withdrawal">Withdrawals</option>
+                        <option value="loan_payment">Loan Payments</option>
+                        <option value="loan_disbursement">Loan Disbursements</option>
+                    </select>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none">
+                        <option value="all">All Status</option>
+                        <option value="pending">Pending</option>
+                        <option value="completed">Completed</option>
+                        <option value="approved">Approved</option>
+                        <option value="rejected">Rejected</option>
+                    </select>
+                    <button
+                        onClick={() => setDirection(d => d === 'desc' ? 'asc' : 'desc')}
+                        className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm hover:bg-gray-50"
+                    >
+                        <i className={`fas fa-sort-${direction === 'desc' ? 'down' : 'up'} mr-1`}></i>
+                        {direction === 'desc' ? 'Newest' : 'Oldest'}
+                    </button>
+                </div>
             </div>
 
-            {/* Table */}
             {isLoading ? (
                 <div className="space-y-3">
                     {[...Array(5)].map((_, i) => (
-                        <div key={i} className="h-14 animate-pulse rounded-lg bg-slate-100 dark:bg-slate-800" />
+                        <div key={i} className="h-20 animate-pulse rounded-xl bg-gray-100" />
                     ))}
                 </div>
             ) : transactions.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center dark:border-slate-600 dark:bg-slate-800">
-                    <i className="fas fa-receipt text-4xl text-slate-300 dark:text-slate-600"></i>
-                    <p className="mt-4 text-sm text-slate-500">No transactions found</p>
+                <div className="rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center">
+                    <i className="fas fa-receipt text-4xl text-gray-300"></i>
+                    <p className="mt-4 text-sm text-gray-500">No transactions found</p>
                 </div>
             ) : (
-                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
-                    <table className="w-full text-left text-sm">
-                        <thead className="border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900">
-                            <tr>
-                                <th className="px-4 py-3 font-medium text-slate-500">Transaction #</th>
-                                <th className="px-4 py-3 font-medium text-slate-500">Type</th>
-                                <th className="px-4 py-3 font-medium text-slate-500">Amount</th>
-                                <th className="px-4 py-3 font-medium text-slate-500">Status</th>
-                                <th className="px-4 py-3 font-medium text-slate-500">Date</th>
-                                <th className="px-4 py-3 font-medium text-slate-500">Note</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                            {transactions.map(t => (
-                                <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                                    <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{t.transaction_number}</td>
-                                    <td className="px-4 py-3">
-                                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${getTypeColor(t.transaction_type)}`}>
-                                            {t.transaction_type.replace('_', ' ')}
-                                        </span>
-                                    </td>
-                                    <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">₱{Number(t.amount).toLocaleString()}</td>
-                                    <td className="px-4 py-3">
+                <div className="space-y-3">
+                    {transactions.map(t => (
+                        <div key={t.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100">
+                                        <i className={`${getTypeIcon(t.transaction_type)} text-lg`}></i>
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-medium text-gray-900">{t.transaction_number}</span>
+                                            <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${getTypeColor(t.transaction_type)}`}>
+                                                {t.transaction_type.replace('_', ' ')}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-gray-500">{t.transaction_date}</p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <p className="font-bold text-gray-900">&#8369;{Number(t.amount).toLocaleString()}</p>
+                                    <div className="mt-1 flex items-center gap-2 justify-end">
                                         <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusColor(t.status)}`}>
                                             {t.status}
                                         </span>
-                                    </td>
-                                    <td className="px-4 py-3 text-slate-500">{t.transaction_date}</td>
-                                    <td className="px-4 py-3 text-slate-500 max-w-[200px] truncate">{t.note || '—'}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                                    </div>
+                                    {t.note && <p className="mt-1 max-w-[200px] truncate text-xs text-gray-400">{t.note}</p>}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             )}
 
-            {/* Pagination */}
             {pagination && pagination.last_page > 1 && (
                 <div className="flex items-center justify-center gap-2">
-                    <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:hover:bg-slate-700">Previous</button>
-                    <span className="text-sm text-slate-500">Page {page} of {pagination.last_page}</span>
-                    <button onClick={() => setPage(p => Math.min(pagination.last_page, p + 1))} disabled={page === pagination.last_page} className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:hover:bg-slate-700">Next</button>
+                    <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50">Previous</button>
+                    <span className="text-sm text-gray-500">Page {page} of {pagination.last_page}</span>
+                    <button onClick={() => setPage(p => Math.min(pagination.last_page, p + 1))} disabled={page === pagination.last_page} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50">Next</button>
                 </div>
             )}
         </div>

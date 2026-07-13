@@ -26,15 +26,41 @@ class ProfileController extends Controller
             'personalData.employment',
             'personalData.memberId',
             'accounts',
-            'loans',
+            'loans.payments',
             'beneficiaries',
             'trustedDevices',
         ]);
 
         $accounts = $user->accounts;
         $totalBalance = $accounts->sum('balance');
-        $loans = $user->loans()->latest()->take(5)->get();
+        $loans = $user->loans()->latest()->take(10)->get();
         $activeLoans = $user->loans()->whereIn('loan_status', ['approved', 'disbursed', 'active'])->count();
+
+        $totalLoanBalance = $user->loans()
+            ->whereIn('loan_status', ['approved', 'active'])
+            ->get()
+            ->sum(fn ($l) => $l->remainingBalance());
+
+        $savingsAccount = $accounts->where('account_type', 'savings')->first();
+        $shareCapitalAccount = $accounts->where('account_type', 'share-capital')->first();
+
+        $announcements = \App\Models\Announcement::query()
+            ->with('creator.personalData')
+            ->latest()
+            ->take(5)
+            ->get()
+            ->map(fn ($a) => [
+                'id' => $a->id,
+                'title' => $a->title,
+                'content' => $a->content,
+                'type' => $a->type,
+                'created_at' => $a->created_at->toISOString(),
+                'created_at_diff' => $a->created_at->diffForHumans(),
+                'creator_name' => trim(
+                    ($a->creator->personalData->first_name ?? '') . ' ' .
+                    ($a->creator->personalData->last_name ?? '')
+                ) ?: 'Unknown',
+            ]);
         $recentLogs = Activity::query()
             ->where('causer_type', $user::class)
             ->where('causer_id', $user->id)
@@ -93,13 +119,37 @@ class ProfileController extends Controller
                 'status' => $a->status,
             ]),
             'total_balance' => $totalBalance,
-            'loans' => $loans->map(fn ($l) => [
-                'id' => $l->id,
-                'loan_number' => $l->loan_number,
-                'loan_type' => $l->loan_type,
-                'principal_amount' => $l->principal_amount,
-                'loan_status' => $l->loan_status,
-            ]),
+            'loans' => $loans->map(function ($l) {
+                $totalPaid = $l->payments->sum('amount');
+                $progress = $l->loan_amount > 0 ? round(($totalPaid / $l->loan_amount) * 100, 1) : 0;
+                return [
+                    'id' => $l->id,
+                    'loan_number' => $l->loan_number,
+                    'loan_type' => $l->loan_type,
+                    'principal_amount' => $l->principal_amount ?? $l->loan_amount,
+                    'loan_amount' => $l->loan_amount,
+                    'loan_status' => $l->loan_status,
+                    'remaining_balance' => $l->remainingBalance(),
+                    'total_paid' => $totalPaid,
+                    'progress' => $progress,
+                    'due_date' => $l->due_date?->format('M d, Y'),
+                    'due_date_raw' => $l->due_date?->toISOString(),
+                    'interest_rate' => (float) ($l->interest_rate ?? 0),
+                    'term_months' => (int) ($l->term_months ?? 0),
+                ];
+            }),
+            'total_loan_balance' => $totalLoanBalance,
+            'savings_account' => $savingsAccount ? [
+                'id' => $savingsAccount->id,
+                'account_number' => $savingsAccount->account_number,
+                'balance' => $savingsAccount->balance,
+            ] : null,
+            'share_capital_account' => $shareCapitalAccount ? [
+                'id' => $shareCapitalAccount->id,
+                'account_number' => $shareCapitalAccount->account_number,
+                'balance' => $shareCapitalAccount->balance,
+            ] : null,
+            'announcements' => $announcements,
             'active_loans_count' => $activeLoans,
             'beneficiaries' => $user->beneficiaries->map(fn ($b) => [
                 'id' => $b->id,

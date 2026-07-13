@@ -18,7 +18,13 @@ export async function fetchUser() {
 }
 
 export async function forgotPassword(email: string) {
+    await fetchCsrf();
     return api.post('/forgot-password', { email });
+}
+
+export async function verifyResetToken(email: string, token: string) {
+    await fetchCsrf();
+    return api.post('/verify-token', { email, token });
 }
 
 export async function resetPassword(payload: {
@@ -27,5 +33,6 @@ export async function resetPassword(payload: {
     password: string;
     password_confirmation: string;
 }) {
+    await fetchCsrf();
     return api.post('/reset-password', payload);
 }

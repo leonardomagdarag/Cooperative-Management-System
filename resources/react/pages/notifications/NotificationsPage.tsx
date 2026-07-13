@@ -47,23 +47,26 @@ export default function NotificationsPage() {
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Notifications</h1>
+        <div className="max-w-7xl mx-auto p-6">
+            <div className="flex items-center justify-between mb-6">
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-900">Notifications</h1>
+                    <p className="text-sm text-gray-500">Stay on top of your alerts and updates</p>
+                </div>
                 <button
                     onClick={() => markAllMutation.mutate()}
-                    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+                    className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg px-4 py-2 text-sm font-medium"
                 >
                     Mark All Read
                 </button>
             </div>
 
             {/* Filters */}
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-3 mb-4">
                 <select
                     value={statusFilter}
                     onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5"
                 >
                     <option value="all">All Status</option>
                     <option value="unread">Unread</option>
@@ -72,7 +75,7 @@ export default function NotificationsPage() {
                 <select
                     value={categoryFilter}
                     onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5"
                 >
                     <option value="all">All Categories</option>
                     <option value="security">Security</option>
@@ -86,13 +89,13 @@ export default function NotificationsPage() {
             {isLoading ? (
                 <div className="space-y-3">
                     {[...Array(5)].map((_, i) => (
-                        <div key={i} className="h-20 animate-pulse rounded-lg bg-slate-100 dark:bg-slate-800" />
+                        <div key={i} className="h-20 animate-pulse rounded-lg bg-gray-100" />
                     ))}
                 </div>
             ) : notifications.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center dark:border-slate-600 dark:bg-slate-800">
-                    <i className="fas fa-bell-slash text-4xl text-slate-300 dark:text-slate-600"></i>
-                    <p className="mt-4 text-sm text-slate-500">No notifications found</p>
+                <div className="rounded-lg border border-dashed border-gray-300 bg-white p-12 text-center">
+                    <i className="fas fa-bell-slash text-4xl text-gray-300"></i>
+                    <p className="mt-4 text-sm text-gray-500">No notifications found</p>
                 </div>
             ) : (
                 <div className="space-y-2">
@@ -103,29 +106,24 @@ export default function NotificationsPage() {
                                 setSelected(n);
                                 if (!n.is_read) markReadMutation.mutate(n.id);
                             }}
-                            className={`w-full rounded-lg border p-4 text-left transition-all hover:shadow-md ${
-                                n.is_read
-                                    ? 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800'
-                                    : 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20'
+                            className={`w-full rounded-2xl bg-white border border-gray-200 shadow-sm p-4 md:p-6 text-left transition-all hover:shadow-md ${
+                                n.is_read ? '' : 'border-l-4 border-l-blue-600'
                             }`}
                         >
                             <div className="flex items-start gap-3">
-                                <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-                                    n.is_read ? 'bg-slate-100 dark:bg-slate-700' : 'bg-emerald-100 dark:bg-emerald-900'
-                                }`}>
-                                    <i className={`fas ${n.icon || 'fa-bell'} text-sm ${
-                                        n.is_read ? 'text-slate-400' : 'text-emerald-600'
-                                    }`}></i>
+                                <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${n.is_read ? 'bg-gray-100' : 'bg-blue-50'}`}>
+                                    <i className={`fas ${n.icon || 'fa-bell'} text-sm ${n.is_read ? 'text-gray-400' : 'text-blue-600'}`}></i>
                                 </div>
                                 <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-2">
-                                        <p className="font-medium text-slate-900 dark:text-white">{n.title}</p>
-                                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getCategoryColor(n.type)}`}>
+                                        <p className="font-medium text-gray-900">{n.title}</p>
+                                        {!n.is_read && <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-red-100 text-red-700">Unread</span>}
+                                        <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${getCategoryColor(n.type)}`}>
                                             {n.type.replace('_', ' ')}
                                         </span>
                                     </div>
-                                    <p className="mt-1 text-sm text-slate-500 line-clamp-2">{n.message}</p>
-                                    <p className="mt-1 text-xs text-slate-400">{n.time_ago}</p>
+                                    <p className="mt-1 text-sm text-gray-500 line-clamp-2">{n.message}</p>
+                                    <p className="mt-1 text-xs text-gray-400">{n.time_ago}</p>
                                 </div>
                             </div>
                         </button>
@@ -135,19 +133,19 @@ export default function NotificationsPage() {
 
             {/* Pagination */}
             {pagination && pagination.last_page > 1 && (
-                <div className="flex items-center justify-center gap-2">
+                <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 flex items-center justify-center gap-2 mt-4">
                     <button
                         onClick={() => setPage(p => Math.max(1, p - 1))}
                         disabled={page === 1}
-                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:hover:bg-slate-700"
+                        className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50"
                     >
                         Previous
                     </button>
-                    <span className="text-sm text-slate-500">Page {page} of {pagination.last_page}</span>
+                    <span className="text-sm text-gray-500">Page {page} of {pagination.last_page}</span>
                     <button
                         onClick={() => setPage(p => Math.min(pagination.last_page, p + 1))}
                         disabled={page === pagination.last_page}
-                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:hover:bg-slate-700"
+                        className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50"
                     >
                         Next
                     </button>
@@ -157,15 +155,17 @@ export default function NotificationsPage() {
             {/* Detail Modal */}
             {selected && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setSelected(null)}>
-                    <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-800" onClick={e => e.stopPropagation()}>
-                        <div className="mb-4 flex items-center justify-between">
-                            <h2 className="text-lg font-bold text-slate-900 dark:text-white">{selected.title}</h2>
-                            <button onClick={() => setSelected(null)} className="text-slate-400 hover:text-slate-600">
-                                <i className="fas fa-times"></i>
-                            </button>
+                    <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+                        <div className="p-6">
+                            <div className="mb-4 flex items-center justify-between">
+                                <h2 className="text-lg font-bold text-gray-900">{selected.title}</h2>
+                                <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600">
+                                    <i className="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <p className="text-sm text-gray-500">{selected.message}</p>
+                            <p className="mt-4 text-xs text-gray-400">{selected.time_ago}</p>
                         </div>
-                        <p className="text-sm text-slate-500">{selected.message}</p>
-                        <p className="mt-4 text-xs text-slate-400">{selected.time_ago}</p>
                     </div>
                 </div>
             )}

@@ -25,8 +25,13 @@ class MemberController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = User::query()
-            ->memberUsers()
             ->with(['personalData.address', 'personalData.contact', 'accounts']);
+
+        if ($request->boolean('is_officer')) {
+            $query->officerUsers();
+        } else {
+            $query->memberUsers();
+        }
 
         // Search
         if ($search = $request->string('search')->toString()) {

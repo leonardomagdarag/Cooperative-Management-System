@@ -118,6 +118,7 @@ Route::middleware(['web', 'auth:web'])->group(function () {
 
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index']);
+    Route::get('/member-loans', [DashboardController::class, 'memberLoans']);
 
     // Loan Products
     Route::get('/loan-products', [LoanProductController::class, 'index']);

@@ -33,88 +33,88 @@ export default function LogsPage() {
     };
 
     return (
-        <div className="space-y-6">
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Audit Logs</h1>
-
-            {/* Filters */}
-            <div className="flex flex-wrap gap-3">
-                <input
-                    type="text"
-                    placeholder="Search logs..."
-                    value={search}
-                    onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
-                />
-                <select value={tag} onChange={e => { setTag(e.target.value); setPage(1); }} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800">
-                    <option value="all">All Tags</option>
-                    {filters?.tags?.map((t: string) => <option key={t} value={t}>{t}</option>)}
-                </select>
-                <select value={event} onChange={e => { setEvent(e.target.value); setPage(1); }} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800">
-                    <option value="all">All Events</option>
-                    {filters?.events?.map((ev: string) => <option key={ev} value={ev}>{ev}</option>)}
-                </select>
-                <select value={dateRange} onChange={e => { setDateRange(e.target.value); setPage(1); }} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800">
-                    <option value="all">All Time</option>
-                    <option value="today">Today</option>
-                    <option value="week">This Week</option>
-                    <option value="month">This Month</option>
-                </select>
+        <>
+            <div className="p-4 bg-white block sm:flex items-center justify-between border-b border-gray-200 lg:mt-1.5">
+                <div>
+                    <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl">Activity Logs</h1>
+                    <p className="text-sm text-gray-500">Track system events and user actions</p>
+                </div>
             </div>
 
-            {/* Table */}
-            {isLoading ? (
-                <div className="space-y-3">
-                    {[...Array(5)].map((_, i) => (
-                        <div key={i} className="h-14 animate-pulse rounded-lg bg-slate-100 dark:bg-slate-800" />
-                    ))}
+            <div className="p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+                    <div className="col-span-1 sm:col-span-2">
+                        <input
+                            type="text"
+                            placeholder="Search logs..."
+                            value={search}
+                            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                            className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                        />
+                    </div>
+                    <select value={tag} onChange={e => { setTag(e.target.value); setPage(1); }} className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+                        <option value="all">All Tags</option>
+                        {filters?.tags?.map((t: string) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <select value={event} onChange={e => { setEvent(e.target.value); setPage(1); }} className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+                        <option value="all">All Events</option>
+                        {filters?.events?.map((ev: string) => <option key={ev} value={ev}>{ev}</option>)}
+                    </select>
                 </div>
-            ) : logs.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center dark:border-slate-600 dark:bg-slate-800">
-                    <i className="fas fa-file-alt text-4xl text-slate-300 dark:text-slate-600"></i>
-                    <p className="mt-4 text-sm text-slate-500">No logs found</p>
-                </div>
-            ) : (
-                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
-                    <table className="w-full text-left text-sm">
-                        <thead className="border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900">
-                            <tr>
-                                <th className="px-4 py-3 font-medium text-slate-500">Time</th>
-                                <th className="px-4 py-3 font-medium text-slate-500">Causer</th>
-                                <th className="px-4 py-3 font-medium text-slate-500">Event</th>
-                                <th className="px-4 py-3 font-medium text-slate-500">Description</th>
-                                <th className="px-4 py-3 font-medium text-slate-500">Tag</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                            {logs.map(log => (
-                                <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                                    <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
-                                        {new Date(log.created_at).toLocaleString()}
-                                    </td>
-                                    <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">
-                                        {log.causer?.name || 'System'}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${getEventColor(log.event)}`}>
-                                            {log.event}
-                                        </span>
-                                    </td>
-                                    <td className="px-4 py-3 text-slate-500 max-w-[300px] truncate">{log.description}</td>
-                                    <td className="px-4 py-3 text-slate-500">{log.log_name || '—'}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
 
-            {pagination && pagination.last_page > 1 && (
-                <div className="flex items-center justify-center gap-2">
-                    <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:hover:bg-slate-700">Previous</button>
-                    <span className="text-sm text-slate-500">Page {page} of {pagination.last_page}</span>
-                    <button onClick={() => setPage(p => Math.min(pagination.last_page, p + 1))} disabled={page === pagination.last_page} className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:hover:bg-slate-700">Next</button>
-                </div>
-            )}
-        </div>
+                {/* Table */}
+                {isLoading ? (
+                    <div className="space-y-3">
+                        {[...Array(5)].map((_, i) => (
+                            <div key={i} className="h-14 animate-pulse rounded-lg bg-gray-100" />
+                        ))}
+                    </div>
+                ) : logs.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-gray-300 bg-white p-12 text-center">
+                        <i className="fas fa-file-alt text-4xl text-gray-300"></i>
+                        <p className="mt-4 text-sm text-gray-500">No logs found</p>
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                        <table className="min-w-full divide-y divide-gray-200 table-fixed">
+                            <thead className="bg-gray-100">
+                                <tr>
+                                    <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Date</th>
+                                    <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">User</th>
+                                    <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Event</th>
+                                    <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {logs.map(log => (
+                                    <tr key={log.id} className="hover:bg-gray-50">
+                                        <td className="p-4 text-sm text-gray-500 whitespace-nowrap">
+                                            {new Date(log.created_at).toLocaleString()}
+                                        </td>
+                                        <td className="p-4 text-sm font-medium text-gray-900">
+                                            {log.causer?.name || 'System'}
+                                        </td>
+                                        <td className="p-4">
+                                            <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${getEventColor(log.event)}`}>
+                                                {log.event}
+                                            </span>
+                                        </td>
+                                        <td className="p-4 text-sm text-gray-500 max-w-[300px] truncate">{log.description}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+
+                {pagination && pagination.last_page > 1 && (
+                    <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 flex items-center justify-center gap-2">
+                        <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50">Previous</button>
+                        <span className="text-sm text-gray-500">Page {page} of {pagination.last_page}</span>
+                        <button onClick={() => setPage(p => Math.min(pagination.last_page, p + 1))} disabled={page === pagination.last_page} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50">Next</button>
+                    </div>
+                )}
+            </div>
+        </>
     );
 }
