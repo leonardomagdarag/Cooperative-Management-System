@@ -2,15 +2,26 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
+import { useAuth } from '../../contexts/AuthContext';
 import MemberWizardForm from './MemberWizardForm';
 import MemberProfileModal from './MemberProfileModal';
+import MemberExportModal from './MemberExportModal';
 
 export default function MembersPage() {
+    const { user } = useAuth();
+    const perms = user?.permissions || [];
+    const canCreate = perms.includes('members.create');
+    const canEdit = perms.includes('members.update');
+    const canDelete = perms.includes('members.delete');
+    const canExport = perms.includes('members.view');
+    const canViewMemberId = perms.includes('members.view-full-details');
+    const hasActions = canEdit || canDelete;
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
     const [showWizard, setShowWizard] = useState(false);
     const [editing, setEditing] = useState<any>(null);
     const [viewing, setViewing] = useState<any>(null);
+    const [showExport, setShowExport] = useState(false);
     const queryClient = useQueryClient();
     const { addToast } = useToast();
 
@@ -53,10 +64,18 @@ export default function MembersPage() {
                             <button type="button" onClick={() => refetch()} className="inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-center text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 focus:ring-4 focus:ring-blue-300" title="Refresh data">
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                             </button>
-                            <button type="button" onClick={() => { setEditing(null); setShowWizard(true); }} className="inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-center text-white bg-blue-700 rounded-lg hover:bg-blue-800 focus:ring-4 focus:ring-blue-300">
-                                <svg className="w-5 h-5 mr-2 -ml-1" fill="currentColor" viewBox="0 0 20 20"><path d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"/></svg>
-                                Add Member
-                            </button>
+                            {canExport && (
+                                <button type="button" onClick={() => setShowExport(true)} className="inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-center text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 focus:ring-4 focus:ring-blue-300">
+                                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                    Export
+                                </button>
+                            )}
+                            {canCreate && (
+                                <button type="button" onClick={() => { setEditing(null); setShowWizard(true); }} className="inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-center text-white bg-blue-700 rounded-lg hover:bg-blue-800 focus:ring-4 focus:ring-blue-300">
+                                    <svg className="w-5 h-5 mr-2 -ml-1" fill="currentColor" viewBox="0 0 20 20"><path d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"/></svg>
+                                    Add Member
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -79,10 +98,10 @@ export default function MembersPage() {
                                         <tr>
                                             <th scope="col" className="p-4 w-10"><div className="flex items-center"><input type="checkbox" className="w-4 h-4 bg-gray-50 rounded border-gray-300 focus:ring-3 focus:ring-blue-300" /></div></th>
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Name</th>
-                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Member ID</th>
+                                            {canViewMemberId && <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Member ID</th>}
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Status</th>
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Email</th>
-                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Actions</th>
+                                            {hasActions && <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Actions</th>}
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
@@ -90,18 +109,20 @@ export default function MembersPage() {
                                             <tr key={m.id} className="hover:bg-gray-50">
                                                 <td className="p-4 w-10"><input type="checkbox" className="w-4 h-4 bg-gray-50 rounded border-gray-300 focus:ring-3 focus:ring-blue-300" /></td>
                                                 <td className="p-4 text-sm font-medium text-gray-900 whitespace-nowrap">{m.name || 'Unknown'}</td>
-                                                <td className="p-4 text-sm font-mono text-gray-500 whitespace-nowrap">{m.user_number || '—'}</td>
+                                                {canViewMemberId && <td className="p-4 text-sm font-mono text-gray-500 whitespace-nowrap">{m.user_number || '—'}</td>}
                                                 <td className="p-4 whitespace-nowrap">
                                                     <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${m.account_status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{m.account_status}</span>
                                                 </td>
                                                 <td className="p-4 text-sm text-gray-500">{m.email || '—'}</td>
-                                                <td className="p-4 whitespace-nowrap">
-                                                    <div className="flex items-center gap-1">
-                                                        <button onClick={() => setViewing(m)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="View"><i className="fas fa-eye text-sm"></i></button>
-                                                        <button onClick={() => { setEditing(m); setShowWizard(true); }} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Edit"><i className="fas fa-edit text-sm"></i></button>
-                                                        <button onClick={() => { if (confirm('Delete this member?')) deleteMutation.mutate(m.id); }} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Delete"><i className="fas fa-trash text-sm"></i></button>
-                                                    </div>
-                                                </td>
+                                                {hasActions && (
+                                                    <td className="p-4 whitespace-nowrap">
+                                                        <div className="flex items-center gap-1">
+                                                            <button onClick={() => setViewing(m)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="View"><i className="fas fa-eye text-sm"></i></button>
+                                                            {canEdit && <button onClick={() => { setEditing(m); setShowWizard(true); }} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Edit"><i className="fas fa-edit text-sm"></i></button>}
+                                                            {canDelete && <button onClick={() => { if (confirm('Delete this member?')) deleteMutation.mutate(m.id); }} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Delete"><i className="fas fa-trash text-sm"></i></button>}
+                                                        </div>
+                                                    </td>
+                                                )}
                                             </tr>
                                         ))}
                                     </tbody>
@@ -122,6 +143,7 @@ export default function MembersPage() {
 
             {showWizard && <MemberWizardForm member={editing} onClose={() => { setShowWizard(false); setEditing(null); }} />}
             {viewing && <MemberProfileModal memberId={viewing.id} onClose={() => setViewing(null)} />}
+            {showExport && <MemberExportModal onClose={() => setShowExport(false)} />}
         </div>
     );
 }

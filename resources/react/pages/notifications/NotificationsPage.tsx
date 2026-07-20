@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getNotifications, markAsRead, markAllAsRead, Notification } from '../../api/notifications';
+import { getNotifications, markAsRead, markAllAsRead, deleteNotification, deleteAllReadNotifications, Notification } from '../../api/notifications';
 
 export default function NotificationsPage() {
     const [statusFilter, setStatusFilter] = useState('all');
@@ -36,6 +36,23 @@ export default function NotificationsPage() {
         },
     });
 
+    const deleteMutation = useMutation({
+        mutationFn: deleteNotification,
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['notifications'] });
+            queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
+            setSelected(null);
+        },
+    });
+
+    const deleteAllReadMutation = useMutation({
+        mutationFn: deleteAllReadNotifications,
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['notifications'] });
+            queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
+        },
+    });
+
     const notifications: Notification[] = data?.data?.notifications ?? [];
     const pagination = data?.data?.pagination;
 
@@ -58,6 +75,12 @@ export default function NotificationsPage() {
                     className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg px-4 py-2 text-sm font-medium"
                 >
                     Mark All Read
+                </button>
+                <button
+                    onClick={() => { if (confirm('Delete all read notifications?')) deleteAllReadMutation.mutate(); }}
+                    className="text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg px-4 py-2 text-sm font-medium"
+                >
+                    Clear Read
                 </button>
             </div>
 
@@ -165,6 +188,15 @@ export default function NotificationsPage() {
                             </div>
                             <p className="text-sm text-gray-500">{selected.message}</p>
                             <p className="mt-4 text-xs text-gray-400">{selected.time_ago}</p>
+                            <div className="mt-6 flex justify-end border-t border-gray-100 pt-4">
+                                <button
+                                    onClick={() => deleteMutation.mutate(selected.id)}
+                                    disabled={deleteMutation.isPending}
+                                    className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-100 disabled:opacity-50"
+                                >
+                                    <i className="fas fa-trash text-xs"></i> Delete
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

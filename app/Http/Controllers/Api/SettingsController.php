@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\TrustedDevice;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Services\SecurityOtpService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -20,9 +21,17 @@ class SettingsController extends Controller
         $validated = $request->validate([
             'current_password' => ['required', 'current_password'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'otp_code' => ['required', 'string', 'digits:6'],
         ]);
 
         $user = Auth::user();
+
+        $securityOtp = app(SecurityOtpService::class);
+        $verified = $securityOtp->verifyChallenge($user, $securityOtp->passwordChangePurpose(), $validated['otp_code']);
+        if (! $verified) {
+            return response()->json(['message' => 'Invalid or expired verification code.'], 422);
+        }
+
         $user->password = $validated['password'];
         $user->remember_token = Str::random(60);
         $user->save();
@@ -41,6 +50,20 @@ class SettingsController extends Controller
         );
 
         return response()->json(['message' => 'Password updated. Trusted devices were revoked for safety.']);
+    }
+
+    public function sendPasswordChangeOtp(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+
+        $securityOtp = app(SecurityOtpService::class);
+        $challenge = $securityOtp->issueChallenge($user, $securityOtp->passwordChangePurpose());
+        $securityOtp->sendOtpMail($user, $securityOtp->passwordChangePurpose(), $challenge['otp_code']);
+
+        return response()->json([
+            'message' => 'A verification code was sent to your email.',
+            'expires_at' => $challenge['challenge']->expires_at->toISOString(),
+        ]);
     }
 
     public function revokeDevices(): JsonResponse

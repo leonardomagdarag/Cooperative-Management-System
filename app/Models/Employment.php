@@ -11,24 +11,14 @@ class Employment extends Model
 
     protected $fillable = [
         'employment_type',
-        'employment_status',
-        'employer_name',
-        'employer_contact',
+        'company',
         'position',
-        'industry',
         'monthly_income',
-        'date_hired',
-        'years_employed',
-        'supervisor_name',
-        'employer_address',
-        'previous_employer',
-        'years_previous_employment',
         'other_income_source',
-        'other_income_amount'
+        'other_income_amount',
     ];
 
     protected $casts = [
-        'date_hired' => 'date',
         'monthly_income' => 'decimal:2',
         'other_income_amount' => 'decimal:2',
     ];
@@ -36,6 +26,6 @@ class Employment extends Model
     // Relationships
     public function personalData()
     {
-        return $this->hasOne(PersonalData::class, 'employment_id');
+        return $this->belongsTo(PersonalData::class, 'employment_id');
     }
 }

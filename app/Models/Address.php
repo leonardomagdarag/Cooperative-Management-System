@@ -25,6 +25,6 @@ class Address extends Model
 
     public function personalData()
     {
-        return $this->hasMany(PersonalData::class);
+        return $this->hasOne(PersonalData::class, 'address_id');
     }
 }

@@ -1,104 +1,105 @@
 <?php
 
-use App\Livewire\Content\PublicContent;
 use App\Models\SiteContent;
 use App\Models\User;
-use Database\Seeders\SiteContentSeeder;
-use Illuminate\Support\Facades\Artisan;
-use Livewire\Livewire;
-use Spatie\Permission\Models\Role;
+use App\Support\SiteContentCatalog;
+use Database\Seeders\SpatieRolePermissionSeeder;
+use Database\Seeders\UserSeeder;
 use function Pest\Laravel\actingAs;
-use function Pest\Laravel\get;
-use function Pest\Laravel\post;
+use function Pest\Laravel\getJson;
+use function Pest\Laravel\putJson;
 
-function makePublicContentAdmin(): User
+function makePublicContentEditor(): User
 {
-    Role::findOrCreate('admin', 'web');
+    (new SpatieRolePermissionSeeder())->run();
+    (new UserSeeder())->run();
 
-    $user = User::factory()->create([
-        'role' => 'admin',
-        'is_officer' => true,
-    ]);
-    $user->assignRole('admin');
+    return User::where('email', 'admin@example.com')->firstOrFail();
+}
+
+function makeUnauthorizedUser(): User
+{
+    $user = User::factory()->create();
 
     return $user;
 }
 
-test('public pages render content from the site contents table', function () {
-    SiteContent::query()->create([
-        'section' => 'home',
-        'key' => 'hero_subtitle',
-        'value' => 'Database driven hero subtitle',
-        'type' => 'text',
-        'description' => 'Hero subtitle',
-        'order' => 1,
-        'is_active' => true,
-    ]);
+function fullForm(): array
+{
+    return SiteContentCatalog::editorContent();
+}
 
-    get(route('home_page'))
+test('public content api returns sections, form, can_manage and turnstile key', function () {
+    $response = getJson('/api/public-content')
         ->assertOk()
-        ->assertSee('Database driven hero subtitle', false);
+        ->assertJsonStructure([
+            'sections',
+            'form',
+            'can_manage',
+            'turnstile_site_key',
+        ]);
+
+    $data = $response->json();
+    expect($data['sections'])->toBeArray()
+        ->and($data['sections'])->toHaveKeys([
+            'home', 'about', 'board', 'officers', 'member_statements',
+            'news', 'events', 'contact', 'registration', 'policies',
+        ])
+        ->and($data['form'])->toBeArray()
+        ->and($data['can_manage'])->toBeFalse();
 });
 
-test('footer and registration page render policy content from site contents', function () {
-    SiteContent::query()->create([
-        'section' => 'policies',
-        'key' => 'terms_and_conditions',
-        'value' => '<h3>Custom Terms</h3><p>Members must review the custom agreement.</p>',
-        'type' => 'html',
-        'description' => 'Terms and Conditions',
-        'order' => 1,
-        'is_active' => true,
-    ]);
+test('admin sees can_manage true when reading public content', function () {
+    $admin = makePublicContentEditor();
 
-    SiteContent::query()->create([
-        'section' => 'policies',
-        'key' => 'privacy_policy',
-        'value' => '<h3>Custom Privacy</h3><p>Members must review the custom privacy policy.</p>',
-        'type' => 'html',
-        'description' => 'Privacy Policy',
-        'order' => 2,
-        'is_active' => true,
-    ]);
-
-    get(route('home_page'))
+    actingAs($admin)
+        ->getJson('/api/public-content')
         ->assertOk()
-        ->assertSee('Terms and Agreement')
-        ->assertSee('Custom Terms', false)
-        ->assertSee('Custom Privacy', false);
-
-    get(route('register_page'))
-        ->assertOk()
-        ->assertSee('Terms and Agreement')
-        ->assertSee('Privacy Policy')
-        ->assertSee('Custom Terms', false)
-        ->assertSee('Custom Privacy', false);
+        ->assertJsonPath('can_manage', true);
 });
 
-test('admin can save public content from the dedicated content page', function () {
-    actingAs(makePublicContentAdmin());
+test('non-admin users see can_manage false when reading public content', function () {
+    $user = makeUnauthorizedUser();
 
-    Livewire::test(PublicContent::class)
-        ->set('form.home.hero_subtitle', 'Updated from Livewire')
-        ->call('save')
-        ->assertHasNoErrors();
+    actingAs($user)
+        ->getJson('/api/public-content')
+        ->assertOk()
+        ->assertJsonPath('can_manage', false);
+});
+
+test('unauthenticated public content read is allowed but cannot save', function () {
+    putJson('/api/public-content', ['form' => fullForm()])
+        ->assertStatus(401);
+});
+
+test('admin can save public content through the api', function () {
+    $admin = makePublicContentEditor();
+
+    $form = fullForm();
+    $form['home']['hero_subtitle'] = 'Updated through React API';
+
+    actingAs($admin)
+        ->putJson('/api/public-content', ['form' => $form])
+        ->assertOk()
+        ->assertJson(['message' => 'Public content updated successfully.']);
 
     expect(
         SiteContent::query()
             ->where('section', 'home')
             ->where('key', 'hero_subtitle')
             ->value('value')
-    )->toBe('Updated from Livewire');
+    )->toBe('Updated through React API');
 });
 
 test('admin can save the online member registration public setting', function () {
-    actingAs(makePublicContentAdmin());
+    $admin = makePublicContentEditor();
 
-    Livewire::test(PublicContent::class)
-        ->set('activeSection', 'registration')
-        ->set('form.registration.online_member_registration_enabled', false)
-        ->call('save')
-        ->assertHasNoErrors();
+    $form = fullForm();
+    $form['registration']['online_member_registration_enabled'] = false;
+
+    actingAs($admin)
+        ->putJson('/api/public-content', ['form' => $form])
+        ->assertOk();
 
     expect(
         SiteContent::query()
@@ -108,63 +109,21 @@ test('admin can save the online member registration public setting', function ()
     )->toBe('0');
 });
 
-test('about page respects the board visibility toggle and renders dynamic board cards', function () {
-    SiteContent::query()->create([
-        'section' => 'board',
-        'key' => 'is_visible',
-        'value' => '0',
-        'type' => 'boolean',
-        'description' => 'Board section visibility',
-        'order' => 1,
-        'is_active' => true,
-    ]);
+test('admin can save dynamic board cards through the api', function () {
+    $admin = makePublicContentEditor();
 
-    SiteContent::query()->create([
-        'section' => 'board',
-        'key' => 'cards',
-        'value' => json_encode([
-            [
-                'name' => 'Maria Example',
-                'position' => 'Chairperson',
-                'image_url' => 'images/hero_banner.jpg',
-            ],
-        ], JSON_THROW_ON_ERROR),
-        'type' => 'json',
-        'description' => 'Board member cards',
-        'order' => 2,
-        'is_active' => true,
-    ]);
+    $form = fullForm();
+    $form['board']['cards'] = [
+        [
+            'name' => 'Maria Example',
+            'position' => 'Chairperson',
+            'image_url' => 'images/hero_banner.jpg',
+        ],
+    ];
 
-    get(route('about_page'))
-        ->assertOk()
-        ->assertDontSee('Board of Directors')
-        ->assertDontSee('Maria Example');
-
-    SiteContent::query()
-        ->where('section', 'board')
-        ->where('key', 'is_visible')
-        ->firstOrFail()
-        ->update(['value' => '1']);
-
-    get(route('about_page'))
-        ->assertOk()
-        ->assertSee('Board of Directors')
-        ->assertSee('Maria Example')
-        ->assertSee('Chairperson');
-});
-
-test('admin can add remove and save dynamic board cards', function () {
-    actingAs(makePublicContentAdmin());
-
-    Livewire::test(PublicContent::class)
-        ->call('addCard', 'board')
-        ->call('addCard', 'board')
-        ->set('form.board.cards.0.name', 'Maria Example')
-        ->set('form.board.cards.0.position', 'Chairperson')
-        ->set('form.board.cards.0.image_url', 'images/hero_banner.jpg')
-        ->call('removeCard', 'board', 1)
-        ->call('save')
-        ->assertHasNoErrors();
+    actingAs($admin)
+        ->putJson('/api/public-content', ['form' => $form])
+        ->assertOk();
 
     $cards = json_decode(
         SiteContent::query()
@@ -182,77 +141,67 @@ test('admin can add remove and save dynamic board cards', function () {
         ->and($cards[0]['image_url'])->toBe('images/hero_banner.jpg');
 });
 
-test('site content seeder preserves legacy board members when backfilling dynamic cards', function () {
-    SiteContent::query()->create([
-        'section' => 'board',
-        'key' => 'chairperson.name',
-        'value' => 'Legacy Chair',
-        'type' => 'text',
-        'description' => 'Legacy chairperson name',
-        'order' => 1,
-        'is_active' => true,
-    ]);
+test('board visibility toggle is reflected back through the api', function () {
+    $admin = makePublicContentEditor();
 
-    SiteContent::query()->create([
-        'section' => 'board',
-        'key' => 'chairperson.title',
-        'value' => 'Legacy Position',
-        'type' => 'text',
-        'description' => 'Legacy chairperson title',
-        'order' => 2,
-        'is_active' => true,
-    ]);
+    $form = fullForm();
+    $form['board']['is_visible'] = false;
 
-    Artisan::call('db:seed', [
-        '--class' => SiteContentSeeder::class,
-        '--no-interaction' => true,
-    ]);
+    actingAs($admin)
+        ->putJson('/api/public-content', ['form' => $form])
+        ->assertOk();
 
-    $cards = json_decode(
-        SiteContent::query()
-            ->where('section', 'board')
-            ->where('key', 'cards')
-            ->value('value'),
-        true,
-        512,
-        JSON_THROW_ON_ERROR
-    );
-
-    expect($cards)->toHaveCount(1)
-        ->and($cards[0]['name'])->toBe('Legacy Chair')
-        ->and($cards[0]['position'])->toBe('Legacy Position')
-        ->and(
-            SiteContent::query()
-                ->where('section', 'board')
-                ->where('key', 'is_visible')
-                ->value('value')
-        )->toBe('1');
+    actingAs($admin)
+        ->getJson('/api/public-content')
+        ->assertOk()
+        ->assertJsonPath('form.board.is_visible', false);
 });
 
-test('public registration affordances and routes are disabled when online member registration is off', function () {
-    SiteContent::query()->create([
-        'section' => 'registration',
-        'key' => 'online_member_registration_enabled',
-        'value' => '0',
-        'type' => 'boolean',
-        'description' => 'Online member registration availability',
-        'order' => 1,
-        'is_active' => true,
-    ]);
+test('non-admin users cannot save public content', function () {
+    $user = makeUnauthorizedUser();
 
-    get(route('home_page'))
-        ->assertOk()
-        ->assertSee('href="#Contact"', false)
-        ->assertDontSee(route('register_page'), false);
+    actingAs($user)
+        ->putJson('/api/public-content', ['form' => fullForm()])
+        ->assertForbidden();
+});
 
-    get(route('login_page'))
-        ->assertOk()
-        ->assertDontSee("Don't have an account?")
-        ->assertDontSee('Create an Account');
+test('public content save validates form fields', function () {
+    $admin = makePublicContentEditor();
 
-    get(route('register_page'))
-        ->assertRedirect(route('home_page'));
+    $form = fullForm();
+    $form['home']['hero_subtitle'] = ['not', 'a', 'string'];
 
-    post(route('register'))
-        ->assertRedirect(route('home_page'));
+    actingAs($admin)
+        ->putJson('/api/public-content', ['form' => $form])
+        ->assertStatus(422);
+});
+
+test('public content save validates card field lengths', function () {
+    $admin = makePublicContentEditor();
+
+    $form = fullForm();
+    $form['board']['cards'] = [
+        [
+            'name' => str_repeat('x', 256),
+            'position' => 'Chairperson',
+            'image_url' => '',
+        ],
+    ];
+
+    actingAs($admin)
+        ->putJson('/api/public-content', ['form' => $form])
+        ->assertStatus(422);
+});
+
+test('public pages still expose the seeded default content tree', function () {
+    $this->seed(SpatieRolePermissionSeeder::class);
+    $this->seed(UserSeeder::class);
+
+    $data = getJson('/api/public-content')->assertOk()->json();
+
+    expect($data['form']['home']['hero_subtitle'])->not->toBeEmpty()
+        ->and($data['form']['about']['mission'])->not->toBeEmpty()
+        ->and($data['form']['board']['cards'])->toBeArray()
+        ->and($data['form']['officers']['cards'])->toBeArray()
+        ->and($data['form']['contact']['email'])->not->toBeEmpty();
 });

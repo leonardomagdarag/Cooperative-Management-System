@@ -36,6 +36,6 @@ class Contact extends Model
 
     public function personalData()
     {
-        return $this->hasMany(PersonalData::class);
+        return $this->hasOne(PersonalData::class, 'contact_id');
     }
 }

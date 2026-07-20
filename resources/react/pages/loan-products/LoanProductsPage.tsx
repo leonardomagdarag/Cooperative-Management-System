@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
+import { useDiscardGuard } from '../../hooks/useDiscardGuard';
+import { validate, loanProductSchema, type FieldErrors } from '../../lib/validation';
 
 interface LoanProduct {
     id: number; code: string; name: string; description: string; base_type: string;
@@ -21,8 +23,10 @@ const emptyProduct: Partial<LoanProduct> = {
 export default function LoanProductsPage() {
     const [showModal, setShowModal] = useState(false);
     const [editing, setEditing] = useState<LoanProduct | null>(null);
-    const [form, setForm] = useState<Partial<LoanProduct>>(emptyProduct);
     const [expandedId, setExpandedId] = useState<number | null>(null);
+    const [form, setForm] = useState<Partial<LoanProduct>>(emptyProduct);
+    const [errors, setErrors] = useState<FieldErrors>({});
+    const { markDirty, reset, requestClose, renderDialog } = useDiscardGuard();
     const queryClient = useQueryClient();
     const { addToast } = useToast();
 
@@ -37,7 +41,7 @@ export default function LoanProductsPage() {
             : api.post('/api/loan-products', payload),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['loan-products'] });
-            setShowModal(false); setEditing(null); setForm(emptyProduct);
+            setShowModal(false); setEditing(null); setForm(emptyProduct); reset();
             addToast(editing ? 'Loan product updated' : 'Loan product created', 'success');
         },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed to save', 'error'),
@@ -56,16 +60,25 @@ export default function LoanProductsPage() {
     const products: LoanProduct[] = data?.data?.data ?? [];
     const canManage = data?.data?.can_manage;
 
-    const openEdit = (p: LoanProduct) => { setEditing(p); setForm(p); setShowModal(true); };
-    const openCreate = () => { setEditing(null); setForm(emptyProduct); setShowModal(true); };
+    const openEdit = (p: LoanProduct) => { reset(); setEditing(p); setForm(p); setErrors({}); setShowModal(true); };
+    const openCreate = () => { reset(); setEditing(null); setForm(emptyProduct); setErrors({}); setShowModal(true); };
 
     const activeCount = products.filter(p => p.is_active).length;
     const typeCount = [...new Set(products.map(p => p.base_type))].length;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        const errs = validate(loanProductSchema, form);
+        if (Object.keys(errs).length) { setErrors(errs); return; }
         saveMutation.mutate(form);
     };
+
+    const setField = (key: keyof LoanProduct, value: any) => {
+        markDirty();
+        setErrors(prev => { const next = { ...prev }; delete next[key]; return next; });
+        setForm(f => ({ ...f, [key]: value }));
+    };
+    const requestCloseGuard = () => requestClose(() => { setShowModal(false); setEditing(null); });
 
     return (
         <div className="space-y-6">
@@ -154,57 +167,63 @@ export default function LoanProductsPage() {
             )}
 
             {showModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowModal(false)}>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={requestCloseGuard}>
                     <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl" onClick={e => e.stopPropagation()}>
                         <h2 className="mb-4 text-lg font-bold text-gray-900">{editing ? 'Edit' : 'New'} Loan Product</h2>
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
-                                <Field label="Code" value={form.code} onChange={v => setForm(f => ({ ...f, code: v }))} required />
-                                <Field label="Name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} required />
-                                <Field label="Base Type" value={form.base_type} onChange={v => setForm(f => ({ ...f, base_type: v }))} type="select" options={['business', 'group', 'special']} />
-                                <Field label="Icon" value={form.icon} onChange={v => setForm(f => ({ ...f, icon: v }))} />
-                                <Field label="Interest Rate (%)" value={form.interest_rate} onChange={v => setForm(f => ({ ...f, interest_rate: Number(v) }))} type="number" />
-                                <Field label="Max Amount" value={form.max_amount} onChange={v => setForm(f => ({ ...f, max_amount: Number(v) }))} type="number" />
-                                <Field label="Max Term (months)" value={form.max_term} onChange={v => setForm(f => ({ ...f, max_term: Number(v) }))} type="number" />
-                                <Field label="Sort Order" value={form.sort_order} onChange={v => setForm(f => ({ ...f, sort_order: Number(v) }))} type="number" />
-                                <Field label="Min Share Capital" value={form.minimum_share_capital} onChange={v => setForm(f => ({ ...f, minimum_share_capital: Number(v) }))} type="number" />
-                                <Field label="Min Membership Years" value={form.minimum_membership_years} onChange={v => setForm(f => ({ ...f, minimum_membership_years: Number(v) }))} type="number" />
-                                <Field label="Required Co-Makers" value={form.required_co_makers} onChange={v => setForm(f => ({ ...f, required_co_makers: Number(v) }))} type="number" />
+                                <Field label="Code" value={form.code} onChange={v => setField('code', v)} error={errors.code} required />
+                                <Field label="Name" value={form.name} onChange={v => setField('name', v)} error={errors.name} required />
+                                <Field label="Base Type" value={form.base_type} onChange={v => setField('base_type', v)} error={errors.base_type} type="select" options={['business', 'group', 'special']} />
+                                <Field label="Icon" value={form.icon} onChange={v => setField('icon', v)} error={errors.icon} />
+                                <Field label="Interest Rate (%)" value={form.interest_rate} onChange={v => setField('interest_rate', v)} error={errors.interest_rate} type="number" />
+                                <Field label="Max Amount" value={form.max_amount} onChange={v => setField('max_amount', v)} error={errors.max_amount} type="number" />
+                                <Field label="Max Term (months)" value={form.max_term} onChange={v => setField('max_term', v)} error={errors.max_term} type="number" />
+                                <Field label="Sort Order" value={form.sort_order} onChange={v => setField('sort_order', v)} error={errors.sort_order} type="number" />
+                                <Field label="Min Share Capital" value={form.minimum_share_capital} onChange={v => setField('minimum_share_capital', v)} error={errors.minimum_share_capital} type="number" />
+                                <Field label="Min Membership Years" value={form.minimum_membership_years} onChange={v => setField('minimum_membership_years', v)} error={errors.minimum_membership_years} type="number" />
+                                <Field label="Required Co-Makers" value={form.required_co_makers} onChange={v => setField('required_co_makers', v)} error={errors.required_co_makers} type="number" />
                             </div>
                             <div>
                                 <label className="mb-1 block text-sm font-medium text-gray-700">Description</label>
-                                <textarea value={form.description || ''} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+                                <textarea value={form.description || ''} onChange={e => { markDirty(); setForm(f => ({ ...f, description: e.target.value })); }} rows={2} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
                             </div>
                             <div className="flex flex-wrap gap-4">
-                                <Toggle label="Active" checked={form.is_active} onChange={v => setForm(f => ({ ...f, is_active: v }))} />
-                                <Toggle label="Requires No Existing Loan" checked={form.requires_no_existing_loan} onChange={v => setForm(f => ({ ...f, requires_no_existing_loan: v }))} />
-                                <Toggle label="Requires Interview" checked={form.requires_interview} onChange={v => setForm(f => ({ ...f, requires_interview: v }))} />
-                                <Toggle label="Requires Special Eligibility" checked={form.requires_special_eligibility} onChange={v => setForm(f => ({ ...f, requires_special_eligibility: v }))} />
+                                <Toggle label="Active" checked={form.is_active} onChange={v => setField('is_active', v)} />
+                                <Toggle label="Requires No Existing Loan" checked={form.requires_no_existing_loan} onChange={v => setField('requires_no_existing_loan', v)} />
+                                <Toggle label="Requires Interview" checked={form.requires_interview} onChange={v => setField('requires_interview', v)} />
+                                <Toggle label="Requires Special Eligibility" checked={form.requires_special_eligibility} onChange={v => setField('requires_special_eligibility', v)} />
                             </div>
                             <div className="flex justify-end gap-3">
-                                <button type="button" onClick={() => setShowModal(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
+                                <button type="button" onClick={requestCloseGuard} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
                                 <button type="submit" disabled={saveMutation.isPending} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
                                     {saveMutation.isPending ? 'Saving...' : 'Save'}
                                 </button>
                             </div>
                         </form>
                     </div>
+                    {renderDialog()}
                 </div>
             )}
         </div>
     );
 }
 
-function Field({ label, value, onChange, type = 'text', options, required }: { label: string; value: any; onChange: (v: any) => void; type?: string; options?: string[]; required?: boolean }) {
+function Field({ label, value, onChange, type = 'text', options, required, error }: { label: string; value: any; onChange: (v: any) => void; type?: string; options?: string[]; required?: boolean; error?: string }) {
+    const border = error ? 'border-red-400 focus:border-red-500' : 'border-gray-200';
     if (type === 'select') return (
         <div><label className="mb-1 block text-sm font-medium text-gray-700">{label}</label>
-            <select value={value} onChange={e => onChange(e.target.value)} required={required} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm">
+            <select value={value} onChange={e => onChange(e.target.value)} required={required} className={`w-full rounded-lg border ${border} px-3 py-2 text-sm`}>
                 {options?.map(o => <option key={o} value={o}>{o}</option>)}
-            </select></div>
+            </select>
+            {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+        </div>
     );
     return (
         <div><label className="mb-1 block text-sm font-medium text-gray-700">{label}</label>
-            <input type={type} value={value ?? ''} onChange={e => onChange(type === 'number' ? Number(e.target.value) : e.target.value)} required={required} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" /></div>
+            <input type={type} value={value ?? ''} onChange={e => onChange(type === 'number' ? Number(e.target.value) : e.target.value)} required={required} className={`w-full rounded-lg border ${border} px-3 py-2 text-sm`} />
+            {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+        </div>
     );
 }
 

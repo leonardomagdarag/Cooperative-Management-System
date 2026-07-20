@@ -1,55 +1,91 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import { useAuth } from '../../contexts/AuthContext';
+import { useDiscardGuard } from '../../hooks/useDiscardGuard';
 import DepositWizard from './DepositWizard';
 import WithdrawalWizard from './WithdrawalWizard';
 import LoanApplicationWizard from './LoanApplicationWizard';
 import LoanPaymentWizard from './LoanPaymentWizard';
 import TransactionApproval from './TransactionApproval';
 
-type ServiceType = 'deposit' | 'withdraw' | 'loan' | 'payment' | 'approve' | null;
+type ServiceType = 'deposit' | 'withdraw' | 'loan' | 'payment' | 'approve' | 'loan-review' | null;
 
 export default function ServicesPage() {
-    const [activeService, setActiveService] = useState<ServiceType>(null);
+    const { user } = useAuth();
+    const perms = user?.permissions || [];
+    const isOfficer = user?.primary_role !== 'member' && user?.primary_role !== null;
+    const canApprove = perms.includes('transactions.approve') || perms.includes('deposits.approve') || perms.includes('withdrawals.approve');
+    const canReviewLoans = perms.includes('loans.update');
 
-    const { data, isLoading } = useQuery({
+    const [activeService, setActiveService] = useState<ServiceType>(null);
+    const [memberSearch, setMemberSearch] = useState('');
+    const [selectedMember, setSelectedMember] = useState<any>(null);
+    const [wizardDirty, setWizardDirty] = useState(false);
+    const { requestClose, renderDialog } = useDiscardGuard(wizardDirty);
+
+    const { data: servicesData } = useQuery({
         queryKey: ['services'],
         queryFn: () => api.get('/api/services'),
+        enabled: isOfficer,
     });
+    const svc = servicesData?.data || {};
 
-    const svc = data?.data || {};
+    const { data: searchResults } = useQuery({
+        queryKey: ['member-search', memberSearch],
+        queryFn: () => api.get('/api/members/search', { params: { q: memberSearch } }),
+        enabled: memberSearch.length >= 2,
+    });
+    const members = searchResults?.data?.data ?? searchResults?.data ?? [];
 
-    const services = [
-        { key: 'deposit' as const, label: 'Deposit / Savings', icon: 'fas fa-plus-circle', color: 'emerald', desc: 'Make a deposit to savings or share capital' },
-        { key: 'withdraw' as const, label: 'Withdrawal', icon: 'fas fa-minus-circle', color: 'red', desc: 'Request a withdrawal from your account' },
-        { key: 'loan' as const, label: 'Loan Application', icon: 'fas fa-file-invoice-dollar', color: 'blue', desc: 'Apply for a new loan' },
-        { key: 'payment' as const, label: 'Loan Payment', icon: 'fas fa-hand-holding-usd', color: 'purple', desc: 'Make a payment on an existing loan' },
-    ];
+    const { data: memberData } = useQuery({
+        queryKey: ['selected-member', selectedMember?.id],
+        queryFn: () => api.get(`/api/members/${selectedMember?.id}`),
+        enabled: !!selectedMember?.id && isOfficer,
+    });
+    const selectedMemberDetail = memberData?.data;
 
-    if (svc.can_manage_member_services) {
-        services.push({ key: 'approve' as const, label: 'Transaction Approval', icon: 'fas fa-check-double', color: 'amber', desc: 'Review and approve pending transactions' });
-    }
+    const { data: pendingData } = useQuery({
+        queryKey: ['services-pending'],
+        queryFn: () => api.get('/api/services/pending'),
+        enabled: isOfficer && canApprove,
+    });
+    const pendingCount = pendingData?.data?.length ?? pendingData?.data?.data?.length ?? 0;
+
+    const financialData = isOfficer ? selectedMemberDetail : null;
+    const savingsBalance = financialData?.accounts?.find((a: any) => a.account_type === 'savings')?.balance ?? 0;
+    const shareCapitalBalance = financialData?.accounts?.find((a: any) => a.account_type === 'share-capital')?.balance ?? 0;
+    const activeLoans = financialData?.loans?.filter((l: any) => ['approved', 'active'].includes(l.loan_status)) ?? [];
+    const hasSelectedMember = !!selectedMember;
+    const needsMember = isOfficer;
+
+    const handleSelectMember = (m: any) => {
+        setSelectedMember(m);
+        setMemberSearch('');
+    };
+
+    const openService = (svc: ServiceType) => {
+        setWizardDirty(false);
+        setActiveService(svc);
+    };
 
     const renderWizard = () => {
         switch (activeService) {
-            case 'deposit': return <DepositWizard onComplete={() => setActiveService(null)} />;
-            case 'withdraw': return <WithdrawalWizard onComplete={() => setActiveService(null)} />;
-            case 'loan': return <LoanApplicationWizard onComplete={() => setActiveService(null)} />;
-            case 'payment': return <LoanPaymentWizard onComplete={() => setActiveService(null)} />;
+            case 'deposit': return <DepositWizard onComplete={() => setActiveService(null)} selectedMember={selectedMember} onDirtyChange={setWizardDirty} />;
+            case 'withdraw': return <WithdrawalWizard onComplete={() => setActiveService(null)} selectedMember={selectedMember} onDirtyChange={setWizardDirty} />;
+            case 'loan': return <LoanApplicationWizard onComplete={() => setActiveService(null)} selectedMember={selectedMember} onDirtyChange={setWizardDirty} />;
+            case 'payment': return <LoanPaymentWizard onComplete={() => setActiveService(null)} selectedMember={selectedMember} onDirtyChange={setWizardDirty} />;
             case 'approve': return <TransactionApproval onComplete={() => setActiveService(null)} />;
+            case 'loan-review': return <TransactionApproval onComplete={() => setActiveService(null)} />;
             default: return null;
         }
     };
 
-    const activeLabel = services.find(s => s.key === activeService)?.label ?? '';
-
-    const colorMap: Record<string, { bg: string; icon: string; ring: string }> = {
-        emerald: { bg: 'bg-emerald-100', icon: 'text-emerald-600', ring: 'ring-emerald-500' },
-        red: { bg: 'bg-red-100', icon: 'text-red-600', ring: 'ring-red-500' },
-        blue: { bg: 'bg-blue-100', icon: 'text-blue-600', ring: 'ring-blue-500' },
-        purple: { bg: 'bg-purple-100', icon: 'text-purple-600', ring: 'ring-purple-500' },
-        amber: { bg: 'bg-amber-100', icon: 'text-amber-600', ring: 'ring-amber-500' },
+    const activeLabelMap: Record<string, string> = {
+        deposit: 'Deposit Money', withdraw: 'Withdraw Money', loan: 'Apply for Loan',
+        payment: 'Make Payment', approve: 'Approve Transactions', 'loan-review': 'Loan Applications',
     };
+    const activeLabel = activeService ? (activeLabelMap[activeService] || '') : '';
 
     return (
         <div className="space-y-6">
@@ -58,29 +94,191 @@ export default function ServicesPage() {
                 <p className="mt-1 text-sm text-gray-500">Select a service to get started</p>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {services.map(s => (
-                    <button
-                        key={s.key}
-                        onClick={() => setActiveService(s.key)}
-                        className="group rounded-xl border border-gray-200 bg-white p-6 text-left shadow-sm transition-all hover:shadow-lg hover:border-gray-300"
-                    >
-                        <div className={`mb-3 flex h-12 w-12 items-center justify-center rounded-xl ${colorMap[s.color]?.bg || 'bg-gray-100'}`}>
-                            <i className={`${s.icon} text-lg ${colorMap[s.color]?.icon || 'text-gray-600'}`}></i>
+            {needsMember && (
+                <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-cyan-500">
+                    <h3 className="text-lg font-bold text-gray-900 mb-4">
+                        <i className="fas fa-user-tie text-cyan-600 mr-2"></i>
+                        {canApprove ? 'Approval Mode - Select Member' : 'Service Officer Mode - Select Member'}
+                    </h3>
+
+                    {selectedMember ? (
+                        <div className="flex items-center justify-between p-4 bg-cyan-50 rounded-lg border border-cyan-200">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-full bg-cyan-500 flex items-center justify-center text-white font-bold text-lg">
+                                    {selectedMember.name?.charAt(0) || selectedMember.personal_data?.first_name?.charAt(0) || 'M'}
+                                </div>
+                                <div>
+                                    <p className="font-semibold text-gray-900">
+                                        {selectedMember.name || `${selectedMember.personal_data?.first_name ?? ''} ${selectedMember.personal_data?.last_name ?? ''}`}
+                                    </p>
+                                    <p className="text-sm text-gray-600">{selectedMember.user_number || ''}</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setSelectedMember(null)} className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                                <i className="fas fa-times mr-2"></i>Change Member
+                            </button>
                         </div>
-                        <h3 className="font-semibold text-gray-900">{s.label}</h3>
-                        <p className="mt-1 text-sm text-gray-500">{s.desc}</p>
-                    </button>
-                ))}
+                    ) : (
+                        <div className="space-y-3">
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    value={memberSearch}
+                                    onChange={e => setMemberSearch(e.target.value)}
+                                    placeholder="Search member by name..."
+                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                                />
+                                <i className="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                            </div>
+
+                            {memberSearch.length >= 2 && members.length > 0 && (
+                                <div className="border border-gray-200 rounded-lg divide-y max-h-64 overflow-y-auto">
+                                    {members.map((m: any) => (
+                                        <button key={m.id} onClick={() => handleSelectMember(m)} className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 text-left transition-colors">
+                                            <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-semibold">
+                                                {m.name?.charAt(0) || m.personal_data?.first_name?.charAt(0) || 'M'}
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="font-medium text-gray-900">{m.name || `${m.personal_data?.first_name ?? ''} ${m.personal_data?.last_name ?? ''}`}</p>
+                                                <p className="text-sm text-gray-500">{m.user_number}</p>
+                                            </div>
+                                            <i className="fas fa-chevron-right text-gray-400"></i>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            {memberSearch.length >= 2 && members.length === 0 && (
+                                <p className="text-sm text-gray-500 text-center py-4">No members found</p>
+                            )}
+                            {memberSearch.length < 2 && (
+                                <p className="text-sm text-gray-500 text-center py-4">Start typing to search for a member</p>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {hasSelectedMember && (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-5 border-l-4 border-green-500">
+                        <p className="text-sm font-medium text-green-700 mb-1">Savings Balance</p>
+                        <p className="text-2xl font-bold text-green-900">₱{Number(savingsBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                    </div>
+                    <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-5 border-l-4 border-blue-500">
+                        <p className="text-sm font-medium text-blue-700 mb-1">Share Capital</p>
+                        <p className="text-2xl font-bold text-blue-900">₱{Number(shareCapitalBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                    </div>
+                    <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-5 border-l-4 border-purple-500">
+                        <p className="text-sm font-medium text-purple-700 mb-1">Active Loans</p>
+                        <p className="text-2xl font-bold text-purple-900">{activeLoans.length}</p>
+                    </div>
+                    <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-5 border-l-4 border-orange-500">
+                        <p className="text-sm font-medium text-orange-700 mb-1">Pending Requests</p>
+                        <p className="text-2xl font-bold text-orange-900">{pendingCount}</p>
+                    </div>
+                </div>
+            )}
+
+            <div className="bg-white rounded-xl shadow-sm p-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-6">Available Services</h2>
+
+                {needsMember && (
+                    <>
+                        {(canApprove || canReviewLoans) && (
+                            <div className={`grid grid-cols-1 ${canApprove && canReviewLoans ? 'md:grid-cols-2' : 'md:grid-cols-1'} gap-4 mb-4`}>
+                                {canApprove && (
+                                    <button onClick={() => openService('approve')} className="group bg-gradient-to-br from-yellow-50 to-amber-100 hover:from-yellow-100 hover:to-amber-200 rounded-xl p-5 text-left transition-all hover:shadow-lg relative">
+                                        {pendingCount > 0 && (
+                                            <span className="absolute top-3 right-3 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">{pendingCount}</span>
+                                        )}
+                                        <div className="w-12 h-12 bg-yellow-500 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                                            <i className="fas fa-clipboard-check text-white text-xl"></i>
+                                        </div>
+                                        <h3 className="text-base font-bold text-gray-900 mb-1">Approve Transactions</h3>
+                                        <p className="text-xs text-gray-600">Review and approve pending member requests</p>
+                                    </button>
+                                )}
+                                {canReviewLoans && (
+                                    <button onClick={() => openService('loan-review')} className="group bg-gradient-to-br from-indigo-50 to-violet-100 hover:from-indigo-100 hover:to-violet-200 rounded-xl p-5 text-left transition-all hover:shadow-lg relative">
+                                        <div className="w-12 h-12 bg-indigo-600 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                                            <i className="fas fa-file-alt text-white text-xl"></i>
+                                        </div>
+                                        <h3 className="text-base font-bold text-gray-900 mb-1">Loan Applications</h3>
+                                        <p className="text-xs text-gray-600">Review and endorse pending loan applications</p>
+                                    </button>
+                                )}
+                            </div>
+                        )}
+
+                        <div className="border-t border-gray-100 mb-4 pt-2">
+                            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">
+                                <i className="fas fa-user-circle mr-1"></i>Member Services
+                                {!hasSelectedMember && <span className="ml-2 text-amber-500 normal-case font-normal">— select a member above to enable</span>}
+                            </p>
+                        </div>
+                    </>
+                )}
+
+                <div className={`grid grid-cols-1 ${needsMember ? 'md:grid-cols-2 lg:grid-cols-4' : 'md:grid-cols-3'} gap-4`}>
+                    <ServiceCard
+                        icon={
+                            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clipRule="evenodd"/>
+                            </svg>
+                        }
+                        color="green"
+                        label="Deposit Money"
+                        desc={needsMember ? 'Add funds to savings or share capital' : 'Add funds to your savings or share capital account'}
+                        locked={needsMember && !hasSelectedMember}
+                        onClick={() => openService('deposit')}
+                    />
+                    <ServiceCard
+                        icon={
+                            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clipRule="evenodd" transform="rotate(180 10 10)"/>
+                            </svg>
+                        }
+                        color="orange"
+                        label="Withdraw Money"
+                        desc={needsMember ? 'Request withdrawal from savings account' : 'Request withdrawal from your savings account'}
+                        locked={needsMember && !hasSelectedMember}
+                        onClick={() => openService('withdraw')}
+                    />
+                    <ServiceCard
+                        icon={
+                            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd"/>
+                            </svg>
+                        }
+                        color="purple"
+                        label="Apply for Loan"
+                        desc={needsMember ? 'Apply for personal, housing, business or emergency loans' : 'Apply for personal, housing, business or emergency loans'}
+                        locked={needsMember && !hasSelectedMember}
+                        onClick={() => openService('loan')}
+                    />
+                    <ServiceCard
+                        icon={
+                            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z"/>
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clipRule="evenodd"/>
+                            </svg>
+                        }
+                        color="blue"
+                        label="Make Payment"
+                        desc={needsMember ? "Pay a member's active loan installments" : 'Pay your active loan installments'}
+                        locked={needsMember && !hasSelectedMember}
+                        onClick={() => openService('payment')}
+                    />
+                </div>
             </div>
 
             {activeService && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setActiveService(null)}>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => requestClose(() => setActiveService(null))}>
                     <div className="w-full max-w-md rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
                         <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-6 text-white">
                             <div className="flex items-center justify-between">
                                 <h2 className="text-lg font-bold">{activeLabel}</h2>
-                                <button onClick={() => setActiveService(null)} className="rounded-full p-1 text-white/80 hover:bg-white/20 hover:text-white">
+                                <button onClick={() => requestClose(() => setActiveService(null))} className="rounded-full p-1 text-white/80 hover:bg-white/20 hover:text-white">
                                     <i className="fas fa-times"></i>
                                 </button>
                             </div>
@@ -89,6 +287,42 @@ export default function ServicesPage() {
                             {renderWizard()}
                         </div>
                     </div>
+                </div>
+            )}
+            {renderDialog()}
+        </div>
+    );
+}
+
+function ServiceCard({ icon, color, label, desc, locked, onClick }: { icon: React.ReactNode; color: string; label: string; desc: string; locked?: boolean; onClick: () => void }) {
+    const bgMap: Record<string, string> = {
+        green: 'bg-green-500', orange: 'bg-orange-500', purple: 'bg-purple-500', blue: 'bg-blue-500',
+    };
+    const gradMap: Record<string, string> = {
+        green: 'from-green-50 to-emerald-100 hover:from-green-100 hover:to-emerald-200',
+        orange: 'from-orange-50 to-red-100 hover:from-orange-100 hover:to-red-200',
+        purple: 'from-purple-50 to-pink-100 hover:from-purple-100 hover:to-pink-200',
+        blue: 'from-blue-50 to-cyan-100 hover:from-blue-100 hover:to-cyan-200',
+    };
+
+    return (
+        <div className="relative group/card">
+            <button
+                onClick={locked ? undefined : onClick}
+                className={`group w-full bg-gradient-to-br ${gradMap[color] || ''} rounded-xl p-5 text-left transition-all hover:shadow-lg ${locked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={locked}
+            >
+                <div className={`w-12 h-12 ${bgMap[color] || 'bg-gray-500'} rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
+                    {icon}
+                </div>
+                <h3 className="text-base font-bold text-gray-900 mb-1">{label}</h3>
+                <p className="text-xs text-gray-600">{desc}</p>
+            </button>
+            {locked && (
+                <div className="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none">
+                    <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200">
+                        <i className="fas fa-lock text-amber-500 mr-1 text-xs"></i>Select member
+                    </span>
                 </div>
             )}
         </div>

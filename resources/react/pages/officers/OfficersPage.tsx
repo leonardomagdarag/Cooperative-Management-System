@@ -1,18 +1,37 @@
 import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
+import { useAuth } from '../../contexts/AuthContext';
+import OfficerFormModal from './OfficerFormModal';
+import OfficerPermissionModal from './OfficerPermissionModal';
 
 export default function OfficersPage() {
+    const { user } = useAuth();
+    const perms = user?.permissions || [];
+    const canCreate = perms.includes('officers.create');
+    const canEdit = perms.includes('officers.update');
+    const canDelete = perms.includes('officers.delete');
+    const canManagePermissions = perms.includes('officers.manage-permissions');
+    const hasActions = canEdit || canDelete || canManagePermissions;
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
     const [viewing, setViewing] = useState<any>(null);
+    const [showForm, setShowForm] = useState(false);
+    const [editingOfficer, setEditingOfficer] = useState<any>(null);
+    const [showPermissions, setShowPermissions] = useState(false);
     const queryClient = useQueryClient();
     const { addToast } = useToast();
 
     const { data, isLoading, refetch } = useQuery({
         queryKey: ['officers', search, page],
         queryFn: () => api.get('/api/members', { params: { is_officer: true, search: search || undefined, page, per_page: 15 } }),
+    });
+
+    const deleteMutation = useMutation({
+        mutationFn: (id: number) => api.delete(`/api/members/${id}`),
+        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['officers'] }); addToast('Officer removed', 'success'); },
+        onError: (err: any) => addToast(err.response?.data?.message || 'Failed', 'error'),
     });
 
     const officers = data?.data?.data ?? [];
@@ -37,9 +56,11 @@ export default function OfficersPage() {
                             <button type="button" onClick={() => refetch()} className="inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-center text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 focus:ring-4 focus:ring-blue-300">
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                             </button>
-                            <button className="inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-center text-white bg-blue-700 rounded-lg hover:bg-blue-800 focus:ring-4 focus:ring-blue-300">
-                                <svg className="w-5 h-5 mr-2 -ml-1" fill="currentColor" viewBox="0 0 20 20"><path d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"/></svg>Add Officer
-                            </button>
+                            {canCreate && (
+                                <button onClick={() => { setEditingOfficer(null); setShowForm(true); }} className="inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-center text-white bg-blue-700 rounded-lg hover:bg-blue-800 focus:ring-4 focus:ring-blue-300">
+                                    <svg className="w-5 h-5 mr-2 -ml-1" fill="currentColor" viewBox="0 0 20 20"><path d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"/></svg>Add Officer
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -78,7 +99,10 @@ export default function OfficersPage() {
                                                 <td className="p-4 text-sm text-gray-500">{o.email || '—'}</td>
                                                 <td className="p-4 whitespace-nowrap">
                                                     <div className="flex items-center gap-1">
-                                                        <button onClick={() => setViewing(o)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><i className="fas fa-eye text-sm"></i></button>
+                                                        <button onClick={() => setViewing(o)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="View"><i className="fas fa-eye text-sm"></i></button>
+                                                        {canEdit && <button onClick={() => { setEditingOfficer(o); setShowForm(true); }} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Edit"><i className="fas fa-edit text-sm"></i></button>}
+                                                        {canManagePermissions && <button onClick={() => { setViewing(null); setEditingOfficer(o); setShowPermissions(true); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg" title="Permissions"><i className="fas fa-user-shield text-sm"></i></button>}
+                                                        {canDelete && <button onClick={() => { if (confirm('Remove this officer?')) deleteMutation.mutate(o.id); }} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Delete"><i className="fas fa-trash text-sm"></i></button>}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -99,22 +123,27 @@ export default function OfficersPage() {
                 </div>
             )}
 
-            {viewing && <OfficerDetailModal officer={viewing} onClose={() => setViewing(null)} />}
+            {viewing && <OfficerDetailModal officer={viewing} onClose={() => setViewing(null)} onEdit={() => { setViewing(null); setEditingOfficer(viewing); setShowForm(true); }} canEdit={canEdit} />}
+            {showForm && <OfficerFormModal officer={editingOfficer} onClose={() => { setShowForm(false); setEditingOfficer(null); }} />}
+            {showPermissions && editingOfficer && <OfficerPermissionModal officer={editingOfficer} onClose={() => { setShowPermissions(false); setEditingOfficer(null); }} />}
         </div>
     );
 }
 
-function OfficerDetailModal({ officer, onClose }: { officer: any; onClose: () => void }) {
+function OfficerDetailModal({ officer, onClose, onEdit, canEdit }: { officer: any; onClose: () => void; onEdit?: () => void; canEdit?: boolean }) {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
             <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
                 <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white">
                     <div className="flex items-center justify-between">
                         <h2 className="text-lg font-bold">Officer Details</h2>
-                        <button onClick={onClose} className="text-white/70 hover:text-white"><i className="fas fa-times"></i></button>
+                        <div className="flex items-center gap-2">
+                            {canEdit && <button onClick={onEdit} className="text-white/70 hover:text-white" title="Edit"><i className="fas fa-edit"></i></button>}
+                            <button onClick={onClose} className="text-white/70 hover:text-white"><i className="fas fa-times"></i></button>
+                        </div>
                     </div>
                 </div>
-                <div className="p-6 space-y-4">
+                    <div className="p-6 space-y-4">
                     <div className="flex items-center gap-4">
                         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-indigo-100 text-xl font-bold text-indigo-600">{officer.name?.charAt(0) || '?'}</div>
                         <div>

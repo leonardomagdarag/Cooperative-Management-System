@@ -3,13 +3,16 @@
 use App\Http\Controllers\Api\AnnouncementController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\ExpenseController;
 use App\Http\Controllers\Api\HistoryController;
 use App\Http\Controllers\Api\LoanController;
 use App\Http\Controllers\Api\LoanProductController;
 use App\Http\Controllers\Api\LedgerController;
 use App\Http\Controllers\Api\LogController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\MemberController;
+use App\Http\Controllers\Api\OfficerPermissionController;
 use App\Http\Controllers\Api\PublicContentController;
 use App\Http\Controllers\Api\RolePermissionController;
 use App\Http\Controllers\Api\ServiceController;
@@ -38,12 +41,8 @@ Route::post('/contact', function (\Illuminate\Http\Request $request) {
     return response()->json(['message' => 'Message sent successfully.']);
 })->middleware('throttle:5,1');
 
-// Public content (no auth)
-Route::get('/public-content', function () {
-    $sections = \App\Support\SiteContentCatalog::editorSections();
-    $form = \App\Support\SiteContentCatalog::editorContent();
-    return response()->json(['sections' => $sections, 'form' => $form]);
-});
+// Public content (no auth, but session-aware so can_manage reflects the logged-in user)
+Route::get('/public-content', [PublicContentController::class, 'index'])->middleware('web');
 
 // Public announcements (no auth — returns only publicly visible announcements)
 Route::get('/announcements/public', function (\Illuminate\Http\Request $request) {
@@ -91,6 +90,7 @@ Route::middleware(['web', 'auth:web'])->group(function () {
 
     // Settings
     Route::put('/settings/password', [SettingsController::class, 'changePassword']);
+    Route::post('/settings/password/send-otp', [SettingsController::class, 'sendPasswordChangeOtp']);
     Route::post('/settings/revoke-devices', [SettingsController::class, 'revokeDevices']);
     Route::post('/settings/deactivate-account', [SettingsController::class, 'deactivateAccount']);
     Route::delete('/settings/account', [SettingsController::class, 'deleteAccount']);
@@ -129,10 +129,23 @@ Route::middleware(['web', 'auth:web'])->group(function () {
 
     // Ledger
     Route::get('/ledger', [LedgerController::class, 'index']);
+    Route::get('/ledger/export', [LedgerController::class, 'export']);
     Route::get('/ledger/summary', [LedgerController::class, 'summary']);
     Route::post('/ledger', [LedgerController::class, 'store']);
     Route::put('/ledger/{transaction}', [LedgerController::class, 'update']);
     Route::delete('/ledger/{transaction}', [LedgerController::class, 'destroy']);
+
+    // Expenses
+    Route::get('/expenses', [ExpenseController::class, 'index']);
+    Route::post('/expenses', [ExpenseController::class, 'store']);
+    Route::put('/expenses/{expense}', [ExpenseController::class, 'update']);
+    Route::delete('/expenses/{expense}', [ExpenseController::class, 'destroy']);
+
+    // Reports
+    Route::get('/reports/financial', [ReportController::class, 'financial']);
+    Route::get('/reports/expenses', [ReportController::class, 'expenses']);
+    Route::get('/reports/balance-sheet', [ReportController::class, 'balanceSheet']);
+    Route::get('/reports/balance-sheet/download', [ReportController::class, 'downloadBalanceSheet']);
 
     // Loans
     Route::get('/loans', [LoanController::class, 'index']);
@@ -140,6 +153,12 @@ Route::middleware(['web', 'auth:web'])->group(function () {
     Route::get('/loans/loan-products', [LoanController::class, 'loanProducts']);
     Route::post('/loans', [LoanController::class, 'store']);
     Route::get('/loans/{loan}', [LoanController::class, 'show']);
+    Route::put('/loans/{loan}', [LoanController::class, 'update']);
+    Route::delete('/loans/{loan}', [LoanController::class, 'destroy']);
+    Route::post('/loans/{loan}/review', [LoanController::class, 'review']);
+    Route::post('/loans/{loan}/disburse', [LoanController::class, 'disburse']);
+    Route::post('/loans/{loan}/close', [LoanController::class, 'close']);
+    Route::post('/loans/{loan}/documents', [LoanController::class, 'uploadDocument']);
 
     // Role Permissions (admin only)
     Route::get('/roles', [RolePermissionController::class, 'index']);
@@ -147,6 +166,7 @@ Route::middleware(['web', 'auth:web'])->group(function () {
     Route::delete('/roles/{role}', [RolePermissionController::class, 'destroyRole']);
     Route::put('/roles/{role}/permissions', [RolePermissionController::class, 'updatePermissions']);
     Route::get('/roles/{role}/restore-preset', [RolePermissionController::class, 'restorePreset']);
+    Route::put('/roles/{role}/rename', [RolePermissionController::class, 'renameRole']);
 
     // Public Content (admin edit only — read is public)
     Route::put('/public-content', [PublicContentController::class, 'save']);
@@ -154,10 +174,15 @@ Route::middleware(['web', 'auth:web'])->group(function () {
     // Members
     Route::get('/members', [MemberController::class, 'index']);
     Route::get('/members/search', [MemberController::class, 'search']);
+    Route::post('/members/export', [MemberController::class, 'export']);
     Route::get('/members/{user}', [MemberController::class, 'show']);
     Route::post('/members', [MemberController::class, 'store']);
     Route::put('/members/{user}', [MemberController::class, 'update']);
     Route::delete('/members/{user}', [MemberController::class, 'destroy']);
+
+    // Officer permission overrides (admin)
+    Route::get('/officers/{user}/permissions', [OfficerPermissionController::class, 'index']);
+    Route::put('/officers/{user}/permissions', [OfficerPermissionController::class, 'update']);
 
     // Services
     Route::get('/services', [ServiceController::class, 'index']);
@@ -166,5 +191,6 @@ Route::middleware(['web', 'auth:web'])->group(function () {
     Route::post('/services/loan-application', [ServiceController::class, 'loanApplication']);
     Route::post('/services/loan-payment', [ServiceController::class, 'loanPayment']);
     Route::post('/services/approve/{transaction}', [ServiceController::class, 'approveTransaction']);
+    Route::post('/services/transactions/{transaction}/send-otp', [ServiceController::class, 'sendWithdrawalApprovalOtp']);
     Route::get('/services/pending', [ServiceController::class, 'pendingTransactions']);
 });

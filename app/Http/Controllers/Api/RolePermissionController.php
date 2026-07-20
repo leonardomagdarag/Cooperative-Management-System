@@ -175,6 +175,44 @@ class RolePermissionController extends Controller
         return response()->json(['permissions' => $preset]);
     }
 
+    public function renameRole(Request $request, string $role): JsonResponse
+    {
+        abort_unless(Auth::user()?->hasRole('admin'), 403);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:60'],
+        ]);
+
+        $baseRoles = array_keys(PermissionCatalog::rolePresets());
+        if (in_array($role, $baseRoles, true)) {
+            return response()->json(['message' => 'Base roles cannot be renamed.'], 422);
+        }
+
+        $userCount = User::query()->role($role)->count();
+        if ($userCount > 0) {
+            return response()->json(['message' => "Unassign role from {$userCount} user(s) first."], 422);
+        }
+
+        $newName = $this->normalizeRoleName($validated['name']);
+        if ($newName === '' || $newName === $role) {
+            return response()->json(['message' => 'Role name must be a new valid name.'], 422);
+        }
+
+        if (in_array($newName, self::RESERVED_ROLES, true)) {
+            return response()->json(['message' => 'That role name is reserved.'], 422);
+        }
+
+        if (Role::query()->where('name', $newName)->where('guard_name', 'web')->exists()) {
+            return response()->json(['message' => 'That role already exists.'], 422);
+        }
+
+        $roleModel = Role::findByName($role, 'web');
+        $roleModel->update(['name' => $newName]);
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        return response()->json(['message' => "Role renamed to {$newName}.", 'role' => $newName]);
+    }
+
     private function bootstrapPermissions(): void
     {
         $lockedPermissions = ['dashboard.view', 'notifications.view', 'profile.view', 'profile.update', 'settings.view'];

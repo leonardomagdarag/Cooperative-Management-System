@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import DatePicker from '../../components/DatePicker';
 import { useToast } from '../../contexts/ToastContext';
+import { useDiscardGuard } from '../../hooks/useDiscardGuard';
+import { validate, ledgerSchema, type FieldErrors } from '../../lib/validation';
 
 export default function LedgerPage() {
     const [category, setCategory] = useState('all');
@@ -9,9 +12,14 @@ export default function LedgerPage() {
     const [page, setPage] = useState(1);
     const [showAddModal, setShowAddModal] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
-    const [form, setForm] = useState({ transaction_type: 'deposit', amount: '', note: '', account_id: '', loan_id: '' });
+    const [form, setForm] = useState({ transaction_type: 'deposit', amount: '', note: '', account_id: '', loan_id: '', transaction_date: new Date().toISOString().slice(0, 10) });
+    const [formErrors, setFormErrors] = useState<FieldErrors>({});
+    const { markDirty, reset, requestClose, renderDialog } = useDiscardGuard();
     const queryClient = useQueryClient();
     const { addToast } = useToast();
+
+    const setFormD = (updater: (f: typeof form) => typeof form) => { markDirty(); setForm(updater); };
+    const requestCloseGuard = () => requestClose(() => setShowAddModal(false));
 
     const { data, isLoading } = useQuery({
         queryKey: ['ledger', category, search, page],
@@ -46,8 +54,40 @@ export default function LedgerPage() {
         return c[t] || 'bg-slate-100 text-slate-700';
     };
 
-    const openAdd = () => { setEditingId(null); setForm({ transaction_type: 'deposit', amount: '', note: '', account_id: '', loan_id: '' }); setShowAddModal(true); };
-    const openEdit = (t: any) => { setEditingId(t.id); setForm({ transaction_type: t.transaction_type, amount: t.amount, note: t.note || '', account_id: t.account_id || '', loan_id: t.loan_id || '' }); setShowAddModal(true); };
+    const openAdd = () => { reset(); setEditingId(null); setForm({ transaction_type: 'deposit', amount: '', note: '', account_id: '', loan_id: '', transaction_date: new Date().toISOString().slice(0, 10) }); setShowAddModal(true); };
+    const openEdit = (t: any) => { reset(); setEditingId(t.id); setForm({ transaction_type: t.transaction_type, amount: t.amount, note: t.note || '', account_id: t.account_id || '', loan_id: t.loan_id || '', transaction_date: t.transaction_date || new Date().toISOString().slice(0, 10) }); setShowAddModal(true); };
+
+    const exportCsv = async () => {
+        try {
+            const res = await api.get('/api/ledger/export', {
+                params: { category: category === 'all' ? undefined : category, search: search || undefined },
+                responseType: 'blob',
+            });
+            const url = URL.createObjectURL(res.data);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ledger-${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            addToast('Exported', 'success');
+        } catch (err: any) {
+            addToast(err.response?.data?.message || 'Export failed', 'error');
+        }
+    };
+
+    const handleSave = (e: React.FormEvent) => {
+        e.preventDefault();
+        const errs = validate(ledgerSchema, form);
+        if (Object.keys(errs).length > 0) {
+            setFormErrors(errs);
+            addToast(Object.values(errs)[0], 'error');
+            return;
+        }
+        setFormErrors({});
+        saveMutation.mutate(form);
+    };
 
     return (
         <>
@@ -57,7 +97,7 @@ export default function LedgerPage() {
                     <p className="text-sm text-gray-500">Track all financial transactions</p>
                 </div>
                 <div className="mt-3 sm:mt-0 flex gap-2">
-                    <button className="bg-blue-700 hover:bg-blue-800 rounded-lg focus:ring-4 focus:ring-blue-300 text-white px-4 py-2 text-sm font-medium">
+                    <button onClick={exportCsv} className="bg-blue-700 hover:bg-blue-800 rounded-lg focus:ring-4 focus:ring-blue-300 text-white px-4 py-2 text-sm font-medium">
                         <i className="fas fa-download mr-1"></i> Export
                     </button>
                     {canEdit && (
@@ -72,10 +112,10 @@ export default function LedgerPage() {
                 {/* Summary */}
                 {summary && (
                     <div className="grid grid-cols-1 gap-3 mt-3 sm:grid-cols-2 lg:grid-cols-4 mb-4">
-                        <MiniStat label="Deposits" value={summary.deposit_count} color="emerald" />
-                        <MiniStat label="Withdrawals" value={summary.withdrawal_count} color="red" />
-                        <MiniStat label="Loan Payments" value={summary.loan_payment_count} color="blue" />
-                        <MiniStat label="Loans" value={summary.loan_count} color="amber" />
+                        <MiniStat label="Deposits" value={summary.deposits ?? 0} color="emerald" icon="fas fa-arrow-down" />
+                        <MiniStat label="Withdrawals" value={summary.withdrawals ?? 0} color="red" icon="fas fa-arrow-up" />
+                        <MiniStat label="Loan Payments" value={summary.loan_payments ?? 0} color="blue" icon="fas fa-money-check" />
+                        <MiniStat label="Loans Disbursed" value={summary.loan_disbursements ?? 0} color="amber" icon="fas fa-hand-holding-usd" />
                     </div>
                 )}
 
@@ -152,44 +192,68 @@ export default function LedgerPage() {
             </div>
 
             {showAddModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowAddModal(false)}>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={requestCloseGuard}>
                     <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
                         <div className="p-6">
                             <h2 className="mb-4 text-lg font-bold text-gray-900">{editingId ? 'Edit' : 'Add'} Transaction</h2>
-                            <form onSubmit={e => { e.preventDefault(); saveMutation.mutate(form); }} className="space-y-4">
+                            <form onSubmit={handleSave} className="space-y-4">
                                 <div>
                                     <label className="mb-1 block text-sm font-medium text-gray-700">Type</label>
-                                    <select value={form.transaction_type} onChange={e => setForm(f => ({ ...f, transaction_type: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm">
+                                    <select value={form.transaction_type} onChange={e => setFormD(f => ({ ...f, transaction_type: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm">
                                         <option value="deposit">Deposit</option><option value="withdrawal">Withdrawal</option><option value="loan_payment">Loan Payment</option><option value="loan_disbursement">Loan Disbursement</option><option value="fee">Fee</option>
                                     </select>
                                 </div>
                                 <div>
                                     <label className="mb-1 block text-sm font-medium text-gray-700">Amount</label>
-                                    <input type="number" step="0.01" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} required className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+                                    <input type="number" step="0.01" value={form.amount} onChange={e => setFormD(f => ({ ...f, amount: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm ${formErrors.amount ? 'border-red-400' : 'border-gray-200'}`} />
+                                    {formErrors.amount && <p className="mt-1 text-xs text-red-600">{formErrors.amount}</p>}
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="mb-1 block text-sm font-medium text-gray-700">Account ID</label>
+                                        <input type="text" value={form.account_id} onChange={e => setFormD(f => ({ ...f, account_id: e.target.value }))} placeholder="Required for deposits/withdrawals" className={`w-full rounded-lg border px-3 py-2 text-sm ${formErrors.account_id ? 'border-red-400' : 'border-gray-200'}`} />
+                                        {formErrors.account_id && <p className="mt-1 text-xs text-red-600">{formErrors.account_id}</p>}
+                                    </div>
+                                    <div>
+                                        <label className="mb-1 block text-sm font-medium text-gray-700">Loan ID</label>
+                                        <input type="text" value={form.loan_id} onChange={e => setFormD(f => ({ ...f, loan_id: e.target.value }))} placeholder="Required for loan types" className={`w-full rounded-lg border px-3 py-2 text-sm ${formErrors.loan_id ? 'border-red-400' : 'border-gray-200'}`} />
+                                        {formErrors.loan_id && <p className="mt-1 text-xs text-red-600">{formErrors.loan_id}</p>}
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-sm font-medium text-gray-700">Date</label>
+                                    <DatePicker value={form.transaction_date} onChange={v => setFormD(f => ({ ...f, transaction_date: v }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
                                 </div>
                                 <div>
                                     <label className="mb-1 block text-sm font-medium text-gray-700">Note</label>
-                                    <input type="text" value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+                                    <input type="text" value={form.note} onChange={e => setFormD(f => ({ ...f, note: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
                                 </div>
                                 <div className="flex justify-end gap-3">
-                                    <button type="button" onClick={() => setShowAddModal(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
+                                    <button type="button" onClick={requestCloseGuard} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
                                     <button type="submit" disabled={saveMutation.isPending} className="bg-blue-700 hover:bg-blue-800 rounded-lg focus:ring-4 focus:ring-blue-300 text-white px-4 py-2 text-sm font-medium disabled:opacity-50">{saveMutation.isPending ? 'Saving...' : 'Save'}</button>
                                 </div>
                             </form>
                         </div>
                     </div>
+                    {renderDialog()}
                 </div>
             )}
         </>
     );
 }
 
-function MiniStat({ label, value, color }: { label: string; value: number; color: string }) {
+function MiniStat({ label, value, color, icon }: { label: string; value: number; color: string; icon: string }) {
     const c: Record<string, string> = { emerald: 'text-emerald-600', red: 'text-red-600', blue: 'text-blue-600', amber: 'text-amber-600' };
+    const bg: Record<string, string> = { emerald: 'bg-emerald-50', red: 'bg-red-50', blue: 'bg-blue-50', amber: 'bg-amber-50' };
     return (
-        <div className="rounded-lg border border-gray-200 bg-white p-4">
-            <p className="text-xs text-gray-500">{label}</p>
-            <p className={`text-xl font-bold ${c[color]}`}>{value}</p>
+        <div className="rounded-lg border border-gray-200 bg-white p-4 flex items-center gap-3">
+            <div className={`h-10 w-10 rounded-lg ${bg[color]} flex items-center justify-center`}>
+                <i className={`${icon} ${c[color]}`}></i>
+            </div>
+            <div>
+                <p className="text-xs text-gray-500">{label}</p>
+                <p className={`text-xl font-bold ${c[color]}`}>{value}</p>
+            </div>
         </div>
     );
 }
