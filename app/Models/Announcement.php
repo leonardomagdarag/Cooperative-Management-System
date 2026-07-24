@@ -39,6 +39,15 @@ class Announcement extends Model
         'updated_at' => 'datetime',
     ];
 
+    protected static function booted(): void
+    {
+        static::creating(function (Announcement $announcement) {
+            if (empty($announcement->visibility)) {
+                $announcement->visibility = [self::VISIBILITY_MEMBERS];
+            }
+        });
+    }
+
     public function scopePublicNews($query)
     {
         return $query->whereIn('type', [self::TYPE_NEWS, self::TYPE_ANNOUNCEMENT])

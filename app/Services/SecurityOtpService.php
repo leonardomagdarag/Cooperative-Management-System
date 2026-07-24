@@ -199,14 +199,17 @@ class SecurityOtpService
             return;
         }
 
-        $mailable = new OtpCodeMail($user, $purpose, $otpCode);
-
         try {
-            // OTP is part of an interactive security check, so prefer immediate delivery.
-            Mail::to($user->email)->send($mailable);
-        } catch (Throwable) {
-            // Fallback to queue if sync send temporarily fails.
-            Mail::to($user->email)->queue($mailable);
+            // OTP is time-sensitive — try async first, fall back to sync
+            \App\Jobs\SendOtpEmailJob::dispatch($user->id, $purpose, $otpCode);
+        } catch (\Throwable $e) {
+            // If job dispatch fails (e.g., queue connection down), send synchronously
+            try {
+                $mailable = new OtpCodeMail($user, $purpose, $otpCode);
+                Mail::to($user->email)->send($mailable);
+            } catch (\Throwable $e2) {
+                \Illuminate\Support\Facades\Log::error("OTP email failed for user {$user->id}: {$e2->getMessage()}");
+            }
         }
     }
 

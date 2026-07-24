@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::table('announcements', function (Blueprint $table) {
             $table->enum('type', ['news', 'announcement'])->default('announcement')->after('content');
-            $table->enum('visibility', ['public', 'cooperative'])->default('cooperative')->after('type');
+            $table->text('visibility')->after('type');
             $table->string('category', 100)->nullable()->after('visibility');
         });
     }

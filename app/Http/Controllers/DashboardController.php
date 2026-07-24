@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Http\RedirectResponse;
+
 class DashboardController extends Controller
 {
-    public function index()
+    public function index(): RedirectResponse
     {
-        return view('dashboard');
+        return redirect('/dashboard');
     }
 }

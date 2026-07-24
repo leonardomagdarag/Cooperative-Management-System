@@ -7,25 +7,26 @@
         "dev": "vite"
     },
     "devDependencies": {
-        "@tailwindcss/forms": "^0.5.11",
         "@tailwindcss/vite": "^4.2.1",
-        "alpinejs": "^3.15.8",
+        "@vitejs/plugin-react": "^4.7.0",
         "autoprefixer": "^10.4.27",
-        "axios": "^1.13.6",
-        "concurrently": "^9.2.1",
+        "axios": "^1.18.1",
         "laravel-vite-plugin": "^2.1.0",
         "postcss": "^8.5.8",
-        "sass": "^1.97.3",
         "tailwindcss": "^4.2.1",
         "vite": "^7.3.1"
     },
     "dependencies": {
-        "@fontsource-variable/outfit": "^5.2.8",
-        "@fontsource/poppins": "^5.2.7",
+        "@fontsource-variable/outfit": "^5.3.0",
         "@fortawesome/fontawesome-free": "^6.7.2",
-        "animate.css": "^4.1.1",
-        "chart.js": "^4.5.0",
-        "flowbite": "^4.0.1",
-        "jquery": "^4.0.0"
+        "@hookform/resolvers": "^5.4.0",
+        "@tanstack/react-query": "^5.101.4",
+        "chart.js": "^4.5.1",
+        "react": "^19.2.8",
+        "react-chartjs-2": "^5.3.1",
+        "react-dom": "^19.2.8",
+        "react-hook-form": "^7.82.0",
+        "react-router-dom": "^7.18.1",
+        "zod": "^4.4.3"
     }
 }

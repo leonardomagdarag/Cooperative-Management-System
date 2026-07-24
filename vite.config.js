@@ -1,19 +1,22 @@
 import { defineConfig } from 'vite';
 import laravel from 'laravel-vite-plugin';
+import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
 const hmrHost = process.env.VITE_HMR_HOST || 'localhost';
+const backendUrl = process.env.VITE_BACKEND_URL || 'http://127.0.0.1:8000';
 
 export default defineConfig({
     plugins: [
         laravel({
             input: [
                 'resources/css/app.css',
-                'resources/js/app.js',
-                'resources/js/login.js',
+                'resources/react/main.tsx',
             ],
             refresh: true,
         }),
+
+        react(),
 
         tailwindcss(),
 
@@ -25,6 +28,16 @@ export default defineConfig({
         hmr: {
             host: hmrHost,
             clientPort: 5173,
-        }
+        },
+        proxy: {
+            '/api': backendUrl,
+            '/sanctum': backendUrl,
+            '/login': backendUrl,
+            '/logout': backendUrl,
+            '/forgot-password': backendUrl,
+            '/reset-password': backendUrl,
+            '/register': backendUrl,
+            '/contact': backendUrl,
+        },
     }
 });

@@ -106,7 +106,7 @@ class PasswordResetController extends Controller
 
         // Send email with token
         try {
-            $this->sendResetEmail($user, $token);
+            \App\Jobs\SendPasswordResetEmailJob::dispatch($user->id, $token);
 
             $this->auditLogService->log(
                 'security.password_reset_code_sent',
@@ -404,12 +404,7 @@ class PasswordResetController extends Controller
         // Delete the reset token
         DB::table('password_reset_tokens')->where('email', $request->email)->delete();
 
-        // Send confirmation email
-        try {
-            $this->sendPasswordChangedEmail($user);
-        } catch (\Exception $e) {
-            // Continue even if email fails
-        }
+        // Password changed notification is already sent via notifyPasswordChanged() above
 
         $this->auditLogService->log(
             'security.password_reset_completed',
