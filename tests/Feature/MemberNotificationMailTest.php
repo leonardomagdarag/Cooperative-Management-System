@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\SendEmailJob;
 use App\Mail\LoanStatusNotification;
 use App\Mail\WithdrawalStatusNotification;
 use App\Models\Account;
@@ -7,11 +8,11 @@ use App\Models\Loan;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\NotificationService;
-use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Bus;
 use Spatie\Permission\Models\Role;
 
 test('loan approval queues an email notification for a member', function () {
-    Mail::fake();
+    Bus::fake();
     Role::findOrCreate('member', 'web');
 
     $member = User::factory()->create([
@@ -28,10 +29,11 @@ test('loan approval queues an email notification for a member', function () {
 
     app(NotificationService::class)->notifyLoanApproved($loan);
 
-    Mail::assertQueued(LoanStatusNotification::class, function (LoanStatusNotification $mail) use ($member, $loan) {
-        return $mail->hasTo($member->email)
-            && $mail->loan->is($loan)
-            && $mail->status === 'approved';
+    Bus::assertDispatched(SendEmailJob::class, function (SendEmailJob $job) use ($member, $loan) {
+        return $job->toEmail === $member->email
+            && $job->mailable instanceof LoanStatusNotification
+            && $job->mailable->loan->is($loan)
+            && $job->mailable->status === 'approved';
     });
 
     $notification = $member->notifications()->latest('id')->first();
@@ -42,7 +44,7 @@ test('loan approval queues an email notification for a member', function () {
 });
 
 test('withdrawal approval queues an email notification for a member', function () {
-    Mail::fake();
+    Bus::fake();
     Role::findOrCreate('member', 'web');
 
     $member = User::factory()->create([
@@ -64,10 +66,11 @@ test('withdrawal approval queues an email notification for a member', function (
 
     app(NotificationService::class)->notifyWithdrawalApproved($withdrawal);
 
-    Mail::assertQueued(WithdrawalStatusNotification::class, function (WithdrawalStatusNotification $mail) use ($member, $withdrawal) {
-        return $mail->hasTo($member->email)
-            && $mail->withdrawal->is($withdrawal)
-            && $mail->status === 'approved';
+    Bus::assertDispatched(SendEmailJob::class, function (SendEmailJob $job) use ($member, $withdrawal) {
+        return $job->toEmail === $member->email
+            && $job->mailable instanceof WithdrawalStatusNotification
+            && $job->mailable->withdrawal->is($withdrawal)
+            && $job->mailable->status === 'approved';
     });
 
     $notification = $member->notifications()->latest('id')->first();

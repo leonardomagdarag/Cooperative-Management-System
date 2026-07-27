@@ -17,6 +17,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class ServiceController extends Controller
 {
@@ -50,7 +51,13 @@ class ServiceController extends Controller
             'account_type' => 'required|in:savings,share-capital',
             'transaction_mode' => 'required|in:counter,online',
             'note' => 'nullable|string|max:500',
-            'proof' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'proof' => [
+                'nullable',
+                'file',
+                'mimes:jpg,jpeg,png,pdf',
+                'max:10240',
+                Rule::requiredIf($request->input('transaction_mode') === 'online'),
+            ],
         ]);
 
         $targetUserId = $validated['member_id'] ?? $validated['user_id'] ?? $user->id;

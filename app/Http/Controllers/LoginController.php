@@ -7,6 +7,7 @@ use App\Services\AuditLogService;
 use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
 use App\Services\TurnstileService;
+use App\Support\PersonPasswordPolicy;
 use App\Models\Account;
 use App\Models\Address;
 use App\Models\Contact;
@@ -20,7 +21,6 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Rules\Password;
 use Spatie\Permission\Models\Role;
 
 class LoginController extends Controller
@@ -332,7 +332,11 @@ class LoginController extends Controller
             'referred_by' => 'nullable|string|max:255',
 
             // Account Credentials
-            'password' => ['required', 'confirmed', Password::min(8)],
+            'password' => array_merge(PersonPasswordPolicy::passwordRules(false, PersonPasswordPolicy::normalizedNameTokens([
+                $request->input('first_name'),
+                $request->input('middle_name'),
+                $request->input('last_name'),
+            ])), ['confirmed']),
             'terms' => 'required|accepted',
         ];
 
