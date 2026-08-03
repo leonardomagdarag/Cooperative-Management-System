@@ -42,8 +42,8 @@ class ProfileController extends Controller
         $nameChanged = $previousName !== trim($validated['name']);
 
         DB::transaction(function () use ($user, $email, $firstName, $lastName, $emailChanged): void {
-            $personalData = $user->personalData ?? new PersonalData();
-            $contact = $personalData->contact ?? new Contact();
+            $personalData = $user->personalData ?? new PersonalData;
+            $contact = $personalData->contact ?? new Contact;
 
             $contact->email = $email;
             if ($emailChanged) {

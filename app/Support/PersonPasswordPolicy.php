@@ -25,8 +25,8 @@ final class PersonPasswordPolicy
         return [
             $isEdit ? 'nullable' : 'required',
             'string',
-            'min:' . self::MIN_LENGTH,
-            'regex:' . self::LETTER_NUMBER_REGEX,
+            'min:'.self::MIN_LENGTH,
+            'regex:'.self::LETTER_NUMBER_REGEX,
             function (string $attribute, mixed $value, Closure $fail) use ($nameTokens) {
                 if (blank($value)) {
                     return;

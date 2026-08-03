@@ -24,7 +24,7 @@ class Transaction extends Model
         'proof_of_payment_path',
         'proof_of_payment_uploaded_at',
         'note',
-        'recorded_by'
+        'recorded_by',
     ];
 
     protected $casts = [
@@ -41,23 +41,23 @@ class Transaction extends Model
         static::creating(function ($transaction) {
             if (empty($transaction->transaction_number)) {
                 // Get the latest transaction_number for today
-                $datePrefix = 'TXN' . date('Ymd');
-                $latest = static::where('transaction_number', 'like', $datePrefix . '%')
+                $datePrefix = 'TXN'.date('Ymd');
+                $latest = static::where('transaction_number', 'like', $datePrefix.'%')
                     ->orderByRaw('CAST(SUBSTRING(transaction_number, 12) AS UNSIGNED) DESC')
                     ->first();
 
-                if ($latest && preg_match('/' . preg_quote($datePrefix, '/') . '(\d+)/', $latest->transaction_number, $matches)) {
+                if ($latest && preg_match('/'.preg_quote($datePrefix, '/').'(\d+)/', $latest->transaction_number, $matches)) {
                     $nextNumber = intval($matches[1]) + 1;
                 } else {
                     $nextNumber = 1;
                 }
 
-                $transaction->transaction_number = $datePrefix . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
+                $transaction->transaction_number = $datePrefix.str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
             }
         });
     }
 
-    //Eloquent Relationships
+    // Eloquent Relationships
 
     public function account()
     {

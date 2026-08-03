@@ -2,9 +2,11 @@
 
 namespace Database\Factories;
 
-use App\Models\PersonalData;
 use App\Models\Address;
 use App\Models\Contact;
+use App\Models\Employment;
+use App\Models\MemberId;
+use App\Models\PersonalData;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class PersonalDataFactory extends Factory
@@ -34,8 +36,8 @@ class PersonalDataFactory extends Factory
             'religion' => fake()->randomElement($religions),
             'address_id' => Address::factory(),
             'contact_id' => Contact::factory(),
-            'employment_id' => \App\Models\Employment::factory(),
-            'member_id' => \App\Models\MemberId::factory(),
+            'employment_id' => Employment::factory(),
+            'member_id' => MemberId::factory(),
         ];
     }
 }

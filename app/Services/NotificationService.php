@@ -5,20 +5,19 @@ namespace App\Services;
 use App\Jobs\SendAnnouncementEmailJob;
 use App\Jobs\SendEmailJob;
 use App\Jobs\SendSecurityAlertJob;
-use App\Mail\AnnouncementNotification as AnnouncementMail;
 use App\Mail\LoanDueNotification;
 use App\Mail\LoanStatusNotification;
-use App\Mail\SecurityAlert;
 use App\Mail\WithdrawalStatusNotification;
-use App\Models\Notification;
-use App\Models\User;
 use App\Models\Announcement;
 use App\Models\Loan;
+use App\Models\Notification;
 use App\Models\Transaction;
+use App\Models\User;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class NotificationService
@@ -140,8 +139,8 @@ class NotificationService
         $this->createForUsers(
             $users,
             'announcement',
-            'New Announcement: ' . $announcement->title,
-            substr($announcement->content, 0, 100) . '...',
+            'New Announcement: '.$announcement->title,
+            substr($announcement->content, 0, 100).'...',
             'normal',
             '/news',
             $announcement
@@ -151,7 +150,7 @@ class NotificationService
             $userIds = $users->filter(fn ($u) => $u->email)->pluck('id')->toArray();
             if (! empty($userIds)) {
                 try {
-                    $batch = \Illuminate\Support\Facades\Bus::batch(
+                    $batch = Bus::batch(
                         array_map(
                             fn ($userId) => new SendAnnouncementEmailJob($announcement, $userId),
                             $userIds
@@ -181,7 +180,7 @@ class NotificationService
             $loan->user,
             'loan_due',
             'Loan Payment Due Soon',
-            "Your loan payment of ₱" . number_format($loan->loan_amount, 2) . " is due in {$daysRemaining} day(s).",
+            'Your loan payment of ₱'.number_format($loan->loan_amount, 2)." is due in {$daysRemaining} day(s).",
             $priority,
             $this->resolveUserDashboardUrl($loan->user),
             $loan
@@ -204,7 +203,7 @@ class NotificationService
             $loan->user,
             'loan_due',
             'Loan Payment Overdue',
-            "Your loan payment is now overdue. Please settle your payment as soon as possible.",
+            'Your loan payment is now overdue. Please settle your payment as soon as possible.',
             'urgent',
             $this->resolveUserDashboardUrl($loan->user),
             $loan
@@ -227,7 +226,7 @@ class NotificationService
             $loan->user,
             'loan_approved',
             'Loan Application Approved',
-            "Congratulations! Your loan application for ₱" . number_format($loan->loan_amount, 2) . " has been approved.",
+            'Congratulations! Your loan application for ₱'.number_format($loan->loan_amount, 2).' has been approved.',
             'high',
             $this->resolveUserDashboardUrl($loan->user),
             $loan
@@ -246,9 +245,9 @@ class NotificationService
      */
     public function notifyLoanRejected(Loan $loan, string $reason = '', bool $sendEmail = true): void
     {
-        $message = "Your loan application has been rejected.";
+        $message = 'Your loan application has been rejected.';
         if ($reason) {
-            $message .= " Reason: " . $reason;
+            $message .= ' Reason: '.$reason;
         }
 
         $this->create(
@@ -278,7 +277,7 @@ class NotificationService
             $loan->user,
             'loan_payment',
             'Payment Received',
-            "Your payment of ₱" . number_format($amount, 2) . " has been received.",
+            'Your payment of ₱'.number_format($amount, 2).' has been received.',
             'normal',
             $this->resolveUserDashboardUrl($loan->user),
             $loan
@@ -294,7 +293,7 @@ class NotificationService
             $withdrawal->user,
             'general',
             'Withdrawal Request Approved',
-            "Your withdrawal request for ₱" . number_format($withdrawal->amount, 2) . " has been approved and processed.",
+            'Your withdrawal request for ₱'.number_format($withdrawal->amount, 2).' has been approved and processed.',
             'high',
             $this->resolveUserDashboardUrl($withdrawal->user),
             $withdrawal
@@ -313,9 +312,9 @@ class NotificationService
      */
     public function notifyWithdrawalRejected(Transaction $withdrawal, string $reason = '', bool $sendEmail = true): void
     {
-        $message = "Your withdrawal request for ₱" . number_format($withdrawal->amount, 2) . " has been rejected.";
+        $message = 'Your withdrawal request for ₱'.number_format($withdrawal->amount, 2).' has been rejected.';
         if ($reason) {
-            $message .= " Reason: " . $reason;
+            $message .= ' Reason: '.$reason;
         }
 
         $this->create(
@@ -378,7 +377,7 @@ class NotificationService
     {
         $message = "Your loan application {$loan->loan_number} has been rejected during review.";
         if ($reason) {
-            $message .= ' Reason: ' . $reason;
+            $message .= ' Reason: '.$reason;
         }
 
         $this->create(
@@ -492,7 +491,7 @@ class NotificationService
             $user,
             'email_verification',
             'Verify Your Email',
-            "Please verify your email address to access all features.",
+            'Please verify your email address to access all features.',
             'high',
             $this->routeIfExists('verification.notice', '/notifications')
         );

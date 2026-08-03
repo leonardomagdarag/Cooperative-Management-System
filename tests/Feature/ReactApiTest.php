@@ -2,11 +2,14 @@
 
 use App\Models\Announcement;
 use App\Models\User;
+use Database\Seeders\SpatieRolePermissionSeeder;
+use Database\Seeders\UserSeeder;
 
 test('react api login establishes an authenticated session', function () {
     $user = User::factory()->create([
         'email' => 'react-api@example.com',
         'password' => 'password',
+        'role' => 'admin',
     ]);
 
     $this->get('/sanctum/csrf-cookie')->assertNoContent();
@@ -20,6 +23,25 @@ test('react api login establishes an authenticated session', function () {
     $this->getJson('/api/user')
         ->assertOk()
         ->assertJsonPath('email', $user->email);
+});
+
+test('new member device login requires otp and blocks protected api access', function () {
+    $user = User::factory()->create([
+        'email' => 'new-device@example.com',
+        'password' => 'password',
+        'role' => 'member',
+    ]);
+
+    $this->postJson('/api/login', [
+        'email' => $user->email,
+        'password' => 'password',
+    ])->assertOk()
+        ->assertJsonPath('requires_otp', true)
+        ->assertJsonPath('redirect', route('otp.challenge.show'));
+
+    $this->getJson('/api/user')
+        ->assertStatus(423)
+        ->assertJsonPath('redirect', route('otp.challenge.show'));
 });
 
 test('public announcement api returns json visibility records', function () {
@@ -45,8 +67,8 @@ test('public announcement api returns json visibility records', function () {
 });
 
 test('seeded admin can access protected react api endpoints', function () {
-    $this->seed(\Database\Seeders\SpatieRolePermissionSeeder::class);
-    $this->seed(\Database\Seeders\UserSeeder::class);
+    $this->seed(SpatieRolePermissionSeeder::class);
+    $this->seed(UserSeeder::class);
 
     $admin = User::where('email', 'admin@example.com')->firstOrFail();
 

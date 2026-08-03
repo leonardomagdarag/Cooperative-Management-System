@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Http\JsonResponse;
 
 class PageController extends Controller
 {
@@ -17,12 +17,35 @@ class PageController extends Controller
         return response()->view('react');
     }
 
-    public function home() { return $this->serveReactApp(); }
-    public function about() { return $this->serveReactApp(); }
-    public function news() { return $this->serveReactApp(); }
-    public function stories() { return $this->serveReactApp(); }
-    public function login() { return $this->serveReactApp(); }
-    public function register() { return $this->serveReactApp(); }
+    public function home()
+    {
+        return $this->serveReactApp();
+    }
+
+    public function about()
+    {
+        return $this->serveReactApp();
+    }
+
+    public function news()
+    {
+        return $this->serveReactApp();
+    }
+
+    public function stories()
+    {
+        return $this->serveReactApp();
+    }
+
+    public function login()
+    {
+        return $this->serveReactApp();
+    }
+
+    public function register()
+    {
+        return $this->serveReactApp();
+    }
 
     public function submitContactMessage(Request $request): JsonResponse
     {

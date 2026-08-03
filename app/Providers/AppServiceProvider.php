@@ -4,7 +4,6 @@ namespace App\Providers;
 
 use App\Models\Announcement;
 use App\Models\Loan;
-use App\Models\OfficerPermissionOverride;
 use App\Models\PersonalData;
 use App\Models\Transaction;
 use App\Models\User;
@@ -15,8 +14,8 @@ use App\Policies\TransactionPolicy;
 use App\Policies\UserPolicy;
 use App\Support\SiteContentCatalog;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\View;
+use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {

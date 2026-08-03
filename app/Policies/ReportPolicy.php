@@ -8,11 +8,11 @@ class ReportPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->can('reports.view');
+        return $user->hasPermissionTo('reports.view');
     }
 
     public function export(User $user): bool
     {
-        return $user->can('reports.export');
+        return $user->hasPermissionTo('reports.export');
     }
 }

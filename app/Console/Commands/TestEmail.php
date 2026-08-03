@@ -3,8 +3,8 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
+use PHPMailer\PHPMailer\PHPMailer;
 
 class TestEmail extends Command
 {
@@ -28,45 +28,47 @@ class TestEmail extends Command
 
         // Check .env configuration
         $this->info('📋 Current Email Settings:');
-        $this->line('MAIL_HOST: ' . (env('MAIL_HOST') ?: '❌ Not set'));
-        $this->line('MAIL_PORT: ' . (env('MAIL_PORT') ?: '❌ Not set'));
-        $this->line('MAIL_USERNAME: ' . (env('MAIL_USERNAME') ?: '❌ Not set'));
-        $this->line('MAIL_PASSWORD: ' . (env('MAIL_PASSWORD') ? '✅ Set (hidden)' : '❌ Not set'));
-        $this->line('MAIL_ENCRYPTION: ' . (env('MAIL_ENCRYPTION') ?: '❌ Not set'));
-        $this->line('MAIL_FROM_ADDRESS: ' . (env('MAIL_FROM_ADDRESS') ?: '❌ Not set'));
-        $this->line('MAIL_FROM_NAME: ' . (env('MAIL_FROM_NAME') ?: '❌ Not set'));
+        $this->line('MAIL_HOST: '.(env('MAIL_HOST') ?: '❌ Not set'));
+        $this->line('MAIL_PORT: '.(env('MAIL_PORT') ?: '❌ Not set'));
+        $this->line('MAIL_USERNAME: '.(env('MAIL_USERNAME') ?: '❌ Not set'));
+        $this->line('MAIL_PASSWORD: '.(env('MAIL_PASSWORD') ? '✅ Set (hidden)' : '❌ Not set'));
+        $this->line('MAIL_ENCRYPTION: '.(env('MAIL_ENCRYPTION') ?: '❌ Not set'));
+        $this->line('MAIL_FROM_ADDRESS: '.(env('MAIL_FROM_ADDRESS') ?: '❌ Not set'));
+        $this->line('MAIL_FROM_NAME: '.(env('MAIL_FROM_NAME') ?: '❌ Not set'));
         $this->newLine();
 
         // Check if all required settings are present
         $required = ['MAIL_HOST', 'MAIL_PORT', 'MAIL_USERNAME', 'MAIL_PASSWORD', 'MAIL_FROM_ADDRESS'];
         $missing = [];
         foreach ($required as $key) {
-            if (!env($key)) {
+            if (! env($key)) {
                 $missing[] = $key;
             }
         }
 
-        if (!empty($missing)) {
-            $this->error('❌ Missing required configuration: ' . implode(', ', $missing));
+        if (! empty($missing)) {
+            $this->error('❌ Missing required configuration: '.implode(', ', $missing));
             $this->newLine();
             $this->info('Please update your .env file with proper mail settings.');
             $this->info('See EMAIL_SETUP_GUIDE.md for detailed instructions.');
+
             return 1;
         }
 
         // Ask for recipient
         $recipient = $this->argument('recipient');
-        if (!$recipient) {
+        if (! $recipient) {
             $recipient = $this->ask('Enter recipient email address');
         }
 
-        if (!filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
+        if (! filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
             $this->error('❌ Invalid email address');
+
             return 1;
         }
 
         // Try to send test email
-        $this->info('📧 Sending test email to: ' . $recipient);
+        $this->info('📧 Sending test email to: '.$recipient);
         $this->newLine();
 
         try {
@@ -75,18 +77,18 @@ class TestEmail extends Command
             // Enable verbose debug output
             $mail->SMTPDebug = 2;
             $mail->Debugoutput = function ($str, $level) {
-                $this->line('   ' . trim($str));
+                $this->line('   '.trim($str));
             };
 
             // Server settings
             $mail->isSMTP();
-            $mail->Host       = env('MAIL_HOST');
-            $mail->SMTPAuth   = true;
-            $mail->Username   = env('MAIL_USERNAME');
-            $mail->Password   = env('MAIL_PASSWORD');
+            $mail->Host = env('MAIL_HOST');
+            $mail->SMTPAuth = true;
+            $mail->Username = env('MAIL_USERNAME');
+            $mail->Password = env('MAIL_PASSWORD');
             $mail->SMTPSecure = env('MAIL_ENCRYPTION', 'tls');
-            $mail->Port       = env('MAIL_PORT', 587);
-            $mail->Timeout    = 30;
+            $mail->Port = env('MAIL_PORT', 587);
+            $mail->Timeout = 30;
 
             // Recipients
             $mail->setFrom(env('MAIL_FROM_ADDRESS'), env('MAIL_FROM_NAME'));
@@ -95,19 +97,20 @@ class TestEmail extends Command
             // Content
             $mail->isHTML(true);
             $mail->Subject = 'Test Email from Cooperative Management System';
-            $mail->Body    = '<h1>Test Email</h1><p>If you received this email, your mail configuration is working correctly! ✅</p>';
+            $mail->Body = '<h1>Test Email</h1><p>If you received this email, your mail configuration is working correctly! ✅</p>';
             $mail->AltBody = 'Test Email - If you received this email, your mail configuration is working correctly!';
 
             $mail->send();
 
             $this->newLine();
             $this->info('✅ Test email sent successfully!');
-            $this->info('Check the inbox of: ' . $recipient);
+            $this->info('Check the inbox of: '.$recipient);
+
             return 0;
         } catch (Exception $e) {
             $this->newLine();
             $this->error('❌ Failed to send email!');
-            $this->error('Error: ' . $e->getMessage());
+            $this->error('Error: '.$e->getMessage());
             $this->newLine();
 
             $this->info('💡 Common Solutions:');

@@ -121,7 +121,7 @@ class LoanProductController extends Controller
         $loanProduct->update(['is_active' => ! $loanProduct->is_active]);
 
         return response()->json([
-            'message' => $loanProduct->name . ($loanProduct->fresh()->is_active ? ' enabled.' : ' disabled.'),
+            'message' => $loanProduct->name.($loanProduct->fresh()->is_active ? ' enabled.' : ' disabled.'),
             'data' => $loanProduct->fresh(),
         ]);
     }

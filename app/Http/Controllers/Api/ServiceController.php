@@ -76,24 +76,28 @@ class ServiceController extends Controller
 
         $status = $validated['transaction_mode'] === 'counter' ? 'completed' : 'pending';
 
-        $transaction = Transaction::create([
-            'account_id' => $account->id,
-            'transaction_type' => 'deposit',
-            'amount' => $validated['amount'],
-            'status' => $status,
-            'transaction_mode' => $validated['transaction_mode'],
-            'note' => $validated['note'] ?? null,
-            'proof_of_payment_path' => $proofPath,
-            'proof_of_payment_uploaded_at' => $proofPath ? now() : null,
-            'transaction_date' => now(),
-            'recorded_by' => Auth::id(),
-        ]);
+        $transaction = DB::transaction(function () use ($account, $validated, $status, $proofPath, $user) {
+            $transaction = Transaction::create([
+                'account_id' => $account->id,
+                'transaction_type' => 'deposit',
+                'amount' => $validated['amount'],
+                'status' => $status,
+                'transaction_mode' => $validated['transaction_mode'],
+                'note' => $validated['note'] ?? null,
+                'proof_of_payment_path' => $proofPath,
+                'proof_of_payment_uploaded_at' => $proofPath ? now() : null,
+                'transaction_date' => now(),
+                'recorded_by' => Auth::id(),
+            ]);
 
-        if ($status === 'completed') {
-            $account->increment('balance', $validated['amount']);
-        }
+            if ($status === 'completed') {
+                Account::whereKey($account->id)->increment('balance', $validated['amount']);
+            }
 
-        app(AuditLogService::class)->log('service.deposit', 'Deposit processed.', 'transaction', $transaction, $user);
+            app(AuditLogService::class)->log('service.deposit', 'Deposit processed.', 'transaction', $transaction, $user);
+
+            return $transaction;
+        });
 
         return response()->json(['message' => 'Deposit submitted.', 'data' => $transaction], 201);
     }
@@ -125,25 +129,32 @@ class ServiceController extends Controller
             return response()->json(['message' => 'Member has no savings account.'], 422);
         }
 
-        $pendingWithdrawals = Transaction::where('account_id', $account->id)->where('transaction_type', 'withdrawal')->where('status', 'pending')->sum('amount');
-        $available = $account->balance - $pendingWithdrawals;
+        $transaction = DB::transaction(function () use ($account, $validated, $user) {
+            // Lock the account row so concurrent withdrawals cannot overdraw.
+            $lockedAccount = Account::whereKey($account->id)->lockForUpdate()->first();
 
-        if ($validated['amount'] > $available) {
-            return response()->json(['message' => 'Insufficient available balance. Available: ₱'.number_format($available, 2)], 422);
-        }
+            $pendingWithdrawals = Transaction::where('account_id', $lockedAccount->id)->where('transaction_type', 'withdrawal')->where('status', 'pending')->sum('amount');
+            $available = (float) $lockedAccount->balance - (float) $pendingWithdrawals;
 
-        $transaction = Transaction::create([
-            'account_id' => $account->id,
-            'transaction_type' => 'withdrawal',
-            'amount' => $validated['amount'],
-            'status' => 'pending',
-            'transaction_mode' => $validated['transaction_mode'],
-            'note' => $validated['note'] ?? $validated['reason'] ?? null,
-            'transaction_date' => now(),
-            'recorded_by' => Auth::id(),
-        ]);
+            if ($validated['amount'] > $available) {
+                abort(422, 'Insufficient available balance. Available: ₱'.number_format($available, 2));
+            }
 
-        app(AuditLogService::class)->log('service.withdrawal', 'Withdrawal requested.', 'transaction', $transaction, $user);
+            $transaction = Transaction::create([
+                'account_id' => $lockedAccount->id,
+                'transaction_type' => 'withdrawal',
+                'amount' => $validated['amount'],
+                'status' => 'pending',
+                'transaction_mode' => $validated['transaction_mode'],
+                'note' => $validated['note'] ?? $validated['reason'] ?? null,
+                'transaction_date' => now(),
+                'recorded_by' => Auth::id(),
+            ]);
+
+            app(AuditLogService::class)->log('service.withdrawal', 'Withdrawal requested.', 'transaction', $transaction, $user);
+
+            return $transaction;
+        });
 
         return response()->json(['message' => 'Withdrawal submitted for approval.', 'data' => $transaction], 201);
     }
@@ -157,7 +168,7 @@ class ServiceController extends Controller
             'amount' => 'required|numeric|min:1',
             'term_months' => 'required|integer|min:1|max:360',
             'payment_frequency' => 'required|in:weekly,bi-weekly,monthly,quarterly,annually',
-            'purpose' => 'nullable|string|max:500',
+            'purpose' => 'required|string|max:500',
             'co_makers' => 'nullable|array',
             'co_makers.*' => 'integer|exists:users,id',
             'interview_schedule' => 'nullable|date',
@@ -272,27 +283,38 @@ class ServiceController extends Controller
 
         $status = $validated['transaction_mode'] === 'counter' ? 'completed' : 'pending';
 
-        $transaction = Transaction::create([
-            'account_id' => $account->id,
-            'loan_id' => $loan->id,
-            'transaction_type' => 'loan_payment',
-            'amount' => $validated['amount'],
-            'status' => $status,
-            'transaction_mode' => $validated['transaction_mode'],
-            'note' => $validated['note'] ?? null,
-            'transaction_date' => now(),
-            'recorded_by' => Auth::id(),
-        ]);
+        $transaction = DB::transaction(function () use ($account, $loan, $validated, $status, $user) {
+            $lockedAccount = Account::whereKey($account->id)->lockForUpdate()->first();
 
-        if ($status === 'completed') {
-            $account->decrement('balance', $validated['amount']);
-
-            if ($loan->remainingBalance() <= 0 && $loan->loan_status !== 'paid_off') {
-                $loan->update(['loan_status' => 'paid_off']);
+            if ((float) $lockedAccount->balance < (float) $validated['amount']) {
+                abort(422, 'Insufficient balance.');
             }
-        }
 
-        app(AuditLogService::class)->log('service.loan_payment', 'Loan payment submitted.', 'transaction', $transaction, $user);
+            $transaction = Transaction::create([
+                'account_id' => $lockedAccount->id,
+                'loan_id' => $loan->id,
+                'transaction_type' => 'loan_payment',
+                'amount' => $validated['amount'],
+                'status' => $status,
+                'transaction_mode' => $validated['transaction_mode'],
+                'note' => $validated['note'] ?? null,
+                'transaction_date' => now(),
+                'recorded_by' => Auth::id(),
+            ]);
+
+            if ($status === 'completed') {
+                $lockedAccount->decrement('balance', $validated['amount']);
+
+                $loan->refresh();
+                if ($loan->remainingBalance() <= 0 && $loan->loan_status !== 'paid_off') {
+                    $loan->update(['loan_status' => 'paid_off']);
+                }
+            }
+
+            app(AuditLogService::class)->log('service.loan_payment', 'Loan payment submitted.', 'transaction', $transaction, $user);
+
+            return $transaction;
+        });
 
         return response()->json(['message' => 'Payment submitted.', 'data' => $transaction], 201);
     }
@@ -334,15 +356,24 @@ class ServiceController extends Controller
 
         DB::transaction(function () use ($transaction, $validated, $user) {
             if ($validated['action'] === 'approve') {
+                $lockedAccount = Account::whereKey($transaction->account_id)->lockForUpdate()->first();
+
+                if (in_array($transaction->transaction_type, ['withdrawal', 'loan_payment'], true)) {
+                    if (! $lockedAccount || (float) $lockedAccount->balance < (float) $transaction->amount) {
+                        abort(422, 'Insufficient available balance to approve this transaction.');
+                    }
+                }
+
                 $transaction->update(['status' => 'completed', 'approved_by' => $user->id, 'approved_at' => now()]);
 
                 if ($transaction->transaction_type === 'deposit') {
-                    $transaction->account->increment('balance', $transaction->amount);
+                    $lockedAccount->increment('balance', $transaction->amount);
                 } elseif ($transaction->transaction_type === 'withdrawal') {
-                    $transaction->account->decrement('balance', $transaction->amount);
+                    $lockedAccount->decrement('balance', $transaction->amount);
                 } elseif ($transaction->transaction_type === 'loan_payment') {
-                    $transaction->account->decrement('balance', $transaction->amount);
+                    $lockedAccount->decrement('balance', $transaction->amount);
 
+                    $transaction->loan?->refresh();
                     if ($transaction->loan && $transaction->loan->remainingBalance() <= 0 && $transaction->loan->loan_status !== 'paid_off') {
                         $transaction->loan->update(['loan_status' => 'paid_off']);
                     }

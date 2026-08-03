@@ -17,7 +17,7 @@ class Contact extends Model
         'phone_verified_at',
         'email',
         'email_verified_at',
-        'facebook'
+        'facebook',
     ];
 
     protected $casts = [
@@ -28,11 +28,11 @@ class Contact extends Model
     protected function email(): Attribute
     {
         return Attribute::make(
-            set: fn(mixed $value) => User::normalizeEmail($value),
+            set: fn (mixed $value) => User::normalizeEmail($value),
         );
     }
 
-    //Eloquent Relationships
+    // Eloquent Relationships
 
     public function personalData()
     {

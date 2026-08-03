@@ -7,7 +7,6 @@ use App\Models\Account;
 use App\Models\Expense;
 use App\Models\Loan;
 use App\Models\Transaction;
-use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;

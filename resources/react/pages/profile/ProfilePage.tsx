@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import { getProfile, updateProfile, type ProfileData } from '../../api/profile';
 import DatePicker from '../../components/DatePicker';
 import { useToast } from '../../contexts/ToastContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
@@ -198,8 +199,8 @@ export default function ProfilePage() {
                                 {trusted_devices.map(d => (
                                     <div key={d.id} className="flex items-center justify-between rounded-xl border border-gray-100 p-3">
                                         <div>
-                                            <p className="text-sm text-gray-700">{d.device_name || 'Unknown device'}</p>
-                                            <p className="text-xs text-gray-400">{d.ip_address}{d.last_used_at ? ` · last used ${new Date(d.last_used_at).toLocaleString()}` : ''}</p>
+                                            <p className="text-sm text-gray-700">{d.device_label || 'Unknown device'}</p>
+                                            <p className="text-xs text-gray-400">{d.last_ip_address}{d.last_used_at ? ` · last used ${new Date(d.last_used_at).toLocaleString()}` : ''}</p>
                                         </div>
                                         <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${d.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{d.is_active ? 'Active' : 'Inactive'}</span>
                                     </div>

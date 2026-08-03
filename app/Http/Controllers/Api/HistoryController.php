@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Transaction;
+use App\Support\SearchFilter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -49,7 +50,7 @@ class HistoryController extends Controller
         }
 
         // Search
-        if ($search = $request->string('search')->toString()) {
+        if ($search = SearchFilter::escapeLike($request->string('search')->toString())) {
             $query->where(function ($q) use ($search) {
                 $q->where('transaction_number', 'like', "%{$search}%")
                     ->orWhere('note', 'like', "%{$search}%")
@@ -85,7 +86,7 @@ class HistoryController extends Controller
                 ] : null,
                 'recorded_by' => $t->recordedBy ? [
                     'id' => $t->recordedBy->id,
-                    'name' => trim(($t->recordedBy->personalData->first_name ?? '') . ' ' . ($t->recordedBy->personalData->last_name ?? '')),
+                    'name' => trim(($t->recordedBy->personalData->first_name ?? '').' '.($t->recordedBy->personalData->last_name ?? '')),
                 ] : null,
                 'created_at' => $t->created_at->toISOString(),
             ]),

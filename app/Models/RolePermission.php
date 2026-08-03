@@ -42,7 +42,7 @@ class RolePermission extends Model
             ->where('is_active', true)
             ->first();
 
-        if (!$rolePermission) {
+        if (! $rolePermission) {
             return false;
         }
 

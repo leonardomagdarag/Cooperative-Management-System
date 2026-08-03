@@ -2,9 +2,9 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
-use App\Models\LoanPayment;
 use App\Models\Loan;
+use App\Models\LoanPayment;
+use Illuminate\Database\Seeder;
 
 class LoanPaymentSeeder extends Seeder
 {
@@ -14,6 +14,7 @@ class LoanPaymentSeeder extends Seeder
 
         if ($loans->isEmpty()) {
             $this->command->error('No loans found. Please run LoanSeeder first.');
+
             return;
         }
 

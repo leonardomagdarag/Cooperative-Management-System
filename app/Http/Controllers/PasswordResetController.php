@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\SendPasswordResetEmailJob;
+use App\Models\TrustedDevice;
+use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\NotificationService;
 use App\Services\TurnstileService;
-use App\Models\User;
 use App\Support\PersonPasswordPolicy;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\Request;
@@ -14,8 +16,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
-use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
+use PHPMailer\PHPMailer\PHPMailer;
 
 class PasswordResetController extends Controller
 {
@@ -107,7 +109,7 @@ class PasswordResetController extends Controller
 
         // Send email with token
         try {
-            \App\Jobs\SendPasswordResetEmailJob::dispatch($user->id, $token);
+            SendPasswordResetEmailJob::dispatch($user->id, $token);
 
             $this->auditLogService->log(
                 'security.password_reset_code_sent',
@@ -125,7 +127,7 @@ class PasswordResetController extends Controller
                 ->with('success', 'A 6-digit reset code has been sent to your email address.');
         } catch (\Exception $e) {
             // Log the error for debugging
-            Log::error('Password reset email failed: ' . $e->getMessage());
+            Log::error('Password reset email failed: '.$e->getMessage());
             report($e);
 
             $this->auditLogService->log(
@@ -150,7 +152,7 @@ class PasswordResetController extends Controller
     {
         $email = $request->query('email');
 
-        if (!$email) {
+        if (! $email) {
             return redirect()->route('password.request')
                 ->with('error', 'Invalid reset link.');
         }
@@ -183,7 +185,7 @@ class PasswordResetController extends Controller
             ->where('email', $request->email)
             ->first();
 
-        if (!$resetRecord) {
+        if (! $resetRecord) {
             $this->auditLogService->log(
                 'security.password_reset_verify_failed',
                 'Password reset verification failed: reset record missing.',
@@ -195,7 +197,7 @@ class PasswordResetController extends Controller
 
             return response()->json([
                 'valid' => false,
-                'message' => 'Invalid or expired reset code.'
+                'message' => 'Invalid or expired reset code.',
             ], 400);
         }
 
@@ -214,12 +216,12 @@ class PasswordResetController extends Controller
 
             return response()->json([
                 'valid' => false,
-                'message' => 'Reset code has expired. Please request a new one.'
+                'message' => 'Reset code has expired. Please request a new one.',
             ], 400);
         }
 
         // Verify token
-        if (!Hash::check($request->token, $resetRecord->token)) {
+        if (! Hash::check($request->token, $resetRecord->token)) {
             $this->auditLogService->log(
                 'security.password_reset_verify_failed',
                 'Password reset verification failed: invalid reset code.',
@@ -231,7 +233,7 @@ class PasswordResetController extends Controller
 
             return response()->json([
                 'valid' => false,
-                'message' => 'Invalid reset code. Please check and try again.'
+                'message' => 'Invalid reset code. Please check and try again.',
             ], 400);
         }
 
@@ -246,7 +248,7 @@ class PasswordResetController extends Controller
 
         return response()->json([
             'valid' => true,
-            'message' => 'Code verified successfully.'
+            'message' => 'Code verified successfully.',
         ]);
     }
 
@@ -338,7 +340,7 @@ class PasswordResetController extends Controller
 
         $user = $resetUser;
 
-        if (!$resetRecord) {
+        if (! $resetRecord) {
             $this->auditLogService->log(
                 'security.password_reset_failed',
                 'Password reset failed: reset record missing.',
@@ -374,7 +376,7 @@ class PasswordResetController extends Controller
         }
 
         // Verify token
-        if (!Hash::check($request->token, $resetRecord->token)) {
+        if (! Hash::check($request->token, $resetRecord->token)) {
             $this->auditLogService->log(
                 'security.password_reset_failed',
                 'Password reset failed: invalid reset code.',
@@ -409,6 +411,13 @@ class PasswordResetController extends Controller
 
         $user->password = Hash::make($request->password);
         $user->save();
+
+        // Invalidate existing sessions and revoke trusted devices so a stolen
+        // session/cookie cannot keep working after the password is reset.
+        $user->invalidateOtherSessions();
+        TrustedDevice::query()
+            ->where('user_id', $user->id)
+            ->update(['is_active' => false]);
 
         app(NotificationService::class)->notifyPasswordChanged($user);
 
@@ -445,11 +454,11 @@ class PasswordResetController extends Controller
         $mailUsername = config('mail.mailers.smtp.username');
         $mailPassword = config('mail.mailers.smtp.password');
 
-        if (!$fromAddress || !filter_var($fromAddress, FILTER_VALIDATE_EMAIL)) {
+        if (! $fromAddress || ! filter_var($fromAddress, FILTER_VALIDATE_EMAIL)) {
             throw new \Exception('MAIL_FROM_ADDRESS is not configured properly in .env file. Please set a valid email address.');
         }
 
-        if (!$mailHost || !$mailUsername || !$mailPassword) {
+        if (! $mailHost || ! $mailUsername || ! $mailPassword) {
             throw new \Exception('Email configuration incomplete. Please check MAIL_HOST, MAIL_USERNAME, and MAIL_PASSWORD in .env file.');
         }
 
@@ -461,19 +470,19 @@ class PasswordResetController extends Controller
 
             // Server settings
             $mail->isSMTP();
-            $mail->Host       = $mailHost;
-            $mail->SMTPAuth   = true;
-            $mail->Username   = $mailUsername;
-            $mail->Password   = $mailPassword;
+            $mail->Host = $mailHost;
+            $mail->SMTPAuth = true;
+            $mail->Username = $mailUsername;
+            $mail->Password = $mailPassword;
             $mail->SMTPSecure = config('mail.mailers.smtp.encryption', 'tls');
-            $mail->Port       = config('mail.mailers.smtp.port', 587);
+            $mail->Port = config('mail.mailers.smtp.port', 587);
 
             // Timeout settings
-            $mail->Timeout    = 30;
+            $mail->Timeout = 30;
 
             // Recipients
             $mail->setFrom($fromAddress, $fromName);
-            $mail->addAddress($user->email, $user->personalData->first_name . ' ' . $user->personalData->last_name);
+            $mail->addAddress($user->email, $user->personalData->first_name.' '.$user->personalData->last_name);
 
             // Content
             $mail->isHTML(true);
@@ -515,13 +524,13 @@ class PasswordResetController extends Controller
                             </div>
                         </div>
                         <div class='footer'>
-                            <p>&copy; " . date('Y') . " Cooperative Management System. All rights reserved.</p>
+                            <p>&copy; ".date('Y').' Cooperative Management System. All rights reserved.</p>
                             <p>This is an automated message, please do not reply to this email.</p>
                         </div>
                     </div>
                 </body>
                 </html>
-            ";
+            ';
 
             $mail->AltBody = "Your password reset code is: {$token}. This code is valid for 30 minutes.";
 
@@ -540,7 +549,7 @@ class PasswordResetController extends Controller
         $fromAddress = config('mail.from.address');
         $fromName = config('mail.from.name', 'Cooperative System');
 
-        if (!$fromAddress || !filter_var($fromAddress, FILTER_VALIDATE_EMAIL)) {
+        if (! $fromAddress || ! filter_var($fromAddress, FILTER_VALIDATE_EMAIL)) {
             throw new \Exception('MAIL_FROM_ADDRESS is not configured properly in .env file.');
         }
 
@@ -549,16 +558,16 @@ class PasswordResetController extends Controller
         try {
             // Server settings
             $mail->isSMTP();
-            $mail->Host       = config('mail.mailers.smtp.host');
-            $mail->SMTPAuth   = true;
-            $mail->Username   = config('mail.mailers.smtp.username');
-            $mail->Password   = config('mail.mailers.smtp.password');
+            $mail->Host = config('mail.mailers.smtp.host');
+            $mail->SMTPAuth = true;
+            $mail->Username = config('mail.mailers.smtp.username');
+            $mail->Password = config('mail.mailers.smtp.password');
             $mail->SMTPSecure = config('mail.mailers.smtp.encryption', 'tls');
-            $mail->Port       = config('mail.mailers.smtp.port', 587);
+            $mail->Port = config('mail.mailers.smtp.port', 587);
 
             // Recipients
             $mail->setFrom($fromAddress, $fromName);
-            $mail->addAddress($user->email, $user->personalData->first_name . ' ' . $user->personalData->last_name);
+            $mail->addAddress($user->email, $user->personalData->first_name.' '.$user->personalData->last_name);
 
             // Content
             $mail->isHTML(true);
@@ -588,17 +597,17 @@ class PasswordResetController extends Controller
                                 <strong>Success!</strong> Your password has been changed successfully.
                             </div>
                             
-                            <p>Your password was changed on <strong>" . now()->format('F d, Y \a\t h:i A') . "</strong>.</p>
+                            <p>Your password was changed on <strong>".now()->format('F d, Y \a\t h:i A')."</strong>.</p>
                             
                             <p>If you did not make this change, please contact the administrator immediately.</p>
                         </div>
                         <div class='footer'>
-                            <p>&copy; " . date('Y') . " Cooperative Management System. All rights reserved.</p>
+                            <p>&copy; ".date('Y').' Cooperative Management System. All rights reserved.</p>
                         </div>
                     </div>
                 </body>
                 </html>
-            ";
+            ';
 
             $mail->send();
         } catch (Exception $e) {

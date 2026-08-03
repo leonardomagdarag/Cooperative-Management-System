@@ -47,6 +47,7 @@ export default function LoansPage() {
     const memberSearchMutation = useMutation({
         mutationFn: (q: string) => api.get('/api/loans/search-members', { params: { q } }),
         onSuccess: (res) => setSearchResults(res.data.data),
+        onError: (err: any) => addToast(err.response?.data?.message || 'Member search failed', 'error'),
     });
 
     const uploadDocMutation = useMutation({

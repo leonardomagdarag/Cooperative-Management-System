@@ -25,6 +25,7 @@ export default function AnnouncementsPage() {
             queryClient.invalidateQueries({ queryKey: ['announcements'] });
             addToast('Announcement deleted', 'success');
         },
+        onError: (err: any) => addToast(err?.response?.data?.message || 'Failed to delete announcement', 'error'),
     });
 
     const announcements: Announcement[] = data?.data?.data ?? [];

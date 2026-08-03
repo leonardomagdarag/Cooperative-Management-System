@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getNotifications, getUnreadCount, markAsRead, markAllAsRead, Notification } from '../api/notifications';
 import { useNavigate } from 'react-router';
+import { useToast } from '../contexts/ToastContext';
 
 export default function NotificationDropdown() {
     const [isOpen, setIsOpen] = useState(false);
     const queryClient = useQueryClient();
     const navigate = useNavigate();
+    const { addToast } = useToast();
 
     const { data: unreadData } = useQuery({
         queryKey: ['notifications-unread-count'],
@@ -26,6 +28,7 @@ export default function NotificationDropdown() {
             queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
             queryClient.invalidateQueries({ queryKey: ['notifications-recent'] });
         },
+        onError: (err: any) => addToast(err?.response?.data?.message || 'Failed to update notification', 'error'),
     });
 
     const markAllMutation = useMutation({
@@ -34,6 +37,7 @@ export default function NotificationDropdown() {
             queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
             queryClient.invalidateQueries({ queryKey: ['notifications-recent'] });
         },
+        onError: (err: any) => addToast(err?.response?.data?.message || 'Failed to update notifications', 'error'),
     });
 
     const unreadCount = unreadData?.data?.count ?? 0;
@@ -82,8 +86,8 @@ export default function NotificationDropdown() {
                                         }}
                                         className="w-full border-b border-slate-50 px-4 py-3 text-left hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-700"
                                     >
-                                        <p className="text-sm font-medium">{n.data.title}</p>
-                                        <p className="mt-0.5 text-xs text-slate-500 line-clamp-2">{n.data.message}</p>
+                                        <p className="text-sm font-medium">{n.title}</p>
+                                        <p className="mt-0.5 text-xs text-slate-500 line-clamp-2">{n.message}</p>
                                     </button>
                                 ))
                             )}

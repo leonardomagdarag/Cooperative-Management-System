@@ -3,13 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Account;
 use App\Models\Loan;
 use App\Models\LoanProduct;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\NotificationService;
+use App\Support\SearchFilter;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -31,7 +31,7 @@ class LoanController extends Controller
         }
 
         // Search
-        if ($search = $request->string('search')->toString()) {
+        if ($search = SearchFilter::escapeLike($request->string('search')->toString())) {
             $query->where(function ($q) use ($search) {
                 $q->where('loan_number', 'like', "%{$search}%")
                     ->orWhere('loan_type', 'like', "%{$search}%")
@@ -135,7 +135,7 @@ class LoanController extends Controller
 
     public function searchMembers(Request $request): JsonResponse
     {
-        $search = $request->string('q')->toString();
+        $search = SearchFilter::escapeLike($request->string('q')->toString());
 
         if ($search === '') {
             return response()->json(['data' => []]);
@@ -313,7 +313,7 @@ class LoanController extends Controller
 
     public function close(Loan $loan): JsonResponse
     {
-        Gate::authorize('encode', Loan::class);
+        Gate::authorize('finalApprove', $loan);
 
         if ($loan->loan_status === 'paid_off') {
             return response()->json(['message' => 'Loan is already closed.'], 422);
@@ -328,7 +328,7 @@ class LoanController extends Controller
 
     public function destroy(Loan $loan): JsonResponse
     {
-        Gate::authorize('encode', Loan::class);
+        Gate::authorize('delete', $loan);
 
         app(AuditLogService::class)->log('loan.deleted', 'Loan record deleted.', 'loan', $loan, Auth::user());
         $loan->delete();

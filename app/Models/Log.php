@@ -13,10 +13,10 @@ class Log extends Model
         'user_id',
         'activity',
         'description',
-        'ip_address'
+        'ip_address',
     ];
 
-    //Eloquent Relationships
+    // Eloquent Relationships
 
     public function user()
     {

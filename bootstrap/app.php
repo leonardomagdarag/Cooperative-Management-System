@@ -1,15 +1,21 @@
 <?php
 
-use Illuminate\Http\Request;
+use App\Http\Middleware\EnsureOtpVerified;
+use App\Http\Middleware\EnsurePublicMemberRegistrationEnabled;
+use App\Http\Middleware\RoleMiddleware;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
+use Spatie\Permission\Middleware\PermissionMiddleware;
+use Spatie\Permission\Middleware\RoleOrPermissionMiddleware;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
-        web: __DIR__ . '/../routes/web.php',
-        api: __DIR__ . '/../routes/api.php',
-        commands: __DIR__ . '/../routes/console.php',
+        web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',
+        commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
@@ -23,20 +29,20 @@ return Application::configure(basePath: dirname(__DIR__))
         );
 
         $middleware->alias([
-            'role' => \App\Http\Middleware\RoleMiddleware::class,
-            'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
-            'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
-            'spatie_role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
-            'public.registration.enabled' => \App\Http\Middleware\EnsurePublicMemberRegistrationEnabled::class,
-            'otp.verified' => \App\Http\Middleware\EnsureOtpVerified::class,
+            'role' => RoleMiddleware::class,
+            'permission' => PermissionMiddleware::class,
+            'role_or_permission' => RoleOrPermissionMiddleware::class,
+            'spatie_role' => Spatie\Permission\Middleware\RoleMiddleware::class,
+            'public.registration.enabled' => EnsurePublicMemberRegistrationEnabled::class,
+            'otp.verified' => EnsureOtpVerified::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(function ($request, $e) {
             return $request->expectsJson();
         });
-        $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, $request) {
-            if (!$request->expectsJson()) {
+        $exceptions->render(function (AuthenticationException $e, $request) {
+            if (! $request->expectsJson()) {
                 return redirect()->route('login_page');
             }
         });

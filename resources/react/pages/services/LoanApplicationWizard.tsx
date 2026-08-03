@@ -1,15 +1,10 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
 import { validate, loanApplicationSchema, type FieldErrors } from '../../lib/validation';
 
 interface CoMaker { id: number; name: string; user_number: string }
-
-function debounce<T extends (...args: any[]) => void>(fn: T, ms: number) {
-    let timer: ReturnType<typeof setTimeout>;
-    return (...args: Parameters<T>) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
-}
 
 export default function LoanApplicationWizard({ onComplete, selectedMember, onDirtyChange }: { onComplete: () => void; selectedMember?: any; onDirtyChange?: (dirty: boolean) => void }) {
     const [step, setStep] = useState(1);
@@ -74,15 +69,22 @@ export default function LoanApplicationWizard({ onComplete, selectedMember, onDi
         submitMutation.mutate();
     };
 
-    const searchCoMakers = useCallback(
-        debounce(async (q: string) => {
+    const coMakersRef = useRef(coMakers);
+    coMakersRef.current = coMakers;
+
+    const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const searchCoMakers = useCallback((q: string) => {
+        if (searchTimer.current) clearTimeout(searchTimer.current);
+        searchTimer.current = setTimeout(async () => {
             if (!q.trim()) { setCoMakerResults([]); return; }
             const res = await api.get(`/api/loans/search-members?q=${encodeURIComponent(q)}`);
-            const results = (res.data?.data || []).filter((m: CoMaker) => !coMakers.some(cm => cm.id === m.id));
+            const results = (res.data?.data || []).filter((m: CoMaker) => !coMakersRef.current.some(cm => cm.id === m.id));
             setCoMakerResults(results);
-        }, 300),
-        [coMakers],
-    );
+        }, 300);
+    }, []);
+
+    useEffect(() => () => { if (searchTimer.current) clearTimeout(searchTimer.current); }, []);
 
     const handleCoMakerSearch = (val: string) => {
         setCoMakerSearch(val);

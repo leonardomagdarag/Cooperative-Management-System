@@ -26,6 +26,6 @@ class ContactMessageMail extends Mailable
 
     public function build(): self
     {
-        return $this->subject('New Contact Message from ' . $this->name);
+        return $this->subject('New Contact Message from '.$this->name);
     }
 }

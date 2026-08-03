@@ -23,7 +23,7 @@ function HeroSection() {
     const registrationEnabled = pc?.data?.form?.registration?.online_member_registration_enabled !== false;
 
     return (
-        <section className="relative flex min-h-[92vh] items-center overflow-hidden pt-24">
+        <section className="relative flex min-h-[100vh] items-center overflow-hidden pt-24">
             <div className="absolute inset-0 z-0">
                 <img src="/images/hero_banner.jpg" alt="Hero background" className="w-full h-full object-cover" fetchPriority="high" />
                 <div className="absolute inset-0 public-gradient-hero"></div>
@@ -31,10 +31,7 @@ function HeroSection() {
 
             <div className="public-shell relative z-10 py-20">
                 <div className="max-w-3xl">
-                    <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/12 px-4 py-2 text-sm font-semibold text-white backdrop-blur">
-                        <i className="fas fa-seedling text-emerald-200"></i>
-                        Community-first financial services
-                    </span>
+                    
                     <h1 className="mb-6 text-5xl font-extrabold leading-tight text-white md:text-7xl">
                         Settlers Credit Cooperative
                     </h1>
@@ -43,12 +40,10 @@ function HeroSection() {
                     </p>
                     <div className="flex flex-col gap-3 sm:flex-row">
                         <a href="#about" className="public-btn public-btn-primary">
-                            <i className="fas fa-arrow-down"></i>
                             Explore membership
                         </a>
                         <Link to={registrationEnabled ? '/register' : '#Contact'} className="public-btn public-btn-secondary">
                             Join now
-                            <i className="fas fa-user-plus"></i>
                         </Link>
                     </div>
                 </div>
@@ -66,7 +61,7 @@ function AboutPreview() {
         <section id="about" className="public-section bg-white">
             <div className="public-shell">
                 <div className="mx-auto max-w-3xl text-center">
-                    <span className="public-eyebrow mb-4"><i className="fas fa-leaf"></i> About the cooperative</span>
+                    <span className="public-eyebrow mb-4">About the cooperative</span>
                     <h2 className="public-heading mb-5 text-3xl md:text-5xl">Built around member progress</h2>
                     <p className="public-copy mb-5 text-lg text-left md:text-center">
                         {about.about1 || 'Settlers Credit Cooperative is a member-owned financial institution dedicated to providing accessible savings, credit, and financial services to our community.'}
@@ -106,7 +101,6 @@ function AboutPreview() {
                 <div className="text-center">
                     <Link to="/about" className="public-btn public-btn-primary">
                         Learn more about us
-                        <i className="fas fa-arrow-right ml-2"></i>
                     </Link>
                 </div>
             </div>
@@ -197,7 +191,7 @@ function NewsSection() {
         <section className="public-section public-section-soft">
             <div className="public-shell">
                 <div className="text-center mb-12">
-                    <span className="public-eyebrow mb-4"><i className="fas fa-newspaper"></i> Updates</span>
+                    <span className="public-eyebrow mb-4">Updates</span>
                     <h2 className="public-heading mb-4 text-3xl md:text-5xl">News & Announcements</h2>
                     <p className="public-copy text-lg">Stay updated with our latest news and updates</p>
                 </div>
@@ -263,17 +257,19 @@ function ContactSection() {
     const contact = pc?.data?.form?.contact || {};
     const [form, setForm] = useState({ name: '', email: '', message: '' });
     const [submitted, setSubmitted] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const submitMutation = useMutation({
         mutationFn: () => api.post('/contact', form),
         onSuccess: () => setSubmitted(true),
+        onError: (err: any) => setError(err?.response?.data?.message || 'Failed to send message. Please try again.'),
     });
 
     return (
         <section id="Contact" className="public-section bg-white">
             <div className="public-shell">
                 <div className="text-center mb-12">
-                    <span className="public-eyebrow mb-4"><i className="fas fa-envelope"></i> Contact</span>
+                    <span className="public-eyebrow mb-4">Contact</span>
                     <h2 className="public-heading mb-4 text-3xl md:text-5xl">Get In Touch</h2>
                     <p className="public-copy text-lg">We're here to help you achieve your financial goals</p>
                 </div>
@@ -286,7 +282,8 @@ function ContactSection() {
                                 <p className="mt-3 font-medium text-emerald-700">Message sent! We'll get back to you soon.</p>
                             </div>
                         ) : (
-                            <form onSubmit={e => { e.preventDefault(); submitMutation.mutate(); }} className="space-y-6">
+                            <form onSubmit={e => { e.preventDefault(); setError(null); submitMutation.mutate(); }} className="space-y-6">
+                                    {error && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>}
                                 <div>
                                     <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">Your Name</label>
                                     <input type="text" id="name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required className="public-input" />

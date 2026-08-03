@@ -2,12 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\SystemSetting;
-use App\Services\AuditLogService;
-use App\Services\NotificationService;
-use App\Services\SecurityOtpService;
-use App\Services\TurnstileService;
-use App\Support\PersonPasswordPolicy;
 use App\Models\Account;
 use App\Models\Address;
 use App\Models\Contact;
@@ -15,6 +9,11 @@ use App\Models\Employment;
 use App\Models\MemberId;
 use App\Models\PersonalData;
 use App\Models\User;
+use App\Services\AuditLogService;
+use App\Services\NotificationService;
+use App\Services\SecurityOtpService;
+use App\Services\TurnstileService;
+use App\Support\PersonPasswordPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -28,6 +27,7 @@ class LoginController extends Controller
     protected AuditLogService $auditLogService;
 
     protected NotificationService $notificationService;
+
     protected SecurityOtpService $securityOtpService;
 
     public function __construct(
@@ -40,8 +40,33 @@ class LoginController extends Controller
         $this->auditLogService = $auditLogService;
     }
 
-    public function login(Request $request)
+    public function login(Request $request, TurnstileService $turnstileService)
     {
+        if (! app()->runningUnitTests()) {
+            $turnstileToken = $request->input('cf-turnstile-response');
+            if (! $turnstileService->verify($turnstileToken, $request->ip())) {
+                $this->auditLogService->log(
+                    'auth.login_blocked',
+                    'Login blocked due to failed captcha verification.',
+                    'auth',
+                    null,
+                    null,
+                    ['ip_address' => $request->ip()]
+                );
+
+                if ($request->ajax() || $request->wantsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Captcha verification failed. Please try again.',
+                    ], 403);
+                }
+
+                return back()->withErrors([
+                    'email' => 'Captcha verification failed. Please try again.',
+                ]);
+            }
+        }
+
         $email = User::normalizeEmail($request->input('email'));
         $password = (string) $request->input('password');
         $ipAddress = (string) ($request->ip() ?? 'unknown');
@@ -163,12 +188,12 @@ class LoginController extends Controller
 
     private function failedLoginAttemptsKey(User $user): string
     {
-        return 'security:failed_login_attempts:user:' . $user->id;
+        return 'security:failed_login_attempts:user:'.$user->id;
     }
 
     private function lastLoginIpKey(User $user): string
     {
-        return 'security:last_login_ip:user:' . $user->id;
+        return 'security:last_login_ip:user:'.$user->id;
     }
 
     private function handleFailedLoginSignals(string $email, string $ipAddress): void
@@ -463,11 +488,11 @@ class LoginController extends Controller
             DB::rollBack();
 
             // Log the error for debugging
-            Log::error('Registration Error: ' . $e->getMessage());
+            Log::error('Registration Error: '.$e->getMessage());
 
             // Return back with error
             return back()->withInput()->withErrors([
-                'error' => 'An error occurred during registration. Please try again or contact support.'
+                'error' => 'An error occurred during registration. Please try again or contact support.',
             ]);
         }
     }

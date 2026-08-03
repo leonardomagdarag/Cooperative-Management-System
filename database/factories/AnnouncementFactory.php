@@ -2,10 +2,12 @@
 
 namespace Database\Factories;
 
+use App\Models\Announcement;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Announcement>
+ * @extends Factory<Announcement>
  */
 class AnnouncementFactory extends Factory
 {
@@ -19,7 +21,7 @@ class AnnouncementFactory extends Factory
         return [
             'title' => fake()->sentence(6),
             'content' => fake()->paragraphs(3, true),
-            'created_by' => \App\Models\User::whereIn('role', ['admin', 'manager', 'secretary'])->inRandomOrder()->first()?->id,
+            'created_by' => User::whereIn('role', ['admin', 'manager', 'secretary'])->inRandomOrder()->first()?->id,
             'created_at' => fake()->dateTimeBetween('-30 days', 'now'),
         ];
     }

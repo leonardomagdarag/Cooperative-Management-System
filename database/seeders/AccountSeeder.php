@@ -2,9 +2,9 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\Account;
 use App\Models\User;
+use Illuminate\Database\Seeder;
 
 class AccountSeeder extends Seeder
 {
@@ -18,6 +18,7 @@ class AccountSeeder extends Seeder
 
         if ($members->isEmpty()) {
             $this->command->error('No member users found. Please run UserSeeder first.');
+
             return;
         }
 
@@ -39,6 +40,6 @@ class AccountSeeder extends Seeder
             ]);
         }
 
-        $this->command->info('Created savings and share capital accounts for ' . $members->count() . ' members.');
+        $this->command->info('Created savings and share capital accounts for '.$members->count().' members.');
     }
 }

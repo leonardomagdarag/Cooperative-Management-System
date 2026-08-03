@@ -14,7 +14,8 @@ class Account extends Model
         'account_number',
         'user_id',
         'account_type',
-        'balance'
+        'balance',
+        'status',
     ];
 
     protected $casts = [
@@ -38,12 +39,12 @@ class Account extends Model
                     $nextNumber = 1;
                 }
 
-                $account->account_number = 'ACNT' . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
+                $account->account_number = 'ACNT'.str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
             }
         });
     }
 
-    //Eloquent Relationships
+    // Eloquent Relationships
 
     public function user()
     {

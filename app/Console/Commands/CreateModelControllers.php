@@ -4,11 +4,11 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Str;
 
 class CreateModelControllers extends Command
 {
     protected $signature = 'make:model-controllers';
+
     protected $description = 'Create resource controllers for all existing models.';
 
     public function handle()
@@ -24,7 +24,7 @@ class CreateModelControllers extends Command
                 continue;
             }
 
-            $controllerName = $modelName . 'Controller';
+            $controllerName = $modelName.'Controller';
 
             $this->call('make:controller', [
                 'name' => $controllerName,

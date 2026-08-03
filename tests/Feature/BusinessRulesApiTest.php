@@ -6,15 +6,19 @@ use App\Models\LoanProduct;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Support\PersonPasswordPolicy;
+use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\SpatieRolePermissionSeeder;
+use Database\Seeders\UserSeeder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
+
 use function Pest\Laravel\actingAs;
 
 beforeEach(function () {
-    $this->seed(\Database\Seeders\SpatieRolePermissionSeeder::class);
-    $this->seed(\Database\Seeders\UserSeeder::class);
+    $this->seed(SpatieRolePermissionSeeder::class);
+    $this->seed(UserSeeder::class);
 
     $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
 });
@@ -295,7 +299,7 @@ test('non-admin cannot encode loans', function () {
 });
 
 test('seeders create secretary account with secretary role', function () {
-    $this->seed(\Database\Seeders\RolePermissionSeeder::class);
+    $this->seed(RolePermissionSeeder::class);
 
     $secretary = User::where('email', 'secretary@example.com')->first();
 

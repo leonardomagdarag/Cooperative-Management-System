@@ -26,7 +26,7 @@ class AddressFactory extends Factory
             'Muntinlupa',
             'San Juan',
             'Marikina',
-            'Valenzuela'
+            'Valenzuela',
         ];
 
         $regions = [
@@ -34,7 +34,7 @@ class AddressFactory extends Factory
             'Region VII' => 'Central Visayas',
             'Region XI' => 'Davao Region',
             'Region III' => 'Central Luzon',
-            'Region IV-A' => 'CALABARZON'
+            'Region IV-A' => 'CALABARZON',
         ];
 
         $barangays = [
@@ -48,7 +48,7 @@ class AddressFactory extends Factory
             'Tandang Sora',
             'Holy Spirit',
             'Bagong Silang',
-            'Veterans Village'
+            'Veterans Village',
         ];
 
         $region = fake()->randomElement(array_keys($regions));

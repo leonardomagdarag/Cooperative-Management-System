@@ -96,7 +96,6 @@ export default function ForgotPasswordPage() {
                                     <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-2">Email Address</label>
                                     <div className="relative">
                                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                            <i className="fas fa-envelope text-slate-400"></i>
                                         </div>
                                         <input
                                             type="email"

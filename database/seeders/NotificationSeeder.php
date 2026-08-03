@@ -16,8 +16,9 @@ class NotificationSeeder extends Seeder
         // Get first user for testing
         $user = User::first();
 
-        if (!$user) {
+        if (! $user) {
             $this->command->warn('No users found. Please create users first.');
+
             return;
         }
 

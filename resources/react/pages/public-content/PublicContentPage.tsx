@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
@@ -61,11 +61,13 @@ export default function PublicContentPage() {
     const sections = data?.data?.sections || {};
     const canManage = data?.data?.can_manage === true;
 
-    if (Object.keys(form).length === 0 && data?.data?.form) {
-        setForm(data.data.form);
-        const firstSection = Object.keys(sections)[0];
-        if (firstSection) setActiveSection(firstSection);
-    }
+    useEffect(() => {
+        if (Object.keys(form).length === 0 && data?.data?.form) {
+            setForm(data.data.form);
+            const firstSection = Object.keys(data.data.sections || {})[0];
+            if (firstSection) setActiveSection(firstSection);
+        }
+    }, [data, form]);
 
     const sectionKeys = Object.keys(sections);
     const meta = sections[activeSection] || {};
@@ -73,7 +75,7 @@ export default function PublicContentPage() {
     const setSectionValue = (path: string, value: any) => setForm(prev => ({ ...prev, [activeSection]: setByPath(prev[activeSection], path, value) }));
 
     const setCardField = (index: number, field: string, value: string) => {
-        const cards = getByPath(form[activeSection], 'cards') || [];
+        const cards = [...(getByPath(form[activeSection], 'cards') || [])];
         cards[index] = { ...cards[index], [field]: value };
         setSectionValue('cards', cards);
     };

@@ -8,13 +8,13 @@ class TurnstileService
 {
     public function verify(?string $token, ?string $remoteIp = null): bool
     {
-        if (!$token) {
+        if (! $token) {
             return false;
         }
 
         $secret = config('services.turnstile.secret_key');
 
-        if (!$secret) {
+        if (! $secret) {
             return false;
         }
 
@@ -24,7 +24,7 @@ class TurnstileService
             'remoteip' => $remoteIp,
         ]);
 
-        if (!$response->ok()) {
+        if (! $response->ok()) {
             return false;
         }
 

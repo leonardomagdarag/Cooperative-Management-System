@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
-use App\Models\LoanPayment;
 use App\Models\Loan;
+use App\Models\LoanPayment;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class LoanPaymentFactory extends Factory

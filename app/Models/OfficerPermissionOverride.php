@@ -12,6 +12,7 @@ class OfficerPermissionOverride extends Model
     use HasFactory;
 
     public const EFFECT_ALLOW = 'allow';
+
     public const EFFECT_DISALLOW = 'disallow';
 
     protected $fillable = [
@@ -40,7 +41,7 @@ class OfficerPermissionOverride extends Model
     {
         return Cache::rememberForever(
             self::cacheKey($userId, $permission),
-            static fn(): ?string => self::query()
+            static fn (): ?string => self::query()
                 ->where('user_id', $userId)
                 ->where('permission', $permission)
                 ->value('effect')

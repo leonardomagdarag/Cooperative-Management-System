@@ -2,9 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Mail\LoanDueNotification;
 use App\Mail\SecurityAlert;
-use App\Models\Loan;
 use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Mail;
@@ -45,8 +43,9 @@ class TestEmailCommand extends Command
             if ($this->confirm('Would you like to test a formatted notification email?', true)) {
                 $user = User::first();
 
-                if (!$user) {
+                if (! $user) {
                     $this->warn('No users found in database. Skipping formatted email test.');
+
                     return Command::SUCCESS;
                 }
 
@@ -61,7 +60,7 @@ class TestEmailCommand extends Command
             return Command::SUCCESS;
         } catch (\Exception $e) {
             $this->error('❌ Failed to send email!');
-            $this->error('Error: ' . $e->getMessage());
+            $this->error('Error: '.$e->getMessage());
             $this->newLine();
             $this->warn('Troubleshooting tips:');
             $this->line('1. Check your .env file for correct MAIL_* settings');

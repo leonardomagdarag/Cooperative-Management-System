@@ -10,9 +10,8 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
-use Throwable;
+use PHPMailer\PHPMailer\PHPMailer;
 
 class SendPasswordResetEmailJob implements ShouldQueue
 {
@@ -45,6 +44,7 @@ class SendPasswordResetEmailJob implements ShouldQueue
 
         if (! $fromAddress || ! $mailHost || ! $mailUsername || ! $mailPassword) {
             Log::error('Email configuration incomplete for password reset');
+
             return;
         }
 
@@ -60,8 +60,9 @@ class SendPasswordResetEmailJob implements ShouldQueue
             $mail->Port = config('mail.mailers.smtp.port', 587);
             $mail->Timeout = 30;
 
+            $name = trim(($user->personalData?->first_name ?? '').' '.($user->personalData?->last_name ?? '')) ?: $user->email;
             $mail->setFrom($fromAddress, $fromName);
-            $mail->addAddress($user->email, $user->personalData->first_name . ' ' . $user->personalData->last_name);
+            $mail->addAddress($user->email, $name);
 
             $mail->isHTML(true);
             $mail->Subject = 'Password Reset Request';
@@ -83,7 +84,7 @@ class SendPasswordResetEmailJob implements ShouldQueue
 
     private function buildResetEmailBody(User $user): string
     {
-        $name = $user->personalData->first_name ?? 'User';
+        $name = trim(($user->personalData?->first_name ?? '').' '.($user->personalData?->last_name ?? '')) ?: $user->email;
 
         return "
             <html>
@@ -118,12 +119,12 @@ class SendPasswordResetEmailJob implements ShouldQueue
                         </div>
                     </div>
                     <div class='footer'>
-                        <p>&copy; " . date('Y') . " Settlers Credit Cooperative. All rights reserved.</p>
+                        <p>&copy; ".date('Y').' Settlers Credit Cooperative. All rights reserved.</p>
                         <p>This is an automated message, please do not reply.</p>
                     </div>
                 </div>
             </body>
             </html>
-        ";
+        ';
     }
 }

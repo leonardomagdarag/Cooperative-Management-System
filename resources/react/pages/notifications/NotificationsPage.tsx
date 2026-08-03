@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getNotifications, markAsRead, markAllAsRead, deleteNotification, deleteAllReadNotifications, Notification } from '../../api/notifications';
+import { useToast } from '../../contexts/ToastContext';
 
 export default function NotificationsPage() {
     const [statusFilter, setStatusFilter] = useState('all');
@@ -8,6 +9,7 @@ export default function NotificationsPage() {
     const [page, setPage] = useState(1);
     const [selected, setSelected] = useState<Notification | null>(null);
     const queryClient = useQueryClient();
+    const { addToast } = useToast();
 
     const { data, isLoading } = useQuery({
         queryKey: ['notifications', statusFilter, categoryFilter, page],
@@ -24,8 +26,8 @@ export default function NotificationsPage() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['notifications'] });
             queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
-            setSelected(null);
         },
+        onError: (err: any) => addToast(err?.response?.data?.message || 'Failed to mark as read', 'error'),
     });
 
     const markAllMutation = useMutation({
@@ -34,6 +36,7 @@ export default function NotificationsPage() {
             queryClient.invalidateQueries({ queryKey: ['notifications'] });
             queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
         },
+        onError: (err: any) => addToast(err?.response?.data?.message || 'Failed to mark all as read', 'error'),
     });
 
     const deleteMutation = useMutation({
@@ -43,6 +46,7 @@ export default function NotificationsPage() {
             queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
             setSelected(null);
         },
+        onError: (err: any) => addToast(err?.response?.data?.message || 'Failed to delete notification', 'error'),
     });
 
     const deleteAllReadMutation = useMutation({
@@ -51,6 +55,7 @@ export default function NotificationsPage() {
             queryClient.invalidateQueries({ queryKey: ['notifications'] });
             queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
         },
+        onError: (err: any) => addToast(err?.response?.data?.message || 'Failed to clear read notifications', 'error'),
     });
 
     const notifications: Notification[] = data?.data?.notifications ?? [];

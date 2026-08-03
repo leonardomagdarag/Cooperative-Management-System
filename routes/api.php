@@ -5,19 +5,24 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\ExpenseController;
 use App\Http\Controllers\Api\HistoryController;
+use App\Http\Controllers\Api\LedgerController;
 use App\Http\Controllers\Api\LoanController;
 use App\Http\Controllers\Api\LoanProductController;
-use App\Http\Controllers\Api\LedgerController;
 use App\Http\Controllers\Api\LogController;
-use App\Http\Controllers\Api\ProfileController;
-use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\MemberController;
 use App\Http\Controllers\Api\OfficerPermissionController;
+use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\PublicContentController;
+use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\RolePermissionController;
+use App\Http\Controllers\Api\SearchController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\NotificationController;
+use App\Jobs\SendEmailJob;
+use App\Mail\ContactMessageMail;
+use App\Models\Announcement;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 // Public auth routes (rate-limited)
@@ -25,7 +30,7 @@ Route::post('/login', [AuthController::class, 'login'])->middleware(['web', 'thr
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('web');
 
 // Public routes (no auth required, rate-limited)
-Route::post('/contact', function (\Illuminate\Http\Request $request) {
+Route::post('/contact', function (Request $request) {
     $validated = $request->validate([
         'name' => 'required|string|max:255',
         'email' => 'required|email|max:255',
@@ -33,9 +38,9 @@ Route::post('/contact', function (\Illuminate\Http\Request $request) {
     ]);
 
     // Send via queue for async processing
-    \App\Jobs\SendEmailJob::dispatch(
+    SendEmailJob::dispatch(
         config('mail.from.address'),
-        new \App\Mail\ContactMessageMail($validated['name'], $validated['email'], $validated['message'])
+        new ContactMessageMail($validated['name'], $validated['email'], $validated['message'])
     );
 
     return response()->json(['message' => 'Message sent successfully.']);
@@ -45,8 +50,8 @@ Route::post('/contact', function (\Illuminate\Http\Request $request) {
 Route::get('/public-content', [PublicContentController::class, 'index'])->middleware('web');
 
 // Public announcements (no auth — returns only publicly visible announcements)
-Route::get('/announcements/public', function (\Illuminate\Http\Request $request) {
-    $announcements = \App\Models\Announcement::query()
+Route::get('/announcements/public', function (Request $request) {
+    $announcements = Announcement::query()
         ->with('creator.personalData')
         ->where(function ($query) {
             $query->whereIn('visibility', ['cooperative', 'public'])
@@ -67,9 +72,9 @@ Route::get('/announcements/public', function (\Illuminate\Http\Request $request)
             'title' => $a->title,
             'content' => substr($a->content, 0, 200),
             'type' => $a->type,
-            'image_url' => $a->image_path ? asset('storage/' . $a->image_path) : null,
+            'image_url' => $a->image_path ? asset('storage/'.$a->image_path) : null,
             'created_at' => $a->created_at->toISOString(),
-            'creator_name' => trim(($a->creator->personalData->first_name ?? '') . ' ' . ($a->creator->personalData->last_name ?? '')) ?: 'Unknown',
+            'creator_name' => trim(($a->creator->personalData->first_name ?? '').' '.($a->creator->personalData->last_name ?? '')) ?: 'Unknown',
         ]),
         'pagination' => [
             'current_page' => $announcements->currentPage(),
@@ -81,7 +86,7 @@ Route::get('/announcements/public', function (\Illuminate\Http\Request $request)
 })->middleware('throttle:30,1');
 
 // Protected routes
-Route::middleware(['web', 'auth:web'])->group(function () {
+Route::middleware(['web', 'auth:web', 'otp.verified'])->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
 
     // Profile
@@ -108,6 +113,9 @@ Route::middleware(['web', 'auth:web'])->group(function () {
 
     // Logs (admin only)
     Route::get('/logs', [LogController::class, 'index']);
+
+    // Global search (permission-scoped)
+    Route::get('/search', [SearchController::class, 'global']);
 
     // Announcements
     Route::get('/announcements', [AnnouncementController::class, 'index']);

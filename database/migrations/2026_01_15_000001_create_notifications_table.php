@@ -23,7 +23,7 @@ return new class extends Migration
                 'security_alert',
                 'email_verification',
                 'otp',
-                'general'
+                'general',
             ]);
             $table->string('title');
             $table->text('message');

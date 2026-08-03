@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
-use App\Models\OfficerPermissionOverride;
 use App\Support\PermissionCatalog;
+use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -16,8 +16,8 @@ use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, SoftDeletes, HasRoles {
+    /** @use HasFactory<UserFactory> */
+    use HasFactory, HasRoles, Notifiable, SoftDeletes {
         // Alias the trait's version so we can call it from our override
         HasRoles::checkPermissionTo as spatieCheckPermissionTo;
     }
@@ -82,7 +82,7 @@ class User extends Authenticatable implements MustVerifyEmail
                     $nextNumber = 1;
                 }
 
-                $user->user_number = 'USR' . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
+                $user->user_number = 'USR'.str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
             }
 
             if (empty($user->account_status)) {
@@ -99,7 +99,7 @@ class User extends Authenticatable implements MustVerifyEmail
     protected function email(): Attribute
     {
         return Attribute::make(
-            set: fn(mixed $value) => static::normalizeEmail($value),
+            set: fn (mixed $value) => static::normalizeEmail($value),
         );
     }
 
