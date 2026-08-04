@@ -5,6 +5,7 @@ interface User {
     id: number;
     name: string;
     email: string;
+    email_verified?: boolean;
     primary_role: string;
     permissions: string[];
     profile_photo_url?: string;

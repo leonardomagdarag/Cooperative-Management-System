@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { api } from '../../api/client';
 import DatePicker from '../../components/DatePicker';
-import TurnstileWidget from '../../components/TurnstileWidget';
+import TurnstileWidget, { type TurnstileWidgetRef } from '../../components/TurnstileWidget';
 import { validate, registerStepSchemas, passwordStrength, type FieldErrors } from '../../lib/validation';
 
 const steps = [
@@ -19,15 +19,16 @@ export default function RegisterPage() {
         first_name: '', middle_name: '', last_name: '', gender: '', birthdate: '', age: '',
         phone: '', email: '', address: '',
         occupation: '', monthly_income: '', membership_type: 'Regular', referred_by: '',
-        password: '', password_confirmation: '',
+        password: '', password_confirmation: '', terms: false,
     });
     const [success, setSuccess] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
     const [errors, setErrors] = useState<FieldErrors>({});
+    const turnstileRef = useRef<TurnstileWidgetRef>(null);
 
     const registerMutation = useMutation({
-        mutationFn: () => api.post('/register', form),
+        mutationFn: (data: typeof form & { 'cf-turnstile-response': string }) => api.post('/register', data),
         onSuccess: () => setSuccess(true),
         onError: (err: any) => {
             const data = err.response?.data?.errors;
@@ -269,16 +270,30 @@ export default function RegisterPage() {
                                                 </button>
                                             </div>
                                             {errors.password_confirmation && <p className="mt-1 text-xs text-red-500">{errors.password_confirmation}</p>}
-                                            {!pwdConfirmOk && form.password_confirmation && <p className="mt-1 text-xs text-red-500">Passwords do not match</p>}
-                                        </div>
-                                    </div>
+{!pwdConfirmOk && form.password_confirmation && <p className="mt-1 text-xs text-red-500">Passwords do not match</p>}
+                                         </div>
+                                         <div className="md:col-span-2">
+                                             <label className="flex items-start gap-2 cursor-pointer">
+                                                 <input type="checkbox" value={form.terms} onChange={e => set('terms', e.target.checked)} required className="mt-1 w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-2 focus:ring-emerald-500" />
+                                                 <span className="text-sm text-slate-700">I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-emerald-700 hover:underline">Terms and Conditions</a> and <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-emerald-700 hover:underline">Privacy Policy</a> <span className="text-red-500">*</span></span>
+                                             </label>
+                                             {errors.terms && <p className="mt-1 text-xs text-red-500">{errors.terms}</p>}
+                                         </div>
+                                     </div>
                                 )}
                             </div>
                         </div>
 
                         {step === 3 && (
                             <div className="flex justify-center mb-4">
-                                <TurnstileWidget />
+                                <div>
+                                    <TurnstileWidget ref={turnstileRef} />
+                                    {(errors.turnstile || errors['cf-turnstile-response']) && (
+                                        <p className="mt-2 text-center text-xs text-red-500">
+                                            {errors.turnstile || errors['cf-turnstile-response']}
+                                        </p>
+                                    )}
+                                </div>
                             </div>
                         )}
 
@@ -294,8 +309,13 @@ export default function RegisterPage() {
                                 <button onClick={() => {
                                     const errs = validate(registerStepSchemas[3], form);
                                     if (Object.keys(errs).length) { setErrors(errs); return; }
+                                    const token = turnstileRef.current?.getToken() ?? '';
+                                    if (!token) {
+                                        setErrors({ turnstile: 'Please complete the captcha verification' });
+                                        return;
+                                    }
                                     setErrors({});
-                                    registerMutation.mutate();
+                                    registerMutation.mutate({ ...form, 'cf-turnstile-response': token });
                                 }} disabled={registerMutation.isPending} className="public-btn public-btn-primary flex-1">
                                     {registerMutation.isPending ? 'Submitting...' : 'Submit Application'}
                                     <i className="fas fa-user-plus ml-2"></i>

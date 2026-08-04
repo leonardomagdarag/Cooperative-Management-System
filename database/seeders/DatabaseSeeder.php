@@ -29,6 +29,7 @@ class DatabaseSeeder extends Seeder
             SiteContentSeeder::class,
             BoardMemberSeeder::class,
             SystemSettingSeeder::class,
+            ServiceAvailabilitySeeder::class,
             LoanProductSeeder::class,
             RolePermissionSeeder::class,
             AnnouncementSeeder::class,

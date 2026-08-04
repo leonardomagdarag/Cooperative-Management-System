@@ -32,7 +32,8 @@ export async function createAnnouncement(data: FormData) {
 }
 
 export async function updateAnnouncement(id: number, data: FormData) {
-    return api.put(`/api/announcements/${id}`, data, {
+    data.append('_method', 'PUT');
+    return api.post(`/api/announcements/${id}`, data, {
         headers: { 'Content-Type': 'multipart/form-data' },
     });
 }

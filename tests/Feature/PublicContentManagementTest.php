@@ -5,6 +5,7 @@ use App\Models\User;
 use App\Support\SiteContentCatalog;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\UserSeeder;
+use Spatie\Permission\Models\Role;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\getJson;
@@ -57,6 +58,17 @@ test('admin sees can_manage true when reading public content', function () {
         ->getJson('/api/public-content')
         ->assertOk()
         ->assertJsonPath('can_manage', true);
+});
+
+test('admin user payload includes the public content management permission', function () {
+    $admin = makePublicContentEditor();
+    Role::findByName('admin', 'web')->revokePermissionTo('settings.update');
+
+    actingAs($admin)
+        ->getJson('/api/user')
+        ->assertOk()
+        ->assertJsonPath('primary_role', 'admin')
+        ->assertJsonFragment(['settings.update']);
 });
 
 test('non-admin users see can_manage false when reading public content', function () {
@@ -205,4 +217,43 @@ test('public pages still expose the seeded default content tree', function () {
         ->and($data['form']['board']['cards'])->toBeArray()
         ->and($data['form']['officers']['cards'])->toBeArray()
         ->and($data['form']['contact']['email'])->not->toBeEmpty();
+});
+
+test('admin saving public content sanitizes active html fields', function () {
+    $admin = makePublicContentEditor();
+
+    $form = fullForm();
+    $form['home']['hero_subtitle'] = '<p>Welcome</p><script>alert("xss")</script>';
+
+    actingAs($admin)
+        ->putJson('/api/public-content', ['form' => $form])
+        ->assertOk();
+
+    $stored = SiteContent::query()
+        ->where('section', 'home')
+        ->where('key', 'hero_subtitle')
+        ->value('value');
+
+    expect($stored)->not->toContain('<script>')
+        ->and($stored)->toContain('<p>Welcome</p>');
+});
+
+test('admin saving public content strips event handler attributes', function () {
+    $admin = makePublicContentEditor();
+
+    $form = fullForm();
+    $form['home']['hero_subtitle'] = '<a href="https://example.com" onclick="alert(1)">Link</a>';
+
+    actingAs($admin)
+        ->putJson('/api/public-content', ['form' => $form])
+        ->assertOk();
+
+    $stored = SiteContent::query()
+        ->where('section', 'home')
+        ->where('key', 'hero_subtitle')
+        ->value('value');
+
+    expect($stored)->not->toContain('onclick')
+        ->and($stored)->toContain('href="https://example.com"')
+        ->and($stored)->toContain('Link');
 });

@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getLogs, LogEntry } from '../../api/logs';
+import EmptyState from '../../components/ui/EmptyState';
+import Badge from '../../components/ui/Badge';
+import Pagination from '../../components/ui/Pagination';
 
 export default function LogsPage() {
     const [search, setSearch] = useState('');
@@ -24,13 +27,6 @@ export default function LogsPage() {
     const logs: LogEntry[] = data?.data?.data ?? [];
     const pagination = data?.data?.pagination;
     const filters = data?.data?.filters;
-
-    const getEventColor = (e: string) => {
-        if (e === 'created') return 'bg-emerald-100 text-emerald-700';
-        if (e === 'updated') return 'bg-blue-100 text-blue-700';
-        if (e === 'deleted') return 'bg-red-100 text-red-700';
-        return 'bg-slate-100 text-slate-700';
-    };
 
     return (
         <>
@@ -70,10 +66,7 @@ export default function LogsPage() {
                         ))}
                     </div>
                 ) : logs.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-gray-300 bg-white p-12 text-center">
-                        <i className="fas fa-file-alt text-4xl text-gray-300"></i>
-                        <p className="mt-4 text-sm text-gray-500">No logs found</p>
-                    </div>
+                    <EmptyState icon="fa-file-alt" title="No logs found" />
                 ) : (
                     <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
                         <table className="min-w-full divide-y divide-gray-200 table-fixed">
@@ -95,9 +88,7 @@ export default function LogsPage() {
                                             {log.causer?.name || 'System'}
                                         </td>
                                         <td className="p-4">
-                                            <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${getEventColor(log.event)}`}>
-                                                {log.event}
-                                            </span>
+                                            <Badge variant={log.event === 'created' ? 'success' : log.event === 'updated' ? 'info' : log.event === 'deleted' ? 'danger' : 'neutral'}>{log.event}</Badge>
                                         </td>
                                         <td className="p-4 text-sm text-gray-500 max-w-[300px] truncate">{log.description}</td>
                                     </tr>
@@ -108,11 +99,7 @@ export default function LogsPage() {
                 )}
 
                 {pagination && pagination.last_page > 1 && (
-                    <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 flex items-center justify-center gap-2">
-                        <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50">Previous</button>
-                        <span className="text-sm text-gray-500">Page {page} of {pagination.last_page}</span>
-                        <button onClick={() => setPage(p => Math.min(pagination.last_page, p + 1))} disabled={page === pagination.last_page} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50">Next</button>
-                    </div>
+                    <Pagination page={page} lastPage={pagination.last_page} onChange={setPage} />
                 )}
             </div>
         </>

@@ -4,6 +4,7 @@ import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
 import { validate, loanProductSchema, type FieldErrors } from '../../lib/validation';
+import SettingsTabHeader from '../settings/SettingsTabHeader';
 
 interface LoanProduct {
     id: number; code: string; name: string; description: string; base_type: string;
@@ -84,21 +85,12 @@ export default function LoanProductsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-bold text-gray-900">Loan Products</h1>
-                    <div className="flex items-center gap-3">
-                        <a href="/dashboard/settings" className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
-                            <i className="fas fa-arrow-left mr-1"></i> Back to Settings
-                        </a>
-                        {canManage && (
-                            <button onClick={openCreate} className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700">
-                                <i className="fas fa-plus mr-1"></i> Add Loan Product
-                            </button>
-                        )}
-                    </div>
-                </div>
-            </div>
+            <SettingsTabHeader
+                title="Loan Products"
+                description="Configure the cooperative’s available loan products and eligibility rules."
+                icon="fas fa-hand-holding-usd"
+                action={canManage ? <button onClick={openCreate} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"><i className="fas fa-plus mr-1"></i> Add Loan Product</button> : undefined}
+            />
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div className="rounded-xl border border-gray-200 bg-green-50 p-4 shadow-sm">

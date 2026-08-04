@@ -35,7 +35,7 @@ function loadTurnstileScript(): Promise<void> {
     return scriptLoadPromise;
 }
 
-interface TurnstileWidgetRef {
+export interface TurnstileWidgetRef {
     getToken: () => string | null;
     reset: () => void;
 }

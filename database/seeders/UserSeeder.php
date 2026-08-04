@@ -9,6 +9,26 @@ use Illuminate\Support\Facades\Hash;
 
 class UserSeeder extends Seeder
 {
+    private function createSeedUser(array $attributes, array $personalData): User
+    {
+        // Seeders may be run more than once during local development. Reuse the
+        // fixed account instead of creating another row with the same email.
+        $existing = User::query()->where('email', $attributes['email'])->first();
+
+        if ($existing) {
+            return $existing;
+        }
+
+        $attributes['personal_data_id'] = PersonalData::factory()->create($personalData)->id;
+
+        $user = User::create($attributes);
+
+        // Seed logins are verified by default so demo accounts can access the app.
+        $user->forceFill(['email_verified_at' => now()])->save();
+
+        return $user;
+    }
+
     private function buildMemberEmail(string $firstName, string $lastName): string
     {
         $normalizedFirstName = strtolower((string) preg_replace('/\s+/', '', trim($firstName)));
@@ -27,17 +47,16 @@ class UserSeeder extends Seeder
         // ===================================
 
         // Create developer account
-        $developer = User::create([
+        $developer = $this->createSeedUser([
             'user_number' => 'USR000001',
-            'personal_data_id' => PersonalData::factory()->create([
-                'first_name' => 'Leo',
-                'last_name' => 'Magdarag',
-                'birth_date' => '2000-01-01',
-                'title' => 'Member',
-            ])->id,
             'email' => 'developer@example.com',
             'password' => Hash::make('password'),
             'role' => 'developer',
+        ], [
+            'first_name' => 'Leo',
+            'last_name' => 'Magdarag',
+            'birth_date' => '2000-01-01',
+            'title' => 'Member',
         ]);
         $developer->assignRole('developer');
 
@@ -61,14 +80,13 @@ class UserSeeder extends Seeder
                 $personalData['birth_date'] = $officerData['birthDate'];
             }
 
-            $officer = User::create([
+            $officer = $this->createSeedUser([
                 'user_number' => $officerData['userNumber'],
-                'personal_data_id' => PersonalData::factory()->create($personalData)->id,
                 'email' => strtolower($officerData['role']).'@example.com',
                 'password' => Hash::make('password'),
                 'role' => $officerData['role'],
                 'is_officer' => true,
-            ]);
+            ], $personalData);
             $officer->assignRole($officerData['role']);
         }
 
@@ -111,13 +129,12 @@ class UserSeeder extends Seeder
                 $personalData['birth_date'] = $memberData['birthDate'];
             }
 
-            $member = User::create([
+            $member = $this->createSeedUser([
                 'user_number' => $memberData['userNumber'],
-                'personal_data_id' => PersonalData::factory()->create($personalData)->id,
                 'email' => $memberData['email'] ?? $this->buildMemberEmail($memberData['firstName'], $memberData['lastName']),
                 'password' => Hash::make('password'),
                 'role' => 'member',
-            ]);
+            ], $personalData);
             $member->assignRole('member');
         }
     }

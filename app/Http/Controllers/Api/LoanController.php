@@ -319,6 +319,13 @@ class LoanController extends Controller
             return response()->json(['message' => 'Loan is already closed.'], 422);
         }
 
+        $outstanding = (float) $loan->remainingBalance();
+        if ($outstanding > 0) {
+            return response()->json([
+                'message' => 'Loan cannot be closed because it still has an outstanding balance of ₱'.number_format($outstanding, 2).'.',
+            ], 422);
+        }
+
         $loan->update(['loan_status' => 'paid_off']);
 
         app(AuditLogService::class)->log('loan.closed', 'Loan marked as paid off.', 'loan', $loan, Auth::user());

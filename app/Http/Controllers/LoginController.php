@@ -279,20 +279,13 @@ class LoginController extends Controller
         $matches = DB::table('users')
             ->select('id')
             ->whereRaw('LOWER(TRIM(email)) = ?', [$email])
-            ->limit(2)
             ->pluck('id');
 
-        if ($matches->count() !== 1) {
-            return false;
-        }
-
-        $user = Auth::getProvider()->retrieveById($matches->first());
+        $user = $matches
+            ->map(fn ($id) => Auth::getProvider()->retrieveById($id))
+            ->first(fn ($candidate) => $candidate instanceof User && Hash::check($password, $candidate->password));
 
         if (! $user instanceof User) {
-            return false;
-        }
-
-        if (! Hash::check($password, $user->password)) {
             return false;
         }
 
@@ -462,6 +455,8 @@ class LoginController extends Controller
             // Commit the transaction
             DB::commit();
 
+            $this->notificationService->sendEmailVerification($user);
+
             $this->auditLogService->log(
                 'member.registered',
                 'New member account registered.',
@@ -481,7 +476,7 @@ class LoginController extends Controller
             // Redirect to login page with success message
             return redirect()->route('login_page')->with(
                 'success',
-                'Registration successful! Your account is pending approval. You will be notified once approved.'
+                'Registration successful! Your account is now active. You may log in to access cooperative services.'
             );
         } catch (\Exception $e) {
             // Rollback the transaction in case of error

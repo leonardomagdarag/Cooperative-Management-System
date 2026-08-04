@@ -88,7 +88,8 @@ export async function getProfile() {
 }
 
 export async function updateProfile(data: Record<string, any>) {
-    return api.put('/api/profile', data, {
+    if (data instanceof FormData) data.append('_method', 'PUT');
+    return api.post('/api/profile', data, {
         headers: { 'Content-Type': 'multipart/form-data' },
     });
 }

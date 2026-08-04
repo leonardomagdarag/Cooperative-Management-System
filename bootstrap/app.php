@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\CheckServiceAvailability;
 use App\Http\Middleware\EnsureOtpVerified;
 use App\Http\Middleware\EnsurePublicMemberRegistrationEnabled;
 use App\Http\Middleware\RoleMiddleware;
@@ -35,6 +36,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'spatie_role' => Spatie\Permission\Middleware\RoleMiddleware::class,
             'public.registration.enabled' => EnsurePublicMemberRegistrationEnabled::class,
             'otp.verified' => EnsureOtpVerified::class,
+            'service.availability' => CheckServiceAvailability::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

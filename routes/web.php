@@ -63,10 +63,10 @@ Route::post('/contact', [PageController::class, 'submitContactMessage'])->middle
 Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 
 // === Password Reset Routes ===
-Route::get('/forgot-password', [PasswordResetController::class, 'showForgotPasswordForm'])->name('password.request');
+Route::get('/forgot-password', [PageController::class, 'forgotPassword'])->name('password.request');
 Route::post('/forgot-password', [PasswordResetController::class, 'sendResetLink'])->middleware('throttle:5,10')->name('password.email');
 Route::get('/reset-password/{token}', [PasswordResetController::class, 'showBrokerResetForm'])->name('password.reset');
-Route::get('/reset-password', [PasswordResetController::class, 'showResetForm'])->name('password.reset.form');
+Route::get('/reset-password', [PageController::class, 'resetPassword'])->name('password.reset.form');
 Route::post('/verify-token', [PasswordResetController::class, 'verifyToken'])
     ->middleware('throttle:5,1')
     ->name('password.verify');
@@ -95,11 +95,11 @@ Route::middleware('auth')->group(function () {
         ->name('otp.challenge.resend');
 });
 
-Route::middleware(['auth', 'otp.verified'])->get('/notifications', function () {
+Route::middleware(['auth', 'otp.verified', 'verified'])->get('/notifications', function () {
     return redirect()->route('dashboard', ['section' => 'notifications']);
 })->name('notifications.index');
 
-Route::middleware(['auth', 'otp.verified'])->group(function () {
+Route::middleware(['auth', 'otp.verified', 'verified'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     foreach (

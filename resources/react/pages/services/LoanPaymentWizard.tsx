@@ -1,9 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
 import { validate, loanPaymentSchema, type FieldErrors } from '../../lib/validation';
 import ReceiptQR from '../../components/ReceiptQR';
+
+interface AvailabilityFlags {
+    global?: boolean;
+    member?: boolean;
+    officer?: boolean;
+    counter?: boolean;
+    online?: boolean;
+}
 
 interface LoanOption {
     id: number;
@@ -22,12 +30,20 @@ interface LoanOption {
     }>;
 }
 
-export default function LoanPaymentWizard({ onComplete, selectedMember, onDirtyChange }: { onComplete: () => void; selectedMember?: any; onDirtyChange?: (dirty: boolean) => void }) {
+export default function LoanPaymentWizard({ onComplete, selectedMember, onDirtyChange, availability }: { onComplete: () => void; selectedMember?: any; onDirtyChange?: (dirty: boolean) => void; availability?: AvailabilityFlags }) {
     const [step, setStep] = useState(1);
     const [form, setForm] = useState({ loan_id: '', amount: '', account_id: '', transaction_mode: '', note: '', period_index: '' });
     const [receipt, setReceipt] = useState<any>(null);
     const { addToast } = useToast();
+    const requestIdRef = useRef<string | null>(null);
     const [errors, setErrors] = useState<FieldErrors>({});
+
+    // Check if transaction mode is available
+    const isModeAvailable = (mode: 'counter' | 'online'): boolean => {
+        if (!availability) return true;
+        if (!availability.global) return false;
+        return availability[mode] !== false;
+    };
 
     useEffect(() => {
         onDirtyChange?.(form.loan_id !== '' || form.amount !== '' || form.account_id !== '' || form.transaction_mode !== '' || form.note !== '');
@@ -49,9 +65,10 @@ export default function LoanPaymentWizard({ onComplete, selectedMember, onDirtyC
             account_id: Number(form.account_id),
             transaction_mode: form.transaction_mode,
             note: form.note || undefined,
+            client_request_id: requestIdRef.current!,
             ...(selectedMember ? { user_id: selectedMember.id } : {}),
         }),
-        onSuccess: (res) => { addToast('Payment submitted', 'success'); setReceipt(res.data.data || { message: res.data.message }); },
+        onSuccess: (res) => { requestIdRef.current = null; addToast('Payment submitted', 'success'); setReceipt(res.data.data || { message: res.data.message }); },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed', 'error'),
     });
 
@@ -85,6 +102,7 @@ export default function LoanPaymentWizard({ onComplete, selectedMember, onDirtyC
             addToast(Object.values(errs)[0], 'error');
             return;
         }
+        requestIdRef.current = requestIdRef.current ?? crypto.randomUUID();
         submitMutation.mutate();
     };
 
@@ -211,11 +229,20 @@ export default function LoanPaymentWizard({ onComplete, selectedMember, onDirtyC
                 <div className="space-y-4">
                     <h3 className="font-medium text-gray-700">Transaction Mode</h3>
                     <div className="grid grid-cols-2 gap-3">
-                        {[{ key: 'counter', label: 'Counter' }, { key: 'online', label: 'Online' }].map(m => (
-                            <button key={m.key} onClick={() => setForm(f => ({ ...f, transaction_mode: m.key }))} className={`rounded-lg border p-4 text-left ${form.transaction_mode === m.key ? 'border-purple-500 bg-purple-50' : 'border-gray-200'}`}>
-                                <p className="font-medium text-gray-900">{m.label}</p>
-                            </button>
-                        ))}
+                        {[{ key: 'counter', label: 'Counter' }, { key: 'online', label: 'Online' }].map(m => {
+                            const disabled = !isModeAvailable(m.key as 'counter' | 'online');
+                            return (
+                                <button
+                                    key={m.key}
+                                    onClick={() => !disabled && setForm(f => ({ ...f, transaction_mode: m.key }))}
+                                    disabled={disabled}
+                                    className={`rounded-lg border p-4 text-left transition-colors ${form.transaction_mode === m.key ? 'border-purple-500 bg-purple-50' : disabled ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed' : 'border-gray-200'}`}
+                                >
+                                    <p className="font-medium text-gray-900">{m.label}</p>
+                                    {disabled && <p className="mt-1 text-xs text-amber-600"><i className="fas fa-tools mr-1"></i>Under maintenance</p>}
+                                </button>
+                            );
+                        })}
                     </div>
                     <div>
                         <label className="mb-1 block text-sm font-medium text-gray-700">Account ID</label>

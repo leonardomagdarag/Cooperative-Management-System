@@ -6,9 +6,11 @@ import PublicLayout from './layouts/PublicLayout';
 import LoginPage from './pages/auth/LoginPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
+import VerifyEmailPage from './pages/auth/VerifyEmailPage';
 import HomePage from './pages/public/HomePage';
 import AboutPage from './pages/public/AboutPage';
 import NewsPage from './pages/public/NewsPage';
+import StoriesPage from './pages/public/StoriesPage';
 import RegisterPage from './pages/public/RegisterPage';
 import ContactPage from './pages/public/ContactPage';
 import NotificationsPage from './pages/notifications/NotificationsPage';
@@ -35,11 +37,13 @@ import OfficerOverview from './pages/overviews/OfficerOverview';
 import MemberLoansPage from './pages/member-loans/MemberLoansPage';
 import MembersPage from './pages/members/MembersPage';
 import LoadingScreen from './components/LoadingScreen';
+import EmptyState from './components/ui/EmptyState';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const { user, isLoading } = useAuth();
     if (isLoading) return <LoadingScreen />;
     if (!user) return <Navigate to="/login" replace />;
+    if (user.email_verified === false) return <VerifyEmailPage />;
     return <>{children}</>;
 }
 
@@ -66,14 +70,10 @@ function RedirectToSettingsTab({ tab }: { tab: string }) {
 
 function UnauthorizedPlaceholder({ permission }: { permission?: string }) {
     return (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">
-            <i className="fas fa-lock text-4xl text-slate-300"></i>
-            <p className="mt-4 text-sm text-slate-500">
-                {permission === 'admin' ? 'This section requires administrator access.' :
+        <EmptyState icon="fa-lock" title="Access restricted" description={
+                permission === 'admin' ? 'This section requires administrator access.' :
                  permission ? `You need the "${permission}" permission to access this section.` :
-                 'You do not have permission to access this section.'}
-            </p>
-        </div>
+                 'You do not have permission to access this section.'} />
     );
 }
 
@@ -136,10 +136,7 @@ function DashboardRouter() {
     }
 
     return (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">
-            <i className="fas fa-hammer text-4xl text-slate-300"></i>
-            <p className="mt-4 text-sm text-slate-500">This page will be built in a later phase.</p>
-        </div>
+        <EmptyState icon="fa-hammer" title="Coming soon" description="This page will be built in a later phase." />
     );
 }
 
@@ -163,6 +160,7 @@ export default function App() {
                 <Route path="/" element={<HomePage />} />
                 <Route path="/about" element={<AboutPage />} />
                 <Route path="/news" element={<NewsPage />} />
+                <Route path="/stories" element={<StoriesPage />} />
                 <Route path="/register" element={<RegisterPage />} />
                 <Route path="/contact" element={<ContactPage />} />
             </Route>
@@ -170,6 +168,7 @@ export default function App() {
             <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
             <Route path="/forgot-password" element={<GuestRoute><ForgotPasswordPage /></GuestRoute>} />
             <Route path="/reset-password" element={<GuestRoute><ResetPasswordPage /></GuestRoute>} />
+            <Route path="/verify-email" element={<ProtectedRoute><VerifyEmailPage /></ProtectedRoute>} />
 
             <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
                 <Route index element={<DashboardRouter />} />

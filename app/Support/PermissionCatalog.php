@@ -77,6 +77,10 @@ class PermissionCatalog
                 'logs.view',
                 'logs.export',
             ],
+            'Settings' => [
+                'settings.view',
+                'settings.update',
+            ],
         ];
     }
 

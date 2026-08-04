@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Account;
+use App\Models\Contact;
 use App\Models\Loan;
 use App\Models\LoanProduct;
 use App\Models\Transaction;
@@ -21,6 +22,19 @@ beforeEach(function () {
     $this->seed(UserSeeder::class);
 
     $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
+});
+
+test('user seeder does not create duplicate fixed login accounts', function () {
+    $this->seed(UserSeeder::class);
+
+    expect(User::query()->whereIn('email', [
+        'developer@example.com',
+        'admin@example.com',
+        'manager@example.com',
+        'accountant@example.com',
+        'loan@example.com',
+        'secretary@example.com',
+    ])->count())->toBe(6);
 });
 
 test('person password policy rejects predictable name plus digits', function () {
@@ -318,4 +332,272 @@ test('permission names referenced by policies exist in the catalog', function ()
     foreach (['members.create', 'members.update', 'members.view', 'settings.update', 'loans.view'] as $name) {
         expect(in_array($name, $permissions, true))->toBeTrue("Permission [{$name}] missing");
     }
+});
+
+test('loan close rejects loans that still have an outstanding balance', function () {
+    $member = User::factory()->create();
+    $member->assignRole('member');
+
+    $loan = Loan::factory()->create([
+        'user_id' => $member->id,
+        'loan_amount' => 1000,
+        'interest_rate' => 12,
+        'term_months' => 1,
+        'payment_frequency' => 'monthly',
+        'loan_status' => 'active',
+    ]);
+
+    actingAs($this->admin);
+
+    $this->postJson('/api/loans/'.$loan->id.'/close')->assertStatus(422);
+
+    expect($loan->fresh()->loan_status)->toBe('active');
+});
+
+test('loan close succeeds when the loan is fully paid', function () {
+    $member = User::factory()->create();
+    $member->assignRole('member');
+
+    $account = Account::factory()->create([
+        'user_id' => $member->id,
+        'account_type' => 'savings',
+        'balance' => 5000,
+    ]);
+
+    $loan = Loan::factory()->create([
+        'user_id' => $member->id,
+        'loan_amount' => 1000,
+        'interest_rate' => 12,
+        'term_months' => 1,
+        'payment_frequency' => 'monthly',
+        'loan_status' => 'active',
+    ]);
+
+    Transaction::factory()->create([
+        'account_id' => $account->id,
+        'loan_id' => $loan->id,
+        'transaction_type' => 'loan_payment',
+        'amount' => $loan->totalPayable(),
+        'status' => 'completed',
+        'transaction_mode' => 'counter',
+        'transaction_date' => now(),
+    ]);
+
+    actingAs($this->admin);
+
+    $this->postJson('/api/loans/'.$loan->id.'/close')->assertOk();
+
+    expect($loan->fresh()->loan_status)->toBe('paid_off');
+});
+
+test('members cannot close loans', function () {
+    $member = User::factory()->create();
+    $member->assignRole('member');
+
+    $loan = Loan::factory()->create([
+        'user_id' => $member->id,
+        'loan_amount' => 1000,
+        'interest_rate' => 12,
+        'term_months' => 1,
+        'loan_status' => 'active',
+    ]);
+
+    actingAs($member);
+
+    $this->postJson('/api/loans/'.$loan->id.'/close')->assertForbidden();
+
+    expect($loan->fresh()->loan_status)->toBe('active');
+});
+
+test('deposit with a duplicate client_request_id is not created twice', function () {
+    $member = User::factory()->create();
+    $member->assignRole('member');
+
+    Account::factory()->create([
+        'user_id' => $member->id,
+        'account_type' => 'savings',
+        'balance' => 0,
+    ]);
+
+    actingAs($member);
+
+    $payload = [
+        'amount' => 500,
+        'account_type' => 'savings',
+        'transaction_mode' => 'counter',
+        'client_request_id' => 'req_test_0001',
+    ];
+
+    $this->postJson('/api/services/deposit', $payload)->assertCreated();
+    $this->postJson('/api/services/deposit', $payload)->assertOk();
+
+    expect(Transaction::where('transaction_type', 'deposit')->where('client_request_id', 'req_test_0001')->count())->toBe(1);
+});
+
+test('withdrawal with a duplicate client_request_id is not created twice', function () {
+    $member = User::factory()->create();
+    $member->assignRole('member');
+
+    Account::factory()->create([
+        'user_id' => $member->id,
+        'account_type' => 'savings',
+        'balance' => 5000,
+    ]);
+
+    actingAs($member);
+
+    $payload = [
+        'amount' => 1000,
+        'transaction_mode' => 'counter',
+        'client_request_id' => 'req_wd_0001',
+    ];
+
+    $this->postJson('/api/services/withdrawal', $payload)->assertCreated();
+    $this->postJson('/api/services/withdrawal', $payload)->assertOk();
+
+    expect(Transaction::where('transaction_type', 'withdrawal')->where('client_request_id', 'req_wd_0001')->count())->toBe(1);
+});
+
+test('loan payment with a duplicate client_request_id is not created twice', function () {
+    $member = User::factory()->create();
+    $member->assignRole('member');
+
+    $account = Account::factory()->create([
+        'user_id' => $member->id,
+        'account_type' => 'savings',
+        'balance' => 5000,
+    ]);
+
+    $loan = Loan::factory()->create([
+        'user_id' => $member->id,
+        'loan_amount' => 1000,
+        'interest_rate' => 12,
+        'term_months' => 1,
+        'payment_frequency' => 'monthly',
+        'loan_status' => 'active',
+    ]);
+
+    actingAs($member);
+
+    $payload = [
+        'loan_id' => $loan->id,
+        'account_id' => $account->id,
+        'amount' => 500,
+        'transaction_mode' => 'counter',
+        'client_request_id' => 'req_lp_0001',
+    ];
+
+    $this->postJson('/api/services/loan-payment', $payload)->assertCreated();
+    $this->postJson('/api/services/loan-payment', $payload)->assertOk();
+
+    expect(Transaction::where('transaction_type', 'loan_payment')->where('client_request_id', 'req_lp_0001')->count())->toBe(1);
+});
+
+test('member create rejects an underage birth date', function () {
+    actingAs($this->admin);
+
+    $this->postJson('/api/members', [
+        'first_name' => 'Nino',
+        'last_name' => 'Tindero',
+        'birth_date' => now()->subYears(17)->toDateString(),
+        'gender' => 'male',
+        'civil_status' => 'single',
+        'email' => 'nino.underage@example.com',
+        'phone_number' => '09171234567',
+        'password' => 'S3curepass!',
+        'password_confirmation' => 'S3curepass!',
+    ])->assertUnprocessable()
+        ->assertJsonValidationErrors('birth_date');
+});
+
+test('member create rejects a future birth date', function () {
+    actingAs($this->admin);
+
+    $this->postJson('/api/members', [
+        'first_name' => 'Future',
+        'last_name' => 'Child',
+        'birth_date' => now()->addYear()->toDateString(),
+        'gender' => 'male',
+        'civil_status' => 'single',
+        'email' => 'future.child@example.com',
+        'phone_number' => '09171234567',
+        'password' => 'S3curepass!',
+        'password_confirmation' => 'S3curepass!',
+    ])->assertUnprocessable()
+        ->assertJsonValidationErrors('birth_date');
+});
+
+test('member create rejects an email already used on a contact record', function () {
+    actingAs($this->admin);
+
+    Contact::create([
+        'phone_no' => '09170000000',
+        'email' => 'taken@example.com',
+    ]);
+
+    $this->postJson('/api/members', [
+        'first_name' => 'Taken',
+        'last_name' => 'Email',
+        'birth_date' => now()->subYears(30)->toDateString(),
+        'gender' => 'male',
+        'civil_status' => 'single',
+        'email' => 'taken@example.com',
+        'phone_number' => '09171234567',
+        'password' => 'S3curepass!',
+        'password_confirmation' => 'S3curepass!',
+    ])->assertUnprocessable()
+        ->assertJsonValidationErrors('email');
+});
+
+test('admin-created member starts unverified and receives a verification notification', function () {
+    actingAs($this->admin);
+
+    $this->postJson('/api/members', [
+        'first_name' => 'Carl',
+        'last_name' => 'Miguel',
+        'birth_date' => now()->subYears(25)->toDateString(),
+        'gender' => 'male',
+        'civil_status' => 'single',
+        'email' => 'carl.miguel@example.com',
+        'phone_number' => '09171234567',
+        'password' => 'S3curepass!',
+        'password_confirmation' => 'S3curepass!',
+    ])->assertCreated();
+
+    $member = User::where('email', 'carl.miguel@example.com')->firstOrFail();
+
+    expect($member->email_verified_at)->toBeNull();
+    expect($member->notifications()->where('type', 'email_verification')->exists())->toBeTrue();
+});
+
+test('member cannot pay another member loan without supplying their own id', function () {
+    $owner = User::factory()->create(['email' => 'loan.owner@example.com']);
+    $attacker = User::factory()->create(['email' => 'loan.attacker@example.com']);
+
+    $ownerAccount = Account::create([
+        'user_id' => $owner->id,
+        'account_type' => 'savings',
+        'balance' => 5000,
+    ]);
+
+    $loan = Loan::factory()->create([
+        'user_id' => $owner->id,
+        'loan_amount' => 1000,
+        'interest_rate' => 12,
+        'term_months' => 1,
+        'payment_frequency' => 'monthly',
+        'loan_status' => 'active',
+    ]);
+
+    actingAs($attacker);
+
+    $this->postJson('/api/services/loan-payment', [
+        'loan_id' => $loan->id,
+        'account_id' => $ownerAccount->id,
+        'amount' => 100,
+        'transaction_mode' => 'counter',
+        'client_request_id' => 'req_lp_owner_0001',
+    ])->assertForbidden();
+
+    expect(Transaction::where('transaction_type', 'loan_payment')->where('client_request_id', 'req_lp_owner_0001')->count())->toBe(0);
 });

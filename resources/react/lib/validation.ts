@@ -365,6 +365,7 @@ export const registerSchema = z.object({
     referred_by: optionalString(255),
     password: passwordPolicy,
     password_confirmation: requiredString('Please confirm your password'),
+    terms: z.boolean().refine(v => v === true, { message: 'You must accept the terms and conditions' }),
 }).refine(d => d.password === d.password_confirmation, { message: 'Passwords do not match', path: ['password_confirmation'] });
 
 export const registerStepSchemas: Record<number, z.ZodTypeAny> = {
@@ -390,6 +391,7 @@ export const registerStepSchemas: Record<number, z.ZodTypeAny> = {
     3: z.object({
         password: passwordPolicy,
         password_confirmation: requiredString('Please confirm your password'),
+        terms: z.boolean().refine(v => v === true, { message: 'You must accept the terms and conditions' }),
     }).refine(d => d.password === d.password_confirmation, { message: 'Passwords do not match', path: ['password_confirmation'] }),
 };
 

@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
 use App\Services\TurnstileService;
+use App\Support\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -18,6 +20,7 @@ class AuthController extends Controller
     public function __construct(
         private readonly SecurityOtpService $securityOtpService,
         private readonly AuditLogService $auditLogService,
+        private readonly NotificationService $notificationService,
     ) {}
 
     public function login(Request $request, TurnstileService $turnstileService): JsonResponse
@@ -34,9 +37,13 @@ class AuthController extends Controller
             'password' => 'required',
         ]);
 
-        $user = User::where('email', User::normalizeEmail($request->input('email')))->first();
+        $email = User::normalizeEmail($request->input('email'));
+        $user = User::query()
+            ->whereRaw('LOWER(TRIM(email)) = ?', [$email])
+            ->get()
+            ->first(fn (User $candidate) => Hash::check($request->password, $candidate->password));
 
-        if (! $user || ! Hash::check($request->password, $user->password)) {
+        if (! $user) {
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials are incorrect.'],
             ]);
@@ -44,6 +51,7 @@ class AuthController extends Controller
 
         if (($user->account_status ?? 'active') !== 'active') {
             Auth::guard('web')->logout();
+
             return response()->json(['message' => 'Your account is not active.'], 403);
         }
 
@@ -96,6 +104,23 @@ class AuthController extends Controller
         return response()->json(['message' => 'Logged out']);
     }
 
+    public function resendVerification(Request $request): JsonResponse
+    {
+        $user = $request->user('web');
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
+        if ($user->hasVerifiedEmail()) {
+            return response()->json(['message' => 'Your email is already verified.']);
+        }
+
+        $this->notificationService->sendEmailVerification($user);
+
+        return response()->json(['message' => 'A verification email has been sent to your email address.']);
+    }
+
     public function user(Request $request): JsonResponse
     {
         $user = $request->user('web');
@@ -111,12 +136,24 @@ class AuthController extends Controller
     {
         $user->loadMissing('personalData');
 
+        $permissions = $user->getAllPermissions()->pluck('name')->toArray();
+
+        // Admins are superusers at the authorization layer (see AppServiceProvider),
+        // so expose the same effective access to the React permission gates.
+        if ($user->hasRole('admin')) {
+            $permissions = array_values(array_unique(array_merge(
+                $permissions,
+                PermissionCatalog::allPermissions(),
+            )));
+        }
+
         return [
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
+            'email_verified' => (bool) $user->hasVerifiedEmail(),
             'primary_role' => $user->primary_role,
-            'permissions' => $user->getAllPermissions()->pluck('name')->toArray(),
+            'permissions' => $permissions,
             'profile_photo_url' => $user->personalData?->profile_picture
                 ? asset('storage/'.$user->personalData->profile_picture)
                 : null,

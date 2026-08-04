@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -13,6 +13,7 @@ const schema = z.object({
 type Form = z.infer<typeof schema>;
 
 export default function ForgotPasswordPage() {
+    const turnstileRef = useRef<any>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [sent, setSent] = useState(false);
     const [error, setError] = useState('');
@@ -25,7 +26,7 @@ export default function ForgotPasswordPage() {
         setIsSubmitting(true);
         setError('');
         try {
-            await forgotPassword(data.email);
+            await forgotPassword(data.email, turnstileRef.current?.getToken?.());
             setSent(true);
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to send reset code. Please try again.');
@@ -118,7 +119,7 @@ export default function ForgotPasswordPage() {
                                 </div>
 
                                 <div className="flex justify-center mt-4">
-                                    <TurnstileWidget />
+                                    <TurnstileWidget ref={turnstileRef} />
                                 </div>
 
                                 <button type="submit" disabled={isSubmitting} className="public-btn public-btn-primary w-full mt-2">
