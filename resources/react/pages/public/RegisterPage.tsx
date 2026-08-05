@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { api } from '../../api/client';
 
 const steps = ['Personal Info', 'Contact & Address', 'Employment', 'Account'];
