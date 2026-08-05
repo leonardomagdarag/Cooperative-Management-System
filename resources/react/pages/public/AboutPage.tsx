@@ -7,155 +7,238 @@ export default function AboutPage() {
     const about = data?.data?.form?.about || {};
     const board = data?.data?.form?.board || {};
     const officers = data?.data?.form?.officers || {};
-    const boardCards = (board.cards || []).filter((c: any) => c.name || c.position);
-    const officerCards = (officers.cards || []).filter((c: any) => c.name || c.position);
+    const memberStatements = data?.data?.form?.member_statements || {};
+
+    const boardVisible = board.is_visible !== false;
+    const officersVisible = officers.is_visible !== false;
+    const boardCards = (board.cards || []).filter((c: any) => c.name || c.position || c.image_url);
+    const officerCards = (officers.cards || []).filter((c: any) => c.name || c.position || c.image_url);
+
+    const statementCards = [
+        { key: 'statement1', quoteClass: 'text-slate-700', avatarClass: 'bg-slate-700' },
+        { key: 'statement2', quoteClass: 'text-emerald-700', avatarClass: 'bg-emerald-700' },
+        { key: 'statement3', quoteClass: 'text-slate-700', avatarClass: 'bg-slate-700' },
+    ];
 
     return (
-        <>
-            {/* Hero */}
-            <section className="relative overflow-hidden bg-slate-950 pb-20 pt-32">
-                <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-950 to-emerald-950/30"></div>
-                <div className="relative mx-auto max-w-4xl px-4 text-center sm:px-6 lg:px-8">
+        <div className="public-page">
+            <section className="relative overflow-hidden bg-slate-950 px-4 pb-20 pt-32">
+                <div className="pointer-events-none absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.03%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')] opacity-60"></div>
+                <div className="relative mx-auto max-w-4xl text-center">
                     <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-1.5 text-sm font-semibold text-emerald-300">
-                        <i className="fas fa-leaf"></i> Our Cooperative Story
+                        <i className="fas fa-leaf text-xs"></i> Our Cooperative Story
                     </span>
-                    <h1 className="mb-6 text-5xl font-extrabold text-white md:text-6xl">About Us</h1>
-                    <p className="text-lg text-slate-300 md:text-xl">{about.about1 || 'Settlers Credit Cooperative is dedicated to serving our community.'}</p>
+                    <h1 className="text-4xl md:text-6xl font-extrabold text-white mb-6 leading-tight tracking-tight">About Us</h1>
+                    <div className="w-16 h-1 bg-emerald-400 mx-auto rounded-full mb-8"></div>
+                    <p className="text-lg md:text-xl text-gray-300 leading-relaxed max-w-3xl mx-auto">
+                        {about.about1 || 'Settlers Credit Cooperative is dedicated to serving our community.'}
+                    </p>
                 </div>
             </section>
 
-            {/* History */}
-            <section className="py-24">
-                <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                    <div className="grid items-center gap-14 md:grid-cols-2">
+            <section className="public-section bg-white">
+                <div className="public-shell">
+                    <div className="grid md:grid-cols-2 gap-14 items-center">
                         <div>
                             <span className="mb-4 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                                <i className="fas fa-history"></i> Our Journey
+                                <i className="fas fa-history text-xs"></i> Our Journey
                             </span>
-                            <h2 className="mb-4 text-4xl font-extrabold text-slate-900 md:text-5xl">Our History</h2>
-                            <div className="mb-6 h-1 w-12 rounded-full bg-emerald-600"></div>
-                            <div className="space-y-5 text-slate-600">
+                            <h2 className="public-heading text-3xl md:text-5xl mb-4">Our History</h2>
+                            <div className="w-12 h-1 bg-emerald-600 rounded-full mb-6"></div>
+                            <div className="space-y-5 text-base text-gray-600 leading-relaxed">
                                 <p>{about.about2 || ''}</p>
                                 <div>{about.history || ''}</div>
                             </div>
                         </div>
                         <div className="relative">
-                            <div className="absolute -inset-4 rounded-3xl bg-emerald-50"></div>
-                            <img src="/images/hero_banner.jpg" alt="Cooperative" className="relative h-80 w-full rounded-2xl object-cover shadow-xl md:h-[420px]" />
+                            <div className="absolute -inset-4 rounded-3xl bg-emerald-50 -z-10"></div>
+                            <img src="/images/hero_banner.jpg" alt="Cooperative member Pictures" className="w-full h-80 md:h-[420px] object-cover rounded-2xl shadow-xl" loading="lazy" decoding="async" />
                         </div>
                     </div>
                 </div>
             </section>
 
-            {/* Mission, Vision, Values */}
-            <section className="bg-slate-950 py-24">
-                <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                    <div className="mb-14 text-center">
+            <section className="public-section bg-slate-950">
+                <div className="public-shell">
+                    <div className="text-center mb-14">
                         <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
-                            <i className="fas fa-compass"></i> Our Foundation
+                            <i className="fas fa-compass text-xs"></i> Our Foundation
                         </span>
-                        <h2 className="mt-2 text-3xl font-bold text-white md:text-4xl">What Guides Us</h2>
+                        <h2 className="text-3xl md:text-4xl font-bold text-white mt-2">What Guides Us</h2>
                     </div>
-                    <div className="grid gap-6 md:grid-cols-3">
-                        {[
-                            { title: 'Mission', icon: 'fas fa-bullseye', colorClass: 'from-emerald-500 to-emerald-400', bgClass: 'bg-emerald-500/20', textClass: 'text-emerald-400', text: about.mission || 'To provide accessible financial services.' },
-                            { title: 'Vision', icon: 'fas fa-eye', colorClass: 'from-cyan-500 to-cyan-400', bgClass: 'bg-cyan-500/20', textClass: 'text-cyan-400', text: about.vision || 'To be the leading cooperative institution.' },
-                            { title: 'Values', icon: 'fas fa-heart', colorClass: 'from-slate-400 to-slate-300', bgClass: 'bg-white/10', textClass: 'text-gray-300', text: null, values: about.values || [] },
-                        ].map((item, i) => (
-                            <div key={i} className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-8 backdrop-blur-sm transition-all hover:bg-white/10">
-                                <div className={`absolute left-0 top-0 h-1 w-full rounded-t-2xl bg-gradient-to-r ${item.colorClass}`}></div>
-                                <div className="mb-6 flex items-center gap-4">
-                                    <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${item.bgClass}`}>
-                                        <i className={`${item.icon} text-xl ${item.textClass}`}></i>
-                                    </div>
-                                    <h3 className="text-xl font-bold text-white">{item.title}</h3>
+
+                    <div className="grid md:grid-cols-3 gap-6">
+                        <div className="group relative overflow-hidden rounded-2xl bg-white/5 border border-white/10 p-8 backdrop-blur-sm transition-all hover:bg-white/10">
+                            <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-t-2xl"></div>
+                            <div className="flex items-center gap-4 mb-6">
+                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20">
+                                    <i className="fas fa-bullseye text-xl text-emerald-400"></i>
                                 </div>
-                                {item.text ? (
-                                    <p className="text-slate-300">{item.text}</p>
-                                ) : (
-                                    <ul className="space-y-3 text-slate-300">
-                                        {(item.values as any[]).map((v, j) => (
-                                            <li key={j} className="flex items-start gap-2">
-                                                <i className="fas fa-check-circle mt-0.5 shrink-0 text-xs text-emerald-400"></i>
-                                                {typeof v === 'string' ? v : v.title || ''}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
+                                <h3 className="text-xl font-bold text-white">Mission</h3>
                             </div>
-                        ))}
+                            <p className="text-gray-300 leading-relaxed">{about.mission || 'To provide accessible financial services.'}</p>
+                        </div>
+
+                        <div className="group relative overflow-hidden rounded-2xl bg-white/5 border border-white/10 p-8 backdrop-blur-sm transition-all hover:bg-white/10">
+                            <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-cyan-500 to-cyan-400 rounded-t-2xl"></div>
+                            <div className="flex items-center gap-4 mb-6">
+                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-cyan-500/20">
+                                    <i className="fas fa-eye text-xl text-cyan-400"></i>
+                                </div>
+                                <h3 className="text-xl font-bold text-white">Vision</h3>
+                            </div>
+                            <p className="text-gray-300 leading-relaxed">{about.vision || 'To be the leading cooperative institution.'}</p>
+                        </div>
+
+                        <div className="group relative overflow-hidden rounded-2xl bg-white/5 border border-white/10 p-8 backdrop-blur-sm transition-all hover:bg-white/10">
+                            <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-slate-400 to-slate-300 rounded-t-2xl"></div>
+                            <div className="flex items-center gap-4 mb-6">
+                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/10">
+                                    <i className="fas fa-heart text-xl text-gray-300"></i>
+                                </div>
+                                <h3 className="text-xl font-bold text-white">Values</h3>
+                            </div>
+                            <ul className="space-y-3 text-gray-300">
+                                {(about.values || []).map((v: any, i: number) => (
+                                    <li key={i} className="flex items-start gap-2">
+                                        <i className="fas fa-check-circle mt-0.5 shrink-0 text-emerald-400 text-xs"></i>
+                                        <span className="text-sm">
+                                            <strong className="text-white">{v.title || ''}</strong>{v.description ? `: ${v.description}` : ''}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </section>
 
-            {/* Board of Directors */}
-            {boardCards.length > 0 && board.is_visible !== false && (
-                <section className="py-24">
-                    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                        <div className="mb-12 text-center">
-                            <h2 className="mb-4 text-4xl font-extrabold text-slate-900">Board of Directors</h2>
-                            <p className="text-lg text-slate-600">The people leading our cooperative</p>
+            {boardVisible && boardCards.length > 0 && (
+                <section className="public-section bg-white">
+                    <div className="public-shell">
+                        <div className="text-center mb-14">
+                            <span className="mb-4 inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                                <i className="fas fa-chess-king text-xs"></i> Leadership
+                            </span>
+                            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mt-2 mb-4">Board of Directors</h2>
+                            <p className="text-base text-gray-500 max-w-xl mx-auto">Meet the dedicated leaders guiding our cooperative towards growth and service.</p>
                         </div>
-                        <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+
+                        <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-6">
                             {boardCards.map((card: any, i: number) => (
-                                <div key={i} className="group overflow-hidden rounded-2xl border border-slate-200 bg-white text-center shadow-sm transition-all hover:shadow-lg hover:-translate-y-1">
-                                    {card.image_url ? (
-                                        <img src={card.image_url} alt={card.name} className="h-48 w-full object-cover" />
-                                    ) : (
-                                        <div className="flex h-48 items-center justify-center bg-gradient-to-br from-emerald-100 to-emerald-200">
-                                            <i className="fas fa-user text-5xl text-emerald-300"></i>
-                                        </div>
-                                    )}
-                                    <div className="p-5">
-                                        <h3 className="font-bold text-slate-900">{card.name}</h3>
-                                        <p className="text-sm text-emerald-600">{card.position}</p>
+                                <article key={i} className="group public-card public-card-hover overflow-hidden">
+                                    <div className="relative">
+                                        {card.image_url ? (
+                                            <>
+                                                <img src={card.image_url} alt={card.name} className="h-64 w-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" decoding="async" />
+                                                <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/50 to-transparent"></div>
+                                            </>
+                                        ) : (
+                                            <div className="flex h-64 items-center justify-center bg-gradient-to-br from-slate-800 to-slate-700">
+                                                <div className="flex h-24 w-24 items-center justify-center rounded-full bg-white/10 ring-4 ring-white/20">
+                                                    <i className="fas fa-user text-4xl text-white/60"></i>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
+                                    <div className="p-5 text-center">
+                                        <h3 className="text-base font-bold text-gray-900 leading-snug">{card.name || ''}</h3>
+                                        <p className="mt-1 text-sm font-semibold text-emerald-600">{card.position || ''}</p>
+                                    </div>
+                                </article>
                             ))}
                         </div>
                     </div>
                 </section>
             )}
 
-            {/* Officers */}
-            {officerCards.length > 0 && officers.is_visible !== false && (
-                <section className="bg-slate-50 py-24">
-                    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                        <div className="mb-12 text-center">
-                            <h2 className="mb-4 text-4xl font-extrabold text-slate-900">Our Officers</h2>
-                            <p className="text-lg text-slate-600">The team making it happen</p>
+            {officersVisible && officerCards.length > 0 && (
+                <section className="public-section public-section-soft">
+                    <div className="public-shell">
+                        <div className="text-center mb-14">
+                            <span className="mb-4 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                                <i className="fas fa-users text-xs"></i> Management
+                            </span>
+                            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mt-2 mb-4">Our Officers</h2>
+                            <p className="text-base text-gray-500 max-w-xl mx-auto">The dedicated professionals managing our daily operations and member services.</p>
                         </div>
-                        <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+
+                        <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-6">
                             {officerCards.map((card: any, i: number) => (
-                                <div key={i} className="group overflow-hidden rounded-2xl border border-slate-200 bg-white text-center shadow-sm transition-all hover:shadow-lg hover:-translate-y-1">
-                                    {card.image_url ? (
-                                        <img src={card.image_url} alt={card.name} className="h-48 w-full object-cover" />
-                                    ) : (
-                                        <div className="flex h-48 items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
-                                            <i className="fas fa-user-tie text-5xl text-slate-300"></i>
-                                        </div>
-                                    )}
-                                    <div className="p-5">
-                                        <h3 className="font-bold text-slate-900">{card.name}</h3>
-                                        <p className="text-sm text-emerald-600">{card.position}</p>
+                                <article key={i} className="group public-card public-card-hover overflow-hidden">
+                                    <div className="relative">
+                                        {card.image_url ? (
+                                            <>
+                                                <img src={card.image_url} alt={card.name} className="h-64 w-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" decoding="async" />
+                                                <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/50 to-transparent"></div>
+                                            </>
+                                        ) : (
+                                            <div className="flex h-64 items-center justify-center bg-gradient-to-br from-emerald-800 to-emerald-700">
+                                                <div className="flex h-24 w-24 items-center justify-center rounded-full bg-white/10 ring-4 ring-white/20">
+                                                    <i className="fas fa-user-tie text-4xl text-white/60"></i>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
+                                    <div className="p-5 text-center">
+                                        <h3 className="text-base font-bold text-gray-900 leading-snug">{card.name || ''}</h3>
+                                        <p className="mt-1 text-sm font-semibold text-emerald-600">{card.position || ''}</p>
+                                    </div>
+                                </article>
                             ))}
                         </div>
                     </div>
                 </section>
             )}
 
-            {/* CTA */}
-            <section className="bg-emerald-600 py-16">
-                <div className="mx-auto max-w-4xl px-4 text-center sm:px-6 lg:px-8">
-                    <h2 className="mb-4 text-3xl font-extrabold text-white md:text-4xl">Ready to Join?</h2>
-                    <p className="mb-8 text-lg text-emerald-100">Become part of our growing cooperative community.</p>
-                    <Link to="/register" className="inline-flex items-center gap-2 rounded-xl bg-white px-8 py-4 text-base font-semibold text-emerald-700 shadow-xl transition-all hover:bg-emerald-50 hover:shadow-2xl hover:-translate-y-0.5">
-                        Apply for Membership <i className="fas fa-arrow-right"></i>
-                    </Link>
+            <section className="public-section bg-white">
+                <div className="public-shell">
+                    <div className="text-center mb-14">
+                        <span className="mb-4 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                            <i className="fas fa-quote-right text-xs"></i> Testimonials
+                        </span>
+                        <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mt-2 mb-4">Member Stories</h2>
+                        <p className="text-base text-gray-500 max-w-xl mx-auto">Hear from our members about their experience with our cooperative.</p>
+                    </div>
+
+                    <div className="grid md:grid-cols-3 gap-6">
+                        {statementCards.map((s, i) => {
+                            const stmt = (memberStatements as any)[s.key] || {};
+                            return (
+                                <div key={i} className="public-card public-card-hover relative overflow-hidden p-8">
+                                    <div className="absolute -top-3 -left-3 text-[7rem] leading-none font-serif font-bold text-emerald-100 select-none pointer-events-none">&ldquo;</div>
+                                    <p className="relative text-gray-700 text-sm leading-relaxed mb-8">{stmt.statement || ''}</p>
+                                    <div className="flex items-center gap-4 border-t border-gray-200 pt-6">
+                                        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${s.avatarClass} shadow-sm`}>
+                                            <i className="fas fa-user text-sm text-white"></i>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-bold text-gray-900">{stmt.name || ''}</p>
+                                            <p className="text-xs text-gray-500">Member since {stmt.member_since || ''}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
             </section>
-        </>
+
+            <section className="public-section px-4 bg-emerald-800 relative overflow-hidden">
+                <div className="pointer-events-none absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.05%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')]"></div>
+                <div className="relative max-w-3xl mx-auto text-center text-white">
+                    <h2 className="text-3xl md:text-4xl font-bold mb-4 leading-tight">Ready to Join Our Community?</h2>
+                    <p className="text-lg text-white/90 mb-10 max-w-xl mx-auto">Become part of a cooperative that puts your financial well-being and community growth first.</p>
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                        <Link to="/#Contact" className="public-btn bg-white text-emerald-700 shadow-md hover:bg-emerald-50">
+                            <i className="fas fa-envelope text-sm"></i> Contact Us
+                        </Link>
+                        <Link to="/login" className="public-btn public-btn-secondary">
+                            <i className="fas fa-sign-in-alt text-sm"></i> Member Login
+                        </Link>
+                    </div>
+                </div>
+            </section>
+        </div>
     );
 }

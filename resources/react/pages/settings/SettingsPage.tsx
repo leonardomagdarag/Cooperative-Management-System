@@ -11,7 +11,10 @@ export default function SettingsPage() {
 
     return (
         <div className="space-y-6">
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Settings</h1>
+            <div className="bg-gradient-to-r from-emerald-600 to-cyan-600 rounded-2xl p-6 text-white shadow-lg">
+                <h1 className="text-2xl font-bold">Settings</h1>
+                <p className="mt-1 text-sm text-white/80">Manage your account and preferences</p>
+            </div>
 
             {isMember ? (
                 <MemberSettings />
@@ -53,12 +56,16 @@ function MemberSettings() {
 
     return (
         <div className="space-y-6">
-            {/* Password */}
-            <div className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
-                <h3 className="font-semibold text-slate-900 dark:text-white">Change Password</h3>
-                <p className="mt-1 text-sm text-slate-500">Update your password to keep your account secure.</p>
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+                <h3 className="font-semibold text-gray-900">Member Self-Service</h3>
+                <p className="mt-1 text-sm text-gray-500">Manage your personal account settings and security</p>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <h3 className="font-semibold text-gray-900">Change Password</h3>
+                <p className="mt-1 text-sm text-gray-500">Update your password to keep your account secure.</p>
                 {!showPasswordForm ? (
-                    <button onClick={() => setShowPasswordForm(true)} className="mt-4 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300">
+                    <button onClick={() => setShowPasswordForm(true)} className="mt-4 rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200">
                         Change Password
                     </button>
                 ) : (
@@ -71,11 +78,11 @@ function MemberSettings() {
                             password_confirmation: fd.get('password_confirmation') as string,
                         });
                     }} className="mt-4 space-y-3">
-                        <input type="password" name="current_password" placeholder="Current password" required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700" />
-                        <input type="password" name="password" placeholder="New password (min 8 chars)" required minLength={8} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700" />
-                        <input type="password" name="password_confirmation" placeholder="Confirm new password" required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700" />
+                        <input type="password" name="current_password" placeholder="Current password" required className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+                        <input type="password" name="password" placeholder="New password (min 8 chars)" required minLength={8} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+                        <input type="password" name="password_confirmation" placeholder="Confirm new password" required className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
                         <div className="flex gap-2">
-                            <button type="button" onClick={() => setShowPasswordForm(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm">Cancel</button>
+                            <button type="button" onClick={() => setShowPasswordForm(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
                             <button type="submit" disabled={passwordMutation.isPending} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
                                 {passwordMutation.isPending ? 'Updating...' : 'Update Password'}
                             </button>
@@ -84,10 +91,9 @@ function MemberSettings() {
                 )}
             </div>
 
-            {/* Trusted Devices */}
-            <div className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
-                <h3 className="font-semibold text-slate-900 dark:text-white">Trusted Devices</h3>
-                <p className="mt-1 text-sm text-slate-500">Revoke all trusted devices to force re-authentication.</p>
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <h3 className="font-semibold text-gray-900">Trusted Devices</h3>
+                <p className="mt-1 text-sm text-gray-500">Revoke all trusted devices to force re-authentication.</p>
                 <button
                     onClick={() => revokeMutation.mutate()}
                     disabled={revokeMutation.isPending}
@@ -98,19 +104,18 @@ function MemberSettings() {
                 </button>
             </div>
 
-            {/* Account Deactivation */}
-            <div className="rounded-xl border border-red-200 bg-white p-6 dark:border-red-800 dark:bg-slate-800">
+            <div className="rounded-xl border border-red-200 bg-white p-6 shadow-sm">
                 <h3 className="font-semibold text-red-600">Deactivate Account</h3>
-                <p className="mt-1 text-sm text-slate-500">Deactivate your account. You can contact support to reactivate.</p>
+                <p className="mt-1 text-sm text-gray-500">Deactivate your account. You can contact support to reactivate.</p>
                 <button onClick={() => setShowDeleteConfirm(true)} className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700">
                     Deactivate Account
                 </button>
 
                 {showDeleteConfirm && (
-                    <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
-                        <p className="text-sm text-red-700 dark:text-red-300">Are you sure? This action requires your password.</p>
+                    <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4">
+                        <p className="text-sm text-red-700">Are you sure? This action requires your password.</p>
                         <div className="mt-3 flex gap-2">
-                            <button onClick={() => setShowDeleteConfirm(false)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm">Cancel</button>
+                            <button onClick={() => setShowDeleteConfirm(false)} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm">Cancel</button>
                             <button
                                 onClick={() => {
                                     const pw = prompt('Enter your password to confirm:');
@@ -132,22 +137,22 @@ function OfficerSettings() {
     const { addToast } = useToast();
 
     return (
-        <div className="space-y-4">
-            <div className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
-                <h3 className="font-semibold text-slate-900 dark:text-white">System Settings</h3>
-                <p className="mt-1 text-sm text-slate-500">Manage system-wide settings.</p>
+        <div className="space-y-6">
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+                <h3 className="font-semibold text-gray-900">System Settings</h3>
+                <p className="mt-1 text-sm text-gray-500">Manage system-wide settings.</p>
                 <div className="mt-4 grid gap-3 md:grid-cols-3">
-                    <a href="/dashboard/role-permissions" className="rounded-lg border border-slate-200 p-4 text-center hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700">
+                    <a href="/dashboard/role-permissions" className="rounded-xl border border-gray-200 p-4 text-center shadow-sm hover:bg-gray-50 transition-colors">
                         <i className="fas fa-user-shield text-2xl text-emerald-600"></i>
-                        <p className="mt-2 text-sm font-medium">Roles & Permissions</p>
+                        <p className="mt-2 text-sm font-medium text-gray-900">Roles &amp; Permissions</p>
                     </a>
-                    <a href="/dashboard/loan-products" className="rounded-lg border border-slate-200 p-4 text-center hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700">
+                    <a href="/dashboard/loan-products" className="rounded-xl border border-gray-200 p-4 text-center shadow-sm hover:bg-gray-50 transition-colors">
                         <i className="fas fa-file-invoice text-2xl text-emerald-600"></i>
-                        <p className="mt-2 text-sm font-medium">Loan Products</p>
+                        <p className="mt-2 text-sm font-medium text-gray-900">Loan Products</p>
                     </a>
-                    <a href="/dashboard/public-content" className="rounded-lg border border-slate-200 p-4 text-center hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700">
+                    <a href="/dashboard/public-content" className="rounded-xl border border-gray-200 p-4 text-center shadow-sm hover:bg-gray-50 transition-colors">
                         <i className="fas fa-globe text-2xl text-emerald-600"></i>
-                        <p className="mt-2 text-sm font-medium">Public Content</p>
+                        <p className="mt-2 text-sm font-medium text-gray-900">Public Content</p>
                     </a>
                 </div>
             </div>

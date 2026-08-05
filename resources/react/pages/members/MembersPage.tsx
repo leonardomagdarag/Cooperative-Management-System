@@ -14,9 +14,9 @@ export default function MembersPage() {
     const queryClient = useQueryClient();
     const { addToast } = useToast();
 
-    const { data, isLoading } = useQuery({
+    const { data, isLoading, refetch } = useQuery({
         queryKey: ['members', search, page],
-        queryFn: () => api.get('/api/members', { params: { search: search || undefined, page, per_page: 10 } }),
+        queryFn: () => api.get('/api/members', { params: { search: search || undefined, page, per_page: 15 } }),
     });
 
     const deleteMutation = useMutation({
@@ -26,55 +26,97 @@ export default function MembersPage() {
     });
 
     const members = data?.data?.data ?? [];
-    const pagination = data?.data?.pagination;
+    const pagination = data?.data?.pagination ?? {};
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Members</h1>
-                <button onClick={() => { setEditing(null); setShowWizard(true); }} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
-                    <i className="fas fa-plus mr-1"></i> Add Member
-                </button>
-            </div>
+        <div>
+            <div className="p-4 bg-white block sm:flex items-center justify-between border-b border-gray-200 lg:mt-1.5">
+                <div className="w-full mb-1">
+                    <div className="mb-4">
+                        <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl">Members</h1>
+                        <p className="text-sm text-gray-500">Manage member profiles and information</p>
+                    </div>
 
-            <input type="text" placeholder="Search members..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="w-full max-w-md rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800" />
-
-            {isLoading ? (
-                <div className="space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800" />)}</div>
-            ) : members.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center dark:border-slate-600 dark:bg-slate-800">
-                    <i className="fas fa-users text-4xl text-slate-300 dark:text-slate-600"></i>
-                    <p className="mt-4 text-sm text-slate-500">No members found</p>
-                </div>
-            ) : (
-                <div className="space-y-3">
-                    {members.map((m: any) => (
-                        <div key={m.id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
-                            <div className="flex items-center gap-3">
-                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
-                                    <span className="text-sm font-bold text-emerald-600">{m.name?.charAt(0) || '?'}</span>
-                                </div>
-                                <div>
-                                    <p className="font-medium text-slate-900 dark:text-white">{m.name || 'Unknown'}</p>
-                                    <p className="text-xs text-slate-500">{m.user_number} · {m.email}</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${m.account_status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{m.account_status}</span>
-                                <button onClick={() => setViewing(m)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"><i className="fas fa-eye text-sm"></i></button>
-                                <button onClick={() => { setEditing(m); setShowWizard(true); }} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"><i className="fas fa-edit text-sm"></i></button>
-                                <button onClick={() => { if (confirm('Delete this member?')) deleteMutation.mutate(m.id); }} className="rounded-lg p-2 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"><i className="fas fa-trash text-sm"></i></button>
+                    <div className="sm:flex">
+                        <div className="items-center hidden mb-3 sm:flex sm:mb-0">
+                            <div className="relative mt-1 lg:w-64 xl:w-96">
+                                <input
+                                    type="text"
+                                    value={search}
+                                    onChange={e => { setSearch(e.target.value); setPage(1); }}
+                                    className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                                    placeholder="Search members..."
+                                />
                             </div>
                         </div>
-                    ))}
+                        <div className="flex items-center ml-auto space-x-2 sm:space-x-3">
+                            <button type="button" onClick={() => refetch()} className="inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-center text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 focus:ring-4 focus:ring-blue-300" title="Refresh data">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            </button>
+                            <button type="button" onClick={() => { setEditing(null); setShowWizard(true); }} className="inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-center text-white bg-blue-700 rounded-lg hover:bg-blue-800 focus:ring-4 focus:ring-blue-300">
+                                <svg className="w-5 h-5 mr-2 -ml-1" fill="currentColor" viewBox="0 0 20 20"><path d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"/></svg>
+                                Add Member
+                            </button>
+                        </div>
+                    </div>
                 </div>
-            )}
+            </div>
 
-            {pagination && pagination.last_page > 1 && (
-                <div className="flex items-center justify-center gap-2">
-                    <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm disabled:opacity-50">Previous</button>
-                    <span className="text-sm text-slate-500">Page {page} of {pagination.last_page}</span>
-                    <button onClick={() => setPage(p => Math.min(pagination.last_page, p + 1))} disabled={page === pagination.last_page} className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm disabled:opacity-50">Next</button>
+            <div className="flex flex-col">
+                <div className="overflow-x-auto">
+                    <div className="inline-block min-w-full align-middle">
+                        <div className="overflow-hidden shadow">
+                            {isLoading ? (
+                                <div className="bg-white p-8 text-center text-sm text-gray-500">Loading...</div>
+                            ) : members.length === 0 ? (
+                                <div className="bg-white p-16 text-center">
+                                    <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                    <p className="text-sm text-gray-500 mt-4">No members found</p>
+                                </div>
+                            ) : (
+                                <table className="min-w-full divide-y divide-gray-200 table-fixed">
+                                    <thead className="bg-gray-100">
+                                        <tr>
+                                            <th scope="col" className="p-4 w-10"><div className="flex items-center"><input type="checkbox" className="w-4 h-4 bg-gray-50 rounded border-gray-300 focus:ring-3 focus:ring-blue-300" /></div></th>
+                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Name</th>
+                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Member ID</th>
+                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Status</th>
+                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Email</th>
+                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {members.map((m: any) => (
+                                            <tr key={m.id} className="hover:bg-gray-50">
+                                                <td className="p-4 w-10"><input type="checkbox" className="w-4 h-4 bg-gray-50 rounded border-gray-300 focus:ring-3 focus:ring-blue-300" /></td>
+                                                <td className="p-4 text-sm font-medium text-gray-900 whitespace-nowrap">{m.name || 'Unknown'}</td>
+                                                <td className="p-4 text-sm font-mono text-gray-500 whitespace-nowrap">{m.user_number || '—'}</td>
+                                                <td className="p-4 whitespace-nowrap">
+                                                    <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${m.account_status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{m.account_status}</span>
+                                                </td>
+                                                <td className="p-4 text-sm text-gray-500">{m.email || '—'}</td>
+                                                <td className="p-4 whitespace-nowrap">
+                                                    <div className="flex items-center gap-1">
+                                                        <button onClick={() => setViewing(m)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="View"><i className="fas fa-eye text-sm"></i></button>
+                                                        <button onClick={() => { setEditing(m); setShowWizard(true); }} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Edit"><i className="fas fa-edit text-sm"></i></button>
+                                                        <button onClick={() => { if (confirm('Delete this member?')) deleteMutation.mutate(m.id); }} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Delete"><i className="fas fa-trash text-sm"></i></button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {pagination.last_page > 1 && (
+                <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 flex items-center justify-center gap-2">
+                    <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50">Previous</button>
+                    <span className="text-sm text-gray-500">Page {page} of {pagination.last_page}</span>
+                    <button onClick={() => setPage(p => Math.min(pagination.last_page, p + 1))} disabled={page === pagination.last_page} className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50">Next</button>
                 </div>
             )}
 

@@ -43,27 +43,27 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-            <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-xl dark:bg-slate-800" onClick={e => e.stopPropagation()}>
+            <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
                 {/* Header */}
-                <div className="sticky top-0 z-10 border-b border-slate-200 bg-white px-6 py-4 dark:border-slate-700 dark:bg-slate-800">
+                <div className="sticky top-0 z-10 bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white">
                     <div className="flex items-center justify-between">
-                        <h2 className="text-lg font-bold text-slate-900 dark:text-white">{isEdit ? 'Edit' : 'New'} Member</h2>
-                        <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><i className="fas fa-times"></i></button>
+                        <h2 className="text-lg font-bold">{isEdit ? 'Edit' : 'New'} Member</h2>
+                        <button onClick={onClose} className="text-white/70 hover:text-white"><i className="fas fa-times"></i></button>
                     </div>
                     {/* Step indicator */}
-                    <div className="mt-3 flex gap-1">
+                    <div className="mt-4 flex gap-1">
                         {STEPS.map((s, i) => (
-                            <div key={s} className={`h-1 flex-1 rounded-full ${i <= step ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700'}`} />
+                            <div key={s} className={`h-1 flex-1 rounded-full ${i <= step ? 'bg-white' : 'bg-white/30'}`} />
                         ))}
                     </div>
-                    <p className="mt-2 text-xs text-slate-500">Step {step + 1} of {STEPS.length}: {currentStep}</p>
+                    <p className="mt-2 text-xs text-white/70">Step {step + 1} of {STEPS.length}: {currentStep}</p>
                 </div>
 
                 {/* Step content */}
                 <div className="p-6">
                     {currentStep === 'personal' && (
                         <div className="space-y-4">
-                            <h3 className="font-semibold text-slate-900 dark:text-white">Personal Information</h3>
+                            <h3 className="font-semibold text-gray-900">Personal Information</h3>
                             <div className="grid grid-cols-2 gap-4">
                                 <Field label="First Name" value={form.first_name} onChange={v => set('first_name', v)} required />
                                 <Field label="Middle Name" value={form.mid_name} onChange={v => set('mid_name', v)} />
@@ -81,7 +81,7 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
 
                     {currentStep === 'address' && (
                         <div className="space-y-4">
-                            <h3 className="font-semibold text-slate-900 dark:text-white">Address</h3>
+                            <h3 className="font-semibold text-gray-900">Address</h3>
                             <div className="grid grid-cols-2 gap-4">
                                 <Field label="Country" value={form.country} onChange={v => set('country', v)} />
                                 <Field label="Region" value={form.region} onChange={v => set('region', v)} />
@@ -96,7 +96,7 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
 
                     {currentStep === 'contact' && (
                         <div className="space-y-4">
-                            <h3 className="font-semibold text-slate-900 dark:text-white">Contact Information</h3>
+                            <h3 className="font-semibold text-gray-900">Contact Information</h3>
                             <div className="grid grid-cols-2 gap-4">
                                 <Field label="Email" type="email" value={form.email} onChange={v => set('email', v)} required />
                                 <Field label="Phone Number" value={form.phone_number} onChange={v => set('phone_number', v)} required />
@@ -107,7 +107,7 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
 
                     {currentStep === 'ids' && (
                         <div className="space-y-4">
-                            <h3 className="font-semibold text-slate-900 dark:text-white">Government IDs</h3>
+                            <h3 className="font-semibold text-gray-900">Government IDs</h3>
                             <div className="grid grid-cols-2 gap-4">
                                 <Field label="National ID" value={form.national_id} onChange={v => set('national_id', v)} />
                                 <Field label="TIN" value={form.tin} onChange={v => set('tin', v)} />
@@ -120,7 +120,7 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
 
                     {currentStep === 'employment' && (
                         <div className="space-y-4">
-                            <h3 className="font-semibold text-slate-900 dark:text-white">Employment</h3>
+                            <h3 className="font-semibold text-gray-900">Employment</h3>
                             <div className="grid grid-cols-2 gap-4">
                                 <Select label="Employment Type" value={form.employment_type} onChange={v => set('employment_type', v)} options={['full-time', 'part-time', 'self-employed', 'freelancer', 'government', 'private', 'ofw', 'retired', 'unemployed', 'student', 'homemaker']} />
                                 <Field label="Employer Name" value={form.employer_name} onChange={v => set('employer_name', v)} />
@@ -132,7 +132,7 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
 
                     {currentStep === 'login' && !isEdit && (
                         <div className="space-y-4">
-                            <h3 className="font-semibold text-slate-900 dark:text-white">Login Credentials</h3>
+                            <h3 className="font-semibold text-gray-900">Login Credentials</h3>
                             <div className="grid grid-cols-2 gap-4">
                                 <Field label="Password" type="password" value={form.password} onChange={v => set('password', v)} required />
                                 <Field label="Confirm Password" type="password" value={form.password_confirmation} onChange={v => set('password_confirmation', v)} required />
@@ -143,16 +143,16 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
                     {currentStep === 'beneficiaries' && (
                         <div className="space-y-4">
                             <div className="flex items-center justify-between">
-                                <h3 className="font-semibold text-slate-900 dark:text-white">Beneficiaries</h3>
+                                <h3 className="font-semibold text-gray-900">Beneficiaries</h3>
                                 <button type="button" onClick={() => set('beneficiaries', [...form.beneficiaries, { first_name: '', last_name: '', relationship: '' }])} className="text-sm text-emerald-600 hover:text-emerald-700"><i className="fas fa-plus mr-1"></i> Add</button>
                             </div>
-                            {form.beneficiaries.length === 0 && <p className="text-sm text-slate-500">No beneficiaries added.</p>}
+                            {form.beneficiaries.length === 0 && <p className="text-sm text-gray-500">No beneficiaries added.</p>}
                             {form.beneficiaries.map((b: any, i: number) => (
-                                <div key={i} className="flex items-end gap-2 rounded-lg border border-slate-200 p-3 dark:border-slate-600">
+                                <div key={i} className="flex items-end gap-2 rounded-lg border border-gray-200 p-3">
                                     <div className="flex-1 grid grid-cols-3 gap-2">
-                                        <input placeholder="First Name" value={b.first_name} onChange={e => { const list = [...form.beneficiaries]; list[i].first_name = e.target.value; set('beneficiaries', list); }} className="rounded border border-slate-200 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700" />
-                                        <input placeholder="Last Name" value={b.last_name} onChange={e => { const list = [...form.beneficiaries]; list[i].last_name = e.target.value; set('beneficiaries', list); }} className="rounded border border-slate-200 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700" />
-                                        <input placeholder="Relationship" value={b.relationship} onChange={e => { const list = [...form.beneficiaries]; list[i].relationship = e.target.value; set('beneficiaries', list); }} className="rounded border border-slate-200 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700" />
+                                        <input placeholder="First Name" value={b.first_name} onChange={e => { const list = [...form.beneficiaries]; list[i].first_name = e.target.value; set('beneficiaries', list); }} className="public-input text-sm" />
+                                        <input placeholder="Last Name" value={b.last_name} onChange={e => { const list = [...form.beneficiaries]; list[i].last_name = e.target.value; set('beneficiaries', list); }} className="public-input text-sm" />
+                                        <input placeholder="Relationship" value={b.relationship} onChange={e => { const list = [...form.beneficiaries]; list[i].relationship = e.target.value; set('beneficiaries', list); }} className="public-input text-sm" />
                                     </div>
                                     <button type="button" onClick={() => { const list = [...form.beneficiaries]; list.splice(i, 1); set('beneficiaries', list); }} className="text-red-400 hover:text-red-600"><i className="fas fa-times"></i></button>
                                 </div>
@@ -162,7 +162,7 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
 
                     {currentStep === 'review' && (
                         <div className="space-y-4">
-                            <h3 className="font-semibold text-slate-900 dark:text-white">Review</h3>
+                            <h3 className="font-semibold text-gray-900">Review</h3>
                             <div className="grid grid-cols-2 gap-4">
                                 <Info label="Name" value={`${form.first_name} ${form.last_name}`} />
                                 <Info label="Email" value={form.email} />
@@ -171,16 +171,16 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
                                 <Info label="Civil Status" value={form.civil_status} />
                                 <Info label="Birth Date" value={form.birth_date} />
                                 <Info label="Address" value={`${form.street}, ${form.barangay}, ${form.city}, ${form.province}`} />
-                                <Info label="Employment" value={form.employment_type || '—'} />
+                                <Info label="Employment" value={form.employment_type || '\u2014'} />
                             </div>
                         </div>
                     )}
                 </div>
 
                 {/* Footer */}
-                <div className="sticky bottom-0 border-t border-slate-200 bg-white px-6 py-4 dark:border-slate-700 dark:bg-slate-800">
+                <div className="sticky bottom-0 border-t border-gray-200 bg-white px-6 py-4">
                     <div className="flex justify-between">
-                        <button type="button" onClick={() => step > 0 ? setStep(step - 1) : onClose()} className="rounded-lg border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50 dark:border-slate-600">
+                        <button type="button" onClick={() => step > 0 ? setStep(step - 1) : onClose()} className="rounded-lg border border-gray-200 px-4 py-2 text-sm hover:bg-gray-50">
                             {step === 0 ? 'Cancel' : 'Back'}
                         </button>
                         <div className="flex gap-2">
@@ -202,8 +202,8 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
 function Field({ label, value, onChange, type = 'text', required }: { label: string; value: any; onChange: (v: any) => void; type?: string; required?: boolean }) {
     return (
         <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
-            <input type={type} value={value || ''} onChange={e => onChange(e.target.value)} required={required} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700" />
+            <label className="mb-1 block text-sm font-medium text-gray-700">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
+            <input type={type} value={value || ''} onChange={e => onChange(e.target.value)} required={required} className="public-input py-2 text-sm" />
         </div>
     );
 }
@@ -211,8 +211,8 @@ function Field({ label, value, onChange, type = 'text', required }: { label: str
 function Select({ label, value, onChange, options, required }: { label: string; value: any; onChange: (v: any) => void; options: string[]; required?: boolean }) {
     return (
         <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
-            <select value={value || ''} onChange={e => onChange(e.target.value)} required={required} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700">
+            <label className="mb-1 block text-sm font-medium text-gray-700">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
+            <select value={value || ''} onChange={e => onChange(e.target.value)} required={required} className="public-input py-2 text-sm">
                 <option value="">Select...</option>
                 {options.map(o => <option key={o} value={o}>{o}</option>)}
             </select>
@@ -222,9 +222,9 @@ function Select({ label, value, onChange, options, required }: { label: string; 
 
 function Info({ label, value }: { label: string; value: string }) {
     return (
-        <div className="rounded-lg border border-slate-100 px-3 py-2 dark:border-slate-700">
-            <p className="text-xs text-slate-500">{label}</p>
-            <p className="text-sm font-medium text-slate-900 dark:text-white">{value || '—'}</p>
+        <div className="rounded-lg border border-gray-100 px-3 py-2">
+            <p className="text-xs text-gray-500">{label}</p>
+            <p className="text-sm font-medium text-gray-900">{value || '\u2014'}</p>
         </div>
     );
 }

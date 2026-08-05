@@ -41,7 +41,7 @@ export default function ProfilePage() {
         return (
             <div className="space-y-4">
                 {[...Array(3)].map((_, i) => (
-                    <div key={i} className="h-32 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800" />
+                    <div key={i} className="h-32 animate-pulse rounded-xl bg-gray-100" />
                 ))}
             </div>
         );
@@ -53,26 +53,38 @@ export default function ProfilePage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">My Profile</h1>
-                <button
-                    onClick={() => setShowEditModal(true)}
-                    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-                >
-                    <i className="fas fa-edit mr-1"></i> Edit Profile
-                </button>
+            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                <div className="h-20 bg-gradient-to-r from-emerald-500 to-cyan-600"></div>
+                <div className="px-6 pb-6">
+                    <div className="flex items-end gap-4 -mt-8">
+                        <div className="h-16 w-16 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-2xl font-bold text-white ring-4 ring-white shadow">
+                            {personal_data?.first_name?.charAt(0)}{personal_data?.last_name?.charAt(0)}
+                        </div>
+                        <div className="flex-1">
+                            <h2 className="text-xl font-bold text-gray-900">
+                                {personal_data?.first_name} {personal_data?.last_name}
+                            </h2>
+                            <p className="text-sm text-gray-500">{user.email}</p>
+                        </div>
+                        <button
+                            onClick={() => setShowEditModal(true)}
+                            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+                        >
+                            <i className="fas fa-edit mr-1"></i> Edit Personal Info
+                        </button>
+                    </div>
+                </div>
             </div>
 
-            {/* Tabs */}
-            <div className="flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-700">
+            <div className="flex gap-1 overflow-x-auto rounded-xl border border-gray-200 bg-white p-1 shadow-sm">
                 {TABS.map(tab => (
                     <button
                         key={tab.key}
                         onClick={() => setActiveTab(tab.key)}
-                        className={`flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                        className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
                             activeTab === tab.key
-                                ? 'border-emerald-600 text-emerald-600'
-                                : 'border-transparent text-slate-500 hover:text-slate-700'
+                                ? 'bg-emerald-600 text-white shadow'
+                                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                         }`}
                     >
                         <i className={tab.icon}></i>
@@ -81,86 +93,77 @@ export default function ProfilePage() {
                 ))}
             </div>
 
-            {/* Tab Content */}
-            <div className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
                 {activeTab === 'overview' && (
                     <div className="space-y-6">
-                        <div className="flex items-center gap-4">
-                            <div className="h-16 w-16 rounded-full bg-emerald-600 flex items-center justify-center text-2xl font-bold text-white">
-                                {personal_data?.first_name?.charAt(0)}{personal_data?.last_name?.charAt(0)}
-                            </div>
-                            <div>
-                                <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-                                    {personal_data?.first_name} {personal_data?.last_name}
-                                </h2>
-                                <p className="text-sm text-slate-500">{user.email}</p>
-                                <p className="text-xs text-slate-400">{user.user_number}</p>
-                            </div>
-                        </div>
                         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                            <InfoCard label="Role" value={user.primary_role} />
-                            <InfoCard label="Status" value={user.account_status} />
-                            <InfoCard label="Gender" value={personal_data?.gender || '—'} />
-                            <InfoCard label="Civil Status" value={personal_data?.civil_status || '—'} />
+                            <InfoCard label="Member ID" value={user.user_number || '\u2014'} />
+                            <StatChip label="Role" value={user.primary_role} color="emerald" />
+                            <StatChip label="Status" value={user.account_status} color="emerald" />
+                            <InfoCard label="Gender" value={personal_data?.gender || '\u2014'} />
+                            <InfoCard label="Civil Status" value={personal_data?.civil_status || '\u2014'} />
+                            <InfoCard label="Birth Date" value={personal_data?.birth_date || '\u2014'} />
+                            <StatChip label="Active Loans" value={String(profile.active_loans_count || 0)} color="amber" />
+                            <StatChip label="Beneficiaries" value={String(beneficiaries?.length || 0)} color="cyan" />
                         </div>
                     </div>
                 )}
 
                 {activeTab === 'contact' && (
                     <div className="space-y-4">
-                        <h3 className="font-semibold text-slate-900 dark:text-white">Contact Information</h3>
+                        <h3 className="font-semibold text-gray-900">Contact Information</h3>
                         <div className="grid grid-cols-2 gap-4">
-                            <InfoCard label="Phone" value={contact?.phone_no || '—'} />
+                            <InfoCard label="Phone" value={contact?.phone_no || '\u2014'} />
                             <InfoCard label="Email" value={contact?.email || user.email} />
-                            <InfoCard label="Facebook" value={contact?.facebook || '—'} />
+                            <InfoCard label="Facebook" value={contact?.facebook || '\u2014'} />
                         </div>
-                        <h3 className="mt-6 font-semibold text-slate-900 dark:text-white">Address</h3>
+                        <h3 className="mt-6 font-semibold text-gray-900">Address</h3>
                         <div className="grid grid-cols-2 gap-4">
-                            <InfoCard label="Country" value={address?.country || '—'} />
-                            <InfoCard label="Province" value={address?.province || '—'} />
-                            <InfoCard label="City/Municipality" value={address?.city_municipality || '—'} />
-                            <InfoCard label="Barangay" value={address?.barangay || '—'} />
-                            <InfoCard label="Street" value={address?.street || '—'} />
-                            <InfoCard label="ZIP Code" value={address?.zip_code || '—'} />
+                            <InfoCard label="Country" value={address?.country || '\u2014'} />
+                            <InfoCard label="Province" value={address?.province || '\u2014'} />
+                            <InfoCard label="City/Municipality" value={address?.city_municipality || '\u2014'} />
+                            <InfoCard label="Barangay" value={address?.barangay || '\u2014'} />
+                            <InfoCard label="Street" value={address?.street || '\u2014'} />
+                            <InfoCard label="ZIP Code" value={address?.zip_code || '\u2014'} />
                         </div>
                     </div>
                 )}
 
                 {activeTab === 'employment' && (
                     <div className="space-y-4">
-                        <h3 className="font-semibold text-slate-900 dark:text-white">Employment Information</h3>
-                        <p className="text-sm text-slate-500">Employment details will be displayed here.</p>
+                        <h3 className="font-semibold text-gray-900">Employment Information</h3>
+                        <p className="text-sm text-gray-500">Employment details will be displayed here.</p>
                     </div>
                 )}
 
                 {activeTab === 'financial' && (
                     <div className="space-y-6">
-                        <h3 className="font-semibold text-slate-900 dark:text-white">Accounts</h3>
+                        <h3 className="font-semibold text-gray-900">Accounts</h3>
                         <div className="grid gap-4 md:grid-cols-2">
                             {accounts.map(a => (
-                                <div key={a.id} className="rounded-lg border border-slate-200 p-4 dark:border-slate-600">
-                                    <p className="text-sm text-slate-500">{a.account_type}</p>
-                                    <p className="text-lg font-bold text-slate-900 dark:text-white">₱{Number(a.balance).toLocaleString()}</p>
-                                    <p className="text-xs text-slate-400">{a.account_number}</p>
+                                <div key={a.id} className="rounded-xl border border-gray-200 p-4 shadow-sm">
+                                    <p className="text-sm text-gray-500">{a.account_type}</p>
+                                    <p className="text-lg font-bold text-gray-900">&#8369;{Number(a.balance).toLocaleString()}</p>
+                                    <p className="text-xs text-gray-400">{a.account_number}</p>
                                 </div>
                             ))}
                         </div>
-                        <h3 className="font-semibold text-slate-900 dark:text-white">Active Loans: {profile.active_loans_count}</h3>
+                        <h3 className="font-semibold text-gray-900">Active Loans: {profile.active_loans_count}</h3>
                     </div>
                 )}
 
                 {activeTab === 'beneficiaries' && (
                     <div className="space-y-4">
-                        <h3 className="font-semibold text-slate-900 dark:text-white">Beneficiaries</h3>
+                        <h3 className="font-semibold text-gray-900">Beneficiaries</h3>
                         {beneficiaries.length === 0 ? (
-                            <p className="text-sm text-slate-500">No beneficiaries listed.</p>
+                            <p className="text-sm text-gray-500">No beneficiaries listed.</p>
                         ) : (
                             <div className="space-y-3">
                                 {beneficiaries.map(b => (
-                                    <div key={b.id} className="flex items-center justify-between rounded-lg border border-slate-200 p-3 dark:border-slate-600">
+                                    <div key={b.id} className="flex items-center justify-between rounded-xl border border-gray-200 p-3">
                                         <div>
-                                            <p className="font-medium text-slate-900 dark:text-white">{b.name}</p>
-                                            <p className="text-xs text-slate-500">{b.relationship}</p>
+                                            <p className="font-medium text-gray-900">{b.name}</p>
+                                            <p className="text-xs text-gray-500">{b.relationship}</p>
                                         </div>
                                         <span className="text-sm font-medium text-emerald-600">{b.percentage}%</span>
                                     </div>
@@ -172,14 +175,14 @@ export default function ProfilePage() {
 
                 {activeTab === 'security' && (
                     <div className="space-y-6">
-                        <h3 className="font-semibold text-slate-900 dark:text-white">Recent Activity</h3>
+                        <h3 className="font-semibold text-gray-900">Recent Activity</h3>
                         <div className="space-y-2">
                             {recent_logs.map(log => (
-                                <div key={log.id} className="flex items-center gap-3 rounded-lg border border-slate-100 p-3 dark:border-slate-700">
-                                    <i className="fas fa-clock text-slate-400"></i>
+                                <div key={log.id} className="flex items-center gap-3 rounded-xl border border-gray-100 p-3">
+                                    <i className="fas fa-clock text-gray-400"></i>
                                     <div>
-                                        <p className="text-sm text-slate-700 dark:text-slate-300">{log.description}</p>
-                                        <p className="text-xs text-slate-400">{new Date(log.created_at).toLocaleString()}</p>
+                                        <p className="text-sm text-gray-700">{log.description}</p>
+                                        <p className="text-xs text-gray-400">{new Date(log.created_at).toLocaleString()}</p>
                                     </div>
                                 </div>
                             ))}
@@ -188,7 +191,6 @@ export default function ProfilePage() {
                 )}
             </div>
 
-            {/* Edit Modal */}
             {showEditModal && (
                 <EditProfileModal
                     profile={profile}
@@ -204,8 +206,22 @@ export default function ProfilePage() {
 function InfoCard({ label, value }: { label: string; value: string }) {
     return (
         <div>
-            <p className="text-xs font-medium text-slate-500">{label}</p>
-            <p className="text-sm font-medium text-slate-900 dark:text-white">{value}</p>
+            <p className="text-xs font-medium text-gray-500">{label}</p>
+            <p className="text-sm font-medium text-gray-900">{value}</p>
+        </div>
+    );
+}
+
+function StatChip({ label, value, color }: { label: string; value: string; color: 'emerald' | 'cyan' | 'amber' }) {
+    const colors = {
+        emerald: 'bg-emerald-50 text-emerald-700',
+        cyan: 'bg-cyan-50 text-cyan-700',
+        amber: 'bg-amber-50 text-amber-700',
+    };
+    return (
+        <div className={`rounded-xl ${colors[color]} p-3 text-center`}>
+            <p className="text-xs font-medium opacity-75">{label}</p>
+            <p className="text-lg font-bold">{value}</p>
         </div>
     );
 }
@@ -228,10 +244,10 @@ function EditProfileModal({ profile, onClose, onSave, isSaving }: {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-            <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-800" onClick={e => e.stopPropagation()}>
+            <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
                 <div className="mb-4 flex items-center justify-between">
-                    <h2 className="text-lg font-bold text-slate-900 dark:text-white">Edit Profile</h2>
-                    <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><i className="fas fa-times"></i></button>
+                    <h2 className="text-lg font-bold text-gray-900">Edit Profile</h2>
+                    <button onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"><i className="fas fa-times"></i></button>
                 </div>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
@@ -243,7 +259,7 @@ function EditProfileModal({ profile, onClose, onSave, isSaving }: {
                         <Field label="Facebook" name="facebook" defaultValue={cont?.facebook} />
                     </div>
                     <div className="flex justify-end gap-3">
-                        <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50">Cancel</button>
+                        <button type="button" onClick={onClose} className="rounded-lg border border-gray-200 px-4 py-2 text-sm hover:bg-gray-50">Cancel</button>
                         <button type="submit" disabled={isSaving} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
                             {isSaving ? 'Saving...' : 'Save Changes'}
                         </button>
@@ -257,9 +273,9 @@ function EditProfileModal({ profile, onClose, onSave, isSaving }: {
 function Field({ label, name, defaultValue, required }: { label: string; name: string; defaultValue?: string; required?: boolean }) {
     return (
         <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">{label}</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700">{label}</label>
             <input type="text" name={name} defaultValue={defaultValue || ''} required={required}
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700" />
+                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm" />
         </div>
     );
 }

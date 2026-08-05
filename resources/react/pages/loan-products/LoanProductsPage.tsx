@@ -22,6 +22,7 @@ export default function LoanProductsPage() {
     const [showModal, setShowModal] = useState(false);
     const [editing, setEditing] = useState<LoanProduct | null>(null);
     const [form, setForm] = useState<Partial<LoanProduct>>(emptyProduct);
+    const [expandedId, setExpandedId] = useState<number | null>(null);
     const queryClient = useQueryClient();
     const { addToast } = useToast();
 
@@ -58,6 +59,9 @@ export default function LoanProductsPage() {
     const openEdit = (p: LoanProduct) => { setEditing(p); setForm(p); setShowModal(true); };
     const openCreate = () => { setEditing(null); setForm(emptyProduct); setShowModal(true); };
 
+    const activeCount = products.filter(p => p.is_active).length;
+    const typeCount = [...new Set(products.map(p => p.base_type))].length;
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         saveMutation.mutate(form);
@@ -65,39 +69,85 @@ export default function LoanProductsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Loan Products</h1>
-                {canManage && <button onClick={openCreate} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"><i className="fas fa-plus mr-1"></i> Add Product</button>}
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="flex items-center justify-between">
+                    <h1 className="text-2xl font-bold text-gray-900">Loan Products</h1>
+                    <div className="flex items-center gap-3">
+                        <a href="/dashboard/settings" className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
+                            <i className="fas fa-arrow-left mr-1"></i> Back to Settings
+                        </a>
+                        {canManage && (
+                            <button onClick={openCreate} className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700">
+                                <i className="fas fa-plus mr-1"></i> Add Loan Product
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="rounded-xl border border-gray-200 bg-green-50 p-4 shadow-sm">
+                    <p className="text-sm font-medium text-green-600">Active Products</p>
+                    <p className="mt-1 text-2xl font-bold text-green-700">{activeCount}</p>
+                </div>
+                <div className="rounded-xl border border-gray-200 bg-cyan-50 p-4 shadow-sm">
+                    <p className="text-sm font-medium text-cyan-600">Product Types</p>
+                    <p className="mt-1 text-2xl font-bold text-cyan-700">{typeCount}</p>
+                </div>
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 shadow-sm">
+                    <p className="text-sm font-medium text-gray-600">Total Products</p>
+                    <p className="mt-1 text-2xl font-bold text-gray-700">{products.length}</p>
+                </div>
             </div>
 
             {isLoading ? (
-                <div className="space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="h-20 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800" />)}</div>
+                <div className="space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="h-20 animate-pulse rounded-xl bg-gray-100" />)}</div>
             ) : (
                 <div className="space-y-3">
                     {products.map(p => (
-                        <div key={p.id} className={`rounded-xl border bg-white p-4 dark:bg-slate-800 ${p.is_active ? 'border-slate-200 dark:border-slate-700' : 'border-slate-200 opacity-60 dark:border-slate-700'}`}>
+                        <div key={p.id} className={`rounded-xl border bg-white p-4 shadow-sm transition-shadow hover:shadow ${p.is_active ? 'border-gray-200' : 'border-gray-200 opacity-60'}`}>
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100">
                                         <i className="fas fa-wallet text-emerald-600"></i>
                                     </div>
                                     <div>
-                                        <h3 className="font-semibold text-slate-900 dark:text-white">{p.name}</h3>
-                                        <p className="text-xs text-slate-500">{p.code} · {p.base_type} · {p.interest_rate}% interest · Max ₱{Number(p.max_amount).toLocaleString()} · {p.max_term}mo</p>
+                                        <h3 className="font-semibold text-gray-900">{p.name}</h3>
+                                        <p className="text-xs text-gray-500">{p.code} &middot; {p.base_type} &middot; {p.interest_rate}% interest &middot; Max &#8369;{Number(p.max_amount).toLocaleString()} &middot; {p.max_term}mo</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <button onClick={() => toggleMutation.mutate(p.id)} className={`rounded-full px-3 py-1 text-xs font-medium ${p.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                                    <button
+                                        onClick={() => toggleMutation.mutate(p.id)}
+                                        className={`rounded-full px-3 py-1 text-xs font-medium ${p.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}
+                                    >
                                         {p.is_active ? 'Active' : 'Inactive'}
+                                    </button>
+                                    <button onClick={() => setExpandedId(expandedId === p.id ? null : p.id)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100">
+                                        <i className={`fas fa-chevron-${expandedId === p.id ? 'up' : 'down'} text-xs`}></i>
                                     </button>
                                     {canManage && (
                                         <>
-                                            <button onClick={() => openEdit(p)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"><i className="fas fa-edit"></i></button>
-                                            <button onClick={() => { if (confirm('Delete this product?')) deleteMutation.mutate(p.id); }} className="rounded-lg p-2 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"><i className="fas fa-trash"></i></button>
+                                            <button onClick={() => openEdit(p)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100"><i className="fas fa-edit"></i></button>
+                                            <button onClick={() => { if (confirm('Delete this product?')) deleteMutation.mutate(p.id); }} className="rounded-lg p-2 text-red-400 hover:bg-red-50"><i className="fas fa-trash"></i></button>
                                         </>
                                     )}
                                 </div>
                             </div>
+                            {expandedId === p.id && (
+                                <div className="mt-4 grid grid-cols-2 gap-3 border-t border-gray-100 pt-4 text-sm sm:grid-cols-4">
+                                    <div><span className="text-gray-500">Min Share Capital</span><p className="font-medium text-gray-900">&#8369;{Number(p.minimum_share_capital).toLocaleString()}</p></div>
+                                    <div><span className="text-gray-500">Min Membership</span><p className="font-medium text-gray-900">{p.minimum_membership_years} years</p></div>
+                                    <div><span className="text-gray-500">Co-Makers</span><p className="font-medium text-gray-900">{p.required_co_makers}</p></div>
+                                    <div><span className="text-gray-500">Sort Order</span><p className="font-medium text-gray-900">{p.sort_order}</p></div>
+                                    <div className="col-span-2"><span className="text-gray-500">Description</span><p className="font-medium text-gray-900">{p.description || '\u2014'}</p></div>
+                                    <div className="col-span-2 flex flex-wrap gap-2">
+                                        {p.requires_no_existing_loan && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">No Existing Loan</span>}
+                                        {p.requires_interview && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Interview Required</span>}
+                                        {p.requires_special_eligibility && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Special Eligibility</span>}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     ))}
                 </div>
@@ -105,8 +155,8 @@ export default function LoanProductsPage() {
 
             {showModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowModal(false)}>
-                    <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-800" onClick={e => e.stopPropagation()}>
-                        <h2 className="mb-4 text-lg font-bold text-slate-900 dark:text-white">{editing ? 'Edit' : 'New'} Loan Product</h2>
+                    <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+                        <h2 className="mb-4 text-lg font-bold text-gray-900">{editing ? 'Edit' : 'New'} Loan Product</h2>
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <Field label="Code" value={form.code} onChange={v => setForm(f => ({ ...f, code: v }))} required />
@@ -122,8 +172,8 @@ export default function LoanProductsPage() {
                                 <Field label="Required Co-Makers" value={form.required_co_makers} onChange={v => setForm(f => ({ ...f, required_co_makers: Number(v) }))} type="number" />
                             </div>
                             <div>
-                                <label className="mb-1 block text-sm font-medium text-slate-700">Description</label>
-                                <textarea value={form.description || ''} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700" />
+                                <label className="mb-1 block text-sm font-medium text-gray-700">Description</label>
+                                <textarea value={form.description || ''} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
                             </div>
                             <div className="flex flex-wrap gap-4">
                                 <Toggle label="Active" checked={form.is_active} onChange={v => setForm(f => ({ ...f, is_active: v }))} />
@@ -132,7 +182,7 @@ export default function LoanProductsPage() {
                                 <Toggle label="Requires Special Eligibility" checked={form.requires_special_eligibility} onChange={v => setForm(f => ({ ...f, requires_special_eligibility: v }))} />
                             </div>
                             <div className="flex justify-end gap-3">
-                                <button type="button" onClick={() => setShowModal(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm">Cancel</button>
+                                <button type="button" onClick={() => setShowModal(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
                                 <button type="submit" disabled={saveMutation.isPending} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
                                     {saveMutation.isPending ? 'Saving...' : 'Save'}
                                 </button>
@@ -147,21 +197,21 @@ export default function LoanProductsPage() {
 
 function Field({ label, value, onChange, type = 'text', options, required }: { label: string; value: any; onChange: (v: any) => void; type?: string; options?: string[]; required?: boolean }) {
     if (type === 'select') return (
-        <div><label className="mb-1 block text-sm font-medium text-slate-700">{label}</label>
-            <select value={value} onChange={e => onChange(e.target.value)} required={required} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700">
+        <div><label className="mb-1 block text-sm font-medium text-gray-700">{label}</label>
+            <select value={value} onChange={e => onChange(e.target.value)} required={required} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm">
                 {options?.map(o => <option key={o} value={o}>{o}</option>)}
             </select></div>
     );
     return (
-        <div><label className="mb-1 block text-sm font-medium text-slate-700">{label}</label>
-            <input type={type} value={value ?? ''} onChange={e => onChange(type === 'number' ? Number(e.target.value) : e.target.value)} required={required} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700" /></div>
+        <div><label className="mb-1 block text-sm font-medium text-gray-700">{label}</label>
+            <input type={type} value={value ?? ''} onChange={e => onChange(type === 'number' ? Number(e.target.value) : e.target.value)} required={required} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" /></div>
     );
 }
 
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
     return (
-        <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-            <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" />
             {label}
         </label>
     );

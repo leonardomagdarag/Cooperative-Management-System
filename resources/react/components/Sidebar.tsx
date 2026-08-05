@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router';
+import { NavLink } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { useSidebar } from '../contexts/SidebarContext';
 
@@ -10,24 +10,23 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-    { label: 'Dashboard', path: '/dashboard', icon: 'fas fa-th-large' },
+    { label: 'Dashboard', path: '/dashboard', icon: 'fas fa-tachometer-alt' },
     { label: 'Members', path: '/dashboard/members', icon: 'fas fa-users', permission: 'members.view' },
     { label: 'Officers', path: '/dashboard/officers', icon: 'fas fa-user-tie', permission: 'officers.view' },
-    { label: 'Services', path: '/dashboard/services', icon: 'fas fa-hand-holding-usd', permission: 'services.view' },
-    { label: 'Loans', path: '/dashboard/loans', icon: 'fas fa-file-invoice-dollar', permission: 'loans.view' },
+    { label: 'Services', path: '/dashboard/services', icon: 'fas fa-briefcase', permission: 'services.view' },
+    { label: 'Loans', path: '/dashboard/loans', icon: 'fas fa-hand-holding-usd', permission: 'loans.view' },
     { label: 'Ledger', path: '/dashboard/ledger', icon: 'fas fa-book', permission: 'transactions.view' },
-    { label: 'Reports', path: '/dashboard/reports', icon: 'fas fa-chart-bar', permission: 'reports.view' },
+    { label: 'History', path: '/dashboard/history', icon: 'fas fa-history' },
     { label: 'Announcements', path: '/dashboard/announcements', icon: 'fas fa-bullhorn', permission: 'announcements.view' },
     { label: 'Notifications', path: '/dashboard/notifications', icon: 'fas fa-bell' },
-    { label: 'History', path: '/dashboard/history', icon: 'fas fa-history' },
-    { label: 'Logs', path: '/dashboard/logs', icon: 'fas fa-file-alt', permission: 'logs.view' },
+    { label: 'Reports', path: '/dashboard/reports', icon: 'fas fa-chart-bar', permission: 'reports.view' },
+    { label: 'Logs', path: '/dashboard/logs', icon: 'fas fa-clipboard-list', permission: 'logs.view' },
     { label: 'Settings', path: '/dashboard/settings', icon: 'fas fa-cog' },
 ];
 
 export default function Sidebar() {
-    const { user } = useAuth();
+    const { user, logout } = useAuth();
     const { isOpen, isMobileOpen, closeMobile } = useSidebar();
-    const location = useLocation();
 
     const filteredItems = NAV_ITEMS.filter(item => {
         if (!item.permission) return true;
@@ -36,60 +35,58 @@ export default function Sidebar() {
 
     return (
         <aside
-            className={`fixed inset-y-0 left-0 z-40 flex flex-col bg-slate-900 text-white transition-all duration-300
-                ${isOpen ? 'w-64' : 'w-20'}
+            className={`fixed inset-y-0 left-0 z-40 flex flex-col border-r border-gray-200 bg-white shadow-lg transition-all duration-300 group
+                ${isOpen ? 'w-64' : 'w-20 lg:w-64 hover:w-64'}
                 ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
                 lg:relative lg:translate-x-0`}
         >
-            {/* Logo */}
-            <div className="flex h-16 items-center justify-center border-b border-slate-700 px-4">
-                {isOpen ? (
-                    <div className="flex items-center gap-3">
-                        <img src="/images/Logo.png" alt="Logo" className="h-8 w-8 rounded-full" />
-                        <span className="text-lg font-bold">SCC Admin</span>
+            <div className="flex items-center justify-center border-b border-gray-200 px-4 py-4 shrink-0" style={{ height: '4rem' }}>
+                <div className="flex items-center gap-3">
+                    <div className="rounded-full overflow-hidden flex items-center justify-center w-10 h-10 shrink-0">
+                        <img src="/images/Logo.png" alt="Settlers Logo" className="w-full h-full object-cover" />
                     </div>
-                ) : (
-                    <img src="/images/Logo.png" alt="Logo" className="h-8 w-8 rounded-full" />
-                )}
+                    <div className={isOpen ? 'block' : 'hidden lg:block group-hover:block'}>
+                        <h1 className="font-bold text-lg bg-linear-to-r from-emerald-600 to-cyan-600 bg-clip-text text-transparent whitespace-nowrap">Settlers</h1>
+                        <p className="text-xs text-gray-600 whitespace-nowrap">Credit Cooperative</p>
+                    </div>
+                </div>
             </div>
 
-            {/* Navigation */}
             <nav className="flex-1 overflow-y-auto py-4">
-                <ul className="space-y-1 px-2">
+                <ul className="space-y-1 px-3">
                     {filteredItems.map(item => (
                         <li key={item.path}>
                             <NavLink
                                 to={item.path}
                                 onClick={closeMobile}
                                 className={({ isActive }) =>
-                                    `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                                    `flex items-center justify-center lg:justify-start gap-3 rounded-lg px-4 py-3 transition-all duration-200 ${
                                         isActive
-                                            ? 'bg-emerald-600 text-white'
-                                            : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                                            ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-md'
+                                            : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-600'
                                     }`
                                 }
                             >
-                                <i className={`${item.icon} w-5 text-center`}></i>
-                                {isOpen && <span>{item.label}</span>}
+                                <i className={`${item.icon} text-lg shrink-0`}></i>
+                                <span className={isOpen ? 'flex' : 'hidden lg:flex group-hover:flex'}>
+                                    <span className="flex-1 text-left font-medium whitespace-nowrap truncate">{item.label}</span>
+                                </span>
                             </NavLink>
                         </li>
                     ))}
                 </ul>
             </nav>
 
-            {/* User info */}
-            <div className="border-t border-slate-700 p-3">
-                <div className={`flex items-center gap-3 ${isOpen ? '' : 'justify-center'}`}>
-                    <div className="h-8 w-8 rounded-full bg-emerald-600 flex items-center justify-center text-xs font-bold">
-                        {user?.name?.charAt(0)}
-                    </div>
-                    {isOpen && (
-                        <div className="min-w-0">
-                            <p className="truncate text-sm font-medium">{user?.name}</p>
-                            <p className="truncate text-xs text-slate-400 capitalize">{user?.primary_role}</p>
-                        </div>
-                    )}
-                </div>
+            <div className="border-t border-gray-200 p-4">
+                <button
+                    onClick={logout}
+                    className="w-full flex items-center justify-center lg:justify-start gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
+                >
+                    <i className="fas fa-sign-out-alt text-lg"></i>
+                    <span className={isOpen ? 'flex' : 'hidden lg:flex group-hover:flex'}>
+                        <span className="flex-1 text-left font-medium whitespace-nowrap">Logout</span>
+                    </span>
+                </button>
             </div>
         </aside>
     );

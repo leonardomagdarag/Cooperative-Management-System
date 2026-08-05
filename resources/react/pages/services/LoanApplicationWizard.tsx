@@ -23,69 +23,68 @@ export default function LoanApplicationWizard({ onComplete }: { onComplete: () =
     };
 
     return (
-        <div className="space-y-6">
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Loan Application</h2>
-            <div className="flex gap-1">{[1, 2, 3].map(s => <div key={s} className={`h-1 flex-1 rounded-full ${s <= step ? 'bg-blue-500' : 'bg-slate-200 dark:bg-slate-700'}`} />)}</div>
+        <div>
+            <div className="mb-4 flex gap-1">{[1, 2, 3].map(s => <div key={s} className={`h-1.5 flex-1 rounded-full ${s <= step ? 'bg-blue-500' : 'bg-gray-200'}`} />)}</div>
 
             {step === 1 && (
                 <div className="space-y-4">
-                    <h3 className="font-medium text-slate-700 dark:text-slate-300">Select Loan Product</h3>
+                    <h3 className="font-medium text-gray-700">Select Loan Product</h3>
                     <div className="space-y-2">
                         {Object.entries(products).map(([code, p]: [string, any]) => (
-                            <button key={code} onClick={() => selectProduct(code)} className={`w-full rounded-lg border p-4 text-left ${form.loan_product_code === code ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-200 dark:border-slate-600'}`}>
-                                <p className="font-medium text-slate-900 dark:text-white">{p.name}</p>
-                                <p className="text-xs text-slate-500">{p.interest_rate}% interest · Max ₱{Number(p.max_amount || 0).toLocaleString()} · {p.max_term}mo</p>
+                            <button key={code} onClick={() => selectProduct(code)} className={`w-full rounded-lg border p-4 text-left ${form.loan_product_code === code ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
+                                <p className="font-medium text-gray-900">{p.name}</p>
+                                <p className="text-xs text-gray-500">{p.interest_rate}% interest &middot; Max &#8369;{Number(p.max_amount || 0).toLocaleString()} &middot; {p.max_term}mo</p>
                             </button>
                         ))}
                     </div>
-                    <button onClick={() => setStep(2)} disabled={!form.loan_product_code} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">Next</button>
+                    <button onClick={() => setStep(2)} disabled={!form.loan_product_code} className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">Next</button>
                 </div>
             )}
 
             {step === 2 && (
                 <div className="space-y-4">
-                    <h3 className="font-medium text-slate-700 dark:text-slate-300">Loan Details</h3>
+                    <h3 className="font-medium text-gray-700">Loan Details</h3>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="mb-1 block text-sm font-medium text-slate-700">Amount</label>
-                            <input type="number" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700" />
+                            <label className="mb-1 block text-sm font-medium text-gray-700">Amount</label>
+                            <input type="number" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
                         </div>
                         <div>
-                            <label className="mb-1 block text-sm font-medium text-slate-700">Term (months)</label>
-                            <input type="number" value={form.term_months} onChange={e => setForm(f => ({ ...f, term_months: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700" />
+                            <label className="mb-1 block text-sm font-medium text-gray-700">Term (months)</label>
+                            <input type="number" value={form.term_months} onChange={e => setForm(f => ({ ...f, term_months: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
                         </div>
                         <div>
-                            <label className="mb-1 block text-sm font-medium text-slate-700">Payment Frequency</label>
-                            <select value={form.payment_frequency} onChange={e => setForm(f => ({ ...f, payment_frequency: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700">
+                            <label className="mb-1 block text-sm font-medium text-gray-700">Payment Frequency</label>
+                            <select value={form.payment_frequency} onChange={e => setForm(f => ({ ...f, payment_frequency: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm">
                                 <option value="weekly">Weekly</option><option value="bi-weekly">Bi-weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annually">Annually</option>
                             </select>
                         </div>
                     </div>
                     <div>
-                        <label className="mb-1 block text-sm font-medium text-slate-700">Purpose</label>
-                        <input type="text" value={form.purpose} onChange={e => setForm(f => ({ ...f, purpose: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700" placeholder="What is the loan for?" />
+                        <label className="mb-1 block text-sm font-medium text-gray-700">Purpose</label>
+                        <input type="text" value={form.purpose} onChange={e => setForm(f => ({ ...f, purpose: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" placeholder="What is the loan for?" />
                     </div>
                     <div className="flex gap-2">
-                        <button onClick={() => setStep(1)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm">Back</button>
-                        <button onClick={() => setStep(3)} disabled={!form.amount} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">Next</button>
+                        <button onClick={() => setStep(1)} className="flex-1 rounded-lg border border-gray-200 px-4 py-2 text-sm">Back</button>
+                        <button onClick={() => setStep(3)} disabled={!form.amount} className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">Next</button>
                     </div>
                 </div>
             )}
 
             {step === 3 && (
                 <div className="space-y-4">
-                    <h3 className="font-medium text-slate-700 dark:text-slate-300">Review Application</h3>
-                    <div className="rounded-lg bg-slate-50 p-4 dark:bg-slate-700">
+                    <h3 className="font-medium text-gray-700">Review Application</h3>
+                    <div className="rounded-lg bg-gray-50 p-4">
                         <div className="space-y-2">
-                            <div className="flex justify-between"><span className="text-sm text-slate-500">Product</span><span className="text-sm text-slate-900 dark:text-white">{(products as any)[form.loan_product_code]?.name}</span></div>
-                            <div className="flex justify-between"><span className="text-sm text-slate-500">Amount</span><span className="font-medium text-slate-900 dark:text-white">₱{Number(form.amount).toLocaleString()}</span></div>
-                            <div className="flex justify-between"><span className="text-sm text-slate-500">Term</span><span className="text-sm text-slate-900 dark:text-white">{form.term_months} months</span></div>
-                            <div className="flex justify-between"><span className="text-sm text-slate-500">Frequency</span><span className="text-sm capitalize text-slate-900 dark:text-white">{form.payment_frequency}</span></div>
+                            <div className="flex justify-between"><span className="text-sm text-gray-500">Product</span><span className="text-sm text-gray-900">{(products as any)[form.loan_product_code]?.name}</span></div>
+                            <div className="flex justify-between"><span className="text-sm text-gray-500">Amount</span><span className="font-medium text-gray-900">&#8369;{Number(form.amount).toLocaleString()}</span></div>
+                            <div className="flex justify-between"><span className="text-sm text-gray-500">Term</span><span className="text-sm text-gray-900">{form.term_months} months</span></div>
+                            <div className="flex justify-between"><span className="text-sm text-gray-500">Frequency</span><span className="text-sm capitalize text-gray-900">{form.payment_frequency}</span></div>
                         </div>
                     </div>
                     <div className="flex gap-2">
-                        <button onClick={() => setStep(2)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm">Back</button>
-                        <button onClick={() => submitMutation.mutate()} disabled={submitMutation.isPending} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                        <button onClick={() => setStep(2)} className="flex-1 rounded-lg border border-gray-200 px-4 py-2 text-sm">Back</button>
+                        <button onClick={() => submitMutation.mutate()} disabled={submitMutation.isPending} className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                             {submitMutation.isPending ? 'Submitting...' : 'Submit Application'}
                         </button>
                     </div>
