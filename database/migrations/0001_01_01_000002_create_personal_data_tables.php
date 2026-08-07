@@ -17,6 +17,10 @@ return new class extends Migration
             $table->string('barangay', 100)->nullable();
             $table->string('street', 255)->nullable();
             $table->string('zip_code', 20)->nullable();
+
+            $table->index('city_municipality');
+            $table->index('province');
+            $table->index('barangay');
         });
 
         Schema::create('contacts', function (Blueprint $table) {
@@ -26,6 +30,9 @@ return new class extends Migration
             $table->string('email', 255)->nullable()->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('facebook', 255)->nullable();
+
+            $table->index('phone_no');
+            $table->index('facebook');
         });
 
         Schema::create('employments', function (Blueprint $table) {
@@ -46,6 +53,13 @@ return new class extends Migration
             $table->string('sss', 64)->nullable();
             $table->string('philhealth', 64)->nullable();
             $table->string('barangay_id', 64)->nullable();
+            $table->string('national_id_photo', 500)->nullable();
+            $table->string('tin_photo', 500)->nullable();
+            $table->string('sss_photo', 500)->nullable();
+            $table->string('philhealth_photo', 500)->nullable();
+            $table->string('barangay_id_photo', 500)->nullable();
+            $table->string('proof_of_registration_path', 500)->nullable();
+            $table->string('other_document_path', 500)->nullable();
             $table->timestamps();
         });
 
@@ -72,12 +86,17 @@ return new class extends Migration
             $table->string('education', 255)->nullable();
             $table->enum('civil_status', ['single', 'married', 'widowed', 'separated'])->nullable();
             $table->string('religion', 64)->nullable();
+            $table->string('profile_picture', 500)->nullable();
             $table->foreignId('address_id')->nullable()->unique()->constrained('addresses');
             $table->foreignId('contact_id')->nullable()->unique()->constrained('contacts');
             $table->foreignId('employment_id')->nullable()->unique()->constrained('employments');
             $table->foreignId('member_id')->nullable()->unique()->constrained('member_ids');
             $table->timestamps();
             $table->softDeletes();
+
+            $table->index('first_name');
+            $table->index('last_name');
+            $table->index('mid_name');
         });
     }
 

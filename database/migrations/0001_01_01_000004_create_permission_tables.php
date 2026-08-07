@@ -6,9 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         $teams = config('permission.teams');
@@ -18,13 +15,9 @@ return new class extends Migration
         $pivotPermission = $columnNames['permission_pivot_key'] ?? 'permission_id';
 
         throw_if(empty($tableNames), 'Error: config/permission.php not loaded. Run [php artisan config:clear] and try again.');
-        throw_if($teams && empty($columnNames['team_foreign_key'] ?? null), 'Error: team_foreign_key on config/permission.php not loaded. Run [php artisan config:clear] and try again.');
 
-        /**
-         * See `docs/prerequisites.md` for suggested lengths on 'name' and 'guard_name' if "1071 Specified key was too long" errors are encountered.
-         */
         Schema::create($tableNames['permissions'], static function (Blueprint $table) {
-            $table->id(); // permission id
+            $table->id();
             $table->string('name');
             $table->string('guard_name');
             $table->timestamps();
@@ -32,12 +25,9 @@ return new class extends Migration
             $table->unique(['name', 'guard_name']);
         });
 
-        /**
-         * See `docs/prerequisites.md` for suggested lengths on 'name' and 'guard_name' if "1071 Specified key was too long" errors are encountered.
-         */
         Schema::create($tableNames['roles'], static function (Blueprint $table) use ($teams, $columnNames) {
-            $table->id(); // role id
-            if ($teams || config('permission.testing')) { // permission.testing is a fix for sqlite testing
+            $table->id();
+            if ($teams || config('permission.testing')) {
                 $table->unsignedBigInteger($columnNames['team_foreign_key'])->nullable();
                 $table->index($columnNames['team_foreign_key'], 'roles_team_foreign_key_index');
             }
@@ -53,13 +43,12 @@ return new class extends Migration
 
         Schema::create($tableNames['model_has_permissions'], static function (Blueprint $table) use ($tableNames, $columnNames, $pivotPermission, $teams) {
             $table->unsignedBigInteger($pivotPermission);
-
             $table->string('model_type');
             $table->unsignedBigInteger($columnNames['model_morph_key']);
             $table->index([$columnNames['model_morph_key'], 'model_type'], 'model_has_permissions_model_id_model_type_index');
 
             $table->foreign($pivotPermission)
-                ->references('id') // permission id
+                ->references('id')
                 ->on($tableNames['permissions'])
                 ->cascadeOnDelete();
             if ($teams) {
@@ -76,13 +65,12 @@ return new class extends Migration
 
         Schema::create($tableNames['model_has_roles'], static function (Blueprint $table) use ($tableNames, $columnNames, $pivotRole, $teams) {
             $table->unsignedBigInteger($pivotRole);
-
             $table->string('model_type');
             $table->unsignedBigInteger($columnNames['model_morph_key']);
             $table->index([$columnNames['model_morph_key'], 'model_type'], 'model_has_roles_model_id_model_type_index');
 
             $table->foreign($pivotRole)
-                ->references('id') // role id
+                ->references('id')
                 ->on($tableNames['roles'])
                 ->cascadeOnDelete();
             if ($teams) {
@@ -102,12 +90,12 @@ return new class extends Migration
             $table->unsignedBigInteger($pivotRole);
 
             $table->foreign($pivotPermission)
-                ->references('id') // permission id
+                ->references('id')
                 ->on($tableNames['permissions'])
                 ->cascadeOnDelete();
 
             $table->foreign($pivotRole)
-                ->references('id') // role id
+                ->references('id')
                 ->on($tableNames['roles'])
                 ->cascadeOnDelete();
 
@@ -117,17 +105,37 @@ return new class extends Migration
         app('cache')
             ->store(config('permission.cache.store') != 'default' ? config('permission.cache.store') : null)
             ->forget(config('permission.cache.key'));
+
+        Schema::create('role_permissions', function (Blueprint $table) {
+            $table->id();
+            $table->string('role');
+            $table->string('section');
+            $table->json('permissions')->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+
+            $table->unique(['role', 'section']);
+            $table->index('role');
+        });
+
+        Schema::create('officer_permission_overrides', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            $table->string('permission');
+            $table->string('effect', 16);
+            $table->timestamps();
+
+            $table->unique(['user_id', 'permission']);
+            $table->index(['user_id', 'effect']);
+        });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
+        Schema::dropIfExists('officer_permission_overrides');
+        Schema::dropIfExists('role_permissions');
+
         $tableNames = config('permission.table_names');
-
-        throw_if(empty($tableNames), 'Error: config/permission.php not found and defaults could not be merged. Please publish the package configuration before proceeding, or drop the tables manually.');
-
         Schema::dropIfExists($tableNames['role_has_permissions']);
         Schema::dropIfExists($tableNames['model_has_roles']);
         Schema::dropIfExists($tableNames['model_has_permissions']);
