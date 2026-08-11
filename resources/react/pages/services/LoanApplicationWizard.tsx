@@ -9,7 +9,7 @@ interface CoMaker { id: number; name: string; user_number: string }
 export default function LoanApplicationWizard({ onComplete, selectedMember, onDirtyChange }: { onComplete: () => void; selectedMember?: any; onDirtyChange?: (dirty: boolean) => void }) {
     const [step, setStep] = useState(1);
     const [form, setForm] = useState({
-        loan_product_code: '', amount: '', term_months: '6', payment_frequency: 'monthly', purpose: '',
+        loan_product_code: '', amount: '', term_months: '6', payment_frequency: 'monthly', purpose: '', interview_schedule: '',
     });
     const [coMakers, setCoMakers] = useState<CoMaker[]>([]);
     const [coMakerSearch, setCoMakerSearch] = useState('');
@@ -18,7 +18,7 @@ export default function LoanApplicationWizard({ onComplete, selectedMember, onDi
     const [errors, setErrors] = useState<FieldErrors>({});
 
     useEffect(() => {
-        onDirtyChange?.(form.loan_product_code !== '' || form.amount !== '' || form.purpose !== '' || coMakers.length > 0);
+        onDirtyChange?.(form.loan_product_code !== '' || form.amount !== '' || form.purpose !== '' || form.interview_schedule !== '' || coMakers.length > 0);
     }, [form, coMakers, onDirtyChange]);
 
     const { data: productsData } = useQuery({
@@ -36,6 +36,7 @@ export default function LoanApplicationWizard({ onComplete, selectedMember, onDi
             term_months: Number(form.term_months),
             payment_frequency: form.payment_frequency,
             purpose: form.purpose,
+            interview_schedule: form.interview_schedule || undefined,
             co_makers: coMakers.map(cm => cm.id),
             ...(selectedMember ? { user_id: selectedMember.id } : {}),
         }),
@@ -54,6 +55,9 @@ export default function LoanApplicationWizard({ onComplete, selectedMember, onDi
 
     const validateAndNext = (stepTo: number) => {
         const errs = validate(loanApplicationSchema, form);
+        if (selectedProduct?.requires_interview && !form.interview_schedule) {
+            errs.interview_schedule = 'An interview schedule is required for this loan product';
+        }
         setErrors(errs);
         if (Object.keys(errs).length > 0) return;
         setStep(stepTo);
@@ -61,6 +65,9 @@ export default function LoanApplicationWizard({ onComplete, selectedMember, onDi
 
     const handleSubmit = () => {
         const errs = validate(loanApplicationSchema, form);
+        if (selectedProduct?.requires_interview && !form.interview_schedule) {
+            errs.interview_schedule = 'An interview schedule is required for this loan product';
+        }
         if (Object.keys(errs).length > 0) {
             setErrors(errs);
             addToast(Object.values(errs)[0], 'error');
@@ -175,6 +182,19 @@ export default function LoanApplicationWizard({ onComplete, selectedMember, onDi
                             </select>
                         </div>
                     </div>
+                    {selectedProduct?.requires_interview && (
+                        <div>
+                            <label className="mb-1 block text-sm font-medium text-gray-700">Interview Schedule <span className="text-red-500">*</span></label>
+                            <input
+                                type="datetime-local"
+                                value={form.interview_schedule}
+                                onChange={e => setForm(f => ({ ...f, interview_schedule: e.target.value }))}
+                                className={`w-full rounded-lg border px-3 py-2 text-sm ${errors.interview_schedule ? 'border-red-400' : 'border-gray-200'}`}
+                            />
+                            {errors.interview_schedule && <p className="mt-1 text-xs text-red-600">{errors.interview_schedule}</p>}
+                            <p className="mt-1 text-xs text-gray-400">This loan product requires an interview before it can be endorsed.</p>
+                        </div>
+                    )}
                     <div>
                         <label className="mb-1 block text-sm font-medium text-gray-700">Co-makers</label>
                         <div className="flex gap-2">
@@ -232,6 +252,9 @@ export default function LoanApplicationWizard({ onComplete, selectedMember, onDi
                             <div className="flex justify-between"><span className="text-sm text-gray-500">Amount</span><span className="font-medium text-gray-900">&#8369;{Number(form.amount).toLocaleString()}</span></div>
                             <div className="flex justify-between"><span className="text-sm text-gray-500">Term</span><span className="text-sm text-gray-900">{form.term_months} months</span></div>
                             <div className="flex justify-between"><span className="text-sm text-gray-500">Frequency</span><span className="text-sm capitalize text-gray-900">{form.payment_frequency}</span></div>
+                            {form.interview_schedule && (
+                                <div className="flex justify-between"><span className="text-sm text-gray-500">Interview</span><span className="text-sm text-gray-900">{new Date(form.interview_schedule).toLocaleString()}</span></div>
+                            )}
                             <div className="flex justify-between"><span className="text-sm text-gray-500">Purpose</span><span className="text-sm text-gray-900">{form.purpose || 'N/A'}</span></div>
                             {coMakers.length > 0 && (
                                 <div className="flex justify-between"><span className="text-sm text-gray-500">Co-makers</span><span className="text-sm text-gray-900">{coMakers.map(cm => cm.name).join(', ')}</span></div>

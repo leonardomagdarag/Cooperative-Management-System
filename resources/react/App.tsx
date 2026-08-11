@@ -17,6 +17,7 @@ import NotificationsPage from './pages/notifications/NotificationsPage';
 import HistoryPage from './pages/history/HistoryPage';
 import LogsPage from './pages/logs/LogsPage';
 import ProfilePage from './pages/profile/ProfilePage';
+import ProfileCompletionPage from './pages/profile/ProfileCompletionPage';
 import SettingsPage from './pages/settings/SettingsPage';
 import AnnouncementsPage from './pages/announcements/AnnouncementsPage';
 import MessagesPage from './pages/messages/MessagesPage';
@@ -44,6 +45,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     if (isLoading) return <LoadingScreen />;
     if (!user) return <Navigate to="/login" replace />;
     if (user.email_verified === false) return <VerifyEmailPage />;
+    if (user.profile_completion_required) return <ProfileCompletionPage />;
     return <>{children}</>;
 }
 

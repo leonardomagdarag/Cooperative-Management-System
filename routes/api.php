@@ -100,6 +100,8 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     // Profile
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::put('/profile', [ProfileController::class, 'update']);
+    Route::post('/profile/email/send-otp', [ProfileController::class, 'sendEmailChangeOtp']);
+    Route::get('/profile/completion', [ProfileController::class, 'completion']);
 
     // Settings
     Route::put('/settings/password', [SettingsController::class, 'changePassword']);
@@ -192,6 +194,9 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     Route::get('/members', [MemberController::class, 'index']);
     Route::get('/members/search', [MemberController::class, 'search']);
     Route::post('/members/export', [MemberController::class, 'export']);
+    Route::post('/members/{user}/password/send-otp', [MemberController::class, 'sendPasswordChangeOtp']);
+    Route::post('/members/{user}/approve', [MemberController::class, 'approve']);
+    Route::post('/members/{user}/decline', [MemberController::class, 'decline']);
     Route::get('/members/{user}', [MemberController::class, 'show']);
     Route::post('/members', [MemberController::class, 'store']);
     Route::put('/members/{user}', [MemberController::class, 'update']);
