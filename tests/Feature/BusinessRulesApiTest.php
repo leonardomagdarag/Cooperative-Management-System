@@ -128,6 +128,59 @@ test('member password changes require an OTP bound to the member', function () {
     expect(Hash::check('Securepass123', $member->fresh()->password))->toBeTrue();
 });
 
+test('member profile returns education and special loan eligibility fields', function () {
+    $member = User::factory()->create([
+        'email' => 'member.show@example.com',
+        'special_loan_eligible' => true,
+    ]);
+
+    actingAs($this->admin);
+
+    $this->getJson('/api/members/'.$member->id)
+        ->assertOk()
+        ->assertJsonPath('special_loan_eligible', true)
+        ->assertJsonPath('personal_data.education', $member->personalData->education);
+});
+
+test('member special loan eligibility toggle flips the flag and audits the change', function () {
+    $member = User::factory()->create([
+        'email' => 'member.eligible@example.com',
+        'special_loan_eligible' => false,
+    ]);
+
+    actingAs($this->admin);
+
+    $this->postJson('/api/members/'.$member->id.'/toggle-special-loan')
+        ->assertOk()
+        ->assertJsonPath('special_loan_eligible', true);
+
+    expect($member->fresh()->special_loan_eligible)->toBeTrue();
+
+    $this->postJson('/api/members/'.$member->id.'/toggle-special-loan')
+        ->assertOk()
+        ->assertJsonPath('special_loan_eligible', false);
+
+    expect($member->fresh()->special_loan_eligible)->toBeFalse();
+});
+
+test('member special loan eligibility toggle requires the members.update permission', function () {
+    $member = User::factory()->create([
+        'email' => 'member.no-perm@example.com',
+        'special_loan_eligible' => false,
+    ]);
+
+    $noPermission = User::factory()->create([
+        'email' => 'list-viewer@example.com',
+    ]);
+    $noPermission->givePermissionTo(Permission::findByName('members.view'));
+
+    actingAs($noPermission);
+
+    $this->postJson('/api/members/'.$member->id.'/toggle-special-loan')->assertForbidden();
+
+    expect($member->fresh()->special_loan_eligible)->toBeFalse();
+});
+
 test('profile email changes require an OTP bound to the new email address', function () {
     $member = User::factory()->create([
         'email' => 'member.current@example.com',
