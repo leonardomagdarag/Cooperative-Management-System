@@ -218,7 +218,7 @@ export default function TransactionApproval({ onComplete }: { onComplete: () => 
             )}
 
             {rejectModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setRejectModal(null)}>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => setRejectModal(null)}>
                     <div className="w-full max-w-sm rounded-xl bg-white shadow-xl" onClick={e => e.stopPropagation()}>
                         <div className="bg-gradient-to-r from-red-500 to-red-600 p-4 text-white rounded-t-xl">
                             <h3 className="font-bold">Reject Transaction</h3>
@@ -247,7 +247,7 @@ export default function TransactionApproval({ onComplete }: { onComplete: () => 
             )}
 
             {approveConfirm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setApproveConfirm(null)}>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => setApproveConfirm(null)}>
                     <div className="w-full max-w-sm rounded-xl bg-white shadow-xl" onClick={e => e.stopPropagation()}>
                         <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 p-4 text-white rounded-t-xl">
                             <h3 className="font-bold">Approve Withdrawal</h3>

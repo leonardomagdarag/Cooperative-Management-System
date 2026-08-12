@@ -279,7 +279,7 @@ function MemberSettings() {
             </div>
 
             {showProfileEdit && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowProfileEdit(false)}>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => setShowProfileEdit(false)}>
                     <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-xl bg-white shadow-xl" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between rounded-t-xl bg-gradient-to-r from-emerald-600 to-cyan-600 p-4 text-white">
                             <h3 className="font-bold">Edit Profile</h3>

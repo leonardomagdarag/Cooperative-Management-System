@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import { validate, loanEncodeSchema, type FieldErrors } from '../../lib/validation';
+import { validate, loanEncodeSchema, loanEditSchema, type FieldErrors } from '../../lib/validation';
 
 export default function LoansPage() {
     const { user } = useAuth();
@@ -19,6 +19,7 @@ export default function LoansPage() {
     const [memberSearch, setMemberSearch] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [encodeErrors, setEncodeErrors] = useState<FieldErrors>({});
+    const [editErrors, setEditErrors] = useState<FieldErrors>({});
     const queryClient = useQueryClient();
     const { addToast } = useToast();
 
@@ -86,6 +87,7 @@ export default function LoansPage() {
 
     const openEdit = (l: any) => {
         setEditingLoan(l);
+        setEditErrors({});
         setEditForm({
             loan_type: l.loan_type,
             loan_amount: String(l.loan_amount),
@@ -96,6 +98,22 @@ export default function LoansPage() {
             due_date: l.due_date || '',
         });
         setShowEditModal(true);
+    };
+
+    const handleEditSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const errs = validate(loanEditSchema, editForm);
+        setEditErrors(errs);
+        if (Object.keys(errs).length > 0) return;
+        editMutation.mutate({
+            loan_type: editForm.loan_type,
+            loan_amount: Number(editForm.loan_amount),
+            interest_rate: Number(editForm.interest_rate),
+            term_months: Number(editForm.term_months),
+            payment_frequency: editForm.payment_frequency,
+            loan_status: editForm.loan_status,
+            due_date: editForm.due_date || null,
+        });
     };
 
     const handleEncodeSubmit = (e: React.FormEvent) => {
@@ -258,25 +276,27 @@ export default function LoansPage() {
 
             {/* Detail Modal */}
             {selectedLoanId && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setSelectedLoanId(null)}>
-                    <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => setSelectedLoanId(null)}>
+                    <div className="w-full max-w-3xl h-[90vh] rounded-2xl bg-white shadow-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
                         <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white shrink-0">
                             <div className="mb-1 flex items-center justify-between">
                                 <h2 className="text-lg font-bold">{detail?.loan_number || 'Loan Details'}</h2>
-                                <button onClick={() => setSelectedLoanId(null)} className="text-white/70 hover:text-white"><i className="fas fa-times"></i></button>
+                                <button onClick={() => setSelectedLoanId(null)} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white"><i className="fas fa-times"></i></button>
                             </div>
                             {detail?.borrower?.name && <p className="text-sm text-white/80">{detail.borrower.name} &middot; {detail.borrower.user_number}</p>}
                         </div>
-                        <div className="p-6">
 
-                            {/* Tabs */}
-                            <div className="flex gap-0 border-b border-gray-200 mb-4">
-                                {tabs.map(t => (
-                                    <button key={t.key} onClick={() => setActiveTab(t.key)} className={`flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-xs font-medium border-b-2 -mb-px transition-colors ${activeTab === t.key ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700 border-transparent'}`}>
-                                        <i className={t.icon}></i> {t.label}
-                                    </button>
-                                ))}
-                            </div>
+                        {/* Tabs */}
+                        <div className="flex gap-0 border-b border-gray-200 shrink-0 px-6">
+                            {tabs.map(t => (
+                                <button key={t.key} onClick={() => setActiveTab(t.key)} className={`flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-xs font-medium border-b-2 -mb-px transition-colors ${activeTab === t.key ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700 border-transparent'}`}>
+                                    <i className={t.icon}></i> {t.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Tab content */}
+                        <div className="p-6 flex-1 overflow-y-auto">
 
                             {/* Tab: Overview */}
                             {activeTab === 'overview' && detail && (
@@ -427,16 +447,16 @@ export default function LoansPage() {
 
             {/* Encode Modal */}
             {showEncodeModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowEncodeModal(false)}>
-                    <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => setShowEncodeModal(false)}>
+                    <div className="w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
                         <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white shrink-0">
                             <div className="flex items-center justify-between">
                                 <h2 className="text-lg font-bold">Encode Loan</h2>
-                                <button onClick={() => setShowEncodeModal(false)} className="text-white/70 hover:text-white"><i className="fas fa-times"></i></button>
+                                <button onClick={() => setShowEncodeModal(false)} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white"><i className="fas fa-times"></i></button>
                             </div>
                         </div>
-                        <div className="p-6">
-                            <form onSubmit={handleEncodeSubmit} className="space-y-4">
+                        <div className="flex-1 overflow-y-auto p-6">
+                            <form id="encode-loan-form" onSubmit={handleEncodeSubmit} className="space-y-4">
                                 <div>
                                     <label className="mb-1 block text-sm font-medium text-gray-700">Search Member *</label>
                                     <input type="text" value={memberSearch} onChange={e => { setMemberSearch(e.target.value); if (e.target.value.length >= 2) memberSearchMutation.mutate(e.target.value); }} className={`w-full rounded-lg border px-3 py-2 text-sm ${encodeErrors.user_id ? 'border-red-400' : 'border-gray-200'}`} placeholder="Search by name or number..." />
@@ -455,11 +475,11 @@ export default function LoansPage() {
                                     <div><label className="mb-1 block text-sm font-medium text-gray-700">Term (months)</label><input type="number" value={encodeForm.term_months} onChange={e => setEncodeForm(f => ({ ...f, term_months: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm ${encodeErrors.term_months ? 'border-red-400' : 'border-gray-200'}`} />{encodeErrors.term_months && <p className="mt-1 text-xs text-red-600">{encodeErrors.term_months}</p>}</div>
                                     <div><label className="mb-1 block text-sm font-medium text-gray-700">Frequency</label><select value={encodeForm.payment_frequency} onChange={e => setEncodeForm(f => ({ ...f, payment_frequency: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"><option value="weekly">Weekly</option><option value="bi-weekly">Bi-weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annually">Annually</option></select></div>
                                 </div>
-                                <div className="flex justify-end gap-3">
-                                    <button type="button" onClick={() => setShowEncodeModal(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
-                                    <button type="submit" disabled={encodeMutation.isPending} className="bg-blue-700 hover:bg-blue-800 rounded-lg focus:ring-4 focus:ring-blue-300 text-white px-4 py-2 text-sm font-medium disabled:opacity-50">{encodeMutation.isPending ? 'Saving...' : 'Encode'}</button>
-                                </div>
                             </form>
+                        </div>
+                        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 rounded-b-2xl">
+                            <button type="button" onClick={() => setShowEncodeModal(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
+                            <button type="submit" form="encode-loan-form" disabled={encodeMutation.isPending} className="bg-blue-700 hover:bg-blue-800 rounded-lg focus:ring-4 focus:ring-blue-300 text-white px-4 py-2 text-sm font-medium disabled:opacity-50">{encodeMutation.isPending ? 'Saving...' : 'Encode'}</button>
                         </div>
                     </div>
                 </div>
@@ -467,30 +487,30 @@ export default function LoansPage() {
 
             {/* Edit Modal */}
             {showEditModal && editingLoan && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowEditModal(false)}>
-                    <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-                        <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => setShowEditModal(false)}>
+                    <div className="w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+                        <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white shrink-0">
                             <div className="flex items-center justify-between">
                                 <h2 className="text-lg font-bold">Edit Loan {editingLoan.loan_number}</h2>
-                                <button onClick={() => setShowEditModal(false)} className="text-white/70 hover:text-white"><i className="fas fa-times"></i></button>
+                                <button onClick={() => setShowEditModal(false)} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white"><i className="fas fa-times"></i></button>
                             </div>
                         </div>
-                        <div className="p-6">
-                            <form onSubmit={e => { e.preventDefault(); editMutation.mutate({ loan_type: editForm.loan_type, loan_amount: Number(editForm.loan_amount), interest_rate: Number(editForm.interest_rate), term_months: Number(editForm.term_months), payment_frequency: editForm.payment_frequency, loan_status: editForm.loan_status, due_date: editForm.due_date || null }); }} className="space-y-4">
+                        <div className="flex-1 overflow-y-auto p-6">
+                            <form id="edit-loan-form" onSubmit={handleEditSubmit} className="space-y-4">
                                 <div className="grid grid-cols-2 gap-4">
                                     <div><label className="mb-1 block text-sm font-medium text-gray-700">Type</label><select value={editForm.loan_type} onChange={e => setEditForm(f => ({ ...f, loan_type: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"><option value="business">Business</option><option value="group">Group</option><option value="special">Special</option></select></div>
                                     <div><label className="mb-1 block text-sm font-medium text-gray-700">Status</label><select value={editForm.loan_status} onChange={e => setEditForm(f => ({ ...f, loan_status: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"><option value="pending">Pending</option><option value="approved">Approved</option><option value="active">Active</option><option value="paid_off">Paid Off</option></select></div>
-                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Amount</label><input type="number" step="0.01" value={editForm.loan_amount} onChange={e => setEditForm(f => ({ ...f, loan_amount: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" /></div>
-                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Interest Rate (%)</label><input type="number" step="0.1" value={editForm.interest_rate} onChange={e => setEditForm(f => ({ ...f, interest_rate: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" /></div>
-                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Term (months)</label><input type="number" value={editForm.term_months} onChange={e => setEditForm(f => ({ ...f, term_months: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" /></div>
+                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Amount</label><input type="number" step="0.01" value={editForm.loan_amount} onChange={e => setEditForm(f => ({ ...f, loan_amount: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm ${editErrors.loan_amount ? 'border-red-400' : 'border-gray-200'}`} />{editErrors.loan_amount && <p className="mt-1 text-xs text-red-600">{editErrors.loan_amount}</p>}</div>
+                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Interest Rate (%)</label><input type="number" step="0.1" value={editForm.interest_rate} onChange={e => setEditForm(f => ({ ...f, interest_rate: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm ${editErrors.interest_rate ? 'border-red-400' : 'border-gray-200'}`} />{editErrors.interest_rate && <p className="mt-1 text-xs text-red-600">{editErrors.interest_rate}</p>}</div>
+                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Term (months)</label><input type="number" value={editForm.term_months} onChange={e => setEditForm(f => ({ ...f, term_months: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm ${editErrors.term_months ? 'border-red-400' : 'border-gray-200'}`} />{editErrors.term_months && <p className="mt-1 text-xs text-red-600">{editErrors.term_months}</p>}</div>
                                     <div><label className="mb-1 block text-sm font-medium text-gray-700">Frequency</label><select value={editForm.payment_frequency} onChange={e => setEditForm(f => ({ ...f, payment_frequency: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"><option value="weekly">Weekly</option><option value="bi-weekly">Bi-weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annually">Annually</option></select></div>
                                     <div><label className="mb-1 block text-sm font-medium text-gray-700">Due Date</label><input type="date" value={editForm.due_date} onChange={e => setEditForm(f => ({ ...f, due_date: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" /></div>
                                 </div>
-                                <div className="flex justify-end gap-3">
-                                    <button type="button" onClick={() => setShowEditModal(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
-                                    <button type="submit" disabled={editMutation.isPending} className="bg-blue-700 hover:bg-blue-800 rounded-lg focus:ring-4 focus:ring-blue-300 text-white px-4 py-2 text-sm font-medium disabled:opacity-50">{editMutation.isPending ? 'Saving...' : 'Save'}</button>
-                                </div>
                             </form>
+                        </div>
+                        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 rounded-b-2xl">
+                            <button type="button" onClick={() => setShowEditModal(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
+                            <button type="submit" form="edit-loan-form" disabled={editMutation.isPending} className="bg-blue-700 hover:bg-blue-800 rounded-lg focus:ring-4 focus:ring-blue-300 text-white px-4 py-2 text-sm font-medium disabled:opacity-50">{editMutation.isPending ? 'Saving...' : 'Save'}</button>
                         </div>
                     </div>
                 </div>

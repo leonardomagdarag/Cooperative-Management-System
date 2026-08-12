@@ -101,13 +101,15 @@ export default function AnnouncementsPage() {
 
             {/* View Modal */}
             {viewing && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setViewing(null)}>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => setViewing(null)}>
                     <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-                        <div className="p-6">
-                            <div className="mb-4 flex items-center justify-between">
-                                <h2 className="text-lg font-bold text-gray-900">{viewing.title}</h2>
-                                <button onClick={() => setViewing(null)} className="text-gray-400 hover:text-gray-600"><i className="fas fa-times"></i></button>
+                        <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white shrink-0">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-lg font-bold">{viewing.title}</h2>
+                                <button onClick={() => setViewing(null)} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white"><i className="fas fa-times"></i></button>
                             </div>
+                        </div>
+                        <div className="p-6">
                             {viewing.image_url && <img src={viewing.image_url} alt="" className="mb-4 w-full rounded-lg object-cover" />}
                             <div className="prose prose-sm text-gray-600 whitespace-pre-wrap">{viewing.content}</div>
                             <div className="mt-4 flex items-center gap-4 text-xs text-gray-400">
@@ -201,14 +203,16 @@ function AnnouncementFormModal({ announcement, onClose, onSuccess }: {
     const requestCloseGuard = () => requestClose(onClose);
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={requestCloseGuard}>
-            <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-                <div className="p-6">
-                    <div className="mb-4 flex items-center justify-between">
-                        <h2 className="text-lg font-bold text-gray-900">{announcement ? 'Edit' : 'New'} Announcement</h2>
-                        <button onClick={requestCloseGuard} className="text-gray-400 hover:text-gray-600"><i className="fas fa-times"></i></button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={requestCloseGuard}>
+            <div className="w-full max-w-lg max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+                <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white shrink-0">
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-lg font-bold">{announcement ? 'Edit' : 'New'} Announcement</h2>
+                        <button onClick={requestCloseGuard} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white"><i className="fas fa-times"></i></button>
                     </div>
-                    <form onSubmit={handleSubmit} className="space-y-4">
+                </div>
+                <div className="flex-1 overflow-y-auto p-6">
+                    <form id="announcement-form" onSubmit={handleSubmit} className="space-y-4">
                         <div>
                             <label className="mb-1 block text-sm font-medium text-gray-700">Title</label>
                             <input name="title" value={title} onChange={e => setTitleD(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${errors.title ? 'border-red-400' : 'border-gray-200'}`} />
@@ -276,13 +280,13 @@ function AnnouncementFormModal({ announcement, onClose, onSuccess }: {
                             <label className="mb-1 block text-sm font-medium text-gray-700">Image</label>
                             <input type="file" name="image" accept="image/*" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
                         </div>
-                        <div className="flex justify-end gap-3">
-                            <button type="button" onClick={requestCloseGuard} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
-                            <button type="submit" disabled={isSaving} className="bg-blue-700 hover:bg-blue-800 rounded-lg focus:ring-4 focus:ring-blue-300 text-white px-4 py-2 text-sm font-medium disabled:opacity-50">
-                                {isSaving ? 'Saving...' : 'Save'}
-                            </button>
-                        </div>
                     </form>
+                </div>
+                <div className="flex shrink-0 items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 rounded-b-2xl">
+                    <button type="button" onClick={requestCloseGuard} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
+                    <button type="submit" form="announcement-form" disabled={isSaving} className="bg-blue-700 hover:bg-blue-800 rounded-lg focus:ring-4 focus:ring-blue-300 text-white px-4 py-2 text-sm font-medium disabled:opacity-50">
+                        {isSaving ? 'Saving...' : 'Save'}
+                    </button>
                 </div>
             </div>
             {renderDialog()}

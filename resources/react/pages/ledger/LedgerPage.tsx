@@ -192,11 +192,16 @@ export default function LedgerPage() {
             </div>
 
             {showAddModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={requestCloseGuard}>
-                    <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-                        <div className="p-6">
-                            <h2 className="mb-4 text-lg font-bold text-gray-900">{editingId ? 'Edit' : 'Add'} Transaction</h2>
-                            <form onSubmit={handleSave} className="space-y-4">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={requestCloseGuard}>
+                    <div className="w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+                        <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white shrink-0">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-lg font-bold">{editingId ? 'Edit' : 'Add'} Transaction</h2>
+                                <button onClick={requestCloseGuard} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white"><i className="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6">
+                            <form id="ledger-form" onSubmit={handleSave} className="space-y-4">
                                 <div>
                                     <label className="mb-1 block text-sm font-medium text-gray-700">Type</label>
                                     <select value={form.transaction_type} onChange={e => setFormD(f => ({ ...f, transaction_type: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm">
@@ -228,11 +233,11 @@ export default function LedgerPage() {
                                     <label className="mb-1 block text-sm font-medium text-gray-700">Note</label>
                                     <input type="text" value={form.note} onChange={e => setFormD(f => ({ ...f, note: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
                                 </div>
-                                <div className="flex justify-end gap-3">
-                                    <button type="button" onClick={requestCloseGuard} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
-                                    <button type="submit" disabled={saveMutation.isPending} className="bg-blue-700 hover:bg-blue-800 rounded-lg focus:ring-4 focus:ring-blue-300 text-white px-4 py-2 text-sm font-medium disabled:opacity-50">{saveMutation.isPending ? 'Saving...' : 'Save'}</button>
-                                </div>
                             </form>
+                        </div>
+                        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 rounded-b-2xl">
+                            <button type="button" onClick={requestCloseGuard} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
+                            <button type="submit" form="ledger-form" disabled={saveMutation.isPending} className="bg-blue-700 hover:bg-blue-800 rounded-lg focus:ring-4 focus:ring-blue-300 text-white px-4 py-2 text-sm font-medium disabled:opacity-50">{saveMutation.isPending ? 'Saving...' : 'Save'}</button>
                         </div>
                     </div>
                     {renderDialog()}
