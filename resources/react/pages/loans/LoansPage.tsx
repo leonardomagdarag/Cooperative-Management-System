@@ -131,35 +131,6 @@ export default function LoansPage() {
         { key: 'group', label: 'Group Members', icon: 'fas fa-users' },
     ];
 
-    const computeSchedule = () => {
-        if (!detail) return [];
-        const principal = Number(detail.loan_amount) || 0;
-        const rate = Number(detail.interest_rate) || 0;
-        const term = Number(detail.term_months) || 0;
-        if (!principal || !term) return [];
-        const monthlyRate = rate > 0 ? (rate / 100) / 12 : 0;
-        const monthlyPrincipal = principal / term;
-        const rows: any[] = [];
-        let balance = principal;
-        const startDate = detail.applied_at ? new Date(detail.applied_at) : new Date();
-        for (let i = 1; i <= term; i++) {
-            const interest = balance * monthlyRate;
-            const payment = monthlyPrincipal + interest;
-            balance -= monthlyPrincipal;
-            const dueDate = new Date(startDate);
-            dueDate.setMonth(dueDate.getMonth() + i);
-            rows.push({
-                period: i,
-                due_date: dueDate.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-                payment: Math.round(payment * 100) / 100,
-                principal: Math.round(monthlyPrincipal * 100) / 100,
-                interest: Math.round(interest * 100) / 100,
-                balance: Math.round(Math.max(0, balance) * 100) / 100,
-            });
-        }
-        return rows;
-    };
-
     return (
         <>
             <div className="p-4 bg-white block sm:flex items-center justify-between border-b border-gray-200 lg:mt-1.5">
@@ -327,7 +298,7 @@ export default function LoansPage() {
                             {/* Tab: Amortization Schedule */}
                             {activeTab === 'schedule' && (
                                 <div>
-                                    {computeSchedule().length > 0 ? (
+                                    {detail?.payment_schedule?.length > 0 ? (
                                         <div className="overflow-x-auto rounded-lg border border-gray-200">
                                             <table className="min-w-full divide-y divide-gray-200">
                                                 <thead className="bg-gray-50">
@@ -341,7 +312,7 @@ export default function LoansPage() {
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-100">
-                                                    {computeSchedule().map((row: any) => (
+                                                    {detail.payment_schedule.map((row: any) => (
                                                         <tr key={row.period} className="hover:bg-gray-50">
                                                             <td className="px-3 py-1.5 text-xs text-gray-500">{row.period}</td>
                                                             <td className="px-3 py-1.5 text-xs text-gray-500">{row.due_date}</td>

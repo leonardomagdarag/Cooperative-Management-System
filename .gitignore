@@ -20,6 +20,7 @@
 /storage/framework/views/*
 /storage/pail
 /vendor
+/Leo
 Homestead.json
 Homestead.yaml
 Thumbs.db

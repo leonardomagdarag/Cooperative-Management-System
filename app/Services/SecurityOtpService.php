@@ -42,6 +42,16 @@ class SecurityOtpService
         return 'password_change';
     }
 
+    public function emailChangePurpose(): string
+    {
+        return 'email_change';
+    }
+
+    public function memberPasswordChangePurpose(): string
+    {
+        return 'member_password_change';
+    }
+
     public function buildDeviceFingerprint(Request $request): string
     {
         $signature = implode('|', [
@@ -266,6 +276,8 @@ class SecurityOtpService
             'new_device_login' => 'A one-time verification code was sent to your email to verify a new device login.',
             'withdrawal_approval' => 'A one-time verification code was sent to your email to approve a high-value withdrawal.',
             'password_change' => 'A one-time verification code was sent to your email to confirm changing your password.',
+            'email_change' => 'A one-time verification code was sent to your current email to confirm changing it.',
+            'member_password_change' => 'A one-time verification code was sent to your email to confirm changing a member password.',
             default => 'A one-time verification code was sent to your email.',
         };
 

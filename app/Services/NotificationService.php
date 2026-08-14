@@ -8,6 +8,7 @@ use App\Jobs\SendSecurityAlertJob;
 use App\Mail\EmailVerificationMail;
 use App\Mail\LoanDueNotification;
 use App\Mail\LoanStatusNotification;
+use App\Mail\MemberApplicationStatusMail;
 use App\Mail\WithdrawalStatusNotification;
 use App\Models\Announcement;
 use App\Models\Loan;
@@ -20,6 +21,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\URL;
+use Spatie\Permission\Exceptions\RoleDoesNotExist;
 use Throwable;
 
 class NotificationService
@@ -496,6 +498,84 @@ class NotificationService
             'Please verify your email address to access all features.',
             'high',
             $this->routeIfExists('verification.notice', '/notifications')
+        );
+    }
+
+    /**
+     * Notify review officers (secretary, manager, admin) that a new membership
+     * application is awaiting their review. In-app only.
+     */
+    public function notifyMemberApplicationSubmitted(User $applicant): void
+    {
+        $name = trim(($applicant->personalData->first_name ?? '').' '.($applicant->personalData->last_name ?? ''));
+
+        // Officer roles are not guaranteed to exist (e.g. before the seeder has
+        // run). Skip notifying when the role setup is incomplete instead of
+        // failing the whole registration.
+        try {
+            $reviewers = User::role(['admin', 'manager', 'secretary'])->get();
+        } catch (RoleDoesNotExist) {
+            return;
+        }
+
+        foreach ($reviewers as $reviewer) {
+            $this->create(
+                $reviewer,
+                'member_application',
+                'New Membership Application',
+                "{$name} ({$applicant->email}) submitted a membership application and is awaiting review.",
+                'high',
+                '/dashboard/members?status=pending',
+                $applicant
+            );
+        }
+    }
+
+    /**
+     * Activate the applicant's account and email them the activation link.
+     * Reuses Laravel's signed email verification link as the activation link.
+     */
+    public function sendMemberActivationEmail(User $user): void
+    {
+        if (! $user->email) {
+            return;
+        }
+
+        $this->create(
+            $user,
+            'member_approved',
+            'Membership Approved',
+            'Congratulations! Your membership application has been approved. Click the link in your email to activate your account.',
+            'high',
+            $this->routeIfExists('verification.notice', '/notifications')
+        );
+
+        $activationUrl = URL::temporarySignedRoute(
+            'verification.verify',
+            now()->addMinutes(60),
+            ['id' => $user->id, 'hash' => sha1((string) $user->email)]
+        );
+
+        $this->safeSendEmail(
+            $user->email,
+            new MemberApplicationStatusMail($user, 'approved', '', $activationUrl),
+            'member.approved'
+        );
+    }
+
+    /**
+     * Email the applicant a decline notice using the original (pre-scramble) email.
+     */
+    public function sendMemberDeclineEmail(string $toEmail, string $name, string $reason = ''): void
+    {
+        if (! $toEmail) {
+            return;
+        }
+
+        $this->safeSendEmail(
+            $toEmail,
+            new MemberApplicationStatusMail(null, 'declined', $reason, null, $name),
+            'member.declined'
         );
     }
 

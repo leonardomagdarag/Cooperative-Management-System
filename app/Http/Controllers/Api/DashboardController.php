@@ -626,7 +626,7 @@ class DashboardController extends Controller
                 $remaining = $l->remainingBalance();
                 $progress = $l->loan_amount > 0 ? round(($totalPaid / $l->loan_amount) * 100, 1) : 0;
 
-                $schedule = $this->buildLoanSchedule($l);
+                $schedule = $l->paymentSchedule();
 
                 return [
                     'id' => $l->id,
@@ -664,54 +664,12 @@ class DashboardController extends Controller
                     ]),
                     'estimated_interest' => $schedule ? $schedule[count($schedule) - 1]['total_interest'] ?? 0 : 0,
                     'estimated_total_repayment' => $schedule
-                        ? ($schedule[count($schedule) - 1]['total_payment'] ?? 0) + ($l->loan_amount ?? 0)
-                        : $l->loan_amount,
+                        ? ($schedule[count($schedule) - 1]['total_payment'] ?? 0)
+                        : $l->totalPayable(),
                 ];
             });
 
         return response()->json(['data' => $loans]);
-    }
-
-    private function buildLoanSchedule(Loan $loan): ?array
-    {
-        $term = (int) ($loan->term_months ?? 0);
-        if ($term <= 0) {
-            return null;
-        }
-
-        $principal = (float) ($loan->principal_amount ?? $loan->loan_amount);
-        $annualRate = (float) ($loan->interest_rate ?? 0);
-        $monthlyRate = $annualRate > 0 ? ($annualRate / 100) / 12 : 0;
-
-        $schedule = [];
-        $balance = $principal;
-
-        $monthlyPrincipal = $principal / $term;
-        $totalInterest = 0;
-        $totalPayment = 0;
-
-        for ($i = 1; $i <= $term; $i++) {
-            $interestPayment = $balance * $monthlyRate;
-            $periodPayment = $monthlyPrincipal + $interestPayment;
-            $balance -= $monthlyPrincipal;
-            $totalInterest += $interestPayment;
-            $totalPayment += $periodPayment;
-
-            $schedule[] = [
-                'period' => $i,
-                'due_date' => $loan->due_date
-                    ? $loan->due_date->copy()->addMonths($i - 1)->format('M d, Y')
-                    : null,
-                'payment' => round($periodPayment, 2),
-                'principal' => round($monthlyPrincipal, 2),
-                'interest' => round($interestPayment, 2),
-                'balance' => round(max(0, $balance), 2),
-                'total_interest' => round($totalInterest, 2),
-                'total_payment' => round($totalPayment, 2),
-            ];
-        }
-
-        return $schedule;
     }
 
     // ─── Shared helpers ────────────────────────────────────────

@@ -93,7 +93,11 @@ test('registration queues an email verification notification', function () {
 
     expect($user)->not->toBeNull();
     expect($user->email_verified_at)->toBeNull();
-    expect($user->notifications()->where('type', 'email_verification')->exists())->toBeTrue();
+    expect($user->account_status)->toBe('inactive');
+
+    // Awaiting-approval applicants do not receive an email verification yet:
+    // the activation link is sent by an officer once the application is approved.
+    expect($user->notifications()->where('type', 'email_verification')->exists())->toBeFalse();
 });
 
 test('unverified user can resend the verification email', function () {

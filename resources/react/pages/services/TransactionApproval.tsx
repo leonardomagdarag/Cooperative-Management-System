@@ -2,7 +2,14 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { validate, transactionApprovalSchema, type FieldErrors } from '../../lib/validation';
+
+interface CoMaker {
+    name: string;
+    user_number: string;
+    has_approved: boolean;
+}
 
 interface ReviewableLoan {
     id: number;
@@ -12,11 +19,19 @@ interface ReviewableLoan {
     applied_at: string;
     loan_status: string;
     borrower: { name: string; user_number: string } | null;
+    review_status: string | null;
+    review_status_label: string;
+    interview_status: string | null;
+    interview_schedule: string | null;
+    review_notes: string | null;
+    reviewer: string | null;
+    co_makers: CoMaker[];
 }
 
 export default function TransactionApproval({ onComplete }: { onComplete: () => void }) {
     const queryClient = useQueryClient();
     const { addToast } = useToast();
+    const { user } = useAuth();
     const [tab, setTab] = useState<'transactions' | 'loans'>('transactions');
     const [rejectModal, setRejectModal] = useState<{ id: number } | null>(null);
     const [rejectReason, setRejectReason] = useState('');
@@ -25,6 +40,12 @@ export default function TransactionApproval({ onComplete }: { onComplete: () => 
     const [otpCode, setOtpCode] = useState('');
     const [otpSent, setOtpSent] = useState(false);
     const [otpError, setOtpError] = useState('');
+    const [expandedLoanId, setExpandedLoanId] = useState<number | null>(null);
+    const [loanAction, setLoanAction] = useState<{ id: number; action: string } | null>(null);
+    const [loanNotes, setLoanNotes] = useState('');
+    const [loanNotesError, setLoanNotesError] = useState('');
+
+    const canFinalApprove = user?.primary_role === 'admin' || user?.primary_role === 'manager';
 
     const { data: serviceInfo } = useQuery({
         queryKey: ['services-info'],
@@ -39,7 +60,7 @@ export default function TransactionApproval({ onComplete }: { onComplete: () => 
 
     const { data: loansData } = useQuery({
         queryKey: ['reviewable-loans'],
-        queryFn: () => api.get('/api/loans?loan_status=pending&per_page=20'),
+        queryFn: () => api.get('/api/loans?loan_status=pending&per_page=50'),
         enabled: tab === 'loans',
     });
 
@@ -54,6 +75,7 @@ export default function TransactionApproval({ onComplete }: { onComplete: () => 
             api.post(`/api/services/approve/${id}`, { action, reason, otp_code: otp }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['pending-transactions'] });
+            queryClient.invalidateQueries({ queryKey: ['services-pending'] });
             addToast('Transaction processed', 'success');
             setRejectModal(null);
             setRejectReason('');
@@ -66,11 +88,16 @@ export default function TransactionApproval({ onComplete }: { onComplete: () => 
     });
 
     const reviewMutation = useMutation({
-        mutationFn: ({ loanId, action }: { loanId: number; action: string }) =>
-            api.post(`/api/loans/${loanId}/review`, { action }),
+        mutationFn: ({ loanId, action, notes }: { loanId: number; action: string; notes?: string }) =>
+            api.post(`/api/loans/${loanId}/review`, { action, notes }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['reviewable-loans'] });
+            queryClient.invalidateQueries({ queryKey: ['loan-detail'] });
             addToast('Loan review action processed', 'success');
+            setLoanAction(null);
+            setLoanNotes('');
+            setLoanNotesError('');
+            setExpandedLoanId(null);
         },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed', 'error'),
     });
@@ -86,6 +113,11 @@ export default function TransactionApproval({ onComplete }: { onComplete: () => 
     const getLoanStatusColor = (s: string) => {
         const c: Record<string, string> = { pending: 'bg-yellow-100 text-yellow-700', approved: 'bg-emerald-100 text-emerald-700', active: 'bg-blue-100 text-blue-700', rejected: 'bg-red-100 text-red-700', paid_off: 'bg-gray-100 text-gray-700' };
         return c[s] || 'bg-gray-100 text-gray-700';
+    };
+
+    const getReviewStatusColor = (s: string | null) => {
+        const c: Record<string, string> = { under_review: 'bg-blue-100 text-blue-700', endorsed_for_approval: 'bg-amber-100 text-amber-700', review_rejected: 'bg-red-100 text-red-700' };
+        return c[s || ''] || 'bg-gray-100 text-gray-700';
     };
 
     const handleReject = (id: number) => {
@@ -129,6 +161,26 @@ export default function TransactionApproval({ onComplete }: { onComplete: () => 
         });
     };
 
+    const startLoanAction = (id: number, action: string) => {
+        setLoanAction({ id, action });
+        setLoanNotes('');
+        setLoanNotesError('');
+    };
+
+    const confirmLoanAction = () => {
+        if (!loanAction) return;
+        const action = loanAction.action;
+        if ((action === 'reject' || action === 'return_for_review') && loanNotes.trim().length < 5) {
+            setLoanNotesError('A note of at least 5 characters is required for this action.');
+            return;
+        }
+        reviewMutation.mutate({
+            loanId: loanAction.id,
+            action,
+            notes: loanNotes.trim() || undefined,
+        });
+    };
+
     if (isLoading) {
         return (
             <div className="space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="h-20 animate-pulse rounded-xl bg-gray-100" />)}</div>
@@ -155,16 +207,25 @@ export default function TransactionApproval({ onComplete }: { onComplete: () => 
                             {transactions.map((t: any) => (
                                 <div key={t.id} className="rounded-lg border border-gray-200 p-4">
                                     <div className="flex items-center justify-between">
-                                        <div>
-                                            <div className="flex items-center gap-2">
+                                        <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2">
                                                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getTypeColor(t.transaction_type)}`}>{t.transaction_type.replace('_', ' ')}</span>
                                                 <span className="text-sm font-medium text-gray-900">{t.transaction_number}</span>
+                                                {t.transaction_mode && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{t.transaction_mode.replace('_', ' ')}</span>}
+                                                {t.account_type && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">{t.account_type}</span>}
+                                                {t.loan_number && <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">Loan {t.loan_number}</span>}
                                             </div>
-                                            <p className="mt-1 text-sm text-gray-500">{t.account_holder || 'Unknown'} &middot; {new Date(t.created_at).toLocaleDateString()}</p>
+                                            <p className="mt-1 text-sm text-gray-500">{t.account_holder || 'Unknown'} &middot; {new Date(t.created_at).toLocaleString()}</p>
+                                            {t.note && <p className="mt-1 truncate text-xs text-gray-400" title={t.note}>{t.note}</p>}
+                                            {t.proof_of_payment_api_url && (
+                                                <a href={t.proof_of_payment_api_url} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:underline">
+                                                    <i className="fas fa-paperclip"></i> View Proof of Payment
+                                                </a>
+                                            )}
                                         </div>
-                                        <div className="text-right">
+                                        <div className="flex shrink-0 flex-col items-end gap-2">
                                             <p className="font-bold text-gray-900">&#8369;{Number(t.amount).toLocaleString()}</p>
-                                            <div className="mt-2 flex gap-1">
+                                            <div className="flex gap-1">
                                                 <button onClick={() => handleApprove(t)} disabled={approveMutation.isPending} className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-700">Approve</button>
                                                 <button onClick={() => handleReject(t.id)} disabled={approveMutation.isPending} className="rounded bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700">Reject</button>
                                             </div>
@@ -190,30 +251,120 @@ export default function TransactionApproval({ onComplete }: { onComplete: () => 
                             {loans.map((l: ReviewableLoan) => (
                                 <div key={l.id} className="rounded-lg border border-gray-200 p-4">
                                     <div className="flex items-center justify-between">
-                                        <div>
-                                            <div className="flex items-center gap-2">
+                                        <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2">
                                                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getLoanStatusColor(l.loan_status)}`}>{l.loan_status}</span>
+                                                {l.review_status && <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getReviewStatusColor(l.review_status)}`}>{l.review_status_label}</span>}
                                                 <span className="text-sm font-medium text-gray-900">{l.loan_number}</span>
                                                 <span className="text-xs text-gray-400">{l.loan_type}</span>
                                             </div>
                                             <p className="mt-1 text-sm text-gray-500">
                                                 {l.borrower?.name || 'Unknown'} &middot; Applied {l.applied_at}
+                                                {l.reviewer ? <span className="text-gray-400"> &middot; Reviewer: {l.reviewer}</span> : null}
                                             </p>
                                         </div>
-                                        <div className="text-right">
+                                        <div className="flex shrink-0 flex-col items-end gap-2">
                                             <p className="font-bold text-gray-900">&#8369;{Number(l.loan_amount).toLocaleString()}</p>
-                                            <div className="mt-2 flex gap-1 flex-wrap justify-end">
-                                                <button onClick={() => reviewMutation.mutate({ loanId: l.id, action: 'start_review' })} disabled={reviewMutation.isPending} className="rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700">Start Review</button>
-                                                <button onClick={() => reviewMutation.mutate({ loanId: l.id, action: 'endorse' })} disabled={reviewMutation.isPending} className="rounded bg-amber-600 px-2 py-1 text-xs font-medium text-white hover:bg-amber-700">Endorse</button>
-                                                <button onClick={() => reviewMutation.mutate({ loanId: l.id, action: 'reject' })} disabled={reviewMutation.isPending} className="rounded bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-700">Reject</button>
-                                                <button onClick={() => reviewMutation.mutate({ loanId: l.id, action: 'interview_complete' })} disabled={reviewMutation.isPending} className="rounded bg-purple-600 px-2 py-1 text-xs font-medium text-white hover:bg-purple-700">Interview Complete</button>
-                                            </div>
+                                            <button onClick={() => setExpandedLoanId(expandedLoanId === l.id ? null : l.id)} className="text-xs font-medium text-indigo-600 hover:underline">
+                                                {expandedLoanId === l.id ? 'Hide details' : 'View details'}
+                                            </button>
                                         </div>
                                     </div>
+
+                                    {expandedLoanId === l.id && (
+                                        <div className="mt-3 rounded-lg bg-gray-50 p-3">
+                                            {l.co_makers && l.co_makers.length > 0 && (
+                                                <div className="mb-2">
+                                                    <p className="text-xs font-semibold text-gray-500">Co-makers</p>
+                                                    <div className="mt-1 flex flex-wrap gap-1.5">
+                                                        {l.co_makers.map(cm => (
+                                                            <span key={cm.user_number} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${cm.has_approved ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-600'}`}>
+                                                                <i className={`fas ${cm.has_approved ? 'fa-check-circle' : 'fa-clock'} text-[10px]`}></i>
+                                                                {cm.name}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {(l.interview_schedule || l.interview_status) && (
+                                                <div className="mb-2 text-xs text-gray-600">
+                                                    <span className="font-semibold text-gray-500">Interview: </span>
+                                                    {l.interview_status || 'not completed'}
+                                                    {l.interview_schedule ? ` — ${new Date(l.interview_schedule).toLocaleString()}` : ''}
+                                                </div>
+                                            )}
+                                            {l.review_notes && (
+                                                <div className="mb-2 text-xs text-gray-600">
+                                                    <span className="font-semibold text-gray-500">Review notes: </span>
+                                                    {l.review_notes}
+                                                </div>
+                                            )}
+
+                                            <div className="mt-2 flex flex-wrap gap-1.5">
+                                                {(l.review_status === null || l.review_status === 'under_review') && (
+                                                    <button onClick={() => reviewMutation.mutate({ loanId: l.id, action: 'start_review' })} disabled={reviewMutation.isPending} className="rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700">Start Review</button>
+                                                )}
+                                                {l.review_status === 'under_review' && (
+                                                    <>
+                                                        {l.interview_status !== 'completed' && (
+                                                            <button onClick={() => reviewMutation.mutate({ loanId: l.id, action: 'interview_complete' })} disabled={reviewMutation.isPending} className="rounded bg-purple-600 px-2 py-1 text-xs font-medium text-white hover:bg-purple-700">Interview Complete</button>
+                                                        )}
+                                                        <button onClick={() => startLoanAction(l.id, 'endorse')} disabled={reviewMutation.isPending} className="rounded bg-amber-600 px-2 py-1 text-xs font-medium text-white hover:bg-amber-700">Endorse</button>
+                                                        <button onClick={() => startLoanAction(l.id, 'reject')} disabled={reviewMutation.isPending} className="rounded bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-700">Reject</button>
+                                                    </>
+                                                )}
+                                                {l.review_status === 'under_review' && l.interview_status !== 'completed' && (
+                                                    <span className="text-[11px] text-purple-700">{l.interview_status === 'scheduled' ? 'Interview scheduled' : 'Interview required'}</span>
+                                                )}
+                                                {l.review_status === 'endorsed_for_approval' && (
+                                                    canFinalApprove ? (
+                                                        <>
+                                                            <button onClick={() => startLoanAction(l.id, 'approve')} disabled={reviewMutation.isPending} className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700">Approve Loan</button>
+                                                            <button onClick={() => startLoanAction(l.id, 'return_for_review')} disabled={reviewMutation.isPending} className="rounded bg-gray-600 px-2 py-1 text-xs font-medium text-white hover:bg-gray-700">Return for Review</button>
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-xs text-amber-700">Awaiting final approval from the admin or chairman.</span>
+                                                    )
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </>
                     )}
+                </div>
+            )}
+
+            {loanAction && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setLoanAction(null)}>
+                    <div className="w-full max-w-sm rounded-xl bg-white shadow-xl" onClick={e => e.stopPropagation()}>
+                        <div className="rounded-t-xl bg-gradient-to-r from-indigo-500 to-indigo-600 p-4 text-white">
+                            <h3 className="font-bold">Confirm Loan Action</h3>
+                        </div>
+                        <div className="space-y-3 p-4">
+                            <p className="text-sm text-gray-600">
+                                <strong className="capitalize">{loanAction.action.replace('_', ' ')}</strong> this loan application?
+                            </p>
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-gray-700">Notes {loanAction.action === 'approve' ? '(optional)' : '*'}</label>
+                                <textarea
+                                    value={loanNotes}
+                                    onChange={e => { setLoanNotes(e.target.value); if (loanNotesError) setLoanNotesError(''); }}
+                                    rows={3}
+                                    className={`w-full rounded-lg border px-3 py-2 text-sm ${loanNotesError ? 'border-red-400' : 'border-gray-200'}`}
+                                    placeholder="Add a note about this action..."
+                                />
+                                {loanNotesError && <p className="mt-1 text-xs text-red-600">{loanNotesError}</p>}
+                            </div>
+                            <div className="flex gap-2">
+                                <button onClick={() => setLoanAction(null)} className="flex-1 rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
+                                <button onClick={confirmLoanAction} disabled={reviewMutation.isPending} className="flex-1 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50">
+                                    {reviewMutation.isPending ? 'Processing...' : 'Confirm'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
 

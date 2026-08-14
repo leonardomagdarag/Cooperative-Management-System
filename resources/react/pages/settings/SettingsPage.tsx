@@ -13,6 +13,7 @@ import LoanProductsPage from '../loan-products/LoanProductsPage';
 import RolePermissionsPage from '../role-permissions/RolePermissionsPage';
 import ServiceAvailabilityPage from './ServiceAvailabilityPage';
 import SettingsTabHeader from './SettingsTabHeader';
+// import EmailChangeVerification from '../../components/EmailChangeVerification';
 
 interface SettingsTab {
     key: string;
@@ -361,6 +362,7 @@ function ProfileEditForm({ profileData, isSaving, onSave, onCancel }: { profileD
         civil_status: pd?.civil_status || '',
         religion: pd?.religion || '',
         email: user?.email || '',
+        email_otp_code: '',
         phone_no: cont?.phone_no || '',
         facebook: cont?.facebook || '',
         country: addr?.country || '',
@@ -417,7 +419,15 @@ function ProfileEditForm({ profileData, isSaving, onSave, onCancel }: { profileD
                 <Field label="Civil Status" k="civil_status" />
                 <Field label="Religion" k="religion" />
                 <Field label="Phone Number" k="phone_no" error={errors.phone_number} />
-                <Field label="Email" k="email" type="email" error={errors.email} className="col-span-2" />
+                <div className="col-span-2">
+                    <Field label="Email" k="email" type="email" error={errors.email} />
+                    <EmailChangeVerification
+                        originalEmail={user?.email || ''}
+                        email={values.email}
+                        otpCode={values.email_otp_code}
+                        onOtpCodeChange={value => set('email_otp_code', value)}
+                    />
+                </div>
                 <Field label="Facebook" k="facebook" className="col-span-2" />
             </div>
             <div>

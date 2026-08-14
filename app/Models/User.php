@@ -36,6 +36,8 @@ class User extends Authenticatable implements MustVerifyEmail
         'account_status',
         'is_officer',
         'special_loan_eligible',
+        'profile_completion_required',
+        'profile_completed_at',
     ];
 
     /**
@@ -62,6 +64,8 @@ class User extends Authenticatable implements MustVerifyEmail
             'password' => 'hashed',
             'account_status' => 'string',
             'special_loan_eligible' => 'boolean',
+            'profile_completion_required' => 'boolean',
+            'profile_completed_at' => 'datetime',
         ];
     }
 
@@ -144,6 +148,20 @@ class User extends Authenticatable implements MustVerifyEmail
     public function isTerminated(): bool
     {
         return $this->account_status === 'terminated';
+    }
+
+    /**
+     * Determine whether the user still needs to complete their profile
+     * (self-registered members capture a subset of fields via the public form).
+     */
+    public function requiresProfileCompletion(): bool
+    {
+        return (bool) $this->profile_completion_required;
+    }
+
+    public function memberApplication()
+    {
+        return $this->hasOne(MemberApplication::class);
     }
 
     public function scopeOfficerUsers(Builder $query): Builder

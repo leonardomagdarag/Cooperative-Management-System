@@ -93,3 +93,7 @@ export async function updateProfile(data: Record<string, any>) {
         headers: { 'Content-Type': 'multipart/form-data' },
     });
 }
+
+export async function sendEmailChangeOtp(email: string) {
+    return api.post('/api/profile/email/send-otp', { email });
+}
