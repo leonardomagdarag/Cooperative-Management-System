@@ -265,10 +265,16 @@ export default function RolePermissionsPage() {
             </div>
 
             {showCreateModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => requestClose(() => setShowCreateModal(false))}>
-                    <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
-                        <h2 className="mb-4 text-lg font-bold text-gray-900">Create Role</h2>
-                        <div className="space-y-3">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => requestClose(() => setShowCreateModal(false))}>
+                    <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+                        <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white shrink-0">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-lg font-bold">Create Role</h2>
+                                <button onClick={() => requestClose(() => setShowCreateModal(false))} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white"><i className="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        <div className="p-6">
+                            <div className="space-y-3">
                             <div>
                                 <label className="mb-1 block text-sm font-medium text-gray-700">Role Name</label>
                                 <input type="text" value={newRoleName} onChange={e => { markDirty(); setNewRoleName(e.target.value); if (roleErrors.name) setRoleErrors({}); }} className={`w-full rounded-xl border bg-white px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500 ${roleErrors.name ? 'border-red-400' : 'border-gray-300'}`} placeholder="e.g., auditor" />
@@ -290,6 +296,7 @@ export default function RolePermissionsPage() {
                         </div>
                     </div>
                     {renderDialog()}
+                </div>
                 </div>
             )}
         </div>

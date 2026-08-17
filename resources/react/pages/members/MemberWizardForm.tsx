@@ -215,7 +215,7 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
     const agreementIsImage = agreementFile instanceof File && agreementFile.type.startsWith('image/');
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 overflow-hidden px-4 sm:px-6" onClick={requestCloseGuard}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm overflow-hidden px-4 sm:px-6" onClick={requestCloseGuard}>
             <div className="relative w-full max-w-5xl h-[90vh] mx-auto flex flex-col overflow-hidden rounded-lg bg-white shadow-xl" onClick={e => e.stopPropagation()}>
                 {/* Header */}
                 <div className="flex items-start justify-between p-6 border-b border-gray-200 rounded-t bg-linear-to-r from-cyan-500 to-emerald-500">

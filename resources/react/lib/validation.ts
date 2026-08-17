@@ -330,6 +330,23 @@ export const ledgerSchema = z.object({
     }
 });
 
+export const expenseSchema = z.object({
+    category: requiredString('Category is required', 100),
+    description: optionalString(255),
+    amount: z.coerce.number({ invalid_type_error: 'Enter a valid amount' }).finite('Enter a valid amount').positive('Amount must be greater than 0').min(0.01, 'Amount must be at least 0.01'),
+    expense_date: requiredString('Date is required').refine(v => !isNaN(Date.parse(v)), { message: 'Enter a valid date' }),
+});
+
+export const loanEditSchema = z.object({
+    loan_type: enumFrom(['business', 'group', 'special'], 'Select a valid loan type'),
+    loan_status: enumFrom(['pending', 'approved', 'active', 'paid_off'], 'Select a valid loan status'),
+    loan_amount: z.coerce.number({ invalid_type_error: 'Enter a valid amount' }).finite('Enter a valid amount').positive('Amount must be greater than 0'),
+    interest_rate: z.coerce.number({ invalid_type_error: 'Enter a valid interest rate' }).min(0, 'Interest rate cannot be negative').max(100, 'Interest rate cannot exceed 100%'),
+    term_months: z.coerce.number().int('Term must be a whole number').min(1, 'Term must be at least 1 month').max(360, 'Term cannot exceed 360 months'),
+    payment_frequency: enumFrom(['weekly', 'bi-weekly', 'monthly', 'quarterly', 'annually'], 'Select a payment frequency'),
+    due_date: dateOrEmpty.optional(),
+});
+
 export const announcementSchema = z.object({
     title: requiredString('Title is required'),
     content: z.string().trim().min(1, 'Content is required').max(5000, 'Content cannot exceed 5000 characters'),
