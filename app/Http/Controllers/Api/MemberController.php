@@ -27,6 +27,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class MemberController extends Controller
 {
@@ -43,10 +44,13 @@ class MemberController extends Controller
             $query->memberUsers();
         }
 
-        // Status filter (pending = inactive self-registered applicants awaiting review)
+        // Status filter (pending = inactive self-registered applicants awaiting review;
+        // archived = soft-deleted accounts)
         $status = $request->string('status')->toString();
-        if (in_array($status, ['all', 'active', 'inactive', 'pending', 'terminated'], true)) {
-            if ($status === 'pending') {
+        if (in_array($status, ['all', 'active', 'inactive', 'pending', 'terminated', 'archived'], true)) {
+            if ($status === 'archived') {
+                $query->onlyTrashed();
+            } elseif ($status === 'pending') {
                 $query->where('account_status', 'inactive')
                     ->whereHas('memberApplication', fn ($q) => $q->where('status', 'pending'));
             } elseif ($status !== 'all') {
@@ -98,6 +102,7 @@ class MemberController extends Controller
                 'accounts' => $u->accounts->map(fn ($a) => ['id' => $a->id, 'type' => $a->account_type, 'balance' => $a->balance]),
                 'has_pending_application' => (bool) ($u?->memberApplication?->status === 'pending'),
                 'created_at' => $u->created_at->toISOString(),
+                'archived_at' => $u->deleted_at?->toISOString(),
             ]),
             'pagination' => [
                 'current_page' => $paginator->currentPage(),
@@ -113,15 +118,17 @@ class MemberController extends Controller
         ]);
     }
 
-    public function show(User $user): JsonResponse
+    public function show(int $user): JsonResponse
     {
         $viewer = Auth::user();
         abort_unless($viewer?->can('members.view') || $viewer?->is($user), 403);
 
-        $user->load([
-            'personalData.address', 'personalData.contact', 'personalData.employment',
-            'personalData.memberId', 'accounts', 'loans', 'beneficiaries',
-        ]);
+        $user = User::withTrashed()
+            ->with([
+                'personalData.address', 'personalData.contact', 'personalData.employment',
+                'personalData.memberId', 'accounts', 'loans', 'beneficiaries', 'memberApplication',
+            ])
+            ->findOrFail($user);
 
         $pd = $user->personalData;
 
@@ -133,6 +140,8 @@ class MemberController extends Controller
             'is_officer' => $user->is_officer,
             'primary_role' => $user->primary_role,
             'created_at' => $user->created_at->toISOString(),
+            'archived_at' => $user->deleted_at?->toISOString(),
+            'has_pending_application' => (bool) ($user->memberApplication?->status === 'pending'),
             'personal_data' => $pd ? [
                 'first_name' => $pd->first_name, 'mid_name' => $pd->mid_name,
                 'last_name' => $pd->last_name, 'suffix' => $pd->suffix,
@@ -596,6 +605,116 @@ class MemberController extends Controller
         $user->delete();
 
         return response()->json(['message' => 'Member deleted.']);
+    }
+
+    public function restore(int $user): JsonResponse
+    {
+        abort_unless(Auth::user()?->hasRole('admin'), 403);
+
+        $member = User::onlyTrashed()->with(['memberApplication', 'personalData.contact'])->findOrFail($user);
+
+        DB::transaction(function () use ($member) {
+            if (str_starts_with((string) $member->user_number, 'ARCH-')) {
+                $number = $this->nextUserNumber();
+                $member->user_number = $number;
+            }
+
+            // Undo the email scramble from a declined application so the
+            // member keeps their original address after being restored.
+            $originalEmail = $member->memberApplication?->original_email;
+            if ($originalEmail) {
+                $taken = User::where('email', User::normalizeEmail($originalEmail))
+                    ->where('id', '!=', $member->id)
+                    ->exists();
+
+                if ($taken) {
+                    throw ValidationException::withMessages([
+                        'email' => 'The member\'s original email is already in use by another account.',
+                    ]);
+                }
+
+                $member->email = $originalEmail;
+
+                $contact = $member->personalData?->contact;
+                if ($contact && str_starts_with((string) $contact->email, 'archived_')) {
+                    $contact->email = $originalEmail;
+                    $contact->save();
+                }
+            }
+
+            $member->restore();
+
+            app(AuditLogService::class)->log(
+                'member.restored',
+                'Archived member restored.',
+                'member',
+                $member,
+                Auth::user()
+            );
+        });
+
+        return response()->json(['message' => 'Member restored.']);
+    }
+
+    public function forceDestroy(int $user): JsonResponse
+    {
+        abort_unless(Auth::user()?->hasRole('admin'), 403);
+
+        $member = User::onlyTrashed()->with('personalData')->findOrFail($user);
+
+        DB::transaction(function () use ($member) {
+            $member->roles()->detach();
+
+            $member->accounts()->delete();
+            $member->loans()->delete();
+            $member->beneficiaries()->delete();
+            $member->memberApplication?->delete();
+
+            $pd = $member->personalData;
+            if ($pd) {
+                // Detach the snapshot rows first so their deletions are FK-safe.
+                $pd->update([
+                    'address_id' => null,
+                    'contact_id' => null,
+                    'employment_id' => null,
+                    'member_id' => null,
+                ]);
+
+                $pd->address?->delete();
+                $pd->contact?->delete();
+                $pd->employment?->delete();
+                $pd->memberId?->delete();
+            }
+
+            app(AuditLogService::class)->log(
+                'member.permanently-deleted',
+                'Member permanently deleted.',
+                'member',
+                $member,
+                Auth::user()
+            );
+
+            $member->forceDelete();
+
+            $pd?->forceDelete();
+        });
+
+        return response()->json(['message' => 'Member permanently deleted.']);
+    }
+
+    private function nextUserNumber(): string
+    {
+        $latest = User::withTrashed()
+            ->orderByRaw('CAST(SUBSTRING(user_number, 4) AS UNSIGNED) DESC')
+            ->first();
+
+        if ($latest && preg_match('/USR(\d+)/', (string) $latest->user_number, $matches)) {
+            $nextNumber = intval($matches[1]) + 1;
+        } else {
+            $nextNumber = 1;
+        }
+
+        return 'USR'.str_pad((string) $nextNumber, 6, '0', STR_PAD_LEFT);
     }
 
     public function approve(User $user): JsonResponse
