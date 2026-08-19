@@ -21,7 +21,8 @@ class PublicContentController extends Controller
         return response()->json([
             'sections' => $sections,
             'form' => $form,
-            'can_manage' => Auth::user()?->can('settings.update'),
+            'can_manage' => (bool) Auth::user()?->can('settings.update'),
+            'turnstile_site_key' => config('services.turnstile.site_key'),
         ]);
     }
 
@@ -29,10 +30,10 @@ class PublicContentController extends Controller
     {
         abort_unless(Auth::user()?->can('settings.update'), 403);
 
-        $form = $request->input('form', []);
+        $validated = $request->validate($this->rules());
 
-        DB::transaction(function () use ($form) {
-            foreach (SiteContentCatalog::recordsFromForm($form) as $record) {
+        DB::transaction(function () use ($validated) {
+            foreach (SiteContentCatalog::recordsFromForm($validated['form']) as $record) {
                 SiteContent::query()->updateOrCreate(
                     ['section' => $record['section'], 'key' => $record['key']],
                     Arr::except($record, ['section', 'key'])
@@ -41,5 +42,31 @@ class PublicContentController extends Controller
         });
 
         return response()->json(['message' => 'Public content updated successfully.']);
+    }
+
+    private function rules(): array
+    {
+        $rules = [];
+
+        foreach (SiteContentCatalog::fieldDefinitions() as $field) {
+            $ruleKey = 'form.' . $field['section'] . '.' . $field['path'];
+            $storage = $field['storage'] ?? 'text';
+            $control = $field['control'] ?? 'text';
+
+            $rules[$ruleKey] = match (true) {
+                $storage === 'boolean' => 'boolean',
+                $storage === 'json' => 'nullable|array',
+                $control === 'email' => 'nullable|email|max:255',
+                default => 'nullable|string',
+            };
+        }
+
+        foreach (['board', 'officers'] as $section) {
+            $rules['form.' . $section . '.cards.*.name'] = 'nullable|string|max:255';
+            $rules['form.' . $section . '.cards.*.position'] = 'nullable|string|max:255';
+            $rules['form.' . $section . '.cards.*.image_url'] = 'nullable|string|max:2048';
+        }
+
+        return $rules;
     }
 }

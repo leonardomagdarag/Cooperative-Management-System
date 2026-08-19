@@ -1,4 +1,5 @@
-import { Routes, Route, Navigate, useParams } from 'react-router';
+import { useEffect } from 'react';
+import { Routes, Route, Navigate, useParams, useNavigate } from 'react-router';
 import { useAuth } from './contexts/AuthContext';
 import DashboardLayout from './layouts/DashboardLayout';
 import PublicLayout from './layouts/PublicLayout';
@@ -18,10 +19,8 @@ import SettingsPage from './pages/settings/SettingsPage';
 import AnnouncementsPage from './pages/announcements/AnnouncementsPage';
 import MessagesPage from './pages/messages/MessagesPage';
 import TicketsPage from './pages/tickets/TicketsPage';
-import LoanProductsPage from './pages/loan-products/LoanProductsPage';
 import LedgerPage from './pages/ledger/LedgerPage';
-import PublicContentPage from './pages/public-content/PublicContentPage';
-import RolePermissionsPage from './pages/role-permissions/RolePermissionsPage';
+import ExpensesPage from './pages/expenses/ExpensesPage';
 import OfficersPage from './pages/officers/OfficersPage';
 import LoansPage from './pages/loans/LoansPage';
 import ReportsPage from './pages/reports/ReportsPage';
@@ -51,57 +50,115 @@ function GuestRoute({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
 }
 
+function PermissionGate({ permission, role, children }: { permission?: string; role?: string; children: React.ReactNode }) {
+    const { user } = useAuth();
+    if (!user) return null;
+    if (role && user.primary_role === role) return <>{children}</>;
+    if (permission && user.permissions?.includes(permission)) return <>{children}</>;
+    return <UnauthorizedPlaceholder permission={permission || role} />;
+}
+
+function RedirectToSettingsTab({ tab }: { tab: string }) {
+    const navigate = useNavigate();
+    useEffect(() => { navigate('/dashboard/settings', { replace: true, state: { tab } }); }, [navigate, tab]);
+    return null;
+}
+
+function UnauthorizedPlaceholder({ permission }: { permission?: string }) {
+    return (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">
+            <i className="fas fa-lock text-4xl text-slate-300"></i>
+            <p className="mt-4 text-sm text-slate-500">
+                {permission === 'admin' ? 'This section requires administrator access.' :
+                 permission ? `You need the "${permission}" permission to access this section.` :
+                 'You do not have permission to access this section.'}
+            </p>
+        </div>
+    );
+}
+
 function DashboardRouter() {
     const { section } = useParams();
     const { user } = useAuth();
 
-    if (!section) return <DefaultOverview role={user?.primary_role || 'member'} />;
+    if (!section) return <DefaultOverview role={user?.primary_role || 'member'} isOfficer={!!user?.is_officer} />;
 
     const sectionMap: Record<string, React.ReactNode> = {
         'notifications': <NotificationsPage />,
         'history': <HistoryPage />,
-        'logs': <LogsPage />,
         'profile': <ProfilePage />,
         'settings': <SettingsPage />,
-        'announcements': <AnnouncementsPage />,
         'messages': <MessagesPage />,
         'tickets': <TicketsPage />,
-        'loan-products': <LoanProductsPage />,
-        'ledger': <LedgerPage />,
-        'public-content': <PublicContentPage />,
-        'role-permissions': <RolePermissionsPage />,
-        'officers': <OfficersPage />,
-        'loans': <LoansPage />,
-        'reports': <ReportsPage />,
-        'services': <ServicesPage />,
-        'members': <MembersPage />,
         'member-loans': <MemberLoansPage />,
-        'overviews': <DefaultOverview role={user?.primary_role || 'member'} />,
     };
 
-    return sectionMap[section] || (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center dark:border-slate-600 dark:bg-slate-800">
-            <i className="fas fa-hammer text-4xl text-slate-300 dark:text-slate-600"></i>
+    const permissionMap: Record<string, { permission?: string; role?: string }> = {
+        'logs': { permission: 'logs.view' },
+        'announcements': { permission: 'announcements.view' },
+        'loan-products': { permission: 'settings.update' },
+        'ledger': { permission: 'transactions.view' },
+        'expenses': { permission: 'transactions.view' },
+        'public-content': { permission: 'settings.update' },
+        'role-permissions': { role: 'admin' },
+        'officers': { permission: 'officers.view' },
+        'loans': { permission: 'loans.view' },
+        'reports': { permission: 'reports.view' },
+        'services': { permission: 'services.view' },
+        'members': { permission: 'members.view' },
+    };
+
+    const tabRedirects: Record<string, string> = {
+        'public-content': 'public-content',
+        'loan-products': 'loan-products',
+        'role-permissions': 'role-permissions',
+    };
+
+    if (sectionMap[section]) return sectionMap[section];
+
+    const gate = permissionMap[section];
+    if (gate) {
+        return (
+            <PermissionGate permission={gate.permission} role={gate.role}>
+                {section === 'logs' ? <LogsPage /> :
+                 section === 'announcements' ? <AnnouncementsPage /> :
+                 tabRedirects[section] ? <RedirectToSettingsTab tab={tabRedirects[section]} /> :
+                 section === 'ledger' ? <LedgerPage /> :
+                 section === 'expenses' ? <ExpensesPage /> :
+                 section === 'officers' ? <OfficersPage /> :
+                 section === 'loans' ? <LoansPage /> :
+                 section === 'reports' ? <ReportsPage /> :
+                 section === 'services' ? <ServicesPage /> :
+                 section === 'members' ? <MembersPage /> :
+                 <DefaultOverview role={user?.primary_role || 'member'} isOfficer={!!user?.is_officer} />}
+            </PermissionGate>
+        );
+    }
+
+    return (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">
+            <i className="fas fa-hammer text-4xl text-slate-300"></i>
             <p className="mt-4 text-sm text-slate-500">This page will be built in a later phase.</p>
         </div>
     );
 }
 
-function DefaultOverview({ role }: { role: string }) {
+function DefaultOverview({ role, isOfficer }: { role: string; isOfficer?: boolean }) {
     switch (role) {
         case 'admin': return <AdminOverview />;
         case 'manager': return <ManagerOverview />;
         case 'accountant': case 'treasurer': return <TreasurerOverview />;
         case 'secretary': return <SecretaryOverview />;
         case 'loan': return <LoanOverview />;
-        default: return <MemberOverview />;
+        default:
+            if (isOfficer) return <OfficerOverview />;
+            return <MemberOverview />;
     }
 }
 
 export default function App() {
     return (
         <Routes>
-            {/* Public routes */}
             <Route element={<PublicLayout />}>
                 <Route path="/" element={<HomePage />} />
                 <Route path="/about" element={<AboutPage />} />
@@ -110,12 +167,10 @@ export default function App() {
                 <Route path="/contact" element={<ContactPage />} />
             </Route>
 
-            {/* Auth routes (no public nav) */}
             <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
             <Route path="/forgot-password" element={<GuestRoute><ForgotPasswordPage /></GuestRoute>} />
             <Route path="/reset-password" element={<GuestRoute><ResetPasswordPage /></GuestRoute>} />
 
-            {/* Protected dashboard routes */}
             <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
                 <Route index element={<DashboardRouter />} />
                 <Route path=":section" element={<DashboardRouter />} />

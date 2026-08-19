@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { forgotPassword } from '../../api/auth';
+import TurnstileWidget from '../../components/TurnstileWidget';
 
 const schema = z.object({
     email: z.string().email('Please enter a valid email'),
@@ -117,7 +118,11 @@ export default function ForgotPasswordPage() {
                                     </div>
                                 </div>
 
-                                <button type="submit" disabled={isSubmitting} className="public-btn public-btn-primary w-full">
+                                <div className="flex justify-center mt-4">
+                                    <TurnstileWidget />
+                                </div>
+
+                                <button type="submit" disabled={isSubmitting} className="public-btn public-btn-primary w-full mt-2">
                                     <span className="flex items-center justify-center gap-2">
                                         <i className={`fas ${isSubmitting ? 'fa-spinner fa-spin' : 'fa-paper-plane'}`}></i>
                                         {isSubmitting ? 'Sending...' : 'Send Verification Code'}

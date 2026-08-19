@@ -3,13 +3,14 @@ import { api } from './client';
 export interface Notification {
     id: number;
     type: string;
-    data: {
-        title: string;
-        message: string;
-        category?: string;
-        url?: string;
-    };
-    read_at: string | null;
+    title: string;
+    message: string;
+    icon?: string;
+    color_class?: string;
+    priority?: string;
+    is_read: boolean;
+    action_url?: string;
+    time_ago?: string;
     created_at: string;
 }
 
@@ -27,4 +28,12 @@ export async function markAsRead(id: number) {
 
 export async function markAllAsRead() {
     return api.post('/api/notifications/mark-all-read');
+}
+
+export async function deleteNotification(id: number) {
+    return api.delete(`/api/notifications/${id}`);
+}
+
+export async function deleteAllReadNotifications() {
+    return api.delete('/api/notifications/read/all');
 }

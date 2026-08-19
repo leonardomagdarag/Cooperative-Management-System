@@ -27,6 +27,6 @@ class MemberId extends Model
     // Relationships
     public function personalData()
     {
-        return $this->hasOne(PersonalData::class, 'member_id');
+        return $this->belongsTo(PersonalData::class, 'member_id');
     }
 }

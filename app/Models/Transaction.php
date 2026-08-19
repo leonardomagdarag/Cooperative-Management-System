@@ -12,11 +12,15 @@ class Transaction extends Model
     protected $fillable = [
         'transaction_number',
         'transaction_type',
+        'transaction_mode',
         'account_id',
         'loan_id',
         'amount',
         'transaction_date',
         'status',
+        'approved_by',
+        'approved_at',
+        'rejection_reason',
         'proof_of_payment_path',
         'proof_of_payment_uploaded_at',
         'note',
@@ -26,6 +30,7 @@ class Transaction extends Model
     protected $casts = [
         'amount' => 'decimal:2',
         'transaction_date' => 'datetime',
+        'approved_at' => 'datetime',
         'proof_of_payment_uploaded_at' => 'datetime',
     ];
 

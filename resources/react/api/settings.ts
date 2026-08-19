@@ -4,8 +4,13 @@ export async function changePassword(data: {
     current_password: string;
     password: string;
     password_confirmation: string;
+    otp_code: string;
 }) {
     return api.put('/api/settings/password', data);
+}
+
+export async function sendPasswordOtp() {
+    return api.post('/api/settings/password/send-otp');
 }
 
 export async function revokeDevices() {

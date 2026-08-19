@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement, Announcement } from '../../api/announcements';
+import DatePicker from '../../components/DatePicker';
 import { useToast } from '../../contexts/ToastContext';
+import { useDiscardGuard } from '../../hooks/useDiscardGuard';
+import { validate, announcementSchema, type FieldErrors } from '../../lib/validation';
 
 export default function AnnouncementsPage() {
     const [page, setPage] = useState(1);
@@ -144,18 +147,39 @@ function AnnouncementFormModal({ announcement, onClose, onSuccess }: {
     onSuccess: () => void;
 }) {
     const [isSaving, setIsSaving] = useState(false);
+    const [selectedType, setSelectedType] = useState(announcement?.type || 'announcement');
+    const [selectedVisibilities, setSelectedVisibilities] = useState<string[]>(
+        announcement?.visibility?.length ? announcement.visibility : ['members']
+    );
+    const [title, setTitle] = useState(announcement?.title || '');
+    const [content, setContent] = useState(announcement?.content || '');
+    const [eventDate, setEventDate] = useState(announcement?.event_date || '');
+    const [errors, setErrors] = useState<FieldErrors>({});
     const { addToast } = useToast();
+    const { markDirty, requestClose, renderDialog } = useDiscardGuard();
+
+    const setTitleD = (v: string) => { markDirty(); setTitle(v); };
+    const setContentD = (v: string) => { markDirty(); setContent(v); };
+    const setTypeD = (v: string) => { markDirty(); setSelectedType(v); };
+    const setEventDateD = (v: string) => { markDirty(); setEventDate(v); };
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        const errs = validate(announcementSchema, {
+            title, content, type: selectedType, visibility: selectedVisibilities,
+            event_date: eventDate,
+        });
+        if (Object.keys(errs).length > 0) {
+            setErrors(errs);
+            addToast(Object.values(errs)[0], 'error');
+            return;
+        }
+        setErrors({});
         setIsSaving(true);
         try {
             const fd = new FormData(e.currentTarget);
-            fd.set('visibility[]', fd.get('visibility') as string);
-
-            const visValue = fd.get('visibility') as string;
             fd.delete('visibility');
-            fd.append('visibility[]', visValue || 'members');
+            selectedVisibilities.forEach(v => fd.append('visibility[]', v));
 
             if (announcement) {
                 fd.append('_method', 'PUT');
@@ -171,27 +195,43 @@ function AnnouncementFormModal({ announcement, onClose, onSuccess }: {
         }
     };
 
+    const toggleVisibility = (value: string) => {
+        markDirty();
+        setSelectedVisibilities(prev =>
+            prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
+        );
+    };
+
+    const requestCloseGuard = () => requestClose(onClose);
+
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={requestCloseGuard}>
             <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
                 <div className="p-6">
                     <div className="mb-4 flex items-center justify-between">
                         <h2 className="text-lg font-bold text-gray-900">{announcement ? 'Edit' : 'New'} Announcement</h2>
-                        <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><i className="fas fa-times"></i></button>
+                        <button onClick={requestCloseGuard} className="text-gray-400 hover:text-gray-600"><i className="fas fa-times"></i></button>
                     </div>
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div>
                             <label className="mb-1 block text-sm font-medium text-gray-700">Title</label>
-                            <input name="title" defaultValue={announcement?.title} required className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+                            <input name="title" value={title} onChange={e => setTitleD(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${errors.title ? 'border-red-400' : 'border-gray-200'}`} />
+                            {errors.title && <p className="mt-1 text-xs text-red-600">{errors.title}</p>}
                         </div>
                         <div>
                             <label className="mb-1 block text-sm font-medium text-gray-700">Content</label>
-                            <textarea name="content" rows={4} defaultValue={announcement?.content} required className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+                            <textarea name="content" rows={4} value={content} onChange={e => setContentD(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${errors.content ? 'border-red-400' : 'border-gray-200'}`} />
+                            {errors.content && <p className="mt-1 text-xs text-red-600">{errors.content}</p>}
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="mb-1 block text-sm font-medium text-gray-700">Type</label>
-                                <select name="type" defaultValue={announcement?.type || 'announcement'} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm">
+                                <select
+                                    name="type"
+                                    value={selectedType}
+                                    onChange={e => setTypeD(e.target.value)}
+                                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                                >
                                     <option value="announcement">Announcement</option>
                                     <option value="news">News</option>
                                     <option value="event">Event</option>
@@ -199,20 +239,49 @@ function AnnouncementFormModal({ announcement, onClose, onSuccess }: {
                             </div>
                             <div>
                                 <label className="mb-1 block text-sm font-medium text-gray-700">Visibility</label>
-                                <select name="visibility" defaultValue={announcement?.visibility?.[0] || 'members'} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm">
-                                    <option value="everyone">Everyone</option>
-                                    <option value="members">Members</option>
-                                    <option value="officers">Officers</option>
-                                    <option value="public">Public</option>
-                                </select>
+                                <div className="space-y-1.5 rounded-lg border border-gray-200 p-2.5">
+                                    {(['everyone', 'members', 'officers', 'public'] as const).map(v => (
+                                        <label key={v} className="flex items-center gap-2 text-sm cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedVisibilities.includes(v)}
+                                                onChange={() => toggleVisibility(v)}
+                                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                            />
+                                            <span className="text-gray-700 capitalize">{v === 'everyone' ? 'Everyone' : v === 'members' ? 'Members' : v === 'officers' ? 'Officers' : 'Public'}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                                {errors.visibility && <p className="mt-1 text-xs text-red-600">{errors.visibility}</p>}
                             </div>
                         </div>
+                        {selectedType === 'event' && (
+                            <div className="space-y-4 rounded-lg border border-purple-200 bg-purple-50 p-4">
+                                <p className="text-sm font-semibold text-purple-800"><i className="fas fa-calendar mr-1"></i> Event Details</p>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="mb-1 block text-sm font-medium text-gray-700">Event Date</label>
+                                        <DatePicker value={eventDate} onChange={setEventDateD} className={`w-full rounded-lg border px-3 py-2 text-sm ${errors.event_date ? 'border-red-400' : 'border-gray-200'}`} />
+                                        <input type="hidden" name="event_date" value={eventDate} />
+                                        {errors.event_date && <p className="mt-1 text-xs text-red-600">{errors.event_date}</p>}
+                                    </div>
+                                    <div>
+                                        <label className="mb-1 block text-sm font-medium text-gray-700">Event Time</label>
+                                        <input type="time" name="event_time" defaultValue={announcement?.event_time || ''} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-sm font-medium text-gray-700">Event Location</label>
+                                    <input type="text" name="event_location" defaultValue={announcement?.event_location || ''} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" placeholder="Venue or address" />
+                                </div>
+                            </div>
+                        )}
                         <div>
                             <label className="mb-1 block text-sm font-medium text-gray-700">Image</label>
                             <input type="file" name="image" accept="image/*" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
                         </div>
                         <div className="flex justify-end gap-3">
-                            <button type="button" onClick={onClose} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
+                            <button type="button" onClick={requestCloseGuard} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
                             <button type="submit" disabled={isSaving} className="bg-blue-700 hover:bg-blue-800 rounded-lg focus:ring-4 focus:ring-blue-300 text-white px-4 py-2 text-sm font-medium disabled:opacity-50">
                                 {isSaving ? 'Saving...' : 'Save'}
                             </button>
@@ -220,6 +289,7 @@ function AnnouncementFormModal({ announcement, onClose, onSuccess }: {
                     </form>
                 </div>
             </div>
+            {renderDialog()}
         </div>
     );
 }

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\SendEmailJob;
+use App\Mail\MemberWelcomeMail;
 use App\Models\Account;
 use App\Models\Address;
 use App\Models\Beneficiary;
@@ -12,6 +14,8 @@ use App\Models\MemberId;
 use App\Models\PersonalData;
 use App\Models\User;
 use App\Services\AuditLogService;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -71,7 +75,7 @@ class MemberController extends Controller
                 'account_status' => $u->account_status,
                 'is_officer' => $u->is_officer,
                 'primary_role' => $u->primary_role,
-                'name' => trim(($u->personalData->first_name ?? '') . ' ' . ($u->personalData->last_name ?? '')),
+                'name' => trim(($u->personalData->first_name ?? '').' '.($u->personalData->last_name ?? '')),
                 'phone' => $u->personalData->contact?->phone_no,
                 'accounts' => $u->accounts->map(fn ($a) => ['id' => $a->id, 'type' => $a->account_type, 'balance' => $a->balance]),
                 'created_at' => $u->created_at->toISOString(),
@@ -108,7 +112,7 @@ class MemberController extends Controller
                 'birth_date' => $pd->birth_date?->format('Y-m-d'), 'birthplace' => $pd->birthplace,
                 'gender' => $pd->gender, 'civil_status' => $pd->civil_status,
                 'religion' => $pd->religion, 'title' => $pd->title,
-                'profile_picture' => $pd->profile_picture ? asset('storage/' . $pd->profile_picture) : null,
+                'profile_picture' => $pd->profile_picture ? asset('storage/'.$pd->profile_picture) : null,
             ] : null,
             'address' => $pd?->address ? [
                 'country' => $pd->address->country, 'region' => $pd->address->region,
@@ -129,6 +133,12 @@ class MemberController extends Controller
                 'national_id' => $pd->memberId->national_id, 'tin' => $pd->memberId->tin,
                 'sss' => $pd->memberId->sss, 'philhealth' => $pd->memberId->philhealth,
                 'barangay_id' => $pd->memberId->barangay_id,
+                'national_id_photo' => $pd->memberId->national_id_photo ? asset('storage/'.$pd->memberId->national_id_photo) : null,
+                'tin_photo' => $pd->memberId->tin_photo ? asset('storage/'.$pd->memberId->tin_photo) : null,
+                'sss_photo' => $pd->memberId->sss_photo ? asset('storage/'.$pd->memberId->sss_photo) : null,
+                'philhealth_photo' => $pd->memberId->philhealth_photo ? asset('storage/'.$pd->memberId->philhealth_photo) : null,
+                'barangay_id_photo' => $pd->memberId->barangay_id_photo ? asset('storage/'.$pd->memberId->barangay_id_photo) : null,
+                'agreement_url' => $pd->memberId->proof_of_registration_path ? asset('storage/'.$pd->memberId->proof_of_registration_path) : null,
             ] : null,
             'accounts' => $user->accounts->map(fn ($a) => [
                 'id' => $a->id, 'account_number' => $a->account_number,
@@ -144,6 +154,8 @@ class MemberController extends Controller
     public function store(Request $request): JsonResponse
     {
         abort_unless(Auth::user()?->can('members.create'), 403);
+
+        $this->normalizeBeneficiaries($request);
 
         $validated = $request->validate([
             'first_name' => 'required|string|max:100',
@@ -177,13 +189,27 @@ class MemberController extends Controller
             'monthly_income' => 'nullable|numeric|min:0',
             'password' => ['required', 'string', 'min:8', 'max:128', 'regex:/[A-Z]/', 'regex:/[a-z]/', 'regex:/[0-9]/'],
             'password_confirmation' => 'required|string|same:password',
+            'role' => 'nullable|string|in:admin,manager,accountant,secretary,loan',
             'beneficiaries' => 'nullable|array',
             'beneficiaries.*.first_name' => 'required|string|max:100',
             'beneficiaries.*.last_name' => 'required|string|max:100',
             'beneficiaries.*.relationship' => 'required|string|max:50',
+            'profile_photo' => 'nullable|file|mimes:jpg,jpeg,png,gif,webp|max:2048',
+            'national_id_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:5120',
+            'tin_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:5120',
+            'sss_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:5120',
+            'philhealth_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:5120',
+            'barangay_id_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:5120',
+            'agreement_file' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
         ]);
 
-        DB::transaction(function () use ($validated) {
+        $profilePhotoPath = $request->file('profile_photo')?->store('profile-photos', 'public');
+        $idPhotoPaths = [];
+        foreach (['national_id_photo', 'tin_photo', 'sss_photo', 'philhealth_photo', 'barangay_id_photo'] as $field) {
+            $idPhotoPaths[$field] = $request->file($field)?->store('id-photos', 'public');
+        }
+
+        DB::transaction(function () use ($validated, $request, $profilePhotoPath, $idPhotoPaths) {
             $contact = Contact::create([
                 'phone_no' => $validated['phone_number'] ?? null,
                 'email' => $validated['email'],
@@ -209,11 +235,17 @@ class MemberController extends Controller
             }
 
             $memberId = null;
-            if (! empty($validated['national_id']) || ! empty($validated['tin'])) {
+            if (! empty($validated['national_id']) || ! empty($validated['tin'])
+                || collect($idPhotoPaths)->filter()->isNotEmpty()) {
                 $memberId = MemberId::create([
                     'national_id' => $validated['national_id'] ?? null, 'tin' => $validated['tin'] ?? null,
                     'sss' => $validated['sss'] ?? null, 'philhealth' => $validated['philhealth'] ?? null,
                     'barangay_id' => $validated['barangay_id'] ?? null,
+                    'national_id_photo' => $idPhotoPaths['national_id_photo'] ?? null,
+                    'tin_photo' => $idPhotoPaths['tin_photo'] ?? null,
+                    'sss_photo' => $idPhotoPaths['sss_photo'] ?? null,
+                    'philhealth_photo' => $idPhotoPaths['philhealth_photo'] ?? null,
+                    'barangay_id_photo' => $idPhotoPaths['barangay_id_photo'] ?? null,
                 ]);
             }
 
@@ -223,6 +255,7 @@ class MemberController extends Controller
                 'birth_date' => $validated['birth_date'], 'birthplace' => $validated['birthplace'] ?? null,
                 'gender' => $validated['gender'], 'civil_status' => $validated['civil_status'],
                 'religion' => $validated['religion'] ?? null, 'title' => $validated['title'] ?? 'Member',
+                'profile_picture' => $profilePhotoPath,
                 'address_id' => $address?->id, 'contact_id' => $contact->id,
                 'employment_id' => $employment?->id, 'member_id' => $memberId?->id,
             ]);
@@ -234,7 +267,19 @@ class MemberController extends Controller
                 'account_status' => 'active',
             ]);
 
+            if ($request->file('agreement_file')) {
+                $agreementPath = $request->file('agreement_file')->store('member-agreements/'.$user->id, 'public');
+                if ($memberId) {
+                    $memberId->update(['proof_of_registration_path' => $agreementPath]);
+                }
+            }
+
             $user->assignRole('member');
+
+            if (! empty($validated['role'])) {
+                $user->syncRoles([$validated['role']]);
+                $user->update(['is_officer' => true]);
+            }
 
             // Create default accounts
             Account::create(['user_id' => $user->id, 'account_type' => 'savings', 'balance' => 0, 'status' => 'active']);
@@ -250,8 +295,25 @@ class MemberController extends Controller
                 }
             }
 
-            app(AuditLogService::class)->log('member.created', 'New member created.', 'member', $user, Auth::user());
+            $isOfficer = ! empty($validated['role']);
+
+            app(AuditLogService::class)->log(
+                $isOfficer ? 'officer.created' : 'member.created',
+                $isOfficer ? 'New officer created.' : 'New member created.',
+                $isOfficer ? 'officer' : 'member',
+                $user,
+                Auth::user()
+            );
         });
+
+        if (config('mail.default') !== 'log') {
+            $name = trim(($validated['first_name'] ?? '').' '.($validated['last_name'] ?? ''));
+            SendEmailJob::dispatch(
+                $validated['email'],
+                new MemberWelcomeMail($name, $validated['email'], $validated['password']),
+                'member.welcome'
+            );
+        }
 
         return response()->json(['message' => 'Member created successfully.'], 201);
     }
@@ -260,43 +322,167 @@ class MemberController extends Controller
     {
         abort_unless(Auth::user()?->can('members.update'), 403);
 
+        $this->normalizeBeneficiaries($request);
+
         $validated = $request->validate([
             'first_name' => 'required|string|max:100',
             'last_name' => 'required|string|max:100',
             'mid_name' => 'nullable|string|max:100',
             'suffix' => 'nullable|string|max:50',
             'birth_date' => 'nullable|date',
+            'birthplace' => 'nullable|string|max:255',
             'gender' => 'nullable|in:male,female,other',
             'civil_status' => 'nullable|in:single,married,widowed,separated',
+            'religion' => 'nullable|string|max:64',
+            'title' => 'nullable|string|max:50',
+            'country' => 'nullable|string|max:100',
+            'region' => 'nullable|string|max:100',
+            'province' => 'nullable|string|max:100',
+            'city' => 'nullable|string|max:100',
+            'barangay' => 'nullable|string|max:100',
+            'street' => 'nullable|string|max:255',
+            'postal_code' => 'nullable|string|max:20',
             'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($user->id)],
             'phone_number' => 'nullable|string|max:11',
             'facebook_link' => 'nullable|string|max:255',
-            'password' => 'nullable|string|min:8',
+            'national_id' => 'nullable|string|max:64',
+            'tin' => 'nullable|string|max:64',
+            'sss' => 'nullable|string|max:64',
+            'philhealth' => 'nullable|string|max:64',
+            'barangay_id' => 'nullable|string|max:64',
+            'employment_type' => 'nullable|string|max:50',
+            'employer_name' => 'nullable|string|max:255',
+            'position' => 'nullable|string|max:100',
+            'monthly_income' => 'nullable|numeric|min:0',
+            'role' => 'nullable|string|in:admin,manager,accountant,secretary,loan',
+            'password' => 'nullable|string|min:8|max:128|regex:/[A-Z]/|regex:/[a-z]/|regex:/[0-9]/',
+            'beneficiaries' => 'nullable|array',
+            'beneficiaries.*.first_name' => 'required|string|max:100',
+            'beneficiaries.*.last_name' => 'required|string|max:100',
+            'beneficiaries.*.relationship' => 'required|string|max:50',
+            'profile_photo' => 'nullable|file|mimes:jpg,jpeg,png,gif,webp|max:2048',
+            'national_id_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:5120',
+            'tin_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:5120',
+            'sss_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:5120',
+            'philhealth_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:5120',
+            'barangay_id_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:5120',
+            'agreement_file' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
         ]);
 
-        DB::transaction(function () use ($user, $validated) {
+        $profilePhotoPath = null;
+        if ($request->file('profile_photo')) {
+            if ($user->personalData?->profile_picture) {
+                Storage::disk('public')->delete($user->personalData->profile_picture);
+            }
+            $profilePhotoPath = $request->file('profile_photo')->store('profile-photos', 'public');
+        }
+
+        $idPhotoFields = ['national_id_photo', 'tin_photo', 'sss_photo', 'philhealth_photo', 'barangay_id_photo'];
+        $idPhotoPaths = [];
+        foreach ($idPhotoFields as $field) {
+            if ($request->file($field)) {
+                $idPhotoPaths[$field] = $request->file($field)->store('id-photos', 'public');
+            }
+        }
+
+        $agreementPath = null;
+        if ($request->file('agreement_file')) {
+            $agreementPath = $request->file('agreement_file')->store('member-agreements/'.$user->id, 'public');
+        }
+
+        DB::transaction(function () use ($user, $validated, $profilePhotoPath, $idPhotoPaths, $agreementPath) {
             $pd = $user->personalData;
 
             if ($pd?->contact) {
-                $pd->contact->update(['phone_no' => $validated['phone_number'] ?? null, 'email' => $validated['email'], 'facebook' => $validated['facebook_link'] ?? null]);
-            }
-
-            if ($pd) {
-                $pd->update([
-                    'first_name' => $validated['first_name'], 'last_name' => $validated['last_name'],
-                    'mid_name' => $validated['mid_name'] ?? null, 'suffix' => $validated['suffix'] ?? null,
-                    'birth_date' => $validated['birth_date'] ?? null, 'gender' => $validated['gender'] ?? null,
-                    'civil_status' => $validated['civil_status'] ?? null,
+                $pd->contact->update([
+                    'phone_no' => $validated['phone_number'] ?? null,
+                    'email' => $validated['email'],
+                    'facebook' => $validated['facebook_link'] ?? null,
                 ]);
             }
 
-            $updateData = ['email' => $validated['email']];
-            if (! empty($validated['password'])) {
-                $updateData['password'] = Hash::make($validated['password']);
+            $addressId = $pd?->address_id;
+            if ($pd?->address) {
+                $pd->address->update($this->addressData($validated));
+            } elseif ($this->hasAnyAddressField($validated)) {
+                $addressId = Address::create($this->addressData($validated))->id;
             }
-            $user->update($updateData);
 
-            app(AuditLogService::class)->log('member.updated', 'Member profile updated.', 'member', $user, Auth::user());
+            $employmentId = $pd?->employment_id;
+            if ($pd?->employment) {
+                $pd->employment->update($this->employmentData($validated));
+            } elseif (! empty($validated['employment_type'])) {
+                $employmentId = Employment::create($this->employmentData($validated))->id;
+            }
+
+            $memberIdId = $pd?->member_id;
+            if ($pd?->memberId) {
+                foreach ($idPhotoPaths as $field => $path) {
+                    $old = $pd->memberId->{$field};
+                    if ($old) {
+                        Storage::disk('public')->delete($old);
+                    }
+                }
+                $pd->memberId->update(array_merge($this->memberIdTextData($validated), $idPhotoPaths));
+            } elseif ($this->hasAnyMemberIdField($validated, $idPhotoPaths)) {
+                $memberIdId = MemberId::create(array_merge($this->memberIdTextData($validated), $idPhotoPaths))->id;
+            }
+
+            if ($agreementPath && $memberIdId) {
+                MemberId::whereKey($memberIdId)->update(['proof_of_registration_path' => $agreementPath]);
+            }
+
+            if ($pd) {
+                $updateData = array_merge([
+                    'first_name' => $validated['first_name'],
+                    'last_name' => $validated['last_name'],
+                    'mid_name' => $validated['mid_name'] ?? null,
+                    'suffix' => $validated['suffix'] ?? null,
+                    'birth_date' => $validated['birth_date'] ?? null,
+                    'birthplace' => $validated['birthplace'] ?? null,
+                    'gender' => $validated['gender'] ?? null,
+                    'civil_status' => $validated['civil_status'] ?? null,
+                    'religion' => $validated['religion'] ?? null,
+                    'title' => $validated['title'] ?? null,
+                    'address_id' => $addressId,
+                    'employment_id' => $employmentId,
+                    'member_id' => $memberIdId,
+                ], $profilePhotoPath ? ['profile_picture' => $profilePhotoPath] : []);
+
+                $pd->update($updateData);
+            }
+
+            $userData = ['email' => $validated['email']];
+            if (! empty($validated['password'])) {
+                $userData['password'] = Hash::make($validated['password']);
+            }
+            if (! empty($validated['role'])) {
+                $userData['role'] = $validated['role'];
+                $userData['is_officer'] = true;
+                $user->syncRoles([$validated['role']]);
+            }
+            $user->update($userData);
+
+            if (array_key_exists('beneficiaries', $validated)) {
+                $user->beneficiaries()->delete();
+                foreach ($validated['beneficiaries'] as $b) {
+                    $user->beneficiaries()->create([
+                        'first_name' => $b['first_name'],
+                        'last_name' => $b['last_name'],
+                        'relationship' => $b['relationship'],
+                    ]);
+                }
+            }
+
+            $isOfficer = ! empty($validated['role']);
+
+            app(AuditLogService::class)->log(
+                $isOfficer ? 'officer.updated' : 'member.updated',
+                $isOfficer ? 'Officer profile updated.' : 'Member profile updated.',
+                $isOfficer ? 'officer' : 'member',
+                $user,
+                Auth::user()
+            );
         });
 
         return response()->json(['message' => 'Member updated successfully.']);
@@ -306,7 +492,15 @@ class MemberController extends Controller
     {
         abort_unless(Auth::user()?->can('members.delete'), 403);
 
-        app(AuditLogService::class)->log('member.deleted', 'Member deleted.', 'member', $user, Auth::user());
+        $isOfficer = (bool) ($user->is_officer ?? false);
+
+        app(AuditLogService::class)->log(
+            $isOfficer ? 'officer.deleted' : 'member.deleted',
+            $isOfficer ? 'Officer removed.' : 'Member deleted.',
+            $isOfficer ? 'officer' : 'member',
+            $user,
+            Auth::user()
+        );
         $user->delete();
 
         return response()->json(['message' => 'Member deleted.']);
@@ -315,7 +509,9 @@ class MemberController extends Controller
     public function search(Request $request): JsonResponse
     {
         $search = $request->string('q')->toString();
-        if ($search === '') return response()->json(['data' => []]);
+        if ($search === '') {
+            return response()->json(['data' => []]);
+        }
 
         $members = User::query()->memberUsers()->with('personalData')
             ->where(function ($q) use ($search) {
@@ -323,8 +519,220 @@ class MemberController extends Controller
                     ->orWhereHas('personalData', fn ($pd) => $pd->where('first_name', 'like', "%{$search}%")->orWhere('last_name', 'like', "%{$search}%"));
             })
             ->limit(10)->get()
-            ->map(fn ($m) => ['id' => $m->id, 'name' => trim(($m->personalData->first_name ?? '') . ' ' . ($m->personalData->last_name ?? '')), 'user_number' => $m->user_number]);
+            ->map(fn ($m) => ['id' => $m->id, 'name' => trim(($m->personalData->first_name ?? '').' '.($m->personalData->last_name ?? '')), 'user_number' => $m->user_number]);
 
         return response()->json(['data' => $members]);
+    }
+
+    public function export(Request $request)
+    {
+        abort_unless(Auth::user()?->can('members.view'), 403);
+
+        $validated = $request->validate([
+            'export_type' => ['required', 'in:pdf,excel'],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+        ], [
+            'end_date.after_or_equal' => 'The end date must be on or after the start date.',
+        ]);
+
+        $start = Carbon::parse($validated['start_date'])->startOfDay();
+        $end = Carbon::parse($validated['end_date'])->endOfDay();
+
+        $members = User::query()
+            ->memberUsers()
+            ->with(['personalData.address', 'personalData.contact'])
+            ->whereBetween('users.created_at', [$start, $end])
+            ->orderByDesc('created_at')
+            ->get();
+
+        return $validated['export_type'] === 'pdf'
+            ? $this->downloadMembersPdf($members, $start, $end)
+            : $this->downloadMembersExcel($members, $start, $end);
+    }
+
+    private function downloadMembersPdf($members, Carbon $start, Carbon $end)
+    {
+        $pdf = Pdf::loadView('exports.members-pdf', [
+            'members' => $members,
+            'start' => $start,
+            'end' => $end,
+            'generatedAt' => now(),
+            'generatedBy' => Auth::user(),
+            'appName' => config('app.name', 'Cooperative Management System'),
+        ]);
+
+        return response()->streamDownload(function () use ($pdf) {
+            echo $pdf->output();
+        }, $this->exportFilename('pdf', $start, $end), [
+            'Content-Type' => 'application/pdf',
+        ]);
+    }
+
+    private function downloadMembersExcel($members, Carbon $start, Carbon $end)
+    {
+        $xml = $this->buildMembersSpreadsheetXml($members);
+
+        return response()->streamDownload(function () use ($xml) {
+            echo $xml;
+        }, $this->exportFilename('xls', $start, $end), [
+            'Content-Type' => 'application/vnd.ms-excel; charset=UTF-8',
+        ]);
+    }
+
+    private function exportFilename(string $extension, Carbon $start, Carbon $end): string
+    {
+        return 'members-'.$start->format('Y-m-d').'-to-'.$end->format('Y-m-d').'.'.$extension;
+    }
+
+    private function buildMembersSpreadsheetXml($members): string
+    {
+        $headers = [
+            'Member ID',
+            'Full Name',
+            'Email',
+            'Phone Number',
+            'Status',
+            'Gender',
+            'Civil Status',
+            'Address',
+            'Join Date',
+        ];
+
+        $rows = $members->map(function (User $member) {
+            $address = $member->personalData?->address;
+
+            return [
+                $member->user_number,
+                $this->memberFullName($member),
+                $member->email,
+                $member->personalData?->contact?->phone_no ?? '',
+                ucfirst((string) ($member->account_status ?? 'active')),
+                $member->personalData?->gender ?? '',
+                $member->personalData?->civil_status ?? '',
+                $this->memberAddress($address),
+                optional($member->created_at)->format('M d, Y') ?? '',
+            ];
+        });
+
+        $xmlRows = collect([$headers])
+            ->merge($rows)
+            ->map(function ($row) {
+                $cells = collect($row)->map(function ($value) {
+                    $escaped = htmlspecialchars((string) $value, ENT_QUOTES | ENT_XML1, 'UTF-8');
+
+                    return '<Cell><Data ss:Type="String">'.$escaped.'</Data></Cell>';
+                })->implode('');
+
+                return '<Row>'.$cells.'</Row>';
+            })->implode('');
+
+        return '<?xml version="1.0" encoding="UTF-8"?>'
+            .'<?mso-application progid="Excel.Sheet"?>'
+            .'<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"'
+            .' xmlns:o="urn:schemas-microsoft-com:office:office"'
+            .' xmlns:x="urn:schemas-microsoft-com:office:excel"'
+            .' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"'
+            .' xmlns:html="http://www.w3.org/TR/REC-html40">'
+            .'<Worksheet ss:Name="Members"><Table>'
+            .$xmlRows
+            .'</Table></Worksheet></Workbook>';
+    }
+
+    private function memberFullName(User $member): string
+    {
+        return trim(implode(' ', array_filter([
+            $member->personalData?->first_name,
+            $member->personalData?->mid_name,
+            $member->personalData?->last_name,
+            $member->personalData?->suffix,
+        ])));
+    }
+
+    private function memberAddress(?Address $address): string
+    {
+        if (! $address) {
+            return '';
+        }
+
+        return implode(', ', array_filter([
+            $address->street,
+            $address->barangay,
+            $address->city_municipality,
+            $address->province,
+            $address->region,
+            $address->zip_code,
+        ]));
+    }
+
+    /**
+     * The member wizard serializes beneficiaries as a JSON string when sent
+     * as multipart form data. Normalize to an array so validation works in
+     * both the JSON and multipart paths.
+     */
+    private function normalizeBeneficiaries(Request $request): void
+    {
+        $beneficiaries = $request->input('beneficiaries');
+
+        if (is_string($beneficiaries)) {
+            $decoded = json_decode($beneficiaries, true);
+            $request->merge(['beneficiaries' => is_array($decoded) ? $decoded : []]);
+        }
+    }
+
+    private function addressData(array $validated): array
+    {
+        return [
+            'country' => $validated['country'] ?? null,
+            'region' => $validated['region'] ?? null,
+            'province' => $validated['province'] ?? null,
+            'city_municipality' => $validated['city'] ?? null,
+            'barangay' => $validated['barangay'] ?? null,
+            'street' => $validated['street'] ?? null,
+            'zip_code' => $validated['postal_code'] ?? null,
+        ];
+    }
+
+    private function hasAnyAddressField(array $validated): bool
+    {
+        foreach (['country', 'region', 'province', 'city', 'barangay', 'street', 'postal_code'] as $field) {
+            if (! empty($validated[$field])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function employmentData(array $validated): array
+    {
+        return [
+            'employment_type' => $validated['employment_type'] ?? null,
+            'company' => $validated['employer_name'] ?? null,
+            'position' => $validated['position'] ?? null,
+            'monthly_income' => $validated['monthly_income'] ?? null,
+        ];
+    }
+
+    private function memberIdTextData(array $validated): array
+    {
+        return [
+            'national_id' => $validated['national_id'] ?? null,
+            'tin' => $validated['tin'] ?? null,
+            'sss' => $validated['sss'] ?? null,
+            'philhealth' => $validated['philhealth'] ?? null,
+            'barangay_id' => $validated['barangay_id'] ?? null,
+        ];
+    }
+
+    private function hasAnyMemberIdField(array $validated, array $idPhotoPaths): bool
+    {
+        foreach (['national_id', 'tin', 'sss', 'philhealth', 'barangay_id'] as $field) {
+            if (! empty($validated[$field])) {
+                return true;
+            }
+        }
+
+        return $idPhotoPaths !== [];
     }
 }

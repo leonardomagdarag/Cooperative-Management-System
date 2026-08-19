@@ -111,6 +111,14 @@ class ProfileController extends Controller
                 'email' => $contact->email,
                 'facebook' => $contact->facebook,
             ] : null,
+            'employment' => $personalData?->employment ? [
+                'employment_type' => $personalData->employment->employment_type,
+                'company' => $personalData->employment->company,
+                'position' => $personalData->employment->position,
+                'monthly_income' => $personalData->employment->monthly_income,
+                'other_income_source' => $personalData->employment->other_income_source,
+                'other_income_amount' => $personalData->employment->other_income_amount,
+            ] : null,
             'accounts' => $accounts->map(fn ($a) => [
                 'id' => $a->id,
                 'account_number' => $a->account_number,
@@ -153,9 +161,11 @@ class ProfileController extends Controller
             'active_loans_count' => $activeLoans,
             'beneficiaries' => $user->beneficiaries->map(fn ($b) => [
                 'id' => $b->id,
-                'name' => $b->name,
+                'name' => trim(($b->first_name ?? '').' '.($b->last_name ?? '')),
+                'first_name' => $b->first_name,
+                'last_name' => $b->last_name,
                 'relationship' => $b->relationship,
-                'percentage' => $b->percentage,
+                'percentage' => $b->percentage ?? null,
             ]),
             'recent_logs' => $recentLogs->map(fn ($log) => [
                 'id' => $log->id,

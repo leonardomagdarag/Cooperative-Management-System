@@ -3,7 +3,6 @@
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\ConfirmablePasswordController;
 use App\Http\Controllers\EmailVerificationController;
-use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OtpChallengeController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\PasswordController;
@@ -94,16 +93,6 @@ Route::middleware('auth')->group(function () {
     Route::post('/security/verify-otp/resend', [OtpChallengeController::class, 'resend'])
         ->middleware('throttle:2,1')
         ->name('otp.challenge.resend');
-});
-
-// === API Routes for Notifications (Protected) ===
-Route::middleware(['auth', 'otp.verified'])->prefix('api')->group(function () {
-    Route::get('/notifications', [NotificationController::class, 'index']);
-    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
-    Route::post('/notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
-    Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
-    Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy']);
-    Route::delete('/notifications/read/all', [NotificationController::class, 'deleteAllRead']);
 });
 
 Route::middleware(['auth', 'otp.verified'])->get('/notifications', function () {

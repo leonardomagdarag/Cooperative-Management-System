@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
+import TurnstileWidget from '../../components/TurnstileWidget';
 
 const loginSchema = z.object({
     email: z.string().email('Please enter a valid email'),
@@ -118,6 +119,10 @@ export default function LoginPage() {
                                     <Link to="/forgot-password" className="text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors">
                                         Forgot password?
                                     </Link>
+                                </div>
+
+                                <div className="flex justify-center my-4">
+                                    <TurnstileWidget />
                                 </div>
 
                                 <button type="submit" disabled={isSubmitting} className="public-btn public-btn-primary w-full">

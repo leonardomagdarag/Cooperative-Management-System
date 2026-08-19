@@ -79,7 +79,7 @@ class LedgerController extends Controller
 
         $transactionCounts = Transaction::query()->where('status', 'completed')
             ->applyRange($range)
-            ->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_payment'])
+            ->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_payment', 'loan_disbursement'])
             ->selectRaw('transaction_type, COUNT(*) as count')
             ->groupBy('transaction_type')
             ->pluck('count', 'transaction_type');
@@ -88,11 +88,64 @@ class LedgerController extends Controller
 
         return response()->json([
             'range' => $range,
-            'deposit_count' => (int) ($transactionCounts['deposit'] ?? 0),
-            'withdrawal_count' => (int) ($transactionCounts['withdrawal'] ?? 0),
-            'loan_payment_count' => (int) ($transactionCounts['loan_payment'] ?? 0),
+            'deposits' => (int) ($transactionCounts['deposit'] ?? 0),
+            'withdrawals' => (int) ($transactionCounts['withdrawal'] ?? 0),
+            'loan_payments' => (int) ($transactionCounts['loan_payment'] ?? 0),
+            'loan_disbursements' => (int) ($transactionCounts['loan_disbursement'] ?? 0),
             'loan_count' => (int) $loanCount,
         ]);
+    }
+
+    public function export(Request $request)
+    {
+        abort_unless(Auth::user()?->can('transactions.view'), 403);
+
+        $query = Transaction::with(['account.user.personalData', 'loan', 'recordedBy']);
+
+        $category = $request->string('category')->toString();
+        if ($category !== '' && $category !== 'all') {
+            $query->where('transaction_type', $category);
+        }
+
+        if ($search = $request->string('search')->toString()) {
+            $query->where(function ($q) use ($search) {
+                $q->where('transaction_number', 'like', "%{$search}%")
+                    ->orWhere('amount', 'like', "%{$search}%")
+                    ->orWhere('status', 'like', "%{$search}%")
+                    ->orWhere('transaction_type', 'like', "%{$search}%")
+                    ->orWhere('note', 'like', "%{$search}%")
+                    ->orWhereHas('account.user.personalData', fn ($sub) => $sub->where('first_name', 'like', "%{$search}%")->orWhere('last_name', 'like', "%{$search}%"))
+                    ->orWhereHas('account.user', fn ($sub) => $sub->where('user_number', 'like', "%{$search}%"))
+                    ->orWhereHas('loan', fn ($sub) => $sub->where('loan_number', 'like', "%{$search}%"));
+            });
+        }
+
+        $transactions = $query->orderByDesc('created_at')->get();
+
+        $filename = 'ledger-'.now()->format('Y-m-d').'.csv';
+
+        return response()->streamDownload(function () use ($transactions) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['Transaction #', 'Type', 'Amount', 'Status', 'Mode', 'Member', 'User #', 'Loan #', 'Note', 'Date', 'Recorded By']);
+
+            foreach ($transactions as $t) {
+                fputcsv($out, [
+                    $t->transaction_number,
+                    $t->transaction_type,
+                    $t->amount,
+                    $t->status,
+                    $t->transaction_mode,
+                    $t->account?->user ? trim(($t->account->user->personalData->first_name ?? '').' '.($t->account->user->personalData->last_name ?? '')) : '',
+                    $t->account?->user?->user_number,
+                    $t->loan?->loan_number,
+                    $t->note,
+                    $t->transaction_date?->format('Y-m-d'),
+                    $t->recordedBy ? trim(($t->recordedBy->personalData->first_name ?? '').' '.($t->recordedBy->personalData->last_name ?? '')) : '',
+                ]);
+            }
+
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function store(Request $request): JsonResponse
