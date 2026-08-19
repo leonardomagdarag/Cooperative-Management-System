@@ -41,7 +41,18 @@ class NotificationService
      */
     private function safeSendEmail(string $toEmail, $mailable, string $tag = 'email.sent'): void
     {
-        if (! $toEmail || config('mail.default') === 'log') {
+        if (! $toEmail) {
+            return;
+        }
+
+        if (config('mail.default') === 'log') {
+            // Nothing is delivered with the log mailer, so surface enough to
+            // keep the flow usable during development (e.g. the verification URL).
+            $detail = $mailable instanceof EmailVerificationMail
+                ? $mailable->verificationUrl
+                : get_class($mailable);
+            Log::info("Email ({$tag}) for {$toEmail}: {$detail}");
+
             return;
         }
 

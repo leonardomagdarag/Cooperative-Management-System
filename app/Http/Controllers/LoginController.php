@@ -124,6 +124,7 @@ class LoginController extends Controller
                 $request->session()->put('security.pending_otp_purpose', $this->securityOtpService->newDevicePurpose());
                 $request->session()->put('security.pending_otp_fingerprint', $fingerprint);
                 $request->session()->put('security.intended_url', $redirectUrl);
+                $this->securityOtpService->stashDebugCode($request->session(), $issued['otp_code']);
 
                 if ($request->ajax() || $request->wantsJson()) {
                     return response()->json([

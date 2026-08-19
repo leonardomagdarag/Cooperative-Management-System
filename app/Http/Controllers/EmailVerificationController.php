@@ -18,7 +18,9 @@ class EmailVerificationController extends Controller
             return redirect()->route('dashboard');
         }
 
-        return response('Verify email', 200);
+        // Serve the SPA so the React VerifyEmailPage (resend + sign out) renders
+        // instead of a dead plain-text page the user can get stuck on.
+        return response()->view('react');
     }
 
     public function verify(EmailVerificationRequest $request): RedirectResponse

@@ -74,6 +74,7 @@ class AuthController extends Controller
                 'security.pending_otp_fingerprint' => $fingerprint,
                 'security.intended_url' => $redirect,
             ]);
+            $this->securityOtpService->stashDebugCode($request->session(), $issued['otp_code']);
 
             return response()->json([
                 'requires_otp' => true,

@@ -24,6 +24,13 @@
             <div class="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{{ session('success') }}</div>
         @endif
 
+        @if (config('app.env') === 'local' && session('security.pending_otp_debug_code'))
+            <div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                <p class="font-medium">Development code</p>
+                <p class="mt-1 font-mono text-2xl tracking-[0.4em]">{{ session('security.pending_otp_debug_code') }}</p>
+            </div>
+        @endif
+
         <form method="POST" action="{{ route('otp.challenge.verify') }}" class="space-y-4">
             @csrf
             <label for="otp" class="block text-sm font-medium text-slate-700">Verification code</label>
@@ -34,6 +41,11 @@
         <form method="POST" action="{{ route('otp.challenge.resend') }}" class="mt-3 text-center">
             @csrf
             <button type="submit" class="text-sm font-medium text-emerald-700 hover:text-emerald-800">Resend code</button>
+        </form>
+
+        <form method="POST" action="{{ route('logout') }}" class="mt-4 border-t border-slate-100 pt-4 text-center">
+            @csrf
+            <button type="submit" class="text-sm font-medium text-slate-500 hover:text-slate-700">Sign out</button>
         </form>
     </main>
 </body>

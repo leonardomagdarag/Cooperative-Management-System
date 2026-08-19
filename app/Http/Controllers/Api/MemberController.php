@@ -759,6 +759,13 @@ class MemberController extends Controller
 
         app(NotificationService::class)->sendMemberActivationEmail($user);
 
+        if (! $user->email_verified_at) {
+            // Public-registered members are approved here, but the verification
+            // link is only mailed on creation for admin-created members. Send it
+            // now so the `verified` gate after OTP does not strand the member.
+            app(NotificationService::class)->sendEmailVerification($user->refresh());
+        }
+
         return response()->json(['message' => 'Application approved and activation email sent.']);
     }
 
