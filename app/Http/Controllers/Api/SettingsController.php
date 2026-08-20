@@ -7,6 +7,7 @@ use App\Models\TrustedDevice;
 use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\SecurityOtpService;
+use App\Support\PersonPasswordPolicy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -18,13 +19,17 @@ class SettingsController extends Controller
 {
     public function changePassword(Request $request): JsonResponse
     {
+        $user = Auth::user();
+
         $validated = $request->validate([
             'current_password' => ['required', 'current_password'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'password' => array_merge(PersonPasswordPolicy::passwordRules(false, PersonPasswordPolicy::normalizedNameTokens([
+                $user->first_name,
+                $user->mid_name,
+                $user->last_name,
+            ])), ['confirmed']),
             'otp_code' => ['required', 'string', 'digits:6'],
         ]);
-
-        $user = Auth::user();
 
         $securityOtp = app(SecurityOtpService::class);
         $verified = $securityOtp->verifyChallenge($user, $securityOtp->passwordChangePurpose(), $validated['otp_code']);

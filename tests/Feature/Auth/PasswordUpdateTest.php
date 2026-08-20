@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 test('password can be updated', function () {
+    config()->set('session.driver', 'database');
+
     $user = User::factory()->create();
     $currentSessionId = 'profile-current-session';
     $otherSessionId = 'profile-other-session';
@@ -48,15 +50,15 @@ test('password can be updated', function () {
         ->from('/profile')
         ->put('/password', [
             'current_password' => 'password',
-            'password' => 'new-password',
-            'password_confirmation' => 'new-password',
+            'password' => 'New-pass123',
+            'password_confirmation' => 'New-pass123',
         ]);
 
     $response
         ->assertSessionHasNoErrors()
         ->assertRedirect('/profile');
 
-    $this->assertTrue(Hash::check('new-password', $user->refresh()->password));
+    $this->assertTrue(Hash::check('New-pass123', $user->refresh()->password));
     expect(DB::table('sessions')->where('id', $otherSessionId)->exists())->toBeFalse()
         ->and(DB::table('sessions')->where('user_id', $user->id)->count())->toBe(1);
 
@@ -72,8 +74,8 @@ test('correct password must be provided to update password', function () {
         ->from('/profile')
         ->put('/password', [
             'current_password' => 'wrong-password',
-            'password' => 'new-password',
-            'password_confirmation' => 'new-password',
+            'password' => 'New-pass123',
+            'password_confirmation' => 'New-pass123',
         ]);
 
     $response

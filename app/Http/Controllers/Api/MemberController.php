@@ -14,6 +14,7 @@ use App\Models\MemberId;
 use App\Models\PersonalData;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Support\PersonPasswordPolicy;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -187,7 +188,11 @@ class MemberController extends Controller
             'employer_name' => 'nullable|string|max:255',
             'position' => 'nullable|string|max:100',
             'monthly_income' => 'nullable|numeric|min:0',
-            'password' => ['required', 'string', 'min:8', 'max:128', 'regex:/[A-Z]/', 'regex:/[a-z]/', 'regex:/[0-9]/'],
+            'password' => PersonPasswordPolicy::passwordRules(false, PersonPasswordPolicy::normalizedNameTokens([
+                $request->input('first_name'),
+                $request->input('mid_name'),
+                $request->input('last_name'),
+            ])),
             'password_confirmation' => 'required|string|same:password',
             'role' => 'nullable|string|in:admin,manager,accountant,secretary,loan',
             'beneficiaries' => 'nullable|array',
@@ -355,7 +360,11 @@ class MemberController extends Controller
             'position' => 'nullable|string|max:100',
             'monthly_income' => 'nullable|numeric|min:0',
             'role' => 'nullable|string|in:admin,manager,accountant,secretary,loan',
-            'password' => 'nullable|string|min:8|max:128|regex:/[A-Z]/|regex:/[a-z]/|regex:/[0-9]/',
+            'password' => PersonPasswordPolicy::passwordRules(true, PersonPasswordPolicy::normalizedNameTokens([
+                $request->input('first_name'),
+                $request->input('mid_name'),
+                $request->input('last_name'),
+            ])),
             'beneficiaries' => 'nullable|array',
             'beneficiaries.*.first_name' => 'required|string|max:100',
             'beneficiaries.*.last_name' => 'required|string|max:100',
@@ -443,7 +452,7 @@ class MemberController extends Controller
                     'gender' => $validated['gender'] ?? null,
                     'civil_status' => $validated['civil_status'] ?? null,
                     'religion' => $validated['religion'] ?? null,
-                    'title' => $validated['title'] ?? null,
+                    'title' => $validated['title'] ?? 'Member',
                     'address_id' => $addressId,
                     'employment_id' => $employmentId,
                     'member_id' => $memberIdId,

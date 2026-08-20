@@ -6,6 +6,7 @@ use App\Services\AuditLogService;
 use App\Services\NotificationService;
 use App\Services\TurnstileService;
 use App\Models\User;
+use App\Support\PersonPasswordPolicy;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -260,10 +261,16 @@ class PasswordResetController extends Controller
         $request->merge(['email' => $email]);
 
         if (! preg_match('/^\d{6}$/', $token)) {
+            $subjectUser = User::query()->where('email', $email)->first();
+
             $request->validate([
                 'token' => 'required|string',
                 'email' => 'required|email',
-                'password' => 'required|min:8|confirmed',
+                'password' => array_merge(PersonPasswordPolicy::passwordRules(false, PersonPasswordPolicy::normalizedNameTokens([
+                    $subjectUser?->first_name,
+                    $subjectUser?->mid_name,
+                    $subjectUser?->last_name,
+                ])), ['confirmed']),
             ]);
 
             $status = Password::reset(
@@ -277,8 +284,6 @@ class PasswordResetController extends Controller
                     event(new PasswordReset($user));
                 }
             );
-
-            $subjectUser = User::query()->where('email', $email)->first();
 
             if ($status === Password::PASSWORD_RESET) {
                 $this->auditLogService->log(
@@ -312,10 +317,16 @@ class PasswordResetController extends Controller
                 : back()->withErrors(['email' => [__($status)]]);
         }
 
+        $resetUser = User::query()->where('email', $email)->first();
+
         $request->validate([
             'email' => 'required|email',
             'token' => 'required|digits:6',
-            'password' => 'required|min:8|confirmed',
+            'password' => array_merge(PersonPasswordPolicy::passwordRules(false, PersonPasswordPolicy::normalizedNameTokens([
+                $resetUser?->first_name,
+                $resetUser?->mid_name,
+                $resetUser?->last_name,
+            ])), ['confirmed']),
         ], [
             'token.digits' => 'The reset code must be 6 digits.',
         ]);
@@ -325,7 +336,7 @@ class PasswordResetController extends Controller
             ->where('email', $request->email)
             ->first();
 
-        $user = User::query()->where('email', $email)->first();
+        $user = $resetUser;
 
         if (!$resetRecord) {
             $this->auditLogService->log(
