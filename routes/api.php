@@ -197,6 +197,7 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     Route::post('/members/{user}/password/send-otp', [MemberController::class, 'sendPasswordChangeOtp']);
     Route::post('/members/{user}/approve', [MemberController::class, 'approve']);
     Route::post('/members/{user}/decline', [MemberController::class, 'decline']);
+    Route::post('/members/{user}/toggle-special-loan', [MemberController::class, 'toggleSpecialLoanEligibility']);
     Route::get('/members/{user}', [MemberController::class, 'show']);
     Route::post('/members', [MemberController::class, 'store']);
     Route::put('/members/{user}', [MemberController::class, 'update']);

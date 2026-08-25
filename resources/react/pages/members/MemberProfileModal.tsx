@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import { useToast } from '../../contexts/ToastContext';
 
 const TABS = [
     { key: 'overview', label: 'Overview' },
@@ -11,18 +12,68 @@ const TABS = [
     { key: 'employment', label: 'Employment' },
     { key: 'beneficiaries', label: 'Beneficiaries' },
     { key: 'financial', label: 'Financial' },
+    { key: 'documents', label: 'Documents' },
     { key: 'activity', label: 'Activity' },
 ];
 
-export default function MemberProfileModal({ memberId, onClose, canApprove, onApprove, onDecline, isApproving, isDeclining }: { memberId: number; onClose: () => void; canApprove?: boolean; onApprove?: (id: number) => void; onDecline?: () => void; isApproving?: boolean; isDeclining?: boolean }) {
+const ID_ROWS = [
+    { key: 'national_id', photo: 'national_id_photo', label: 'National ID (PhilSys)' },
+    { key: 'tin', photo: 'tin_photo', label: 'TIN' },
+    { key: 'sss', photo: 'sss_photo', label: 'SSS Number' },
+    { key: 'philhealth', photo: 'philhealth_photo', label: 'PhilHealth Number' },
+    { key: 'barangay_id', photo: 'barangay_id_photo', label: 'Barangay ID' },
+];
+
+const LOAN_STATUS_COLORS: Record<string, string> = {
+    pending: 'bg-yellow-100 text-yellow-800',
+    approved: 'bg-emerald-100 text-emerald-700',
+    active: 'bg-emerald-100 text-emerald-700',
+    rejected: 'bg-red-100 text-red-700',
+    closed: 'bg-gray-100 text-gray-600',
+    paid: 'bg-gray-100 text-gray-600',
+};
+
+export default function MemberProfileModal({ memberId, onClose, onEdit, canEdit, canViewFullId, canApprove, onApprove, onDecline, isApproving, isDeclining }: { memberId: number; onClose: () => void; onEdit?: () => void; canEdit?: boolean; canViewFullId?: boolean; canApprove?: boolean; onApprove?: (id: number) => void; onDecline?: () => void; isApproving?: boolean; isDeclining?: boolean }) {
     const [activeTab, setActiveTab] = useState('overview');
+    const [lightbox, setLightbox] = useState<string | null>(null);
+    const queryClient = useQueryClient();
+    const { addToast } = useToast();
 
     const { data, isLoading } = useQuery({
         queryKey: ['member', memberId],
         queryFn: () => api.get(`/api/members/${memberId}`),
     });
 
+    const toggleMutation = useMutation({
+        mutationFn: () => api.post(`/api/members/${memberId}/toggle-special-loan`),
+        onSuccess: (res: any) => {
+            queryClient.invalidateQueries({ queryKey: ['member', memberId] });
+            addToast(res?.data?.special_loan_eligible ? 'Special loan eligibility enabled' : 'Special loan eligibility disabled', 'success');
+        },
+        onError: (err: any) => addToast(err.response?.data?.message || 'Failed to update eligibility', 'error'),
+    });
+
     const m = data?.data;
+
+    const fmtDate = (d: string | undefined) => {
+        if (!d) return 'N/A';
+        const date = new Date(d);
+        return isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    };
+
+    const peso = (n: any) => `₱${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    const maskedId = (val: string | undefined) => {
+        if (!val) return null;
+        return `********${val.slice(-3)}`;
+    };
+
+    const isImageUrl = (url: string) => /\.(jpe?g|png|gif|webp)$/i.test(url);
+
+    const beneficiaryAddress = (b: any) => {
+        const parts = [b.street, b.barangay, b.city, b.province, b.postal_code].filter(Boolean);
+        return parts.length ? parts.join(', ') : 'N/A';
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={onClose}>
@@ -56,11 +107,15 @@ export default function MemberProfileModal({ memberId, onClose, canApprove, onAp
                             {activeTab === 'overview' && (
                                 <div className="space-y-5">
                                     <div className="flex items-center gap-4">
-                                        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
-                                            <span className="text-2xl font-bold text-emerald-600">
-                                                {m.personal_data?.first_name?.charAt(0)}{m.personal_data?.last_name?.charAt(0)}
-                                            </span>
-                                        </div>
+                                        {m.personal_data?.profile_picture ? (
+                                            <img src={m.personal_data.profile_picture} alt="Profile" className="h-16 w-16 rounded-full object-cover border-2 border-emerald-200" />
+                                        ) : (
+                                            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+                                                <span className="text-2xl font-bold text-emerald-600">
+                                                    {m.personal_data?.first_name?.charAt(0)}{m.personal_data?.last_name?.charAt(0)}
+                                                </span>
+                                            </div>
+                                        )}
                                         <div>
                                             <p className="text-lg font-semibold text-gray-900">{m.personal_data?.first_name} {m.personal_data?.mid_name ? m.personal_data.mid_name + ' ' : ''}{m.personal_data?.last_name}</p>
                                             <p className="text-sm text-gray-500">{m.user_number} &middot; {m.email}</p>
@@ -87,7 +142,7 @@ export default function MemberProfileModal({ memberId, onClose, canApprove, onAp
                                         <InfoRow label="Primary Role" value={m.primary_role} />
                                         <InfoRow label="Gender" value={m.personal_data?.gender} />
                                         <InfoRow label="Civil Status" value={m.personal_data?.civil_status} />
-                                        <InfoRow label="Birth Date" value={m.personal_data?.birth_date} />
+                                        <InfoRow label="Birth Date" value={fmtDate(m.personal_data?.birth_date)} />
                                     </div>
                                 </div>
                             )}
@@ -113,7 +168,7 @@ export default function MemberProfileModal({ memberId, onClose, canApprove, onAp
                                     <InfoRow label="City" value={m.address?.city} />
                                     <InfoRow label="Barangay" value={m.address?.barangay} />
                                     <InfoRow label="Street" value={m.address?.street} />
-                                    <InfoRow label="ZIP Code" value={m.address?.zip_code} />
+                                    <InfoRow label="ZIP Code" value={m.address?.postal_code} />
                                 </div>
                             )}
 
@@ -126,33 +181,58 @@ export default function MemberProfileModal({ memberId, onClose, canApprove, onAp
                             )}
 
                             {activeTab === 'ids' && (
-                                <div className="grid grid-cols-2 gap-3">
-                                    <InfoRow label="National ID" value={m.personal_data?.national_id} />
-                                    <InfoRow label="TIN" value={m.personal_data?.tin} />
-                                    <InfoRow label="SSS" value={m.personal_data?.sss} />
-                                    <InfoRow label="PhilHealth" value={m.personal_data?.philhealth} />
-                                    <InfoRow label="Barangay ID" value={m.personal_data?.barangay_id} />
+                                <div className="space-y-3">
+                                    {ID_ROWS.map(row => {
+                                        const fieldVal = m.member_ids?.[row.key];
+                                        const photoVal = m.member_ids?.[row.photo];
+                                        return (
+                                            <div key={row.key} className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3">
+                                                <div className="min-w-0">
+                                                    <p className="text-xs text-gray-500">{row.label}</p>
+                                                    <p className="text-sm font-mono font-medium text-gray-900 mt-0.5">
+                                                        {fieldVal ? (canViewFullId ? fieldVal : maskedId(fieldVal)) : <span className="text-gray-400 font-normal">N/A</span>}
+                                                    </p>
+                                                </div>
+                                                {canViewFullId && (photoVal ? (
+                                                    <img src={photoVal} alt={`${row.label} photo`} onClick={() => setLightbox(photoVal)} className="ml-3 h-10 w-16 rounded-lg border border-gray-200 object-cover cursor-pointer hover:opacity-90 transition-opacity" />
+                                                ) : (
+                                                    <div className="ml-3 flex h-10 w-16 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50">
+                                                        <i className="fas fa-id-card text-gray-300"></i>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             )}
 
                             {activeTab === 'employment' && (
                                 <div className="grid grid-cols-2 gap-3">
                                     <InfoRow label="Employment Type" value={m.employment?.employment_type} />
-                                    <InfoRow label="Employer Name" value={m.employment?.employer_name} />
+                                    <InfoRow label="Employer Name" value={m.employment?.company} />
                                     <InfoRow label="Position" value={m.employment?.position} />
-                                    <InfoRow label="Monthly Income" value={m.employment?.monthly_income ? `₱${Number(m.employment.monthly_income).toLocaleString()}` : undefined} />
+                                    <InfoRow label="Monthly Income" value={m.employment?.monthly_income != null ? peso(m.employment.monthly_income) : 'N/A'} />
+                                    {m.employment?.other_income_source && (
+                                        <InfoRow label="Other Income" value={`${m.employment.other_income_source}${m.employment.other_income_amount != null ? ` (${peso(m.employment.other_income_amount)})` : ''}`} />
+                                    )}
                                 </div>
                             )}
 
                             {activeTab === 'beneficiaries' && (
                                 <div className="space-y-3">
                                     {m.beneficiaries?.length > 0 ? m.beneficiaries.map((b: any) => (
-                                        <div key={b.id} className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3">
-                                            <div>
-                                                <p className="font-medium text-gray-900">{b.first_name} {b.last_name}</p>
-                                                <p className="text-sm text-gray-500">{b.relationship}</p>
+                                        <div key={b.id} className="rounded-lg border border-gray-100 px-4 py-3">
+                                            <div className="flex items-start justify-between">
+                                                <div>
+                                                    <p className="font-medium text-gray-900">{b.first_name} {b.mid_name ? b.mid_name[0] + '. ' : ''}{b.last_name}</p>
+                                                    <span className="mt-1 inline-block px-2 py-0.5 text-xs font-medium rounded bg-indigo-50 text-indigo-700">{b.relationship}</span>
+                                                </div>
                                             </div>
-                                            {b.percentage && <span className="text-sm font-medium text-indigo-600">{b.percentage}%</span>}
+                                            <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                                                <InfoRow label="Date of Birth" value={fmtDate(b.birth_date)} />
+                                                <InfoRow label="Contact Number" value={b.phone_no} />
+                                            </div>
+                                            <p className="mt-2 text-sm text-gray-600"><span className="text-xs text-gray-500">Address: </span>{beneficiaryAddress(b)}</p>
                                         </div>
                                     )) : <p className="text-sm text-gray-500">No beneficiaries.</p>}
                                 </div>
@@ -171,8 +251,7 @@ export default function MemberProfileModal({ memberId, onClose, canApprove, onAp
                                                             {a.account_number && <p className="text-xs text-gray-500">{a.account_number}</p>}
                                                         </div>
                                                         <div className="text-right">
-                                                            <p className="font-semibold text-gray-900">₱{Number(a.balance).toLocaleString()}</p>
-                                                            {a.status && <p className="text-xs text-gray-500">{a.status}</p>}
+                                                            <p className="font-semibold text-gray-900">{peso(a.balance)}</p>
                                                         </div>
                                                     </div>
                                                 ))}
@@ -187,22 +266,29 @@ export default function MemberProfileModal({ memberId, onClose, canApprove, onAp
                                                     <div key={l.id} className="rounded-lg border border-gray-100 px-4 py-3 space-y-2">
                                                         <div className="flex items-center justify-between">
                                                             <div>
-                                                                <p className="font-medium text-gray-900">{l.loan_type || l.type}</p>
-                                                                <p className="text-xs text-gray-500">{l.loan_number}</p>
+                                                                <p className="font-medium text-gray-900">{l.loan_type ? l.loan_type.charAt(0).toUpperCase() + l.loan_type.slice(1) : ''} Loan</p>
+                                                                <p className="text-xs text-gray-500">Loan No: {l.loan_number}</p>
                                                             </div>
                                                             <div className="text-right">
-                                                                <p className="font-semibold text-gray-900">₱{Number(l.amount).toLocaleString()}</p>
-                                                                <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${l.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{l.status}</span>
+                                                                <p className="font-semibold text-gray-900">{peso(l.loan_amount)}</p>
+                                                                <span className={`mt-0.5 inline-block px-2 py-0.5 text-xs font-semibold rounded-full ${LOAN_STATUS_COLORS[l.loan_status] || 'bg-gray-100 text-gray-600'}`}>{l.loan_status}</span>
                                                             </div>
                                                         </div>
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="flex-1 h-1.5 rounded-full bg-gray-200 overflow-hidden">
-                                                                <div className="h-full rounded-full bg-indigo-500" style={{ width: `${l.progress || 0}%` }} />
-                                                            </div>
-                                                            <span className="text-xs text-gray-500">{l.progress || 0}%</span>
+                                                        <div className="flex items-center gap-1 text-sm text-gray-600">
+                                                            {l.interest_rate != null && <span>{l.interest_rate}% &middot; {l.term_months} months</span>}
+                                                            {l.applied_at && <span className="ml-auto">Applied {fmtDate(l.applied_at)}</span>}
                                                         </div>
-                                                        {l.remaining_balance !== undefined && (
-                                                            <p className="text-xs text-gray-500">Remaining: ₱{Number(l.remaining_balance).toLocaleString()}</p>
+                                                        {['approved', 'active'].includes(l.loan_status) && (
+                                                            <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                                                                <div>
+                                                                    <p className="text-xs text-gray-500">Remaining Balance</p>
+                                                                    <p className="font-semibold text-red-600">{peso(l.remaining_balance)}</p>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <p className="text-xs text-gray-500">Due Date</p>
+                                                                    <p className="text-sm font-medium text-gray-900">{fmtDate(l.due_date)}</p>
+                                                                </div>
+                                                            </div>
                                                         )}
                                                     </div>
                                                 ))}
@@ -210,6 +296,70 @@ export default function MemberProfileModal({ memberId, onClose, canApprove, onAp
                                         </div>
                                     )}
                                     {(!m.accounts?.length && !m.loans?.length) && <p className="text-sm text-gray-500">No financial records.</p>}
+                                </div>
+                            )}
+
+                            {activeTab === 'documents' && (
+                                <div className="space-y-6">
+                                    <div>
+                                        <h3 className="mb-3 text-sm font-semibold text-gray-700">Profile Photo</h3>
+                                        {m.personal_data?.profile_picture ? (
+                                            <div className="flex items-center gap-4">
+                                                <img src={m.personal_data.profile_picture} alt="Profile photo" onClick={() => setLightbox(m.personal_data.profile_picture)} className="h-20 w-20 rounded-full object-cover border-2 border-gray-200 cursor-pointer hover:opacity-90 transition-opacity" />
+                                                <a href={m.personal_data.profile_picture} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:text-blue-800"><i className="fas fa-external-link-alt mr-1"></i>View full size</a>
+                                            </div>
+                                        ) : <p className="text-sm text-gray-500">No profile photo uploaded.</p>}
+                                    </div>
+                                    <div>
+                                        <h3 className="mb-3 text-sm font-semibold text-gray-700">Government ID Photos</h3>
+                                        {canViewFullId ? (
+                                            ID_ROWS.some(row => m.member_ids?.[row.photo]) ? (
+                                                <div className="grid grid-cols-1 gap-2">
+                                                    {ID_ROWS.filter(row => m.member_ids?.[row.photo]).map(row => (
+                                                        <div key={row.key} className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3">
+                                                            <p className="text-sm font-medium text-gray-700">{row.label}</p>
+                                                            <img src={m.member_ids[row.photo]} alt={`${row.label} photo`} onClick={() => setLightbox(m.member_ids[row.photo])} className="h-12 w-20 rounded-lg border border-gray-200 object-cover cursor-pointer hover:opacity-90 transition-opacity" />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm text-gray-500">No ID photos uploaded.</p>
+                                            )
+                                        ) : (
+                                            <p className="text-sm text-gray-500">ID photos require the members.view-full-details permission.</p>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <h3 className="mb-3 text-sm font-semibold text-gray-700">Other Member Documents</h3>
+                                        {(() => {
+                                            const docs = [
+                                                { label: 'Proof of Registration', path: m.member_ids?.agreement_url },
+                                                { label: 'Other Supporting Document', path: m.member_ids?.other_document },
+                                            ].filter(d => d.path);
+                                            return docs.length > 0 ? (
+                                                <div className="space-y-2">
+                                                    {docs.map(doc => (
+                                                        <div key={doc.label} className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3">
+                                                            <div className="flex min-w-0 items-center gap-3">
+                                                                {isImageUrl(doc.path!) ? (
+                                                                    <img src={doc.path} alt={doc.label} onClick={() => setLightbox(doc.path!)} className="h-12 w-16 rounded-lg border border-gray-200 object-cover cursor-pointer hover:opacity-90 transition-opacity" />
+                                                                ) : (
+                                                                    <div className="flex h-12 w-16 shrink-0 items-center justify-center rounded-lg border border-red-100 bg-red-50 text-red-500"><i className="fas fa-file-alt"></i></div>
+                                                                )}
+                                                                <div className="min-w-0">
+                                                                    <p className="text-sm font-medium text-gray-900">{doc.label}</p>
+                                                                    <p className="truncate text-xs text-gray-500">{doc.path!.split('/').pop()}</p>
+                                                                </div>
+                                                            </div>
+                                                            <a href={doc.path} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:text-blue-800"><i className="fas fa-external-link-alt mr-1"></i>Open</a>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm text-gray-500">No additional documents uploaded.</p>
+                                            );
+                                        })()}
+                                    </div>
                                 </div>
                             )}
 
@@ -233,7 +383,49 @@ export default function MemberProfileModal({ memberId, onClose, canApprove, onAp
                         </>
                     ) : null}
                 </div>
+
+                <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 shrink-0">
+                    <div className="flex items-center">
+                        {canEdit && !m?.archived_at && (
+                            <label className="inline-flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={!!m?.special_loan_eligible}
+                                    onChange={() => toggleMutation.mutate()}
+                                    disabled={toggleMutation.isPending}
+                                    className="sr-only peer"
+                                />
+                                <div className="relative w-10 h-5.5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4.5 after:w-4.5 after:transition-all peer-checked:bg-indigo-600"></div>
+                                <span className="ms-3 text-sm font-medium text-gray-700">Special Loan Eligible</span>
+                            </label>
+                        )}
+                        {canEdit && onEdit && !m?.archived_at && (
+                            <button
+                                onClick={onEdit}
+                                className="ml-4 inline-flex items-center px-3 py-1.5 text-sm font-medium text-indigo-700 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors"
+                            >
+                                <i className="fas fa-edit mr-1.5"></i>Edit Member
+                            </button>
+                        )}
+                        {m?.archived_at && (
+                            <span className="text-sm text-gray-500"><i className="fas fa-archive mr-1"></i>Archived member</span>
+                        )}
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="text-gray-500 bg-white hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-200 rounded-lg border border-gray-200 text-sm font-medium px-5 py-2.5 hover:text-gray-900 focus:z-10 transition-colors"
+                    >
+                        Close
+                    </button>
+                </div>
             </div>
+
+            {lightbox && (
+                <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4" onClick={() => setLightbox(null)}>
+                    <img src={lightbox} alt="Preview full" className="max-w-full max-h-full rounded-lg shadow-2xl" onClick={e => e.stopPropagation()} />
+                    <button onClick={() => setLightbox(null)} className="absolute top-4 right-4 text-white/80 hover:text-white text-2xl"><i className="fas fa-times"></i></button>
+                </div>
+            )}
         </div>
     );
 }
