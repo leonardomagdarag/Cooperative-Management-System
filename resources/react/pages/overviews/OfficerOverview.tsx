@@ -1,6 +1,7 @@
 import { useAuth } from '../../contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import { formatPermissionLabel } from '../../lib/permissions';
 
 export default function OfficerOverview() {
     const { user } = useAuth();
@@ -35,7 +36,7 @@ export default function OfficerOverview() {
 
                     <div className="rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-4">
                         <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700">Account status</p>
-                        <p className="mt-2 text-lg font-semibold text-cyan-900 capitalize">Active</p>
+                        <p className="mt-2 text-lg font-semibold text-cyan-900 capitalize">{user?.account_status || 'Active'}</p>
                     </div>
                 </div>
             </div>
@@ -55,7 +56,7 @@ export default function OfficerOverview() {
                         <div className="flex flex-wrap gap-2">
                             {permissions.map((p: string) => (
                                 <span key={p} className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700">
-                                    {p.split('.').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                                    {formatPermissionLabel(p)}
                                 </span>
                             ))}
                         </div>

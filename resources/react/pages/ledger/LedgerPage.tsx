@@ -50,8 +50,13 @@ export default function LedgerPage() {
     const summary = summaryData?.data;
 
     const getTypeColor = (t: string) => {
-        const c: Record<string, string> = { deposit: 'bg-emerald-100 text-emerald-700', withdrawal: 'bg-red-100 text-red-700', loan_payment: 'bg-blue-100 text-blue-700', loan_disbursement: 'bg-amber-100 text-amber-700', fee: 'bg-slate-100 text-slate-700' };
-        return c[t] || 'bg-slate-100 text-slate-700';
+        const c: Record<string, string> = { deposit: 'bg-blue-100 text-blue-800', withdrawal: 'bg-orange-100 text-orange-800', loan_payment: 'bg-green-100 text-green-800', loan_disbursement: 'bg-purple-100 text-purple-800', fee: 'bg-red-100 text-red-800' };
+        return c[t] || 'bg-gray-100 text-gray-800';
+    };
+
+    const getTypeLabel = (t: string) => {
+        const c: Record<string, string> = { deposit: 'Deposit', withdrawal: 'Withdrawal', loan_payment: 'Loan Payment', loan_disbursement: 'Loan Disbursement', fee: 'Fee' };
+        return c[t] || t.replace(/_/g, ' ');
     };
 
     const openAdd = () => { reset(); setEditingId(null); setForm({ transaction_type: 'deposit', amount: '', note: '', account_id: '', loan_id: '', transaction_date: new Date().toISOString().slice(0, 10) }); setShowAddModal(true); };
@@ -150,6 +155,7 @@ export default function LedgerPage() {
                             <thead className="bg-gray-100">
                                 <tr>
                                     <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Txn #</th>
+                                    <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Member</th>
                                     <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Type</th>
                                     <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Amount</th>
                                     <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Status</th>
@@ -162,8 +168,9 @@ export default function LedgerPage() {
                                 {transactions.map((t: any) => (
                                     <tr key={t.id} className="hover:bg-gray-50">
                                         <td className="p-4 text-sm font-medium text-gray-900">{t.transaction_number}</td>
-                                        <td className="p-4"><span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${getTypeColor(t.transaction_type)}`}>{t.transaction_type.replace('_', ' ')}</span></td>
-                                        <td className="p-4 text-sm font-medium text-gray-900">₱{Number(t.amount).toLocaleString()}</td>
+                                        <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{t.account_holder || '—'}{t.user_number && <div className="text-xs text-gray-500">{t.user_number}</div>}</td>
+                                        <td className="p-4"><span className={`px-2.5 py-0.5 text-xs font-medium rounded ${getTypeColor(t.transaction_type)}`}>{getTypeLabel(t.transaction_type)}</span></td>
+                                        <td className={`p-4 text-sm font-semibold whitespace-nowrap ${t.transaction_type === 'withdrawal' || t.transaction_type === 'fee' ? 'text-red-600' : 'text-green-600'}`}>{(t.transaction_type === 'withdrawal' || t.transaction_type === 'fee') ? '-' : '+'}₱{Number(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                         <td className="p-4"><span className={`text-xs font-medium ${t.status === 'completed' ? 'text-emerald-600' : 'text-amber-600'}`}>{t.status}</span></td>
                                         <td className="p-4 text-sm text-gray-500">{t.note || '—'}</td>
                                         <td className="p-4 text-sm text-gray-500">{t.transaction_date || '—'}</td>
@@ -185,7 +192,7 @@ export default function LedgerPage() {
                 {pagination && pagination.last_page > 1 && (
                     <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 flex items-center justify-center gap-2">
                         <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm disabled:opacity-50">Previous</button>
-                        <span className="text-sm text-gray-500">Page {page} of {pagination.last_page}</span>
+                        <span className="text-sm font-normal text-gray-500">Showing <span className="font-semibold text-gray-900">{((page - 1) * pagination.per_page + 1)}-{Math.min(page * pagination.per_page, pagination.total)}</span> of <span className="font-semibold text-gray-900">{pagination.total}</span></span>
                         <button onClick={() => setPage(p => Math.min(pagination.last_page, p + 1))} disabled={page === pagination.last_page} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm disabled:opacity-50">Next</button>
                     </div>
                 )}

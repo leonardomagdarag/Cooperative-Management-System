@@ -183,7 +183,7 @@ export default function AdminOverview() {
                                     {pendingTx.map((t: any) => (
                                         <tr key={t.id} className="hover:bg-gray-50/50 transition-colors">
                                             <td className="px-6 py-3 font-mono text-xs">{t.transaction_number}</td>
-                                            <td className="px-6 py-3"><span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">{t.transaction_type?.replace(/_/g, ' ')}</span></td>
+                                            <td className="px-6 py-3"><span className={`px-2.5 py-0.5 text-xs font-medium rounded ${txBadgeColor(t.transaction_type)}`}>{txBadgeLabel(t.transaction_type)}</span></td>
                                             <td className="px-6 py-3 text-xs">{t.member_name}</td>
                                             <td className="px-6 py-3 font-medium">₱{Number(t.amount).toLocaleString()}</td>
                                             <td className="px-6 py-3 text-xs text-gray-400">{t.created_at}</td>
@@ -234,6 +234,16 @@ export default function AdminOverview() {
             </div>
         </div>
     );
+}
+
+function txBadgeColor(type: string): string {
+    const c: Record<string, string> = { deposit: 'bg-blue-100 text-blue-800', withdrawal: 'bg-orange-100 text-orange-800', loan_payment: 'bg-green-100 text-green-800', loan_disbursement: 'bg-purple-100 text-purple-800', fee: 'bg-red-100 text-red-800' };
+    return c[type] || 'bg-gray-100 text-gray-800';
+}
+
+function txBadgeLabel(type: string): string {
+    const c: Record<string, string> = { deposit: 'Deposit', withdrawal: 'Withdrawal', loan_payment: 'Loan Payment', loan_disbursement: 'Loan Disbursement', fee: 'Fee' };
+    return c[type] || type?.replace(/_/g, ' ') || 'Unknown';
 }
 
 function KpiCard({ label, value, icon, color, badge, detail }: { label: string; value: string; icon: string; color: string; badge?: string; detail?: string }) {

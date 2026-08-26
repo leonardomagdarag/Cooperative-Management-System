@@ -7,6 +7,8 @@ interface User {
     email: string;
     email_verified?: boolean;
     primary_role: string;
+    account_status?: string;
+    first_name?: string;
     permissions: string[];
     profile_photo_url?: string;
     profile_completion_required?: boolean;

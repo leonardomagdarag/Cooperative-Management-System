@@ -9,6 +9,8 @@ export default function LoansPage() {
     const { user } = useAuth();
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
+    const [sort, setSort] = useState('created_at');
+    const [direction, setDirection] = useState<'asc' | 'desc'>('desc');
     const [selectedLoanId, setSelectedLoanId] = useState<number | null>(null);
     const [activeTab, setActiveTab] = useState('overview');
     const [showEncodeModal, setShowEncodeModal] = useState(false);
@@ -24,8 +26,8 @@ export default function LoansPage() {
     const { addToast } = useToast();
 
     const { data, isLoading } = useQuery({
-        queryKey: ['loans', search, page],
-        queryFn: () => api.get('/api/loans', { params: { search: search || undefined, page, per_page: 10 } }),
+        queryKey: ['loans', search, page, sort, direction],
+        queryFn: () => api.get('/api/loans', { params: { search: search || undefined, page, per_page: 10, sort, direction } }),
     });
 
     const { data: loanDetail } = useQuery({
@@ -136,9 +138,29 @@ export default function LoansPage() {
     const canManage = !!canEncode;
 
     const getStatusColor = (s: string) => {
-        const c: Record<string, string> = { pending: 'bg-amber-100 text-amber-700', approved: 'bg-blue-100 text-blue-700', active: 'bg-emerald-100 text-emerald-700', paid_off: 'bg-slate-100 text-slate-700', rejected: 'bg-red-100 text-red-700' };
-        return c[s] || 'bg-slate-100 text-slate-700';
+        const c: Record<string, string> = { pending: 'bg-yellow-100 text-yellow-800', approved: 'bg-green-100 text-green-800', active: 'bg-blue-100 text-blue-800', paid_off: 'bg-gray-100 text-gray-800', rejected: 'bg-red-100 text-red-800' };
+        return c[s] || 'bg-gray-100 text-gray-800';
     };
+
+    const getStatusLabel = (s: string) => {
+        const c: Record<string, string> = { pending: 'Pending', approved: 'Approved', active: 'Active', paid_off: 'Paid Off', rejected: 'Rejected' };
+        return c[s] || s;
+    };
+
+    const toggleSort = (field: string) => {
+        if (sort === field) {
+            setDirection(d => (d === 'desc' ? 'asc' : 'desc'));
+        } else {
+            setSort(field);
+            setDirection('asc');
+        }
+    };
+
+    const sortableTh = (label: string, field: string) => (
+        <th onClick={() => toggleSort(field)} className={`p-4 text-xs font-medium text-left text-gray-500 uppercase cursor-pointer hover:bg-gray-200 ${sort === field ? 'text-blue-700' : ''}`}>
+            {label} {sort === field && <span className="ml-1">{direction === 'asc' ? '↑' : '↓'}</span>}
+        </th>
+    );
 
     const detail = loanDetail?.data;
     const tabs = [
@@ -186,9 +208,10 @@ export default function LoansPage() {
                                 <tr>
                                     <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Loan #</th>
                                     <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Member</th>
-                                    <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Type</th>
-                                    <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Amount</th>
-                                    <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Status</th>
+                                    {sortableTh('Amount', 'loan_amount')}
+                                    {sortableTh('Type', 'loan_type')}
+                                    {sortableTh('Status', 'loan_status')}
+                                    {sortableTh('Date', 'created_at')}
                                     <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Actions</th>
                                 </tr>
                             </thead>
@@ -196,12 +219,13 @@ export default function LoansPage() {
                                 {loans.map((l: any) => (
                                     <tr key={l.id} className="hover:bg-gray-50">
                                         <td className="p-4 text-sm font-medium text-gray-900">{l.loan_number}</td>
-                                        <td className="p-4 text-sm text-gray-500">{l.borrower?.name || 'Unknown'}</td>
-                                        <td className="p-4 text-sm text-gray-500">{l.loan_type}</td>
-                                        <td className="p-4 text-sm font-medium text-gray-900">₱{Number(l.loan_amount).toLocaleString()}</td>
+                                        <td className="p-4 text-sm font-medium text-gray-900">{l.borrower?.name || 'Unknown'}{l.borrower?.user_number && <div className="text-xs text-gray-500">{l.borrower.user_number}</div>}</td>
+                                        <td className="p-4 text-base font-semibold text-gray-900">₱{Number(l.loan_amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                        <td className="p-4"><span className="px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded capitalize">{l.loan_type}</span></td>
                                         <td className="p-4">
-                                            <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${getStatusColor(l.loan_status)}`}>{l.loan_status}</span>
+                                            <span className={`px-2.5 py-0.5 text-xs font-medium rounded ${getStatusColor(l.loan_status)}`}>{getStatusLabel(l.loan_status)}</span>
                                         </td>
+                                        <td className="p-4 text-sm text-gray-900">{l.created_at}</td>
                                         <td className="p-4">
                                             <div className="flex items-center gap-1">
                                                 <button onClick={() => { setSelectedLoanId(l.id); setActiveTab('overview'); }} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="View">
@@ -239,7 +263,7 @@ export default function LoansPage() {
                 {pagination && pagination.last_page > 1 && (
                     <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 flex items-center justify-center gap-2">
                         <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm disabled:opacity-50">Previous</button>
-                        <span className="text-sm text-gray-500">Page {page} of {pagination.last_page}</span>
+                        <span className="text-sm font-normal text-gray-500">Showing <span className="font-semibold text-gray-900">{((page - 1) * pagination.per_page + 1)}-{Math.min(page * pagination.per_page, pagination.total)}</span> of <span className="font-semibold text-gray-900">{pagination.total}</span></span>
                         <button onClick={() => setPage(p => Math.min(pagination.last_page, p + 1))} disabled={page === pagination.last_page} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm disabled:opacity-50">Next</button>
                     </div>
                 )}

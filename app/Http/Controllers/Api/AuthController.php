@@ -154,6 +154,8 @@ class AuthController extends Controller
             'email' => $user->email,
             'email_verified' => (bool) $user->hasVerifiedEmail(),
             'primary_role' => $user->primary_role,
+            'account_status' => $user->account_status ?? 'active',
+            'first_name' => $user->personalData?->first_name,
             'profile_completion_required' => $user->requiresProfileCompletion(),
             'permissions' => $permissions,
             'profile_photo_url' => $user->personalData?->profile_picture

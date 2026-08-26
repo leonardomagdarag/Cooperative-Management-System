@@ -166,6 +166,7 @@ export default function MembersPage() {
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-[24%]">Name</th>
                                             {canViewMemberId && <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-32">Member ID</th>}
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-32">Status</th>
+                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-28">Join Date</th>
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-[30%]">Email</th>
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-28">Actions</th>
                                         </tr>
@@ -185,6 +186,7 @@ export default function MembersPage() {
                                                         <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${m.account_status === 'active' ? 'bg-emerald-100 text-emerald-700' : m.account_status === 'terminated' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>{m.account_status}</span>
                                                     )}
                                                 </td>
+                                                <td className="p-4 text-sm text-gray-500 whitespace-nowrap">{m.created_at ? new Date(m.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : '—'}</td>
                                                 <td className="p-4 min-w-0">
                                                     <span className="block truncate text-sm text-gray-500" title={m.email}>{m.email || '—'}</span>
                                                 </td>
@@ -217,7 +219,7 @@ export default function MembersPage() {
             {pagination.last_page > 1 && (
                 <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 flex items-center justify-center gap-2">
                     <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50">Previous</button>
-                    <span className="text-sm text-gray-500">Page {page} of {pagination.last_page}</span>
+                    <span className="text-sm font-normal text-gray-500">Showing <span className="font-semibold text-gray-900">{((page - 1) * pagination.per_page + 1)}-{Math.min(page * pagination.per_page, pagination.total)}</span> of <span className="font-semibold text-gray-900">{pagination.total}</span></span>
                     <button onClick={() => setPage(p => Math.min(pagination.last_page, p + 1))} disabled={page === pagination.last_page} className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50">Next</button>
                 </div>
             )}
