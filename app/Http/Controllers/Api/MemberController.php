@@ -28,6 +28,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Spatie\Activitylog\Models\Activity;
 
 class MemberController extends Controller
 {
@@ -132,6 +133,15 @@ class MemberController extends Controller
 
         $pd = $user->personalData;
 
+        $recentLogs = Activity::query()
+            ->where(function ($q) use ($user) {
+                $q->where(fn ($q) => $q->where('causer_type', $user::class)->where('causer_id', $user->id))
+                    ->orWhere(fn ($q) => $q->where('subject_type', $user::class)->where('subject_id', $user->id));
+            })
+            ->latest()
+            ->take(8)
+            ->get();
+
         return response()->json([
             'id' => $user->id,
             'user_number' => $user->user_number,
@@ -206,6 +216,12 @@ class MemberController extends Controller
                 'approved_at' => $l->approved_at?->toISOString(),
                 'due_date' => $l->due_date?->toDateString(),
                 'remaining_balance' => $l->remainingBalance(),
+            ]),
+            'recent_logs' => $recentLogs->map(fn ($log) => [
+                'id' => $log->id,
+                'description' => $log->description,
+                'event' => $log->event,
+                'created_at' => $log->created_at->toISOString(),
             ]),
         ]);
     }
