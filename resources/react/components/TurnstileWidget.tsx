@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 
@@ -8,6 +8,7 @@ declare global {
             render: (container: string | HTMLElement, options: Record<string, string>) => string;
             reset: (widgetId: string) => void;
             remove: (widgetId: string) => void;
+            getResponse: (widgetId: string) => string;
         };
     }
 }
@@ -34,8 +35,14 @@ function loadTurnstileScript(): Promise<void> {
     return scriptLoadPromise;
 }
 
-export default function TurnstileWidget() {
+interface TurnstileWidgetRef {
+    getToken: () => string | null;
+    reset: () => void;
+}
+
+export default forwardRef<TurnstileWidgetRef, {}>(function TurnstileWidget(props, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
+    const widgetIdRef = useRef<string>('');
 
     const { data: pc } = useQuery({
         queryKey: ['public-content'],
@@ -45,26 +52,42 @@ export default function TurnstileWidget() {
 
     const siteKey = pc?.data?.turnstile_site_key;
 
+    useImperativeHandle(ref, () => ({
+        getToken: () => {
+            if (widgetIdRef.current && window.turnstile) {
+                return window.turnstile.getResponse(widgetIdRef.current);
+            }
+            return null;
+        },
+        reset: () => {
+            if (widgetIdRef.current && window.turnstile) {
+                window.turnstile.reset(widgetIdRef.current);
+            }
+        },
+    }));
+
     useEffect(() => {
         if (!siteKey || !containerRef.current) return;
-        let widgetId = '';
+        let cancelled = false;
 
         loadTurnstileScript().then(() => {
-            if (containerRef.current && window.turnstile) {
-                widgetId = window.turnstile.render(containerRef.current, {
+            if (!cancelled && containerRef.current && window.turnstile) {
+                widgetIdRef.current = window.turnstile.render(containerRef.current, {
                     sitekey: siteKey,
                 });
             }
         });
 
         return () => {
-            if (widgetId && window.turnstile) {
-                window.turnstile.remove(widgetId);
+            cancelled = true;
+            if (widgetIdRef.current && window.turnstile) {
+                window.turnstile.remove(widgetIdRef.current);
             }
+            widgetIdRef.current = '';
         };
     }, [siteKey]);
 
     if (!siteKey) return null;
 
     return <div ref={containerRef}></div>;
-}
+});

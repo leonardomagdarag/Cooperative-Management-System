@@ -153,6 +153,7 @@ class SpatieRolePermissionSeeder extends Seeder
 
             if (! $role->permissions()->exists()) {
                 $role->syncPermissions($grantedPermissions);
+
                 continue;
             }
 

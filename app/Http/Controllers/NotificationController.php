@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Auth;
 class NotificationController extends Controller
 {
     protected NotificationService $notificationService;
+
     protected AuditLogService $auditLogService;
 
     public function __construct(NotificationService $notificationService, AuditLogService $auditLogService)
@@ -60,7 +61,7 @@ class NotificationController extends Controller
             $paginator = $query->paginate($perPage);
 
             return response()->json([
-                'notifications' => $paginator->getCollection()->map(fn($notification) => $this->serializeNotification($notification)),
+                'notifications' => $paginator->getCollection()->map(fn ($notification) => $this->serializeNotification($notification)),
                 'unread_count' => $this->getUnreadCount(),
                 'pagination' => [
                     'current_page' => $paginator->currentPage(),
@@ -74,7 +75,7 @@ class NotificationController extends Controller
         $notifications = $query
             ->limit(20)
             ->get()
-            ->map(fn($notification) => $this->serializeNotification($notification));
+            ->map(fn ($notification) => $this->serializeNotification($notification));
 
         $unreadCount = $this->getUnreadCount();
 

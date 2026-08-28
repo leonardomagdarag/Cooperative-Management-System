@@ -4,8 +4,8 @@ namespace App\Console\Commands;
 
 use App\Models\Loan;
 use App\Services\NotificationService;
-use Illuminate\Console\Command;
 use Carbon\Carbon;
+use Illuminate\Console\Command;
 
 class CheckLoanDueNotifications extends Command
 {
@@ -56,11 +56,12 @@ class CheckLoanDueNotifications extends Command
                     ->where('created_at', '>=', Carbon::today())
                     ->exists();
 
-                if (!$alreadyNotified) {
+                if (! $alreadyNotified) {
                     $this->notificationService->notifyLoanOverdue($loan);
                     $this->line("Sent overdue notification for loan #{$loan->loan_number}");
                     $notificationsSent++;
                 }
+
                 continue;
             }
 
@@ -77,7 +78,7 @@ class CheckLoanDueNotifications extends Command
                         ->where('created_at', '>=', Carbon::today())
                         ->exists();
 
-                    if (!$alreadyNotified) {
+                    if (! $alreadyNotified) {
                         $this->notificationService->notifyLoanDue($loan, $days);
                         $this->line("Sent {$days}-day warning for loan #{$loan->loan_number}");
                         $notificationsSent++;

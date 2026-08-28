@@ -15,6 +15,7 @@ use App\Models\PersonalData;
 use App\Models\User;
 use App\Services\AuditLogService;
 use App\Support\PersonPasswordPolicy;
+use App\Support\SearchFilter;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -29,6 +30,8 @@ class MemberController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        abort_unless(Auth::user()?->can('members.view'), 403);
+
         $query = User::query()
             ->with(['personalData.address', 'personalData.contact', 'accounts']);
 
@@ -40,6 +43,7 @@ class MemberController extends Controller
 
         // Search
         if ($search = $request->string('search')->toString()) {
+            $search = SearchFilter::escapeLike($search);
             $query->where(function ($q) use ($search) {
                 $q->where('user_number', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%")
@@ -92,6 +96,8 @@ class MemberController extends Controller
 
     public function show(User $user): JsonResponse
     {
+        abort_unless(Auth::user()?->can('members.view'), 403);
+
         $user->load([
             'personalData.address', 'personalData.contact', 'personalData.employment',
             'personalData.memberId', 'accounts', 'loans', 'beneficiaries',
@@ -155,6 +161,8 @@ class MemberController extends Controller
     public function store(Request $request): JsonResponse
     {
         abort_unless(Auth::user()?->can('members.create'), 403);
+
+        $this->assertCanAssignRole($request->input('role'), 'officers.create');
 
         $this->normalizeBeneficiaries($request);
 
@@ -326,6 +334,8 @@ class MemberController extends Controller
     public function update(Request $request, User $user): JsonResponse
     {
         abort_unless(Auth::user()?->can('members.update'), 403);
+
+        $this->assertCanAssignRole($request->input('role'), 'officers.update');
 
         $this->normalizeBeneficiaries($request);
 
@@ -517,7 +527,9 @@ class MemberController extends Controller
 
     public function search(Request $request): JsonResponse
     {
-        $search = $request->string('q')->toString();
+        abort_unless(Auth::user()?->can('members.view'), 403);
+
+        $search = SearchFilter::escapeLike($request->string('q')->toString());
         if ($search === '') {
             return response()->json(['data' => []]);
         }
@@ -679,6 +691,26 @@ class MemberController extends Controller
      * as multipart form data. Normalize to an array so validation works in
      * both the JSON and multipart paths.
      */
+    /**
+     * Prevent privilege escalation: only an admin may create/update admins,
+     * and only users with officer-management permissions may assign officer
+     * roles to a member account.
+     */
+    private function assertCanAssignRole(mixed $role, string $permission): void
+    {
+        if (empty($role)) {
+            return;
+        }
+
+        if ($role === 'admin' && ! Auth::user()?->hasRole('admin')) {
+            abort(403, 'Only administrators can manage admin accounts.');
+        }
+
+        if (! Auth::user()?->can($permission)) {
+            abort(403, 'You do not have permission to assign officer roles.');
+        }
+    }
+
     private function normalizeBeneficiaries(Request $request): void
     {
         $beneficiaries = $request->input('beneficiaries');

@@ -49,7 +49,7 @@ class PublicContentController extends Controller
         $rules = [];
 
         foreach (SiteContentCatalog::fieldDefinitions() as $field) {
-            $ruleKey = 'form.' . $field['section'] . '.' . $field['path'];
+            $ruleKey = 'form.'.$field['section'].'.'.$field['path'];
             $storage = $field['storage'] ?? 'text';
             $control = $field['control'] ?? 'text';
 
@@ -62,9 +62,9 @@ class PublicContentController extends Controller
         }
 
         foreach (['board', 'officers'] as $section) {
-            $rules['form.' . $section . '.cards.*.name'] = 'nullable|string|max:255';
-            $rules['form.' . $section . '.cards.*.position'] = 'nullable|string|max:255';
-            $rules['form.' . $section . '.cards.*.image_url'] = 'nullable|string|max:2048';
+            $rules['form.'.$section.'.cards.*.name'] = 'nullable|string|max:255';
+            $rules['form.'.$section.'.cards.*.position'] = 'nullable|string|max:255';
+            $rules['form.'.$section.'.cards.*.image_url'] = 'nullable|string|max:2048';
         }
 
         return $rules;

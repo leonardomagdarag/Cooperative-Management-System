@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Transaction;
 use App\Models\ArchivedTransaction;
+use App\Models\Transaction;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -26,6 +26,7 @@ class ArchiveOldTransactions extends Command
 
         if ($count === 0) {
             $this->info("No transactions older than {$years} years found.");
+
             return Command::SUCCESS;
         }
 
@@ -38,14 +39,16 @@ class ArchiveOldTransactions extends Command
                 $query->selectRaw('transaction_type, COUNT(*) as count')
                     ->groupBy('transaction_type')
                     ->get()
-                    ->map(fn($item) => [$item->transaction_type, $item->count])
+                    ->map(fn ($item) => [$item->transaction_type, $item->count])
                     ->toArray()
             );
+
             return Command::SUCCESS;
         }
 
-        if (!$this->confirm("Do you want to archive these {$count} transactions?")) {
+        if (! $this->confirm("Do you want to archive these {$count} transactions?")) {
             $this->info('Operation cancelled.');
+
             return Command::SUCCESS;
         }
 

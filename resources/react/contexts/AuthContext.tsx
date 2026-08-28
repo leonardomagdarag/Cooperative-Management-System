@@ -13,7 +13,7 @@ interface User {
 interface AuthContextType {
     user: User | null;
     isLoading: boolean;
-    login: (email: string, password: string) => Promise<void>;
+    login: (email: string, password: string, remember?: boolean, turnstileToken?: string | null) => Promise<{ requiresOtp: boolean; redirect?: string }>;
     logout: () => Promise<void>;
     refreshUser: () => Promise<void>;
 }
@@ -37,10 +37,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fetchUser().finally(() => setIsLoading(false));
     }, [fetchUser]);
 
-    const login = async (email: string, password: string) => {
+    const login = async (email: string, password: string, remember: boolean = false, turnstileToken: string | null = null) => {
         await api.get('/sanctum/csrf-cookie');
-        await api.post('/api/login', { email, password });
+        const { data } = await api.post('/api/login', { email, password, remember, 'cf-turnstile-response': turnstileToken });
+        if (data.requires_otp) {
+            return { requiresOtp: true, redirect: data.redirect };
+        }
         await fetchUser();
+        return { requiresOtp: false, redirect: data.redirect };
     };
 
     const logout = async () => {

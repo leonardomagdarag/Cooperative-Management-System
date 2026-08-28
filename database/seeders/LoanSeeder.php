@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\Account;
 use App\Models\Loan;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -16,6 +15,7 @@ class LoanSeeder extends Seeder
 
         if ($users->isEmpty()) {
             $this->command->error('No users found. Please run UserSeeder first.');
+
             return;
         }
 

@@ -3,7 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\Loan;
-use App\Models\Account;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class LoanFactory extends Factory
@@ -33,7 +33,7 @@ class LoanFactory extends Factory
         };
 
         return [
-            'user_id' => \App\Models\User::factory(),
+            'user_id' => User::factory(),
             'loan_type' => $loanType,
             'loan_amount' => $loanAmount,
             'interest_rate' => fake()->randomFloat(2, 2, 5),

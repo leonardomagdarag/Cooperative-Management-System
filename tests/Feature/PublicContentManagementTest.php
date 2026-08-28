@@ -5,14 +5,15 @@ use App\Models\User;
 use App\Support\SiteContentCatalog;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\UserSeeder;
+
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\getJson;
 use function Pest\Laravel\putJson;
 
 function makePublicContentEditor(): User
 {
-    (new SpatieRolePermissionSeeder())->run();
-    (new UserSeeder())->run();
+    (new SpatieRolePermissionSeeder)->run();
+    (new UserSeeder)->run();
 
     return User::where('email', 'admin@example.com')->firstOrFail();
 }

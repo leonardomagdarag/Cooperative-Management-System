@@ -344,7 +344,7 @@ class SiteContentCatalog
                 ->each(function (SiteContent $content) use (&$tree): void {
                     Arr::set(
                         $tree,
-                        $content->section . '.' . $content->key,
+                        $content->section.'.'.$content->key,
                         self::castStoredValue($content->value, $content->type)
                     );
                 });
@@ -373,7 +373,7 @@ class SiteContentCatalog
         $tree = [];
 
         foreach (self::fieldDefinitions() as $field) {
-            Arr::set($tree, $field['section'] . '.' . $field['path'], self::defaultForField($field['section'], $field));
+            Arr::set($tree, $field['section'].'.'.$field['path'], self::defaultForField($field['section'], $field));
         }
 
         return $tree;
@@ -387,7 +387,7 @@ class SiteContentCatalog
             $records[] = [
                 'section' => $field['section'],
                 'key' => $field['path'],
-                'value' => self::prepareForStorage(data_get($tree, $field['section'] . '.' . $field['path'])),
+                'value' => self::prepareForStorage(data_get($tree, $field['section'].'.'.$field['path'])),
                 'type' => $field['storage'] ?? 'text',
                 'description' => $field['description'] ?? $field['label'],
                 'order' => (int) $field['order'],
@@ -451,7 +451,7 @@ class SiteContentCatalog
             return $field['default'];
         }
 
-        return data_get(self::seedTree(), $section . '.' . $field['path'], '');
+        return data_get(self::seedTree(), $section.'.'.$field['path'], '');
     }
 
     private static function normalizeDynamicSections(array $tree): array
@@ -479,7 +479,7 @@ class SiteContentCatalog
             $section['cards'] = self::legacyCardsFromSection($section, $legacyKeys);
         } else {
             $section['cards'] = collect($section['cards'])
-                ->map(fn($card) => self::normalizeCard($card))
+                ->map(fn ($card) => self::normalizeCard($card))
                 ->values()
                 ->all();
         }
@@ -497,12 +497,12 @@ class SiteContentCatalog
         return collect($legacyKeys)
             ->map(function (string $legacyKey) use ($section) {
                 return self::normalizeCard([
-                    'name' => data_get($section, $legacyKey . '.name', ''),
-                    'position' => data_get($section, $legacyKey . '.title', ''),
-                    'image_url' => data_get($section, $legacyKey . '.image_url', ''),
+                    'name' => data_get($section, $legacyKey.'.name', ''),
+                    'position' => data_get($section, $legacyKey.'.title', ''),
+                    'image_url' => data_get($section, $legacyKey.'.image_url', ''),
                 ]);
             })
-            ->filter(fn(array $card) => filled($card['name']) || filled($card['position']) || filled($card['image_url']))
+            ->filter(fn (array $card) => filled($card['name']) || filled($card['position']) || filled($card['image_url']))
             ->values()
             ->all();
     }

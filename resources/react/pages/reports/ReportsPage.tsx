@@ -120,7 +120,6 @@ export default function ReportsPage() {
                         </div>
                         <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100">Clear</button>
                     </div>
-                    <p className="mt-1 text-xs text-gray-400">Date range filters financial, expense, and balance sheet reports server-side.</p>
                 </div>
 
                 {isLoading ? (

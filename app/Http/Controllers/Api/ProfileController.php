@@ -4,9 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Address;
+use App\Models\Announcement;
 use App\Models\Contact;
 use App\Models\PersonalData;
-use App\Models\User;
 use App\Services\AuditLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -44,7 +44,7 @@ class ProfileController extends Controller
         $savingsAccount = $accounts->where('account_type', 'savings')->first();
         $shareCapitalAccount = $accounts->where('account_type', 'share-capital')->first();
 
-        $announcements = \App\Models\Announcement::query()
+        $announcements = Announcement::query()
             ->with('creator.personalData')
             ->latest()
             ->take(5)
@@ -57,7 +57,7 @@ class ProfileController extends Controller
                 'created_at' => $a->created_at->toISOString(),
                 'created_at_diff' => $a->created_at->diffForHumans(),
                 'creator_name' => trim(
-                    ($a->creator->personalData->first_name ?? '') . ' ' .
+                    ($a->creator->personalData->first_name ?? '').' '.
                     ($a->creator->personalData->last_name ?? '')
                 ) ?: 'Unknown',
             ]);
@@ -95,7 +95,7 @@ class ProfileController extends Controller
                 'education' => $personalData->education,
                 'civil_status' => $personalData->civil_status,
                 'religion' => $personalData->religion,
-                'profile_picture' => $personalData->profile_picture ? asset('storage/' . $personalData->profile_picture) : null,
+                'profile_picture' => $personalData->profile_picture ? asset('storage/'.$personalData->profile_picture) : null,
             ] : null,
             'address' => $address ? [
                 'country' => $address->country,
@@ -130,6 +130,7 @@ class ProfileController extends Controller
             'loans' => $loans->map(function ($l) {
                 $totalPaid = $l->payments->sum('amount');
                 $progress = $l->loan_amount > 0 ? round(($totalPaid / $l->loan_amount) * 100, 1) : 0;
+
                 return [
                     'id' => $l->id,
                     'loan_number' => $l->loan_number,
@@ -175,8 +176,8 @@ class ProfileController extends Controller
             ]),
             'trusted_devices' => $trustedDevices->map(fn ($d) => [
                 'id' => $d->id,
-                'device_name' => $d->device_name,
-                'ip_address' => $d->ip_address,
+                'device_label' => $d->device_label,
+                'last_ip_address' => $d->last_ip_address,
                 'last_used_at' => $d->last_used_at?->toISOString(),
                 'is_active' => $d->is_active,
             ]),
@@ -218,9 +219,9 @@ class ProfileController extends Controller
         $emailChanged = $user->email !== $validated['email'];
 
         DB::transaction(function () use ($request, $user, $validated, $emailChanged) {
-            $personalData = $user->personalData ?: new PersonalData();
-            $address = $personalData->address ?: new Address();
-            $contact = $personalData->contact ?: new Contact();
+            $personalData = $user->personalData ?: new PersonalData;
+            $address = $personalData->address ?: new Address;
+            $contact = $personalData->contact ?: new Contact;
 
             $address->fill([
                 'country' => $validated['country'] ?? null,

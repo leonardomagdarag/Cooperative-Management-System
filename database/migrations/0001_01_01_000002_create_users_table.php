@@ -28,7 +28,7 @@ return new class extends Migration
                 'secretary',
                 'accountant',
                 'inactive',
-                'terminated'
+                'terminated',
             ])->default('member');
             $table->timestamps();
             $table->softDeletes();

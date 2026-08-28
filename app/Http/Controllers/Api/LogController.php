@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Support\SearchFilter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -19,7 +20,7 @@ class LogController extends Controller
             ->with(['causer.personalData', 'subject']);
 
         // Search
-        if ($search = $request->string('search')->toString()) {
+        if ($search = SearchFilter::escapeLike($request->string('search')->toString())) {
             $query->where(function ($q) use ($search) {
                 $q->where('description', 'like', "%{$search}%")
                     ->orWhere('event', 'like', "%{$search}%")
@@ -76,7 +77,7 @@ class LogController extends Controller
                 'subject_id' => $log->subject_id,
                 'causer' => $log->causer ? [
                     'id' => $log->causer->id,
-                    'name' => trim(($log->causer->personalData->first_name ?? '') . ' ' . ($log->causer->personalData->last_name ?? '')) ?: $log->causer->email,
+                    'name' => trim(($log->causer->personalData->first_name ?? '').' '.($log->causer->personalData->last_name ?? '')) ?: $log->causer->email,
                     'email' => $log->causer->email,
                 ] : null,
                 'properties' => $log->properties,

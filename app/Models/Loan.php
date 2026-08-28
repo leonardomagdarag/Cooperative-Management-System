@@ -33,7 +33,7 @@ class Loan extends Model
         'interview_schedule',
         'interview_status',
         'interview_officer_id',
-        'interview_notes'
+        'interview_notes',
     ];
 
     protected $casts = [
@@ -63,7 +63,7 @@ class Loan extends Model
                     $nextNumber = 1;
                 }
 
-                $loan->loan_number = 'LOAN' . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
+                $loan->loan_number = 'LOAN'.str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
             }
         });
     }
@@ -150,10 +150,10 @@ class Loan extends Model
     public function getReviewStatusLabelAttribute(): string
     {
         return match ($this->review_status) {
-            'under_review'           => 'Under Review',
-            'endorsed_for_approval'  => 'Endorsed for Approval',
-            'review_rejected'        => 'Rejected in Review',
-            default                  => 'Awaiting Review',
+            'under_review' => 'Under Review',
+            'endorsed_for_approval' => 'Endorsed for Approval',
+            'review_rejected' => 'Rejected in Review',
+            default => 'Awaiting Review',
         };
     }
 
@@ -163,10 +163,10 @@ class Loan extends Model
     public function getReviewStatusColorAttribute(): string
     {
         return match ($this->review_status) {
-            'under_review'          => 'blue',
+            'under_review' => 'blue',
             'endorsed_for_approval' => 'amber',
-            'review_rejected'       => 'red',
-            default                 => 'gray',
+            'review_rejected' => 'red',
+            default => 'gray',
         };
     }
 

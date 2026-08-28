@@ -21,14 +21,14 @@ class AccountFactory extends Factory
 
     public function savings(): static
     {
-        return $this->state(fn(array $attributes) => [
+        return $this->state(fn (array $attributes) => [
             'account_type' => 'savings',
         ]);
     }
 
     public function shareCapital(): static
     {
-        return $this->state(fn(array $attributes) => [
+        return $this->state(fn (array $attributes) => [
             'account_type' => 'share-capital',
         ]);
     }

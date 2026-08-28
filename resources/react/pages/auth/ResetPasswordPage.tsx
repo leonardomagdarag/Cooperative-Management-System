@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { verifyResetToken, resetPassword } from '../../api/auth';
 import { useToast } from '../../contexts/ToastContext';
+import { passwordPolicy } from '../../lib/validation';
 
 type Step = 2 | 3 | 'done';
 
@@ -46,7 +47,7 @@ export default function ResetPasswordPage() {
 
     const passwordForm = useForm({
         resolver: zodResolver(z.object({
-            password: z.string().min(8, 'Password must be at least 8 characters'),
+            password: passwordPolicy,
             password_confirmation: z.string(),
         }).refine(d => d.password === d.password_confirmation, {
             message: "Passwords don't match",
@@ -241,7 +242,7 @@ export default function ResetPasswordPage() {
                                     </button>
                                 </div>
                                 {pwdErrors.password && <p className="mt-2 text-sm text-red-600">{pwdErrors.password.message}</p>}
-                                <p className="mt-2 text-xs text-slate-500">Minimum 8 characters required</p>
+                                <p className="mt-2 text-xs text-slate-500">At least 8 characters with uppercase, lowercase, and a number</p>
                             </div>
 
                             <div>

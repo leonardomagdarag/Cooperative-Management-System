@@ -16,8 +16,7 @@ class MemberWelcomeMail extends Mailable
         public string $name,
         public string $email,
         public string $plainPassword,
-    ) {
-    }
+    ) {}
 
     public function envelope(): Envelope
     {

@@ -18,8 +18,9 @@ class LeoLoanDueTestSeeder extends Seeder
             ->where('email', 'leo.baluyot.magdarag039@gmail.com')
             ->first();
 
-        if (!$leo) {
+        if (! $leo) {
             $this->command?->error('Leo test user not found. Run UserSeeder first.');
+
             return;
         }
 
@@ -27,7 +28,7 @@ class LeoLoanDueTestSeeder extends Seeder
             ->where('email', 'admin@example.com')
             ->value('id');
 
-        $loanNumber = 'LEODUE' . Carbon::now()->format('ymdHis');
+        $loanNumber = 'LEODUE'.Carbon::now()->format('ymdHis');
 
         // Keep this idempotent for repeated test runs.
         $existing = Loan::query()
@@ -39,6 +40,7 @@ class LeoLoanDueTestSeeder extends Seeder
 
         if ($existing) {
             $this->command?->info("Existing test loan found: {$existing->loan_number}");
+
             return;
         }
 

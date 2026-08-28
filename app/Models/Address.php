@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 class Address extends Model
 {
     use HasFactory;
-    
+
     public $timestamps = false;
 
     protected $fillable = [
@@ -18,10 +18,10 @@ class Address extends Model
         'city_municipality',
         'barangay',
         'street',
-        'zip_code'
+        'zip_code',
     ];
 
-    //Eloquent Relationship
+    // Eloquent Relationship
 
     public function personalData()
     {

@@ -50,11 +50,13 @@ export default function LoanProductsPage() {
     const toggleMutation = useMutation({
         mutationFn: (id: number) => api.post(`/api/loan-products/${id}/toggle`),
         onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['loan-products'] }); addToast('Status updated', 'success'); },
+        onError: (err: any) => addToast(err.response?.data?.message || 'Failed to update status', 'error'),
     });
 
     const deleteMutation = useMutation({
         mutationFn: (id: number) => api.delete(`/api/loan-products/${id}`),
         onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['loan-products'] }); addToast('Loan product deleted', 'success'); },
+        onError: (err: any) => addToast(err.response?.data?.message || 'Failed to delete loan product', 'error'),
     });
 
     const products: LoanProduct[] = data?.data?.data ?? [];

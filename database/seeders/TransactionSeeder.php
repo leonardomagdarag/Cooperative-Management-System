@@ -2,11 +2,11 @@
 
 namespace Database\Seeders;
 
-use App\Models\Transaction;
 use App\Models\Account;
 use App\Models\Loan;
-use Illuminate\Database\Seeder;
+use App\Models\Transaction;
 use Carbon\Carbon;
+use Illuminate\Database\Seeder;
 
 class TransactionSeeder extends Seeder
 {
@@ -44,7 +44,7 @@ class TransactionSeeder extends Seeder
                         'Monthly savings deposit',
                         'Salary deposit',
                         'Share capital contribution',
-                        null
+                        null,
                     ]),
                     'recorded_by' => rand(2, 5), // Random staff member
                     'status' => 'completed',
@@ -64,7 +64,7 @@ class TransactionSeeder extends Seeder
                     'note' => fake()->optional(0.4)->randomElement([
                         'Emergency withdrawal',
                         'Partial withdrawal',
-                        null
+                        null,
                     ]),
                     'recorded_by' => rand(2, 5),
                     'status' => 'completed',
@@ -89,7 +89,7 @@ class TransactionSeeder extends Seeder
                     'transaction_type' => 'loan_disbursement',
                     'amount' => $loan->loan_amount,
                     'transaction_date' => $disbursementDate,
-                    'note' => 'Loan disbursement - ' . ucfirst($loan->loan_type) . ' loan',
+                    'note' => 'Loan disbursement - '.ucfirst($loan->loan_type).' loan',
                     'recorded_by' => rand(2, 5),
                     'status' => 'completed',
                 ]);
@@ -97,7 +97,7 @@ class TransactionSeeder extends Seeder
                 // Create loan payment transactions based on loan status
                 $paymentCount = match ($loan->loan_status) {
                     'paid_off' => $loan->term_months,  // Full term paid
-                    'active' => rand(2, (int)($loan->term_months * 0.5)), // Partial payments
+                    'active' => rand(2, (int) ($loan->term_months * 0.5)), // Partial payments
                     default => rand(0, 1), // Approved but minimal/no payments yet
                 };
 
@@ -119,7 +119,7 @@ class TransactionSeeder extends Seeder
                             'Monthly loan payment',
                             'Regular installment',
                             'Principal + interest',
-                            null
+                            null,
                         ]),
                         'recorded_by' => rand(2, 5),
                         'status' => 'completed',

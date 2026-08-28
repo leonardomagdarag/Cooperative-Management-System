@@ -7,10 +7,12 @@ export default function ContactPage() {
     const contact = data?.data?.form?.contact || {};
     const [form, setForm] = useState({ name: '', email: '', message: '' });
     const [submitted, setSubmitted] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const submitMutation = useMutation({
         mutationFn: () => api.post('/contact', form),
         onSuccess: () => setSubmitted(true),
+        onError: (err: any) => setError(err?.response?.data?.message || 'Failed to send message. Please try again.'),
     });
 
     return (
@@ -32,7 +34,8 @@ export default function ContactPage() {
                                     <p className="mt-3 font-medium text-emerald-700">Message sent! We'll get back to you soon.</p>
                                 </div>
                             ) : (
-                                <form onSubmit={e => { e.preventDefault(); submitMutation.mutate(); }} className="space-y-6">
+                                <form onSubmit={e => { e.preventDefault(); setError(null); submitMutation.mutate(); }} className="space-y-6">
+                                    {error && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>}
                                     <div>
                                         <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">Your Name</label>
                                         <input type="text" id="name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required className="public-input" />

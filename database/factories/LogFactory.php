@@ -23,7 +23,7 @@ class LogFactory extends Factory
             'Withdrawal Recorded',
             'Payment Recorded',
             'Profile Updated',
-            'Settings Changed'
+            'Settings Changed',
         ];
 
         return [

@@ -16,13 +16,14 @@ class PasswordController extends Controller
     public function update(Request $request): RedirectResponse
     {
         $user = $request->user();
+        $user->loadMissing('personalData');
 
         $validated = $request->validateWithBag('updatePassword', [
             'current_password' => ['required', 'current_password'],
             'password' => array_merge(PersonPasswordPolicy::passwordRules(false, PersonPasswordPolicy::normalizedNameTokens([
-                $user->first_name,
-                $user->mid_name,
-                $user->last_name,
+                $user->personalData?->first_name,
+                $user->personalData?->mid_name,
+                $user->personalData?->last_name,
             ])), ['confirmed']),
         ]);
 

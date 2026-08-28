@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
@@ -20,9 +20,36 @@ export default function ServicesPage() {
 
     const [activeService, setActiveService] = useState<ServiceType>(null);
     const [memberSearch, setMemberSearch] = useState('');
+    const [debouncedQuery, setDebouncedQuery] = useState('');
+    const [searchOpen, setSearchOpen] = useState(false);
+    const [activeIndex, setActiveIndex] = useState(-1);
     const [selectedMember, setSelectedMember] = useState<any>(null);
     const [wizardDirty, setWizardDirty] = useState(false);
     const { requestClose, renderDialog } = useDiscardGuard(wizardDirty);
+
+    const searchContainerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const t = setTimeout(() => {
+            const q = memberSearch.trim();
+            setDebouncedQuery(q);
+            if (q.length < 2) {
+                setSearchOpen(false);
+                setActiveIndex(-1);
+            }
+        }, 250);
+        return () => clearTimeout(t);
+    }, [memberSearch]);
+
+    useEffect(() => {
+        function onClickOutside(e: MouseEvent) {
+            if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+                setSearchOpen(false);
+            }
+        }
+        document.addEventListener('mousedown', onClickOutside);
+        return () => document.removeEventListener('mousedown', onClickOutside);
+    }, []);
 
     const { data: servicesData } = useQuery({
         queryKey: ['services'],
@@ -31,10 +58,10 @@ export default function ServicesPage() {
     });
     const svc = servicesData?.data || {};
 
-    const { data: searchResults } = useQuery({
-        queryKey: ['member-search', memberSearch],
-        queryFn: () => api.get('/api/members/search', { params: { q: memberSearch } }),
-        enabled: memberSearch.length >= 2,
+    const { data: searchResults, isFetching: searchLoading } = useQuery({
+        queryKey: ['member-search', debouncedQuery],
+        queryFn: () => api.get('/api/members/search', { params: { q: debouncedQuery } }),
+        enabled: debouncedQuery.length >= 2,
     });
     const members = searchResults?.data?.data ?? searchResults?.data ?? [];
 
@@ -62,6 +89,30 @@ export default function ServicesPage() {
     const handleSelectMember = (m: any) => {
         setSelectedMember(m);
         setMemberSearch('');
+        setDebouncedQuery('');
+        setSearchOpen(false);
+        setActiveIndex(-1);
+    };
+
+    const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (members.length > 0) {
+                setSearchOpen(true);
+                setActiveIndex(i => (i + 1) % members.length);
+            }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (members.length > 0) {
+                setActiveIndex(i => (i - 1 + members.length) % members.length);
+            }
+        } else if (e.key === 'Enter') {
+            if (activeIndex >= 0 && members[activeIndex]) {
+                handleSelectMember(members[activeIndex]);
+            }
+        } else if (e.key === 'Escape') {
+            setSearchOpen(false);
+        }
     };
 
     const openService = (svc: ServiceType) => {
@@ -72,7 +123,7 @@ export default function ServicesPage() {
     const renderWizard = () => {
         switch (activeService) {
             case 'deposit': return <DepositWizard onComplete={() => setActiveService(null)} selectedMember={selectedMember} onDirtyChange={setWizardDirty} />;
-            case 'withdraw': return <WithdrawalWizard onComplete={() => setActiveService(null)} selectedMember={selectedMember} onDirtyChange={setWizardDirty} />;
+            case 'withdraw': return <WithdrawalWizard onComplete={() => setActiveService(null)} selectedMember={selectedMember} memberDetail={selectedMemberDetail} onDirtyChange={setWizardDirty} />;
             case 'loan': return <LoanApplicationWizard onComplete={() => setActiveService(null)} selectedMember={selectedMember} onDirtyChange={setWizardDirty} />;
             case 'payment': return <LoanPaymentWizard onComplete={() => setActiveService(null)} selectedMember={selectedMember} onDirtyChange={setWizardDirty} />;
             case 'approve': return <TransactionApproval onComplete={() => setActiveService(null)} />;
@@ -119,39 +170,58 @@ export default function ServicesPage() {
                             </button>
                         </div>
                     ) : (
-                        <div className="space-y-3">
+                        <div className="relative" ref={searchContainerRef}>
                             <div className="relative">
                                 <input
                                     type="text"
                                     value={memberSearch}
-                                    onChange={e => setMemberSearch(e.target.value)}
-                                    placeholder="Search member by name..."
-                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                                    onChange={e => { setMemberSearch(e.target.value); setSearchOpen(true); setActiveIndex(-1); }}
+                                    onKeyDown={handleSearchKeyDown}
+                                    onFocus={() => memberSearch.trim().length >= 2 && setSearchOpen(true)}
+                                    placeholder="Search member by name or member number..."
+                                    className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
                                 />
                                 <i className="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                                {searchLoading && (
+                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-cyan-500" />
+                                )}
                             </div>
 
-                            {memberSearch.length >= 2 && members.length > 0 && (
-                                <div className="border border-gray-200 rounded-lg divide-y max-h-64 overflow-y-auto">
-                                    {members.map((m: any) => (
-                                        <button key={m.id} onClick={() => handleSelectMember(m)} className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 text-left transition-colors">
-                                            <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-semibold">
-                                                {m.name?.charAt(0) || m.personal_data?.first_name?.charAt(0) || 'M'}
+                            {searchOpen && (
+                                <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 max-h-72 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
+                                    <div className="max-h-72 overflow-y-auto p-2">
+                                        {memberSearch.trim().length < 2 ? (
+                                            <p className="px-3 py-4 text-center text-sm text-gray-500">Start typing to search for a member</p>
+                                        ) : searchLoading && members.length === 0 ? (
+                                            <div className="flex items-center gap-2 px-3 py-3 text-sm text-gray-500">
+                                                <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-cyan-500" />
+                                                Searching...
                                             </div>
-                                            <div className="flex-1">
-                                                <p className="font-medium text-gray-900">{m.name || `${m.personal_data?.first_name ?? ''} ${m.personal_data?.last_name ?? ''}`}</p>
-                                                <p className="text-sm text-gray-500">{m.user_number}</p>
-                                            </div>
-                                            <i className="fas fa-chevron-right text-gray-400"></i>
-                                        </button>
-                                    ))}
+                                        ) : members.length === 0 ? (
+                                            <p className="px-3 py-4 text-center text-sm text-gray-500">No members found</p>
+                                        ) : (
+                                            members.map((m: any, idx: number) => (
+                                                <button
+                                                    key={m.id}
+                                                    type="button"
+                                                    onMouseDown={e => e.preventDefault()}
+                                                    onClick={() => handleSelectMember(m)}
+                                                    onMouseEnter={() => setActiveIndex(idx)}
+                                                    className={`flex w-full items-center gap-3 rounded-lg p-3 text-left transition-colors ${idx === activeIndex ? 'bg-cyan-50' : 'hover:bg-gray-50'}`}
+                                                >
+                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold shrink-0 ${idx === activeIndex ? 'bg-cyan-100 text-cyan-700' : 'bg-gray-200 text-gray-600'}`}>
+                                                        {m.name?.charAt(0) || m.personal_data?.first_name?.charAt(0) || 'M'}
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="truncate font-medium text-gray-900">{m.name || `${m.personal_data?.first_name ?? ''} ${m.personal_data?.last_name ?? ''}`}</p>
+                                                        <p className="truncate text-sm text-gray-500">{m.user_number}</p>
+                                                    </div>
+                                                    <i className="fas fa-chevron-right shrink-0 text-gray-400"></i>
+                                                </button>
+                                            ))
+                                        )}
+                                    </div>
                                 </div>
-                            )}
-                            {memberSearch.length >= 2 && members.length === 0 && (
-                                <p className="text-sm text-gray-500 text-center py-4">No members found</p>
-                            )}
-                            {memberSearch.length < 2 && (
-                                <p className="text-sm text-gray-500 text-center py-4">Start typing to search for a member</p>
                             )}
                         </div>
                     )}

@@ -5,7 +5,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { validate, withdrawalSchema, type FieldErrors } from '../../lib/validation';
 import ReceiptQR from '../../components/ReceiptQR';
 
-export default function WithdrawalWizard({ onComplete, selectedMember, onDirtyChange }: { onComplete: () => void; selectedMember?: any; onDirtyChange?: (dirty: boolean) => void }) {
+export default function WithdrawalWizard({ onComplete, selectedMember, memberDetail, onDirtyChange }: { onComplete: () => void; selectedMember?: any; memberDetail?: any; onDirtyChange?: (dirty: boolean) => void }) {
     const [step, setStep] = useState(1);
     const [form, setForm] = useState({
         amount: '', account_id: '', reason: '', transaction_mode: '',
@@ -19,10 +19,11 @@ export default function WithdrawalWizard({ onComplete, selectedMember, onDirtyCh
     }, [form, onDirtyChange]);
 
     const { data: dashboard } = useQuery({
-        queryKey: ['dashboard-withdrawal'],
+        queryKey: ['dashboard-withdrawal', selectedMember?.id],
         queryFn: () => api.get('/api/dashboard'),
+        enabled: !selectedMember,
     });
-    const savingsAccount = dashboard?.data?.savings_account;
+    const savingsAccount = memberDetail?.accounts?.find((a: any) => a.account_type === 'savings') ?? dashboard?.data?.savings_account;
     const availableBalance = savingsAccount?.balance ?? 0;
     const exceedsBalance = Number(form.amount) > availableBalance && availableBalance > 0;
     const [errors, setErrors] = useState<FieldErrors>({});

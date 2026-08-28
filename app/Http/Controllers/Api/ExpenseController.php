@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Expense;
 use App\Services\AuditLogService;
+use App\Support\SearchFilter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,7 +18,7 @@ class ExpenseController extends Controller
 
         $query = Expense::with('recordedBy.personalData');
 
-        if ($search = $request->string('search')->toString()) {
+        if ($search = SearchFilter::escapeLike($request->string('search')->toString())) {
             $query->where(function ($q) use ($search) {
                 $q->where('description', 'like', "%{$search}%")
                     ->orWhere('category', 'like', "%{$search}%")

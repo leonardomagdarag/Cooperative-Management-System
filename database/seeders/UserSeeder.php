@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\Contact;
 use App\Models\PersonalData;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -65,7 +64,7 @@ class UserSeeder extends Seeder
             $officer = User::create([
                 'user_number' => $officerData['userNumber'],
                 'personal_data_id' => PersonalData::factory()->create($personalData)->id,
-                'email' => strtolower($officerData['role']) . '@example.com',
+                'email' => strtolower($officerData['role']).'@example.com',
                 'password' => Hash::make('password'),
                 'role' => $officerData['role'],
                 'is_officer' => true,

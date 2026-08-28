@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
+use App\Jobs\SendOtpEmailJob;
 use App\Mail\OtpCodeMail;
-use App\Services\AuditLogService;
 use App\Models\Notification;
 use App\Models\OtpChallenge;
 use App\Models\SystemSetting;
@@ -11,6 +11,7 @@ use App\Models\TrustedDevice;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Throwable;
 
@@ -20,7 +21,10 @@ class SecurityOtpService
 
     public function shouldEnforceOtpForUser(User $user): bool
     {
-        return $user->hasRole('member');
+        // Some legacy users still carry their role on the users table rather
+        // than in the Spatie pivot. Keep the security decision consistent for
+        // both representations.
+        return $user->hasRole('member') || $user->primary_role === 'member';
     }
 
     public function newDevicePurpose(): string
@@ -206,14 +210,14 @@ class SecurityOtpService
 
         try {
             // OTP is time-sensitive — try async first, fall back to sync
-            \App\Jobs\SendOtpEmailJob::dispatch($user->id, $purpose, $otpCode);
-        } catch (\Throwable $e) {
+            SendOtpEmailJob::dispatch($user->id, $purpose, $otpCode);
+        } catch (Throwable $e) {
             // If job dispatch fails (e.g., queue connection down), send synchronously
             try {
                 $mailable = new OtpCodeMail($user, $purpose, $otpCode);
                 Mail::to($user->email)->send($mailable);
-            } catch (\Throwable $e2) {
-                \Illuminate\Support\Facades\Log::error("OTP email failed for user {$user->id}: {$e2->getMessage()}");
+            } catch (Throwable $e2) {
+                Log::error("OTP email failed for user {$user->id}: {$e2->getMessage()}");
             }
         }
     }

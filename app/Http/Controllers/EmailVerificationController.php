@@ -37,6 +37,6 @@ class EmailVerificationController extends Controller
             );
         }
 
-        return redirect()->to(route('dashboard', absolute: false) . '?verified=1');
+        return redirect()->to(route('dashboard', absolute: false).'?verified=1');
     }
 }

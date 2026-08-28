@@ -25,7 +25,7 @@ class SiteContentSeeder extends Seeder
             $record->fill(Arr::except($content, ['section', 'key', 'value']));
 
             if (! $record->exists) {
-                $resolvedValue = data_get($existingContent, $content['section'] . '.' . $content['key']);
+                $resolvedValue = data_get($existingContent, $content['section'].'.'.$content['key']);
 
                 $record->value = SiteContentCatalog::serializeForStorage(
                     $resolvedValue !== null ? $resolvedValue : $content['value'],

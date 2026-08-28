@@ -34,8 +34,8 @@ export default function LoanPaymentWizard({ onComplete, selectedMember, onDirtyC
     }, [form, onDirtyChange]);
 
     const { data: loansData, isLoading: loansLoading } = useQuery({
-        queryKey: ['member-loans'],
-        queryFn: () => api.get('/api/member-loans'),
+        queryKey: ['member-loans', selectedMember?.id],
+        queryFn: () => api.get('/api/member-loans', { params: selectedMember ? { user_id: selectedMember.id } : {} }),
     });
 
     const loans: LoanOption[] = loansData?.data?.data ?? [];

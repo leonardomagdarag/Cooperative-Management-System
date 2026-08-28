@@ -3,17 +3,21 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Account;
 use App\Models\Loan;
 use App\Models\Transaction;
-use Carbon\Carbon;
+use App\Support\SearchFilter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class LedgerController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        abort_unless(Auth::user()?->can('transactions.view'), 403);
+
         $query = Transaction::with(['account.user.personalData', 'loan.user.personalData', 'recordedBy']);
 
         // Category filter
@@ -23,7 +27,7 @@ class LedgerController extends Controller
         }
 
         // Search
-        if ($search = $request->string('search')->toString()) {
+        if ($search = SearchFilter::escapeLike($request->string('search')->toString())) {
             $query->where(function ($q) use ($search) {
                 $q->where('transaction_number', 'like', "%{$search}%")
                     ->orWhere('amount', 'like', "%{$search}%")
@@ -57,10 +61,10 @@ class LedgerController extends Controller
                 'status' => $t->status,
                 'note' => $t->note,
                 'transaction_date' => $t->transaction_date?->format('Y-m-d'),
-                'account_holder' => $t->account?->user ? trim(($t->account->user->personalData->first_name ?? '') . ' ' . ($t->account->user->personalData->last_name ?? '')) : null,
+                'account_holder' => $t->account?->user ? trim(($t->account->user->personalData->first_name ?? '').' '.($t->account->user->personalData->last_name ?? '')) : null,
                 'user_number' => $t->account?->user?->user_number,
                 'loan_number' => $t->loan?->loan_number,
-                'recorded_by' => $t->recordedBy ? trim(($t->recordedBy->personalData->first_name ?? '') . ' ' . ($t->recordedBy->personalData->last_name ?? '')) : null,
+                'recorded_by' => $t->recordedBy ? trim(($t->recordedBy->personalData->first_name ?? '').' '.($t->recordedBy->personalData->last_name ?? '')) : null,
                 'created_at' => $t->created_at->toISOString(),
             ]),
             'pagination' => [
@@ -75,6 +79,8 @@ class LedgerController extends Controller
 
     public function summary(Request $request): JsonResponse
     {
+        abort_unless(Auth::user()?->can('transactions.view'), 403);
+
         $range = $request->string('range', 'today')->toString();
 
         $transactionCounts = Transaction::query()->where('status', 'completed')
@@ -107,7 +113,7 @@ class LedgerController extends Controller
             $query->where('transaction_type', $category);
         }
 
-        if ($search = $request->string('search')->toString()) {
+        if ($search = SearchFilter::escapeLike($request->string('search')->toString())) {
             $query->where(function ($q) use ($search) {
                 $q->where('transaction_number', 'like', "%{$search}%")
                     ->orWhere('amount', 'like', "%{$search}%")
@@ -160,15 +166,21 @@ class LedgerController extends Controller
             'loan_id' => 'required_if:transaction_type,loan_payment,loan_disbursement|nullable|exists:loans,id',
         ]);
 
-        $transaction = Transaction::create([
-            'transaction_type' => $validated['transaction_type'],
-            'amount' => $validated['amount'],
-            'note' => $validated['note'] ?? null,
-            'account_id' => $validated['account_id'] ?? null,
-            'loan_id' => $validated['loan_id'] ?? null,
-            'transaction_date' => now(),
-            'recorded_by' => Auth::id(),
-        ]);
+        $transaction = DB::transaction(function () use ($validated) {
+            $transaction = Transaction::create([
+                'transaction_type' => $validated['transaction_type'],
+                'amount' => $validated['amount'],
+                'note' => $validated['note'] ?? null,
+                'account_id' => $validated['account_id'] ?? null,
+                'loan_id' => $validated['loan_id'] ?? null,
+                'transaction_date' => now(),
+                'recorded_by' => Auth::id(),
+            ]);
+
+            $this->applyBalanceEffect($transaction);
+
+            return $transaction;
+        });
 
         return response()->json(['message' => 'Transaction created.', 'data' => $transaction], 201);
     }
@@ -185,13 +197,20 @@ class LedgerController extends Controller
             'loan_id' => 'nullable|exists:loans,id',
         ]);
 
-        $transaction->update([
-            'transaction_type' => $validated['transaction_type'],
-            'amount' => $validated['amount'],
-            'note' => $validated['note'] ?? null,
-            'account_id' => $validated['account_id'] ?? null,
-            'loan_id' => $validated['loan_id'] ?? null,
-        ]);
+        DB::transaction(function () use ($transaction, $validated) {
+            // Reverse the previous balance effect before applying the new one.
+            $this->applyBalanceEffect($transaction, reverse: true);
+
+            $transaction->update([
+                'transaction_type' => $validated['transaction_type'],
+                'amount' => $validated['amount'],
+                'note' => $validated['note'] ?? null,
+                'account_id' => $validated['account_id'] ?? null,
+                'loan_id' => $validated['loan_id'] ?? null,
+            ]);
+
+            $this->applyBalanceEffect($transaction->fresh());
+        });
 
         return response()->json(['message' => 'Transaction updated.', 'data' => $transaction->fresh()]);
     }
@@ -200,8 +219,49 @@ class LedgerController extends Controller
     {
         abort_unless(Auth::user()?->can('transactions.update'), 403);
 
-        $transaction->delete();
+        DB::transaction(function () use ($transaction) {
+            $this->applyBalanceEffect($transaction, reverse: true);
+            $transaction->delete();
+        });
 
         return response()->json(['message' => 'Transaction deleted.']);
+    }
+
+    /**
+     * Keep account balances in sync with manual ledger entries.
+     * Deposits and loan disbursements credit the account; withdrawals and
+     * loan payments debit it.
+     */
+    private function applyBalanceEffect(Transaction $transaction, bool $reverse = false): void
+    {
+        if (! $transaction->account_id) {
+            return;
+        }
+
+        $effect = match ($transaction->transaction_type) {
+            'deposit', 'loan_disbursement' => (float) $transaction->amount,
+            'withdrawal', 'loan_payment' => -(float) $transaction->amount,
+            default => 0.0,
+        };
+
+        if ($effect == 0.0) {
+            return;
+        }
+
+        if ($reverse) {
+            $effect = -$effect;
+        }
+
+        $account = Account::whereKey($transaction->account_id)->lockForUpdate()->first();
+
+        if (! $account) {
+            return;
+        }
+
+        if ($effect < 0 && (float) $account->balance < abs($effect)) {
+            abort(422, 'Insufficient balance to record this transaction.');
+        }
+
+        $account->increment('balance', $effect);
     }
 }

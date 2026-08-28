@@ -38,6 +38,14 @@ export interface ProfileData {
         email: string;
         facebook: string;
     } | null;
+    employment: {
+        employment_type: string;
+        company: string;
+        position: string;
+        monthly_income: string;
+        other_income_source: string;
+        other_income_amount: string;
+    } | null;
     accounts: Array<{
         id: number;
         account_number: string;
@@ -68,8 +76,8 @@ export interface ProfileData {
     }>;
     trusted_devices: Array<{
         id: number;
-        device_name: string;
-        ip_address: string;
+        device_label: string;
+        last_ip_address: string;
         last_used_at: string;
         is_active: boolean;
     }>;

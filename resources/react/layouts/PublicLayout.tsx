@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../api/client';
 
 export default function PublicLayout() {
     const [isShrunk, setIsShrunk] = useState(false);
@@ -10,19 +12,32 @@ export default function PublicLayout() {
     const navigate = useNavigate();
     const ticking = useRef(false);
 
+    const { data: pc } = useQuery({
+        queryKey: ['public-content'],
+        queryFn: () => api.get('/api/public-content'),
+    });
+
+    const termsContent = pc?.data?.form?.policies?.terms_and_conditions;
+    const privacyContent = pc?.data?.form?.policies?.privacy_policy;
+
     useEffect(() => { setMobileOpen(false); }, [location]);
 
     useEffect(() => {
+        let frame: number | null = null;
         const handleScroll = () => {
             if (ticking.current) return;
             ticking.current = true;
-            requestAnimationFrame(() => {
+            frame = requestAnimationFrame(() => {
                 setIsShrunk(window.scrollY > 50 && !isHovering);
                 ticking.current = false;
             });
         };
         window.addEventListener('scroll', handleScroll, { passive: true });
-        return () => window.removeEventListener('scroll', handleScroll);
+        return () => {
+            window.removeEventListener('scroll', handleScroll);
+            if (frame !== null) cancelAnimationFrame(frame);
+            ticking.current = false;
+        };
     }, [isHovering]);
 
     useEffect(() => {
@@ -196,7 +211,7 @@ export default function PublicLayout() {
                                 <i className="fas fa-shield-halved text-xs"></i>Privacy Policy
                             </button>
                         </div>
-                        <p className="text-center text-slate-500 text-sm">&copy; 2024 Settlers Credit Cooperative. All rights reserved.</p>
+                        <p className="text-center text-slate-500 text-sm">&copy; {new Date().getFullYear()} Settlers Credit Cooperative. All rights reserved.</p>
                     </div>
                 </div>
             </footer>
@@ -210,9 +225,14 @@ export default function PublicLayout() {
                         <h2 className="text-2xl font-bold text-slate-900 mb-4">
                             {policyModal === 'terms' ? 'Terms and Agreement' : 'Privacy Policy'}
                         </h2>
-                        <div className="text-sm text-slate-600 leading-relaxed space-y-3">
-                            <p>This section will display the {policyModal === 'terms' ? 'terms and agreement' : 'privacy policy'} content from the cooperative.</p>
-                        </div>
+                        {(() => {
+                            const content = policyModal === 'terms' ? termsContent : privacyContent;
+                            return content ? (
+                                <div className="text-sm text-slate-600 leading-relaxed space-y-3" dangerouslySetInnerHTML={{ __html: content }} />
+                            ) : (
+                                <p className="text-sm text-slate-500">This policy content is not currently available. Please contact the cooperative for assistance.</p>
+                            );
+                        })()}
                     </div>
                 </div>
             )}

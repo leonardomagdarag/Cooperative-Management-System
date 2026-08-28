@@ -278,7 +278,7 @@ export const loanApplicationSchema = z.object({
     amount: amount(1),
     term_months: z.coerce.number().int('Term must be a whole number').min(1, 'Term must be at least 1 month').max(360, 'Term cannot exceed 360 months'),
     payment_frequency: enumFrom(['weekly', 'bi-weekly', 'monthly', 'quarterly', 'annually'], 'Select a payment frequency'),
-    purpose: optionalString(500),
+    purpose: requiredString('Purpose is required', 500),
 });
 
 export const loanPaymentSchema = z.object({

@@ -64,7 +64,7 @@ class AnnouncementController extends Controller
         $creatorName = 'Unknown';
         if ($announcement->creator) {
             $creatorName = trim(
-                (($announcement->creator->personalData->first_name ?? '') . ' ' . ($announcement->creator->personalData->last_name ?? ''))
+                (($announcement->creator->personalData->first_name ?? '').' '.($announcement->creator->personalData->last_name ?? ''))
             ) ?: 'Unknown';
         }
 
@@ -76,7 +76,7 @@ class AnnouncementController extends Controller
             'type_label' => $announcement->type_label,
             'visibility_label' => $announcement->visibility_label,
             'category' => $announcement->category,
-            'image_url' => $announcement->image_path ? asset('storage/' . $announcement->image_path) : null,
+            'image_url' => $announcement->image_path ? asset('storage/'.$announcement->image_path) : null,
             'created_at' => $announcement->created_at?->format('F d, Y h:i A'),
             'creator_name' => $creatorName,
             'event_date' => $announcement->event_date?->format('Y-m-d'),
@@ -211,7 +211,7 @@ class AnnouncementController extends Controller
         $creatorName = 'Unknown';
         if ($a->creator) {
             $creatorName = trim(
-                (($a->creator->personalData->first_name ?? '') . ' ' . ($a->creator->personalData->last_name ?? ''))
+                (($a->creator->personalData->first_name ?? '').' '.($a->creator->personalData->last_name ?? ''))
             ) ?: 'Unknown';
         }
 
@@ -224,7 +224,7 @@ class AnnouncementController extends Controller
             'visibility' => $a->visibility,
             'visibility_label' => $a->visibility_label,
             'category' => $a->category,
-            'image_url' => $a->image_path ? asset('storage/' . $a->image_path) : null,
+            'image_url' => $a->image_path ? asset('storage/'.$a->image_path) : null,
             'event_date' => $a->event_date?->format('Y-m-d'),
             'event_time' => $a->event_time,
             'event_location' => $a->event_location,

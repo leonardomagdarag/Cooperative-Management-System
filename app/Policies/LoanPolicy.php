@@ -3,8 +3,8 @@
 namespace App\Policies;
 
 use App\Models\Loan;
-use App\Support\PermissionCatalog;
 use App\Models\User;
+use App\Support\PermissionCatalog;
 
 class LoanPolicy
 {

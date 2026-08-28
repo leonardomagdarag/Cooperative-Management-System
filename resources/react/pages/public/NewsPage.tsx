@@ -219,35 +219,6 @@ export default function NewsPage() {
                 </div>
             </section>
 
-            <section className="public-section bg-white">
-                <div className="mx-auto max-w-4xl px-4 text-center">
-                    <div className="public-card p-10">
-                        <div className="inline-block p-4 bg-white rounded-full shadow-md mb-6">
-                            <i className="fas fa-envelope-open-text text-3xl text-emerald-700"></i>
-                        </div>
-                        <h2 className="text-2xl md:text-3xl font-bold text-slate-800 mb-4">
-                            {newsContent.newsletter?.title || 'Stay Informed'}
-                        </h2>
-                        <p className="text-base text-gray-700 mb-8">
-                            {newsContent.newsletter?.description || 'Subscribe to receive updates on news, events, and announcements.'}
-                        </p>
-                        <div className="max-w-md mx-auto mb-6">
-                            <div className="flex flex-col gap-4">
-                                <input type="text" placeholder="Your full name" className="public-input" />
-                                <input type="email" placeholder="Your email address" className="public-input" />
-                                <button className="public-btn public-btn-primary w-full">
-                                    Subscribe Now
-                                    <i className="fas fa-paper-plane ml-2"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <p className="text-sm text-gray-500">
-                            <i className="fas fa-lock mr-2"></i>{newsContent.newsletter?.privacy_note || 'We respect your privacy. Unsubscribe at any time.'}
-                        </p>
-                    </div>
-                </div>
-            </section>
-
             {selected && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setSelected(null)}>
                     <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>

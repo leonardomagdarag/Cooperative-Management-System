@@ -2,10 +2,9 @@
 
 namespace Database\Factories;
 
-use App\Models\Transaction;
 use App\Models\Account;
 use App\Models\Loan;
-use App\Models\User;
+use App\Models\Transaction;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class TransactionFactory extends Factory

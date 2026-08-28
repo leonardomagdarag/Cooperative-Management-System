@@ -8,8 +8,10 @@ use App\Models\Expense;
 use App\Models\Loan;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Support\PermissionCatalog;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -48,7 +50,11 @@ class DashboardController extends Controller
 
         $activeLoans = $user->loans->whereIn('loan_status', ['approved', 'active'])->values();
 
-        $totalLoanBalance = $activeLoans->sum(fn ($l) => $l->remainingBalance());
+        $totalLoanBalance = $activeLoans->sum(function ($l) {
+            $totalPaid = $l->payments->where('status', 'completed')->sum('amount');
+
+            return max(0, round($l->totalPayable() - $totalPaid, 2));
+        });
 
         $announcements = Announcement::query()
             ->with('creator.personalData')
@@ -60,11 +66,11 @@ class DashboardController extends Controller
                 'title' => $a->title,
                 'content' => $a->content,
                 'type' => $a->type,
-                'image_url' => $a->image_path ? asset('storage/' . $a->image_path) : null,
+                'image_url' => $a->image_path ? asset('storage/'.$a->image_path) : null,
                 'created_at' => $a->created_at->toISOString(),
                 'created_at_diff' => $a->created_at->diffForHumans(),
                 'creator_name' => trim(
-                    ($a->creator->personalData->first_name ?? '') . ' ' .
+                    ($a->creator->personalData->first_name ?? '').' '.
                     ($a->creator->personalData->last_name ?? '')
                 ) ?: 'Unknown',
             ]);
@@ -95,15 +101,16 @@ class DashboardController extends Controller
             ]),
             'active_loans_count' => $activeLoans->count(),
             'loans' => $activeLoans->map(function ($l) {
-                $totalPaid = $l->payments->sum('amount');
+                $totalPaid = $l->payments->where('status', 'completed')->sum('amount');
                 $progress = $l->loan_amount > 0 ? round(($totalPaid / $l->loan_amount) * 100, 1) : 0;
+
                 return [
                     'id' => $l->id,
                     'loan_number' => $l->loan_number,
                     'loan_type' => $l->loan_type,
                     'loan_amount' => $l->loan_amount,
                     'loan_status' => $l->loan_status,
-                    'remaining_balance' => $l->remainingBalance(),
+                    'remaining_balance' => max(0, round($l->totalPayable() - $totalPaid, 2)),
                     'total_paid' => $totalPaid,
                     'progress' => $progress,
                     'due_date' => $l->due_date?->format('M d, Y'),
@@ -176,7 +183,7 @@ class DashboardController extends Controller
                 'amount' => $t->amount,
                 'status' => $t->status,
                 'member_name' => trim(
-                    ($t->account->user->personalData->first_name ?? '') . ' ' .
+                    ($t->account->user->personalData->first_name ?? '').' '.
                     ($t->account->user->personalData->last_name ?? '')
                 ) ?: 'Unknown',
                 'created_at' => $t->created_at->format('M d, Y'),
@@ -209,7 +216,7 @@ class DashboardController extends Controller
                 'created_at_diff' => $a->created_at->diffForHumans(),
                 'created_at' => $a->created_at->toISOString(),
                 'creator_name' => trim(
-                    ($a->creator->personalData->first_name ?? '') . ' ' .
+                    ($a->creator->personalData->first_name ?? '').' '.
                     ($a->creator->personalData->last_name ?? '')
                 ) ?: 'Unknown',
             ]);
@@ -283,7 +290,7 @@ class DashboardController extends Controller
                 'transaction_type' => $t->transaction_type,
                 'amount' => $t->amount,
                 'member_name' => trim(
-                    ($t->account->user->personalData->first_name ?? '') . ' ' .
+                    ($t->account->user->personalData->first_name ?? '').' '.
                     ($t->account->user->personalData->last_name ?? '')
                 ) ?: 'Unknown',
                 'created_at' => $t->created_at->format('M d, Y'),
@@ -298,7 +305,7 @@ class DashboardController extends Controller
             ->map(fn ($m) => [
                 'id' => $m->id,
                 'name' => trim(
-                    ($m->personalData->first_name ?? '') . ' ' .
+                    ($m->personalData->first_name ?? '').' '.
                     ($m->personalData->last_name ?? '')
                 ) ?: 'Unknown',
                 'created_at' => $m->created_at->format('M d, Y'),
@@ -368,7 +375,7 @@ class DashboardController extends Controller
                 'amount' => $t->amount,
                 'status' => $t->status,
                 'member_name' => trim(
-                    ($t->account->user->personalData->first_name ?? '') . ' ' .
+                    ($t->account->user->personalData->first_name ?? '').' '.
                     ($t->account->user->personalData->last_name ?? '')
                 ) ?: 'Unknown',
                 'transaction_date' => ($t->transaction_date ?? $t->created_at)->format('M d'),
@@ -437,7 +444,7 @@ class DashboardController extends Controller
             ->map(fn ($m) => [
                 'id' => $m->id,
                 'name' => trim(
-                    ($m->personalData->first_name ?? '') . ' ' .
+                    ($m->personalData->first_name ?? '').' '.
                     ($m->personalData->last_name ?? '')
                 ) ?: 'Unknown',
                 'user_number' => $m->user_number,
@@ -459,7 +466,7 @@ class DashboardController extends Controller
                 'created_at_diff' => $a->created_at->diffForHumans(),
                 'created_at' => $a->created_at->toISOString(),
                 'creator_name' => trim(
-                    ($a->creator->personalData->first_name ?? '') . ' ' .
+                    ($a->creator->personalData->first_name ?? '').' '.
                     ($a->creator->personalData->last_name ?? '')
                 ) ?: 'Unknown',
             ]);
@@ -533,7 +540,7 @@ class DashboardController extends Controller
                 'loan_type' => $l->loan_type,
                 'loan_amount' => $l->loan_amount,
                 'member_name' => trim(
-                    ($l->user->personalData->first_name ?? '') . ' ' .
+                    ($l->user->personalData->first_name ?? '').' '.
                     ($l->user->personalData->last_name ?? '')
                 ) ?: 'Unknown',
                 'created_at' => $l->created_at->format('M d, Y'),
@@ -553,7 +560,7 @@ class DashboardController extends Controller
                 'loan_type' => $l->loan_type,
                 'loan_amount' => $l->loan_amount,
                 'member_name' => trim(
-                    ($l->user->personalData->first_name ?? '') . ' ' .
+                    ($l->user->personalData->first_name ?? '').' '.
                     ($l->user->personalData->last_name ?? '')
                 ) ?: 'Unknown',
                 'due_date' => $l->due_date?->format('M d, Y'),
@@ -594,9 +601,21 @@ class DashboardController extends Controller
 
     // ─── Member Loans ──────────────────────────────────────────
 
-    public function memberLoans(): JsonResponse
+    public function memberLoans(Request $request): JsonResponse
     {
-        $user = Auth::user()->load(['loans.payments']);
+        $actor = Auth::user();
+        $targetUser = $actor;
+
+        if ($request->filled('user_id') && (int) $request->query('user_id') !== (int) $actor->id) {
+            abort_unless(
+                $actor->hasRole('admin') || $actor->hasAnyRole(PermissionCatalog::officerRoles()),
+                403,
+                'You are not authorized to view another member\'s loans.'
+            );
+            $targetUser = User::findOrFail($request->query('user_id'));
+        }
+
+        $user = $targetUser->load(['loans.payments']);
 
         $loans = $user->loans()
             ->with(['payments'])
@@ -628,7 +647,7 @@ class DashboardController extends Controller
                     'applied_at' => $l->created_at->format('M d, Y'),
                     'approved_at' => $l->approved_at?->format('M d, Y'),
                     'approved_by' => $l->approvedBy?->personalData
-                        ? trim(($l->approvedBy->personalData->first_name ?? '') . ' ' . ($l->approvedBy->personalData->last_name ?? ''))
+                        ? trim(($l->approvedBy->personalData->first_name ?? '').' '.($l->approvedBy->personalData->last_name ?? ''))
                         : null,
                     'group_members' => $l->groupMembers->map(fn ($gm) => [
                         'name' => $gm->name ?? 'Unknown',
@@ -638,7 +657,7 @@ class DashboardController extends Controller
                     'completed_payments' => $l->payments->sortBy('payment_date')->values()->map(fn ($p, $idx) => [
                         'id' => $p->id,
                         'payment_number' => $idx + 1,
-                        'transaction_number' => $p->transaction_number ?? ('PAY-' . $p->id),
+                        'transaction_number' => $p->transaction_number ?? ('PAY-'.$p->id),
                         'amount' => $p->amount,
                         'payment_date' => ($p->payment_date ?? $p->created_at)->format('M d, Y'),
                         'status' => $p->status ?? 'completed',
@@ -702,6 +721,7 @@ class DashboardController extends Controller
     private function greeting(): string
     {
         $hour = (int) now()->format('H');
+
         return match (true) {
             $hour < 12 => 'Good morning',
             $hour < 17 => 'Good afternoon',
@@ -793,13 +813,13 @@ class DashboardController extends Controller
         $seen = [];
         $ordered = [];
         foreach ($preferredOrder as $s) {
-            if (isset($statusCounts[$s]) && !isset($seen[$s])) {
+            if (isset($statusCounts[$s]) && ! isset($seen[$s])) {
                 $ordered[] = $s;
                 $seen[$s] = true;
             }
         }
         foreach (array_keys($statusCounts) as $s) {
-            if (!isset($seen[$s])) {
+            if (! isset($seen[$s])) {
                 $ordered[] = $s;
                 $seen[$s] = true;
             }

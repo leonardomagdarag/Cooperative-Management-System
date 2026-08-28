@@ -36,7 +36,7 @@ class SystemSetting extends Model
         return Cache::remember("system_setting.{$key}", 3600, function () use ($key, $default) {
             $setting = static::where('key', $key)->first();
 
-            if (!$setting) {
+            if (! $setting) {
                 return $default;
             }
 
@@ -59,7 +59,7 @@ class SystemSetting extends Model
     {
         $setting = static::where('key', $key)->first();
 
-        if (!$setting || !$setting->is_editable) {
+        if (! $setting || ! $setting->is_editable) {
             return false;
         }
 

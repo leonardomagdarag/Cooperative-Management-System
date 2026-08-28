@@ -10,14 +10,19 @@ class Announcement extends Model
 {
     use HasFactory, SoftDeletes;
 
-    const TYPE_NEWS         = 'news';
-    const TYPE_ANNOUNCEMENT = 'announcement';
-    const TYPE_EVENT        = 'event';
+    const TYPE_NEWS = 'news';
 
-    const VISIBILITY_EVERYONE  = 'everyone';
-    const VISIBILITY_MEMBERS   = 'members';
-    const VISIBILITY_OFFICERS  = 'officers';
-    const VISIBILITY_PUBLIC    = 'public';
+    const TYPE_ANNOUNCEMENT = 'announcement';
+
+    const TYPE_EVENT = 'event';
+
+    const VISIBILITY_EVERYONE = 'everyone';
+
+    const VISIBILITY_MEMBERS = 'members';
+
+    const VISIBILITY_OFFICERS = 'officers';
+
+    const VISIBILITY_PUBLIC = 'public';
 
     protected $fillable = [
         'title',
@@ -74,9 +79,9 @@ class Announcement extends Model
     public function getTypeLabelAttribute(): string
     {
         return match ($this->type) {
-            self::TYPE_NEWS  => 'News',
+            self::TYPE_NEWS => 'News',
             self::TYPE_EVENT => 'Event',
-            default          => 'Announcement',
+            default => 'Announcement',
         };
     }
 
@@ -89,9 +94,9 @@ class Announcement extends Model
         }
 
         $labels = array_filter([
-            in_array(self::VISIBILITY_MEMBERS,  $visibility, true) ? 'Members'  : null,
+            in_array(self::VISIBILITY_MEMBERS, $visibility, true) ? 'Members' : null,
             in_array(self::VISIBILITY_OFFICERS, $visibility, true) ? 'Officers' : null,
-            in_array(self::VISIBILITY_PUBLIC,   $visibility, true) ? 'Public'   : null,
+            in_array(self::VISIBILITY_PUBLIC, $visibility, true) ? 'Public' : null,
         ]);
 
         return $labels ? implode(', ', $labels) : 'Members';

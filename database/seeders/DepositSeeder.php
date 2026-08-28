@@ -2,10 +2,10 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
-use App\Models\Deposit;
 use App\Models\Account;
+use App\Models\Deposit;
 use App\Models\User;
+use Illuminate\Database\Seeder;
 
 class DepositSeeder extends Seeder
 {
@@ -15,6 +15,7 @@ class DepositSeeder extends Seeder
 
         if ($accounts->isEmpty()) {
             $this->command->error('No accounts found. Please run AccountSeeder first.');
+
             return;
         }
 
