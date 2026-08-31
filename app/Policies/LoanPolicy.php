@@ -42,7 +42,7 @@ class LoanPolicy
 
     public function uploadDocument(User $user, Loan $loan): bool
     {
-        return $user->hasAnyRole(['admin', 'manager', 'accountant']);
+        return $user->hasAnyRole(['admin', 'manager']);
     }
 
     public function reject(User $user): bool

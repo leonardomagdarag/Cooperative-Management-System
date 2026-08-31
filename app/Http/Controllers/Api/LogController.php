@@ -14,7 +14,7 @@ class LogController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = Auth::user();
-        abort_unless($user && $user->primary_role === 'admin', 403);
+        abort_unless($user && $user->hasRole('admin'), 403);
 
         $query = Activity::query()
             ->with(['causer.personalData', 'subject']);

@@ -50,8 +50,8 @@ class SearchController extends Controller
 
         $user = $request->user();
         $needle = '%'.SearchFilter::escapeLike($q).'%';
-        $isAdmin = $user->hasRole('admin') || $user->primary_role === 'admin';
-        $isMember = $user->hasRole('member') || $user->primary_role === 'member';
+        $isAdmin = $user->hasRole('admin');
+        $isMember = $user->hasRole('member');
         $canViewAll = $user->is_officer || $user->hasRole('admin');
         $can = fn (string $permission): bool => $user->can($permission);
 
