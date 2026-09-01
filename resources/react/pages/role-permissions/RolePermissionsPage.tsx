@@ -1,28 +1,88 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
 import { validate, roleSchema, type FieldErrors } from '../../lib/validation';
-import SettingsTabHeader from '../settings/SettingsTabHeader';
+import { formatPermissionLabel } from '../../lib/permissions';
+
+interface RoleData {
+    roles: string[];
+    role_permissions: Record<string, string[]>;
+    role_user_counts: Record<string, number>;
+    role_display_names: Record<string, string>;
+    role_descriptions: Record<string, string>;
+    role_presets: Record<string, string[]>;
+    base_roles: string[];
+    groups: Record<string, string[]>;
+}
 
 export default function RolePermissionsPage() {
     const [selectedRole, setSelectedRole] = useState('');
+    const [pendingRole, setPendingRole] = useState('');
+    const [showDiscardModal, setShowDiscardModal] = useState(false);
+    const [dirtyPermissions, setDirtyPermissions] = useState<Record<string, string[]>>({});
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [newRoleName, setNewRoleName] = useState('');
     const [newRoleTemplate, setNewRoleTemplate] = useState('');
-    const [dirtyPermissions, setDirtyPermissions] = useState<Record<string, string[]>>({});
-    const [isRenaming, setIsRenaming] = useState(false);
-    const [renameValue, setRenameValue] = useState('');
     const [roleErrors, setRoleErrors] = useState<FieldErrors>({});
+    const [renameValue, setRenameValue] = useState('');
+    const [showSaveModal, setShowSaveModal] = useState(false);
+    const [saveSummary, setSaveSummary] = useState<{ added: string[]; removed: string[] }>({ added: [], removed: [] });
+    const [showDeleteRoleModal, setShowDeleteRoleModal] = useState(false);
     const { markDirty, reset, requestClose, renderDialog } = useDiscardGuard();
     const queryClient = useQueryClient();
     const { addToast } = useToast();
+    const navigate = useNavigate();
 
     const { data, isLoading } = useQuery({
         queryKey: ['roles'],
         queryFn: () => api.get('/api/roles'),
     });
+
+    const d: RoleData | undefined = data?.data;
+
+    const editablePermissions = normalize(Object.values(d?.groups || {}).flat());
+    const totalEditableCount = editablePermissions.length;
+    const roles: string[] = d?.roles || [];
+    const rolePermissions: Record<string, string[]> = d?.role_permissions || {};
+    const roleUserCounts: Record<string, number> = d?.role_user_counts || {};
+    const roleDisplayNames: Record<string, string> = d?.role_display_names || {};
+    const roleDescriptions: Record<string, string> = d?.role_descriptions || {};
+    const rolePresets: Record<string, string[]> = d?.role_presets || {};
+    const baseRoles: string[] = d?.base_roles || [];
+
+    useEffect(() => {
+        if (!selectedRole && roles.length > 0) {
+            setSelectedRole(roles[0]);
+        }
+    }, [roles, selectedRole]);
+
+    useEffect(() => {
+        setRenameValue(roleDisplayNames[selectedRole] || selectedRole);
+    }, [selectedRole, roleDisplayNames]);
+
+    useEffect(() => {
+        if (!selectedRole) return;
+        if (!roles.includes(selectedRole)) {
+            setSelectedRole(roles[0] || '');
+        }
+    }, [roles, selectedRole]);
+
+    const roleLabel = (role: string) => roleDisplayNames[role] || role;
+    const roleDescription = (role: string) => roleDescriptions[role] || 'Custom database role managed through shared permission groups.';
+    const isBaseRole = (role: string) => baseRoles.includes(role);
+    const assignedUserCount = (role: string) => roleUserCounts[role] || 0;
+
+    const initialFor = (role: string) => normalize((rolePermissions[role] || []).filter(p => editablePermissions.includes(p)));
+    const currentFor = (role: string) => (dirtyPermissions[role] !== undefined ? normalize(dirtyPermissions[role]) : initialFor(role));
+    const hasChanges = (role: string) => dirtyPermissions[role] !== undefined;
+    const hasPreset = (role: string) => Object.prototype.hasOwnProperty.call(rolePresets, role);
+    const presetFor = (role: string) => normalize((rolePresets[role] || []).filter(p => editablePermissions.includes(p)));
+    const canManageRoleIdentity = (role: string) => !isBaseRole(role) && assignedUserCount(role) === 0 && !hasChanges(role);
+
+    const currentPermissions = currentFor(selectedRole);
 
     const updateMutation = useMutation({
         mutationFn: ({ role, permissions }: { role: string; permissions: string[] }) => api.put(`/api/roles/${role}/permissions`, { permissions }),
@@ -33,16 +93,134 @@ export default function RolePermissionsPage() {
                 delete next[variables.role];
                 return next;
             });
-            addToast('Permissions updated', 'success');
+            setShowSaveModal(false);
+            addToast(`Role permissions updated for ${roleLabel(variables.role)}.`, 'success');
         },
-        onError: () => addToast('Failed to update permissions', 'error'),
+        onError: () => {
+            setShowSaveModal(true);
+            addToast('Unable to save role permissions. Please try again.', 'error');
+        },
     });
 
     const createMutation = useMutation({
         mutationFn: () => api.post('/api/roles', { name: newRoleName, template: newRoleTemplate || undefined }),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['roles'] }); setShowCreateModal(false); setNewRoleName(''); setNewRoleTemplate(''); reset(); addToast('Role created', 'success'); },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['roles'] });
+            setShowCreateModal(false);
+            setNewRoleName('');
+            setNewRoleTemplate('');
+            setRoleErrors({});
+            reset();
+            addToast('Role created', 'success');
+        },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed', 'error'),
     });
+
+    const deleteMutation = useMutation({
+        mutationFn: (role: string) => api.delete(`/api/roles/${role}`),
+        onSuccess: (res) => {
+            queryClient.invalidateQueries({ queryKey: ['roles'] });
+            setShowDeleteRoleModal(false);
+            setSelectedRole('');
+            addToast(res.data?.message || 'Role deleted', 'success');
+        },
+        onError: (err: any) => {
+            addToast(err.response?.data?.message || 'Failed', 'error');
+        },
+    });
+
+    const renameMutation = useMutation({
+        mutationFn: ({ role, name }: { role: string; name: string }) => api.put(`/api/roles/${role}/rename`, { name }),
+        onSuccess: (res) => {
+            queryClient.invalidateQueries({ queryKey: ['roles'] });
+            setSelectedRole(res.data.role);
+            addToast('Role renamed', 'success');
+        },
+        onError: (err: any) => addToast(err.response?.data?.message || 'Failed to rename role', 'error'),
+    });
+
+    const switchRole = (role: string) => {
+        setSelectedRole(role);
+        setPendingRole('');
+        setShowDiscardModal(false);
+        setRenameValue(roleLabel(role));
+    };
+
+    const requestRoleSwitch = (role: string) => {
+        if (role === selectedRole) return;
+        if (hasChanges(selectedRole)) {
+            setPendingRole(role);
+            setShowDiscardModal(true);
+            return;
+        }
+        switchRole(role);
+    };
+
+    const discardAndSwitch = () => {
+        if (!pendingRole) return;
+        setDirtyPermissions(prev => {
+            const next = { ...prev };
+            delete next[selectedRole];
+            return next;
+        });
+        switchRole(pendingRole);
+    };
+
+    const togglePermission = (permission: string) => {
+        if (!selectedRole) return;
+        setDirtyPermissions(prev => {
+            const saved = initialFor(selectedRole);
+            const current = prev[selectedRole] !== undefined ? normalize(prev[selectedRole]) : saved;
+            const updated = normalize(
+                current.includes(permission) ? current.filter(p => p !== permission) : [...current, permission],
+            );
+            if (updated.join('|') === saved.join('|')) {
+                const next = { ...prev };
+                delete next[selectedRole];
+                return next;
+            }
+            return { ...prev, [selectedRole]: updated };
+        });
+    };
+
+    const openSaveModal = () => {
+        if (!hasChanges(selectedRole) || updateMutation.isPending) return;
+        const current = currentFor(selectedRole);
+        const initial = initialFor(selectedRole);
+        setSaveSummary({
+            added: current.filter(p => !initial.includes(p)),
+            removed: initial.filter(p => !current.includes(p)),
+        });
+        setShowSaveModal(true);
+    };
+
+    const confirmSave = () => {
+        if (!hasChanges(selectedRole) || updateMutation.isPending) return;
+        const role = selectedRole;
+        const permissions = currentFor(role);
+        updateMutation.mutate({ role, permissions });
+    };
+
+    const openDeleteRoleModal = () => {
+        if (!canManageRoleIdentity(selectedRole)) return;
+        setShowDeleteRoleModal(true);
+    };
+
+    const confirmDeleteRole = () => {
+        if (!canManageRoleIdentity(selectedRole) || deleteMutation.isPending) return;
+        setShowDeleteRoleModal(false);
+        deleteMutation.mutate(selectedRole);
+    };
+
+    const handleRename = () => {
+        const proposed = renameValue.trim();
+        if (!canManageRoleIdentity(selectedRole) || renameMutation.isPending) return;
+        if (!proposed) {
+            addToast('Role name is required.', 'error');
+            return;
+        }
+        renameMutation.mutate({ role: selectedRole, name: proposed });
+    };
 
     const handleCreateRole = () => {
         const errs = validate(roleSchema, { name: newRoleName });
@@ -55,250 +233,558 @@ export default function RolePermissionsPage() {
         createMutation.mutate();
     };
 
-    const deleteMutation = useMutation({
-        mutationFn: (role: string) => api.delete(`/api/roles/${role}`),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['roles'] }); addToast('Role deleted', 'success'); },
-        onError: (err: any) => addToast(err.response?.data?.message || 'Failed', 'error'),
-    });
-
-    const renameMutation = useMutation({
-        mutationFn: ({ role, name }: { role: string; name: string }) => api.put(`/api/roles/${role}/rename`, { name }),
-        onSuccess: (res) => {
-            queryClient.invalidateQueries({ queryKey: ['roles'] });
-            setSelectedRole(res.data.role);
-            setIsRenaming(false);
-            addToast('Role renamed', 'success');
-        },
-        onError: (err: any) => addToast(err.response?.data?.message || 'Failed to rename role', 'error'),
-    });
-
-    const restorePresetMutation = useMutation({
-        mutationFn: (role: string) => api.get(`/api/roles/${role}/restore-preset`),
-        onSuccess: (res, role) => {
-            const presetPermissions = res.data.permissions as string[];
-            updateMutation.mutate({ role, permissions: presetPermissions });
-        },
-        onError: (err: any) => addToast(err.response?.data?.message || 'Failed to restore preset', 'error'),
-    });
-
-    const roles: string[] = data?.data?.roles || [];
-    const rolePermissions: Record<string, string[]> = data?.data?.role_permissions || {};
-    const roleUserCounts: Record<string, number> = data?.data?.role_user_counts || {};
-    const roleDisplayNames: Record<string, string> = data?.data?.role_display_names || {};
-    const groups: Record<string, string[]> = data?.data?.groups || {};
-    const baseRoles: string[] = data?.data?.base_roles || [];
-    const rolePresets: Record<string, string[]> = data?.data?.role_presets || {};
-
-    if (!selectedRole && roles.length > 0 && !selectedRole) {
-        setSelectedRole(roles[0]);
-    }
-
-    const getEffectivePermissions = (role: string): string[] => {
-        if (dirtyPermissions[role] !== undefined) return dirtyPermissions[role];
-        return rolePermissions[role] || [];
+    const openCreateModal = () => {
+        reset();
+        setNewRoleName('');
+        setNewRoleTemplate('');
+        setRoleErrors({});
+        setShowCreateModal(true);
     };
 
-    const currentPermissions = getEffectivePermissions(selectedRole);
-    const isDirty = dirtyPermissions[selectedRole] !== undefined;
-    const isBaseRole = baseRoles.includes(selectedRole);
-    const totalPermissionCount = Object.values(groups).reduce((sum, perms) => sum + perms.length, 0);
-    const currentCount = currentPermissions.length;
-
-    const togglePermission = (permission: string) => {
+    const restorePreset = () => {
+        if (!selectedRole) return;
+        if (!hasPreset(selectedRole)) {
+            addToast(`No preset is defined for ${roleLabel(selectedRole)}.`, 'info');
+            return;
+        }
+        const preset = presetFor(selectedRole);
         setDirtyPermissions(prev => {
-            const saved = rolePermissions[selectedRole] || [];
-            const current = prev[selectedRole] !== undefined ? prev[selectedRole] : saved;
-            const updated = current.includes(permission)
-                ? current.filter(p => p !== permission)
-                : [...current, permission];
-            const arraysEqual = saved.length === updated.length && saved.every(v => updated.includes(v));
-            if (arraysEqual) {
-                const next = { ...prev };
+            const saved = initialFor(selectedRole);
+            const next = { ...prev };
+            if (preset.join('|') === saved.join('|')) {
                 delete next[selectedRole];
-                return next;
+            } else {
+                next[selectedRole] = preset;
             }
-            return { ...prev, [selectedRole]: updated };
+            return next;
         });
     };
 
-    const savePermissions = () => {
-        if (dirtyPermissions[selectedRole]) {
-            updateMutation.mutate({ role: selectedRole, permissions: dirtyPermissions[selectedRole] });
-        }
-    };
+    const groupGrantedCount = (permissions: string[]) => permissions.filter(p => currentPermissions.includes(p)).length;
 
-    const handleStartRename = () => {
-        setRenameValue(roleDisplayNames[selectedRole] || selectedRole);
-        setIsRenaming(true);
-    };
-
-    const handleRename = () => {
-        if (!renameValue.trim() || renameValue.trim() === selectedRole) {
-            addToast('Enter a new role name', 'error');
-            return;
-        }
-        renameMutation.mutate({ role: selectedRole, name: renameValue });
-    };
+    if (isLoading) {
+        return <Skeleton />;
+    }
 
     return (
-        <div className="space-y-6">
-            <SettingsTabHeader
-                title="Roles & Permissions"
-                description="Manage role access across the cooperative system."
-                icon="fas fa-user-shield"
-                action={<button onClick={() => { reset(); setNewRoleName(''); setNewRoleTemplate(''); setRoleErrors({}); setShowCreateModal(true); }} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"><i className="fas fa-plus mr-1"></i> New Role</button>}
-            />
-
-            <div className="flex gap-6">
-                {/* Role List */}
-                <div className="w-64 shrink-0 space-y-2">
-                    {roles.map(role => {
-                        const roleCount = rolePermissions[role]?.length || 0;
-                        const isBase = baseRoles.includes(role);
-                        return (
-                            <button
-                                key={role}
-                                onClick={() => setSelectedRole(role)}
-                                className={`w-full border rounded-xl bg-white px-3 py-3 text-left transition ${
-                                    selectedRole === role
-                                        ? 'border-cyan-200 bg-cyan-50 ring-1 ring-cyan-200'
-                                        : 'border-gray-200 text-gray-500 hover:bg-gray-50'
-                                }`}
-                            >
-                                <div className="flex items-center justify-between">
-                                    <p className="text-sm font-medium text-gray-900">{roleDisplayNames[role] || role}</p>
-                                    {isBase && <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-cyan-700">Base</span>}
-                                    {!isBase && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">Custom</span>}
-                                </div>
-                                <p className="mt-1 text-xs text-gray-400">{roleCount} / {totalPermissionCount} permissions · {roleUserCounts[role] || 0} users</p>
-                            </button>
-                        );
-                    })}
-                </div>
-
-                {/* Detail Panel */}
-                <div className="flex-1 space-y-4">
-                    {selectedRole && (
-                        <div className="rounded-xl border bg-white shadow-sm">
-                            {isDirty && (
-                                <div className="flex items-center justify-between bg-amber-50 border-b border-amber-200 px-6 py-2.5">
-                                    <span className="text-sm font-medium text-amber-800">
-                                        <i className="fas fa-exclamation-triangle mr-1"></i>
-                                        You have unsaved changes &mdash; Save to apply
-                                    </span>
-                                    <button
-                                        onClick={savePermissions}
-                                        disabled={updateMutation.isPending}
-                                        className="rounded-lg bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-                                    >
-                                        {updateMutation.isPending ? 'Saving...' : 'Save'}
-                                    </button>
-                                </div>
-                            )}
-                            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-                                <div className="flex items-center gap-2">
-                                    {isRenaming ? (
-                                        <div className="flex items-center gap-1">
-                                            <input
-                                                type="text"
-                                                value={renameValue}
-                                                onChange={e => setRenameValue(e.target.value)}
-                                                onKeyDown={e => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') setIsRenaming(false); }}
-                                                className="w-48 rounded-lg border border-gray-300 px-2 py-1 text-sm font-semibold"
-                                                autoFocus
-                                            />
-                                            <button onClick={handleRename} className="rounded-lg p-1 text-emerald-600 hover:bg-emerald-50"><i className="fas fa-check"></i></button>
-                                            <button onClick={() => setIsRenaming(false)} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100"><i className="fas fa-times"></i></button>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <h2 className="text-lg font-semibold text-gray-900">{roleDisplayNames[selectedRole] || selectedRole}</h2>
-                                            <button onClick={handleStartRename} className="rounded-lg p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"><i className="fas fa-pen text-xs"></i></button>
-                                        </>
-                                    )}
-                                    <p className="text-sm text-gray-500">{currentCount} of {totalPermissionCount} permissions granted</p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    {rolePresets[selectedRole] && (
-                                        <button
-                                            onClick={() => { if (confirm('Restore default permissions for this role?')) restorePresetMutation.mutate(selectedRole); }}
-                                            disabled={restorePresetMutation.isPending}
-                                            className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
-                                        >
-                                            <i className="fas fa-undo mr-1"></i> Restore Preset
-                                        </button>
-                                    )}
-                                    {isBaseRole ? (
-                                        <span className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-medium text-cyan-700">
-                                            <i className="fas fa-lock mr-1"></i> Base role &mdash; edit permissions, rename/delete locked
-                                        </span>
-                                    ) : (
-                                        <button onClick={() => { if (confirm(`Delete role "${selectedRole}"?`)) deleteMutation.mutate(selectedRole); }} className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-100">
-                                            <i className="fas fa-trash mr-1"></i> Delete Role
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                            <div className="p-6 space-y-4">
-                                {Object.entries(groups).map(([group, permissions]) => (
-                                    <div key={group} className="rounded-xl border border-gray-200 bg-white p-4">
-                                        <h3 className="mb-3 text-sm font-semibold text-gray-900 capitalize">{group.replace(/_/g, ' ')}</h3>
-                                        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                                            {permissions.map(permission => (
-                                                <label key={permission} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition cursor-pointer ${currentPermissions.includes(permission) ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-gray-100 bg-white text-gray-600 hover:bg-gray-50'}`}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={currentPermissions.includes(permission)}
-                                                        onChange={() => togglePermission(permission)}
-                                                        className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 disabled:opacity-50"
-                                                    />
-                                                    <span className="truncate">{permission.split('.').pop()}</span>
-                                                </label>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
+        <div className="flex min-h-[calc(100vh-8rem)] flex-col gap-5 pb-2">
+            <div className="rounded-xl border border-gray-200 bg-white px-6 py-4 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                        <h2 className="text-xl font-bold text-gray-900">Role Permission Management</h2>
+                        <p className="mt-0.5 text-sm text-gray-500">
+                            Configure the editable permissions for assignable database roles. Dashboard, notifications, profile, and
+                            settings stay available to all managed roles and are not part of this editor.
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <button
+                            type="button"
+                            onClick={openCreateModal}
+                            className="inline-flex items-center rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-cyan-700"
+                        >
+                            Add Custom Role
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            {showCreateModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => requestClose(() => setShowCreateModal(false))}>
-                    <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-                        <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white shrink-0">
-                            <div className="flex items-center justify-between">
-                                <h2 className="text-lg font-bold">Create Role</h2>
-                                <button onClick={() => requestClose(() => setShowCreateModal(false))} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white"><i className="fas fa-times"></i></button>
+            {roles.length === 0 ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-6 py-8 text-sm text-amber-800 shadow-sm">
+                    No editable roles exist yet. Use the create role button above to add the first assignable role.
+                </div>
+            ) : (
+                <>
+                    <div className="grid flex-1 gap-5 xl:grid-cols-[240px_minmax(0,1fr)]">
+                        <div className="space-y-2">
+                            {roles.map(role => {
+                                const active = selectedRole === role;
+                                const count = currentFor(role).length;
+                                const assigned = assignedUserCount(role);
+                                return (
+                                    <button
+                                        key={role}
+                                        type="button"
+                                        onClick={() => requestRoleSwitch(role)}
+                                        className={`group w-full rounded-xl border px-4 py-3.5 text-left transition-all ${
+                                            active
+                                                ? 'border-cyan-300 bg-cyan-50 shadow-sm ring-1 ring-cyan-200'
+                                                : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className={`text-sm font-semibold ${active ? 'text-cyan-900' : 'text-gray-800'}`}>
+                                                {roleLabel(role)}
+                                            </span>
+                                            <span
+                                                className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+                                                    active ? 'bg-cyan-100 text-cyan-700' : 'bg-gray-100 text-gray-500'
+                                                }`}
+                                            >
+                                                {count} / {totalEditableCount}
+                                            </span>
+                                        </div>
+                                        <p className={`mt-1 text-xs leading-relaxed ${active ? 'text-cyan-700' : 'text-gray-500'}`}>
+                                            {roleDescription(role)}
+                                        </p>
+                                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                            <span
+                                                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                                                    isBaseRole(role) ? 'bg-slate-100 text-slate-600' : 'bg-cyan-50 text-cyan-700'
+                                                }`}
+                                            >
+                                                {isBaseRole(role) ? 'Base role' : 'Custom role'}
+                                            </span>
+                                            {assigned > 0 && (
+                                                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                                                    {assigned} assigned
+                                                </span>
+                                            )}
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        <div className="space-y-3">
+                            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                                <div className="border-b border-gray-100 bg-gray-50 px-5 py-4">
+                                    <div className="flex flex-wrap items-start justify-between gap-3">
+                                        <div>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <h3 className="text-base font-semibold text-gray-900">{roleLabel(selectedRole)}</h3>
+                                                {isBaseRole(selectedRole) ? (
+                                                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                                                        Base role
+                                                    </span>
+                                                ) : (
+                                                    <span className="rounded-full bg-cyan-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-cyan-700">
+                                                        Custom role
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="mt-1 text-sm text-gray-600">{roleDescription(selectedRole)}</p>
+                                        </div>
+
+                                        <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
+                                            {assignedUserCount(selectedRole)} assigned
+                                        </span>
+                                    </div>
+
+                                    <p className="mt-3 text-xs text-gray-400">
+                                        Role key: <span className="font-mono">{selectedRole}</span>
+                                    </p>
+                                </div>
+
+                                <div className="space-y-4 px-5 py-4">
+                                    {isBaseRole(selectedRole) ? (
+                                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                                            Base roles stay available to the system. You can keep editing their permissions below,
+                                            but rename and delete are locked.
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            {hasChanges(selectedRole) && (
+                                                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                                                    Save or discard the current permission draft before renaming or deleting this role.
+                                                </div>
+                                            )}
+                                            {assignedUserCount(selectedRole) > 0 && (
+                                                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                                                    This role is currently assigned to <span className="font-semibold">{assignedUserCount(selectedRole)}</span> user(s). Unassign it before renaming or deleting it.
+                                                </div>
+                                            )}
+
+                                            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                                                <div className="space-y-2">
+                                                    <label className="block text-sm font-medium text-gray-700">Rename role</label>
+                                                    <input
+                                                        type="text"
+                                                        value={renameValue}
+                                                        onChange={e => setRenameValue(e.target.value)}
+                                                        onKeyDown={e => { if (e.key === 'Enter') handleRename(); }}
+                                                        placeholder="Enter a new role name"
+                                                        disabled={!canManageRoleIdentity(selectedRole) || renameMutation.isPending}
+                                                        className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-500 focus:ring-cyan-500 disabled:cursor-not-allowed disabled:bg-gray-100"
+                                                    />
+                                                    <p className="text-xs text-gray-500">
+                                                        The saved role key will be normalized to lowercase slug format.
+                                                    </p>
+                                                </div>
+
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleRename}
+                                                        disabled={!canManageRoleIdentity(selectedRole) || renameMutation.isPending || !renameValue.trim()}
+                                                        className="inline-flex items-center rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-2 text-sm font-medium text-cyan-700 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400"
+                                                    >
+                                                        {renameMutation.isPending ? 'Renaming...' : 'Rename Role'}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={openDeleteRoleModal}
+                                                        disabled={!canManageRoleIdentity(selectedRole) || deleteMutation.isPending}
+                                                        className="inline-flex items-center rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400"
+                                                    >
+                                                        Delete Role
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {Object.entries(d?.groups || {}).map(([group, permissions]) => (
+                                <div key={group} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                                    <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-5 py-2.5">
+                                        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">{group}</h3>
+                                        <span className="text-xs text-gray-400">
+                                            {groupGrantedCount(permissions)} / {permissions.length}
+                                        </span>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 gap-px bg-gray-100 sm:grid-cols-2">
+                                        {permissions.map(permission => {
+                                            const on = currentPermissions.includes(permission);
+                                            const isPresetForRole = hasPreset(selectedRole) && presetFor(selectedRole).includes(permission);
+                                            return (
+                                                <div key={permission} className="flex items-center justify-between gap-3 bg-white px-4 py-3 transition-colors hover:bg-gray-50">
+                                                    <div className="min-w-0">
+                                                        <p className="truncate text-sm font-medium text-gray-800">{formatPermissionLabel(permission)}</p>
+                                                        <div className="mt-0.5 flex items-center gap-2">
+                                                            {isPresetForRole && (
+                                                                <span className="shrink-0 text-[10px] font-medium text-emerald-600">preset</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => togglePermission(permission)}
+                                                        role="switch"
+                                                        aria-checked={on}
+                                                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-1 ${on ? 'bg-cyan-500' : 'bg-gray-200'}`}
+                                                    >
+                                                        <span
+                                                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${on ? 'translate-x-4' : 'translate-x-0'}`}
+                                                        />
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="sticky bottom-0 z-30 mt-2 border-t border-gray-200 bg-white/95 px-6 py-3 shadow-lg backdrop-blur-sm">
+                        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
+                            <button
+                                type="button"
+                                onClick={() => navigate('/settings')}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                            >
+                                <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+                                </svg>
+                                Back to Settings
+                            </button>
+
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={restorePreset}
+                                    disabled={!hasPreset(selectedRole)}
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-300 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400"
+                                >
+                                    <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                                    </svg>
+                                    Restore Preset
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={openSaveModal}
+                                    disabled={!hasChanges(selectedRole) || updateMutation.isPending}
+                                    className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-cyan-300 disabled:cursor-not-allowed disabled:bg-cyan-300"
+                                >
+                                    <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
+                                    </svg>
+                                    <span>{updateMutation.isPending ? 'Saving...' : 'Save Changes'}</span>
+                                </button>
                             </div>
                         </div>
-                        <div className="p-6">
-                            <div className="space-y-3">
-                            <div>
-                                <label className="mb-1 block text-sm font-medium text-gray-700">Role Name</label>
-                                <input type="text" value={newRoleName} onChange={e => { markDirty(); setNewRoleName(e.target.value); if (roleErrors.name) setRoleErrors({}); }} className={`w-full rounded-xl border bg-white px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500 ${roleErrors.name ? 'border-red-400' : 'border-gray-300'}`} placeholder="e.g., auditor" />
-                                {roleErrors.name && <p className="mt-1 text-xs text-red-600">{roleErrors.name}</p>}
+                    </div>
+                </>
+            )}
+
+            {showDiscardModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 px-4 py-6">
+                    <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl">
+                        <div className="flex items-start gap-4">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                                <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86l-8.13 14A1.5 1.5 0 0 0 3.46 20h17.08a1.5 1.5 0 0 0 1.3-2.14l-8.13-14a1.5 1.5 0 0 0-2.6 0Z" />
+                                </svg>
                             </div>
-                            <div>
-                                <label className="mb-1 block text-sm font-medium text-gray-700">Clone From (optional)</label>
-                                <select value={newRoleTemplate} onChange={e => { markDirty(); setNewRoleTemplate(e.target.value); }} className="w-full rounded-xl border-gray-300 bg-white px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500 border">
-                                    <option value="">None (base access only)</option>
-                                    {roles.map(r => <option key={r} value={r}>{roleDisplayNames[r] || r}</option>)}
-                                </select>
+                            <div className="min-w-0 flex-1">
+                                <h3 className="text-lg font-semibold text-gray-900">Discard Changes?</h3>
+                                <p className="mt-1 text-sm text-gray-600">
+                                    You have unsaved changes for <span className="font-medium">{roleLabel(selectedRole)}</span>.
+                                    Switching roles will discard those edits.
+                                </p>
+                                <p className="mt-1 text-xs text-gray-400">
+                                    Current draft will be reset before loading <span className="font-medium">{roleLabel(pendingRole)}</span>.
+                                </p>
                             </div>
                         </div>
-                        <div className="mt-4 flex justify-end gap-3">
-                            <button onClick={() => requestClose(() => setShowCreateModal(false))} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
-                            <button onClick={handleCreateRole} disabled={createMutation.isPending} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
-                                {createMutation.isPending ? 'Creating...' : 'Create'}
+                        <div className="mt-6 flex justify-end gap-3">
+                            <button
+                                type="button"
+                                onClick={() => { setShowDiscardModal(false); setPendingRole(''); }}
+                                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                            >
+                                Keep Editing
+                            </button>
+                            <button
+                                type="button"
+                                onClick={discardAndSwitch}
+                                className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+                            >
+                                Discard Changes
                             </button>
                         </div>
                     </div>
-                    {renderDialog()}
-                </div>
                 </div>
             )}
+
+            {showCreateModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 px-4 py-6" onClick={() => requestClose(() => setShowCreateModal(false))}>
+                    <div className="relative w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <h3 className="text-lg font-semibold text-gray-900">Create Custom Role</h3>
+                                <p className="mt-1 text-sm text-gray-600">
+                                    Add a new assignable database role and optionally clone permissions from an existing one.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => requestClose(() => setShowCreateModal(false))}
+                                className="rounded-full p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                                aria-label="Close create role modal"
+                            >
+                                <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div className="mt-6 space-y-4">
+                            <div>
+                                <label htmlFor="new-role-name" className="mb-1 block text-sm font-medium text-gray-700">Role name</label>
+                                <input
+                                    id="new-role-name"
+                                    type="text"
+                                    value={newRoleName}
+                                    onChange={e => { markDirty(); setNewRoleName(e.target.value); if (roleErrors.name) setRoleErrors({}); }}
+                                    placeholder="e.g. auditor or branch-supervisor"
+                                    className={`w-full rounded-xl border px-3 py-2 text-sm focus:border-cyan-500 focus:ring-cyan-500 ${roleErrors.name ? 'border-rose-400' : 'border-gray-300'}`}
+                                />
+                                <p className="mt-1 text-xs text-gray-500">
+                                    The name is saved as a lowercase slug, such as <span className="font-medium">branch-supervisor</span>.
+                                </p>
+                                {roleErrors.name && <p className="mt-1 text-xs font-medium text-rose-600">{roleErrors.name}</p>}
+                            </div>
+
+                            <div>
+                                <label htmlFor="new-role-template" className="mb-1 block text-sm font-medium text-gray-700">Start with permissions from</label>
+                                <select
+                                    id="new-role-template"
+                                    value={newRoleTemplate}
+                                    onChange={e => { markDirty(); setNewRoleTemplate(e.target.value); }}
+                                    className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-500 focus:ring-cyan-500"
+                                >
+                                    <option value="">Blank role with base dashboard/profile access</option>
+                                    {roles.map(r => <option key={r} value={r}>{roleLabel(r)}</option>)}
+                                </select>
+                            </div>
+
+                            <div className="rounded-xl border border-cyan-100 bg-cyan-50 px-4 py-3 text-sm text-cyan-800">
+                                New roles can be assigned immediately in Officers after creation.
+                            </div>
+
+                            <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => requestClose(() => setShowCreateModal(false))}
+                                    className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleCreateRole}
+                                    disabled={createMutation.isPending}
+                                    className="inline-flex items-center rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:bg-cyan-300"
+                                >
+                                    {createMutation.isPending ? 'Creating...' : 'Create Role'}
+                                </button>
+                            </div>
+                        </div>
+                        {renderDialog()}
+                    </div>
+                </div>
+            )}
+
+            {showSaveModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 px-4 py-6">
+                    <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl">
+                        <div className="flex items-start gap-4">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-cyan-100 text-cyan-700">
+                                <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
+                                </svg>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <h3 className="text-lg font-semibold text-gray-900">Review Changes</h3>
+                                <p className="mt-1 text-sm text-gray-600">
+                                    You're about to save permission updates for <span className="font-medium">{roleLabel(selectedRole)}</span>.
+                                </p>
+                                <p className="mt-1 text-xs text-gray-400">
+                                    Role key: <span className="font-mono">{selectedRole}</span>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Added</p>
+                                <p className="mt-1 text-sm text-emerald-900">
+                                    {saveSummary.added.length ? `${saveSummary.added.length} permission(s)` : 'No additions'}
+                                </p>
+                            </div>
+                            <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-rose-700">Removed</p>
+                                <p className="mt-1 text-sm text-rose-900">
+                                    {saveSummary.removed.length ? `${saveSummary.removed.length} permission(s)` : 'No removals'}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="mt-5 space-y-4">
+                            {saveSummary.added.length > 0 && (
+                                <div className="rounded-xl border border-gray-200 p-4">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Added permissions</p>
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                        {saveSummary.added.map(permission => (
+                                            <span key={permission} className="inline-flex max-w-full items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                                                <span className="truncate">{formatPermissionLabel(permission)}</span>
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            {saveSummary.removed.length > 0 && (
+                                <div className="rounded-xl border border-gray-200 p-4">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Removed permissions</p>
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                        {saveSummary.removed.map(permission => (
+                                            <span key={permission} className="inline-flex max-w-full items-center rounded-full bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700">
+                                                <span className="truncate">{formatPermissionLabel(permission)}</span>
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="mt-6 flex justify-end gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setShowSaveModal(false)}
+                                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={confirmSave}
+                                disabled={updateMutation.isPending}
+                                className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:bg-cyan-300"
+                            >
+                                {updateMutation.isPending ? 'Saving...' : 'Confirm and Save'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showDeleteRoleModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 px-4 py-6">
+                    <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl">
+                        <div className="flex items-start gap-4">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-700">
+                                <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                </svg>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <h3 className="text-lg font-semibold text-gray-900">Delete Custom Role?</h3>
+                                <p className="mt-1 text-sm text-gray-600">
+                                    This will permanently remove <span className="font-medium">{roleLabel(selectedRole)}</span>
+                                    from the available assignable roles.
+                                </p>
+                                <p className="mt-1 text-xs text-gray-400">
+                                    Current key: <span className="font-mono">{selectedRole}</span>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 flex justify-end gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setShowDeleteRoleModal(false)}
+                                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={confirmDeleteRole}
+                                disabled={deleteMutation.isPending}
+                                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-300"
+                            >
+                                {deleteMutation.isPending ? 'Deleting...' : 'Confirm Delete'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function normalize(list: string[]): string[] {
+    return [...new Set((list || []).filter(Boolean))].sort();
+}
+
+function Skeleton() {
+    return (
+        <div className="space-y-5">
+            <div className="h-20 animate-pulse rounded-xl bg-gray-100" />
+            <div className="grid gap-5 xl:grid-cols-[240px_minmax(0,1fr)]">
+                <div className="space-y-2">
+                    <div className="h-24 animate-pulse rounded-xl bg-gray-100" />
+                    <div className="h-24 animate-pulse rounded-xl bg-gray-100" />
+                    <div className="h-24 animate-pulse rounded-xl bg-gray-100" />
+                </div>
+                <div className="h-96 animate-pulse rounded-xl bg-gray-100" />
+            </div>
         </div>
     );
 }
