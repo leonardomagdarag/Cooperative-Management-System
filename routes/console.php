@@ -17,3 +17,12 @@ Schedule::command('notifications:check-loan-due')
 Schedule::command('notifications:cleanup')
     ->daily()
     ->description('Cleanup old read notifications and expired notifications');
+
+// Backups: the ping command acts as the deciding agent. It reads the per-tier
+// cron expressions from the database (SystemSetting) and only runs what is due.
+// If the host has no cron (e.g. shared hosting), point a cron at /backup/ping
+// instead — see docs/BACKUPS.md.
+Schedule::command('backup:ping')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->description('Run scheduled backups that are due');

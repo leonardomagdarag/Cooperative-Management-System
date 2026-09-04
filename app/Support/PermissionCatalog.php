@@ -82,6 +82,11 @@ class PermissionCatalog
                 'settings.view',
                 'settings.update',
             ],
+            'Backups' => [
+                'backups.view',
+                'backups.manage',
+                'backups.restore',
+            ],
         ];
     }
 

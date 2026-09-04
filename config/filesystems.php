@@ -47,6 +47,26 @@ return [
             'report' => false,
         ],
 
+        // On-server backup archive storage (works on shared hosting). Kept out of
+        // the "public" disk so encrypted archives are never web-accessible.
+        'local_backups' => [
+            'driver' => 'local',
+            'root' => storage_path('app/backups'),
+            'throw' => false,
+            'report' => false,
+        ],
+
+        // Google Drive long-term backup storage (cloud tier).
+        'google' => [
+            'driver' => 'google',
+            // Optional; guard against fully missing credentials at boot.
+            'clientId' => env('GOOGLE_DRIVE_CLIENT_ID'),
+            'clientSecret' => env('GOOGLE_DRIVE_CLIENT_SECRET'),
+            'refreshToken' => env('GOOGLE_DRIVE_REFRESH_TOKEN'),
+            'folder' => env('GOOGLE_DRIVE_FOLDER', ''), // empty = root of the drive
+            // 'teamDriveId' => env('GOOGLE_DRIVE_TEAM_DRIVE_ID'),
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

@@ -10,6 +10,7 @@ use App\Http\Controllers\PasswordController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 
 // === Public Routes ===
@@ -117,6 +118,24 @@ Route::middleware(['auth', 'otp.verified', 'verified'])->group(function () {
         })->name($legacyName);
     }
 });
+
+// === Backup Cron Fallback Ping ===
+// Shared hosts without cron support can hit this endpoint (every minute) with
+// the BACKUP_PING_TOKEN secret. It runs whichever tier is scheduled & due.
+Route::get('/backup/ping', function (Request $request) {
+    $token = env('BACKUP_PING_TOKEN');
+
+    if (! is_string($token) || $token === '' || ! hash_equals($token, (string) $request->query('token', ''))) {
+        abort(403);
+    }
+
+    $exitCode = Artisan::call('backup:ping');
+
+    return response()->json([
+        'ok' => $exitCode === 0,
+        'output' => trim(Artisan::output()),
+    ]);
+})->name('backup.ping');
 
 // === SPA Catch-All ===
 // Serve the React app for any non-API, non-asset routes.
