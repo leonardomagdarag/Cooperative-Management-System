@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Response;
 
 class DashboardController extends Controller
 {
-    public function index(): RedirectResponse
+    public function index(): Response
     {
-        return redirect('/dashboard');
+        // The dashboard is rendered by the React SPA. This route is protected
+        // server-side, then hands the request to the SPA shell for both initial
+        // navigation and browser reloads.
+        return response()->view('react');
     }
 }

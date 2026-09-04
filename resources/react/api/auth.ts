@@ -17,9 +17,9 @@ export async function fetchUser() {
     return api.get('/api/user');
 }
 
-export async function forgotPassword(email: string) {
+export async function forgotPassword(email: string, turnstileToken?: string | null) {
     await fetchCsrf();
-    return api.post('/forgot-password', { email });
+    return api.post('/forgot-password', { email, 'cf-turnstile-response': turnstileToken });
 }
 
 export async function verifyResetToken(email: string, token: string) {

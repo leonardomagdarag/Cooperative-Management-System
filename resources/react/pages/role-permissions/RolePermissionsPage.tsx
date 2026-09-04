@@ -4,6 +4,7 @@ import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
 import { validate, roleSchema, type FieldErrors } from '../../lib/validation';
+import SettingsTabHeader from '../settings/SettingsTabHeader';
 
 export default function RolePermissionsPage() {
     const [selectedRole, setSelectedRole] = useState('');
@@ -141,10 +142,12 @@ export default function RolePermissionsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-gray-900">Roles & Permissions</h1>
-                <button onClick={() => { reset(); setNewRoleName(''); setNewRoleTemplate(''); setRoleErrors({}); setShowCreateModal(true); }} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"><i className="fas fa-plus mr-1"></i> New Role</button>
-            </div>
+            <SettingsTabHeader
+                title="Roles & Permissions"
+                description="Manage role access across the cooperative system."
+                icon="fas fa-user-shield"
+                action={<button onClick={() => { reset(); setNewRoleName(''); setNewRoleTemplate(''); setRoleErrors({}); setShowCreateModal(true); }} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"><i className="fas fa-plus mr-1"></i> New Role</button>}
+            />
 
             <div className="flex gap-6">
                 {/* Role List */}

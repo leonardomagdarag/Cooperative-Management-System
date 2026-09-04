@@ -24,3 +24,30 @@ export async function deactivateAccount(data: { current_password: string }) {
 export async function deleteAccount(data: { current_password: string }) {
     return api.delete('/api/settings/account', { data });
 }
+
+export interface ServiceAvailabilityFlags {
+    global: boolean;
+    member: boolean;
+    officer: boolean;
+    counter?: boolean;
+    online?: boolean;
+    bank_transfer?: boolean;
+}
+
+export interface ServiceAvailabilityData {
+    deposit: ServiceAvailabilityFlags;
+    withdrawal: ServiceAvailabilityFlags;
+    loan_application: ServiceAvailabilityFlags;
+    loan_payment: ServiceAvailabilityFlags;
+}
+
+export async function getServiceAvailability() {
+    return api.get('/api/settings/service-availability');
+}
+
+export async function updateServiceAvailability(data: {
+    services: ServiceAvailabilityData;
+    notify_affected: boolean;
+}) {
+    return api.put('/api/settings/service-availability', data);
+}

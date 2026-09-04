@@ -5,6 +5,10 @@ import DatePicker from '../../components/DatePicker';
 import { useToast } from '../../contexts/ToastContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
 import { validate, announcementSchema, type FieldErrors } from '../../lib/validation';
+import Button from '../../components/ui/Button';
+import Badge from '../../components/ui/Badge';
+import EmptyState from '../../components/ui/EmptyState';
+import Pagination from '../../components/ui/Pagination';
 
 export default function AnnouncementsPage() {
     const [page, setPage] = useState(1);
@@ -46,9 +50,7 @@ export default function AnnouncementsPage() {
                     <p className="text-sm text-gray-500">Stay updated with the latest news and events</p>
                 </div>
                 {permissions?.can_create && (
-                    <button onClick={() => { setEditing(null); setShowModal(true); }} className="bg-blue-600 hover:bg-blue-700 rounded-lg text-white px-4 py-2 text-sm font-medium">
-                        <i className="fas fa-plus mr-1"></i> New Announcement
-                    </button>
+                    <Button onClick={() => { setEditing(null); setShowModal(true); }} icon={<i className="fas fa-plus" />}>New Announcement</Button>
                 )}
             </div>
 
@@ -57,10 +59,7 @@ export default function AnnouncementsPage() {
                     {[...Array(5)].map((_, i) => <div key={i} className="h-24 animate-pulse rounded-lg bg-gray-100" />)}
                 </div>
             ) : announcements.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-gray-300 bg-white p-12 text-center">
-                    <i className="fas fa-bullhorn text-4xl text-gray-300"></i>
-                    <p className="mt-4 text-sm text-gray-500">No announcements yet</p>
-                </div>
+                <EmptyState icon="fa-bullhorn" title="No announcements yet" />
             ) : (
                 <div className="space-y-3">
                     {announcements.map(a => (
@@ -72,7 +71,7 @@ export default function AnnouncementsPage() {
                                 <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-2">
                                         <h3 className="font-semibold text-gray-900">{a.title}</h3>
-                                        <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-100 text-gray-500">{a.type}</span>
+                                        <Badge>{a.type}</Badge>
                                     </div>
                                     <div className="prose prose-sm mt-1 text-gray-500 line-clamp-2">{a.content}</div>
                                     <div className="mt-2 flex items-center gap-4 text-xs text-gray-400">
@@ -82,12 +81,12 @@ export default function AnnouncementsPage() {
                                     </div>
                                 </div>
                                 <div className="flex gap-1">
-                                    <button onClick={() => setViewing(a)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><i className="fas fa-eye"></i></button>
+                                    <Button variant="ghost" size="sm" onClick={() => setViewing(a)} aria-label={`View ${a.title}`}><i className="fas fa-eye"></i></Button>
                                     {permissions?.can_update && (
-                                        <button onClick={() => { setEditing(a); setShowModal(true); }} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><i className="fas fa-edit"></i></button>
+                                        <Button variant="ghost" size="sm" onClick={() => { setEditing(a); setShowModal(true); }} aria-label={`Edit ${a.title}`}><i className="fas fa-edit"></i></Button>
                                     )}
                                     {permissions?.can_delete && (
-                                        <button onClick={() => { if (confirm('Delete this announcement?')) deleteMutation.mutate(a.id); }} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><i className="fas fa-trash"></i></button>
+                                        <Button variant="ghost" size="sm" onClick={() => { if (confirm('Delete this announcement?')) deleteMutation.mutate(a.id); }} aria-label={`Delete ${a.title}`} className="hover:bg-red-50 hover:text-red-600"><i className="fas fa-trash"></i></Button>
                                     )}
                                 </div>
                             </div>
@@ -97,11 +96,7 @@ export default function AnnouncementsPage() {
             )}
 
             {pagination && pagination.last_page > 1 && (
-                <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 flex items-center justify-center gap-2">
-                    <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm disabled:opacity-50">Previous</button>
-                    <span className="text-sm text-gray-500">Page {page} of {pagination.last_page}</span>
-                    <button onClick={() => setPage(p => Math.min(pagination.last_page, p + 1))} disabled={page === pagination.last_page} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm disabled:opacity-50">Next</button>
-                </div>
+                <Pagination page={page} lastPage={pagination.last_page} onChange={setPage} />
             )}
 
             {/* View Modal */}

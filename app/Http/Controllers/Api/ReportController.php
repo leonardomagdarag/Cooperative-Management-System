@@ -75,6 +75,43 @@ class ReportController extends Controller
         ]);
     }
 
+    public function memberActivity(Request $request): JsonResponse
+    {
+        abort_unless(Auth::user()?->can('reports.view'), 403);
+
+        [$start, $end] = $this->resolveRange($request);
+        $activityType = $request->string('activity_type', 'all')->toString();
+        $allowedTypes = ['all', 'deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'fee'];
+
+        $query = $this->completedTransactions()
+            ->with(['account.user.personalData', 'loan.user.personalData'])
+            ->whereBetween('transaction_date', [$start, $end])
+            ->where(function ($builder) {
+                $builder->whereHas('account.user')
+                    ->orWhereHas('loan.user');
+            })
+            ->latest('transaction_date');
+
+        if (in_array($activityType, array_slice($allowedTypes, 1), true)) {
+            $query->where('transaction_type', $activityType);
+        }
+
+        $rows = $query->get()->map(function (Transaction $transaction) {
+            $user = $transaction->account?->user ?? $transaction->loan?->user;
+
+            return [
+                'id' => $transaction->id,
+                'transaction_number' => $transaction->transaction_number,
+                'transaction_type' => $transaction->transaction_type,
+                'amount' => (float) $transaction->amount,
+                'transaction_date' => $transaction->transaction_date?->format('Y-m-d H:i'),
+                'member_name' => $user?->name ?: $user?->email,
+            ];
+        });
+
+        return response()->json(['data' => $rows, 'total' => (float) $rows->sum('amount')]);
+    }
+
     public function balanceSheet(Request $request): JsonResponse
     {
         abort_unless(Auth::user()?->can('reports.financial'), 403);

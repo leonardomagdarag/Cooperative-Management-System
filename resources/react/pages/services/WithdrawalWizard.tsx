@@ -1,11 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
 import { validate, withdrawalSchema, type FieldErrors } from '../../lib/validation';
 import ReceiptQR from '../../components/ReceiptQR';
 
-export default function WithdrawalWizard({ onComplete, selectedMember, memberDetail, onDirtyChange }: { onComplete: () => void; selectedMember?: any; memberDetail?: any; onDirtyChange?: (dirty: boolean) => void }) {
+interface AvailabilityFlags {
+    global?: boolean;
+    member?: boolean;
+    officer?: boolean;
+    counter?: boolean;
+    online?: boolean;
+    bank_transfer?: boolean;
+}
+
+export default function WithdrawalWizard({ onComplete, selectedMember, memberDetail, onDirtyChange, availability }: { onComplete: () => void; selectedMember?: any; memberDetail?: any; onDirtyChange?: (dirty: boolean) => void; availability?: AvailabilityFlags }) {
     const [step, setStep] = useState(1);
     const [form, setForm] = useState({
         amount: '', account_id: '', reason: '', transaction_mode: '',
@@ -13,6 +22,14 @@ export default function WithdrawalWizard({ onComplete, selectedMember, memberDet
     });
     const [receipt, setReceipt] = useState<any>(null);
     const { addToast } = useToast();
+    const requestIdRef = useRef<string | null>(null);
+
+    // Check if transaction mode is available
+    const isModeAvailable = (mode: 'counter' | 'online' | 'bank_transfer'): boolean => {
+        if (!availability) return true;
+        if (!availability.global) return false;
+        return availability[mode] !== false;
+    };
 
     useEffect(() => {
         onDirtyChange?.(form.amount !== '' || form.reason !== '' || form.transaction_mode !== '' || form.bank_name !== '' || form.account_number !== '' || form.account_holder !== '');
@@ -43,6 +60,7 @@ export default function WithdrawalWizard({ onComplete, selectedMember, memberDet
             addToast(Object.values(errs)[0], 'error');
             return;
         }
+        requestIdRef.current = requestIdRef.current ?? crypto.randomUUID();
         submitMutation.mutate();
     };
 
@@ -53,6 +71,7 @@ export default function WithdrawalWizard({ onComplete, selectedMember, memberDet
                 account_id: savingsAccount?.id,
                 reason: form.reason,
                 transaction_mode: form.transaction_mode,
+                client_request_id: requestIdRef.current!,
             };
             if (form.transaction_mode === 'bank_transfer') {
                 payload.note = `Bank: ${form.bank_name}, Acct: ${form.account_number}, Holder: ${form.account_holder}`;
@@ -62,6 +81,7 @@ export default function WithdrawalWizard({ onComplete, selectedMember, memberDet
             return api.post('/api/services/withdrawal', payload);
         },
         onSuccess: (res) => {
+            requestIdRef.current = null;
             addToast('Withdrawal submitted for approval', 'success');
             setReceipt(res.data.data || { message: res.data.message });
         },
@@ -136,11 +156,20 @@ export default function WithdrawalWizard({ onComplete, selectedMember, memberDet
                             { key: 'counter', label: 'Counter' },
                             { key: 'online', label: 'Online' },
                             { key: 'bank_transfer', label: 'Bank Transfer' },
-                        ].map(m => (
-                            <button key={m.key} onClick={() => setForm(f => ({ ...f, transaction_mode: m.key }))} className={`rounded-lg border p-4 text-left ${form.transaction_mode === m.key ? 'border-red-500 bg-red-50' : 'border-gray-200'}`}>
-                                <p className="font-medium text-gray-900 text-sm">{m.label}</p>
-                            </button>
-                        ))}
+                        ].map(m => {
+                            const disabled = !isModeAvailable(m.key as 'counter' | 'online' | 'bank_transfer');
+                            return (
+                                <button
+                                    key={m.key}
+                                    onClick={() => !disabled && setForm(f => ({ ...f, transaction_mode: m.key }))}
+                                    disabled={disabled}
+                                    className={`rounded-lg border p-4 text-left transition-colors ${form.transaction_mode === m.key ? 'border-red-500 bg-red-50' : disabled ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed' : 'border-gray-200'}`}
+                                >
+                                    <p className="font-medium text-gray-900 text-sm">{m.label}</p>
+                                    {disabled && <p className="mt-1 text-xs text-amber-600"><i className="fas fa-tools mr-1"></i>Under maintenance</p>}
+                                </button>
+                            );
+                        })}
                     </div>
                     {form.transaction_mode === 'bank_transfer' && (
                         <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3">

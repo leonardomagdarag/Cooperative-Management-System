@@ -11,6 +11,8 @@ import DatePicker from '../../components/DatePicker';
 import PublicContentPage from '../public-content/PublicContentPage';
 import LoanProductsPage from '../loan-products/LoanProductsPage';
 import RolePermissionsPage from '../role-permissions/RolePermissionsPage';
+import ServiceAvailabilityPage from './ServiceAvailabilityPage';
+import SettingsTabHeader from './SettingsTabHeader';
 
 interface SettingsTab {
     key: string;
@@ -31,6 +33,7 @@ export default function SettingsPage() {
         { key: 'public-content', label: 'Public Page', icon: 'fas fa-globe', visible: !isMember && canManageSettings },
         { key: 'loan-products', label: 'Loan Products', icon: 'fas fa-hand-holding-usd', visible: !isMember && canManageSettings },
         { key: 'role-permissions', label: 'Roles & Permissions', icon: 'fas fa-user-shield', visible: !isMember && isAdmin },
+        { key: 'service-availability', label: 'Service Availability', icon: 'fas fa-toggle-on', visible: !isMember && canManageSettings },
     ];
 
     const visibleTabs = tabs.filter(t => t.visible);
@@ -53,10 +56,11 @@ export default function SettingsPage() {
                 ))}
             </div>
 
-            {activeTab === 'public-content' ? <PublicContentPage /> :
-             activeTab === 'loan-products' ? <LoanProductsPage /> :
-             activeTab === 'role-permissions' ? <RolePermissionsPage /> :
-             <MemberSettings />}
+{activeTab === 'public-content' ? <PublicContentPage /> :
+              activeTab === 'loan-products' ? <LoanProductsPage /> :
+              activeTab === 'role-permissions' ? <RolePermissionsPage /> :
+              activeTab === 'service-availability' ? <ServiceAvailabilityPage /> :
+              <MemberSettings />}
         </div>
     );
 }
@@ -137,10 +141,11 @@ function MemberSettings() {
 
     return (
         <div className="space-y-6">
-            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-                <h3 className="font-semibold text-gray-900">Member Self-Service</h3>
-                <p className="mt-1 text-sm text-gray-500">Manage your personal account settings and security</p>
-            </div>
+            <SettingsTabHeader
+                title="My Account"
+                description="Manage your profile, password, trusted devices, and account security."
+                icon="fas fa-user-cog"
+            />
 
             <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
                 <div className="flex items-start justify-between gap-4">

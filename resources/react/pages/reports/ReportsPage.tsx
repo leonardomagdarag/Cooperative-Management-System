@@ -12,6 +12,7 @@ export default function ReportsPage() {
     const [reportType, setReportType] = useState('financial');
     const [dateFrom, setDateFrom] = useState('');
     const [dateTo, setDateTo] = useState('');
+    const [activityType, setActivityType] = useState('all');
 
     const { data: financialData, isLoading } = useQuery({
         queryKey: ['reports-financial', dateFrom, dateTo],
@@ -35,6 +36,12 @@ export default function ReportsPage() {
         enabled: reportType === 'balance_sheet',
     });
 
+    const { data: memberActivityData } = useQuery({
+        queryKey: ['reports-member-activity', dateFrom, dateTo, activityType],
+        queryFn: () => api.get('/api/reports/member-activity', { params: { from: dateFrom || undefined, to: dateTo || undefined, activity_type: activityType } }),
+        enabled: reportType === 'member_activity',
+    });
+
     const { data: membersData } = useQuery({
         queryKey: ['reports-members'],
         queryFn: () => api.get('/api/members', { params: { per_page: 10 } }),
@@ -51,6 +58,7 @@ export default function ReportsPage() {
         { key: 'loans', label: 'Loan Report', icon: 'fas fa-file-invoice-dollar' },
         { key: 'payments', label: 'Payment Collection', icon: 'fas fa-money-bill-wave' },
         { key: 'expenses', label: 'Expense Report', icon: 'fas fa-receipt' },
+        { key: 'member_activity', label: 'Member Activity', icon: 'fas fa-user-clock' },
         ...(canViewFinancial ? [{ key: 'balance_sheet', label: 'Balance Sheet', icon: 'fas fa-balance-scale' }] : []),
     ];
 
@@ -59,6 +67,7 @@ export default function ReportsPage() {
     const pendingTransactions = overview.pending_transactions_list || [];
     const members = membersData?.data?.data || [];
     const expenseRows = expensesData?.data?.data ?? [];
+    const memberActivityRows = memberActivityData?.data?.data ?? [];
 
     const formatCurrency = (v: any) => `₱${Number(v || 0).toLocaleString()}`;
 
@@ -119,6 +128,14 @@ export default function ReportsPage() {
                             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm" />
                         </div>
                         <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100">Clear</button>
+                        {reportType === 'member_activity' && (
+                            <div>
+                                <label className="mb-1 block text-xs font-medium text-gray-500">Activity</label>
+                                <select value={activityType} onChange={e => setActivityType(e.target.value)} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm">
+                                    <option value="all">All activities</option><option value="deposit">Deposits</option><option value="withdrawal">Withdrawals</option><option value="loan_disbursement">Loan disbursements</option><option value="loan_payment">Loan payments</option><option value="fee">Fees</option>
+                                </select>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -208,6 +225,21 @@ export default function ReportsPage() {
                                                 </tr>
                                             ))}
                                         </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {reportType === 'member_activity' && (
+                            <div className="rounded-lg border border-gray-200 bg-white">
+                                <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+                                    <h3 className="text-sm font-semibold text-gray-700">Member Activity</h3>
+                                    <span className="text-sm font-bold text-emerald-700">Total: {formatCurrency(memberActivityData?.data?.total)}</span>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-100">
+                                        <thead className="bg-gray-50"><tr><th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-500">Date</th><th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-500">Member</th><th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-500">Activity</th><th className="px-4 py-2 text-right text-xs font-medium uppercase text-gray-500">Amount</th></tr></thead>
+                                        <tbody className="divide-y divide-gray-50">{memberActivityRows.length === 0 ? <tr><td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-500">No member activity in range</td></tr> : memberActivityRows.map((row: any) => <tr key={row.id} className="hover:bg-gray-50"><td className="px-4 py-2 text-sm text-gray-500">{row.transaction_date}</td><td className="px-4 py-2 text-sm text-gray-700">{row.member_name}</td><td className="px-4 py-2 text-sm capitalize text-gray-700">{row.transaction_type.replace('_', ' ')}</td><td className="px-4 py-2 text-right text-sm font-medium text-gray-900">{formatCurrency(row.amount)}</td></tr>)}</tbody>
                                     </table>
                                 </div>
                             </div>

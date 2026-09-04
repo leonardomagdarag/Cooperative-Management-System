@@ -24,37 +24,40 @@ class ClearAllCaches extends Command
      */
     public function handle()
     {
-        $this->info('🧹 Clearing caches...');
+        $this->info('Clearing caches...');
 
         Artisan::call('route:clear');
-        $this->info('✅ Routes cleared');
+        $this->info('Routes cleared');
 
         Artisan::call('view:clear');
-        $this->info('✅ Views cleared');
+        $this->info('Views cleared');
 
         Artisan::call('config:clear');
-        $this->info('✅ Config cleared');
+        $this->info('Config cleared');
 
         Artisan::call('cache:clear');
-        $this->info('✅ Application cache cleared');
+        $this->info('Application cache cleared');
 
         Artisan::call('event:clear');
-        $this->info('✅ Events cleared');
+        $this->info(' Events cleared');
 
         $this->newLine();
-        $this->info('⚙️ Rebuilding caches...');
+        $this->info('Rebuilding caches...');
 
         Artisan::call('config:cache');
-        $this->info('🔧 Config cache rebuilt');
+        $this->info('Config cache rebuilt');
 
         Artisan::call('route:cache');
-        $this->info('🔧 Route cache rebuilt');
+        $this->info('Route cache rebuilt');
 
         Artisan::call('event:cache');
-        $this->info('🔧 Event cache rebuilt');
+        $this->info('Event cache rebuilt');
+
+        Artisan::call('permission:cache-reset');
+        $this->info('Spatie permission cache rebuilt');
 
         $this->newLine();
-        $this->info('✨ All caches cleared and rebuilt successfully!');
+        $this->info('All caches cleared and rebuilt successfully!');
 
         return Command::SUCCESS;
     }

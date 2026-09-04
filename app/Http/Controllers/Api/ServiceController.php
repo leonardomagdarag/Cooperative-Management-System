@@ -58,6 +58,7 @@ class ServiceController extends Controller
                 'max:10240',
                 Rule::requiredIf($request->input('transaction_mode') === 'online'),
             ],
+            'client_request_id' => 'nullable|string|min:8|max:100',
         ]);
 
         $targetUserId = $validated['member_id'] ?? $validated['user_id'] ?? $user->id;
@@ -65,6 +66,10 @@ class ServiceController extends Controller
         // Only officers/admins can deposit to other users' accounts
         if ($targetUserId !== $user->id && ! $this->canManageServicesForMembers($user)) {
             return response()->json(['message' => 'You can only deposit to your own account.'], 403);
+        }
+
+        if ($existing = $this->existingDuplicate($validated)) {
+            return response()->json(['message' => 'This request was already submitted.', 'data' => $existing], 200);
         }
 
         $account = Account::where('user_id', $targetUserId)->where('account_type', $validated['account_type'])->firstOrFail();
@@ -79,6 +84,7 @@ class ServiceController extends Controller
         $transaction = DB::transaction(function () use ($account, $validated, $status, $proofPath, $user) {
             $transaction = Transaction::create([
                 'account_id' => $account->id,
+                'client_request_id' => $validated['client_request_id'] ?? null,
                 'transaction_type' => 'deposit',
                 'amount' => $validated['amount'],
                 'status' => $status,
@@ -113,6 +119,10 @@ class ServiceController extends Controller
             'reason' => 'nullable|string|max:500',
             'note' => 'nullable|string|max:500',
             'transaction_mode' => 'required|in:counter,online,bank_transfer',
+            'bank_name' => 'required_if:transaction_mode,bank_transfer|string|max:255',
+            'account_number' => 'required_if:transaction_mode,bank_transfer|string|max:100',
+            'account_holder' => 'required_if:transaction_mode,bank_transfer|string|max:255',
+            'client_request_id' => 'nullable|string|min:8|max:100',
         ]);
 
         $targetUserId = $validated['member_id'] ?? $validated['user_id'] ?? $user->id;
@@ -120,6 +130,10 @@ class ServiceController extends Controller
         // Only officers/admins can withdraw from other users' accounts
         if ($targetUserId !== $user->id && ! $this->canManageServicesForMembers($user)) {
             return response()->json(['message' => 'You can only withdraw from your own account.'], 403);
+        }
+
+        if ($existing = $this->existingDuplicate($validated)) {
+            return response()->json(['message' => 'This request was already submitted.', 'data' => $existing], 200);
         }
 
         // Withdrawals are always debited from the target member's savings account.
@@ -142,6 +156,7 @@ class ServiceController extends Controller
 
             $transaction = Transaction::create([
                 'account_id' => $lockedAccount->id,
+                'client_request_id' => $validated['client_request_id'] ?? null,
                 'transaction_type' => 'withdrawal',
                 'amount' => $validated['amount'],
                 'status' => 'pending',
@@ -258,13 +273,18 @@ class ServiceController extends Controller
             'note' => 'nullable|string|max:500',
             'member_id' => 'nullable|exists:users,id',
             'user_id' => 'nullable|exists:users,id',
+            'client_request_id' => 'nullable|string|min:8|max:100',
         ]);
 
         $loan = Loan::findOrFail($validated['loan_id']);
-        $targetUserId = $validated['member_id'] ?? $validated['user_id'] ?? $loan->user_id ?? $user->id;
+        $targetUserId = $validated['member_id'] ?? $validated['user_id'] ?? $user->id;
 
         if ($loan->user_id && (int) $targetUserId !== (int) $loan->user_id && ! $this->canManageServicesForMembers($user)) {
             return response()->json(['message' => 'You can only pay your own loan.'], 403);
+        }
+
+        if ($existing = $this->existingDuplicate($validated)) {
+            return response()->json(['message' => 'This request was already submitted.', 'data' => $existing], 200);
         }
 
         $account = ! empty($validated['account_id']) ? Account::find($validated['account_id']) : null;
@@ -293,6 +313,7 @@ class ServiceController extends Controller
             $transaction = Transaction::create([
                 'account_id' => $lockedAccount->id,
                 'loan_id' => $loan->id,
+                'client_request_id' => $validated['client_request_id'] ?? null,
                 'transaction_type' => 'loan_payment',
                 'amount' => $validated['amount'],
                 'status' => $status,
@@ -474,6 +495,17 @@ class ServiceController extends Controller
     private function canApprove($user): bool
     {
         return (bool) ($user && ($user->can('transactions.approve') || $user->can('deposits.approve') || $user->can('withdrawals.approve')));
+    }
+
+    private function existingDuplicate(array $validated): ?Transaction
+    {
+        $clientRequestId = $validated['client_request_id'] ?? null;
+
+        if ($clientRequestId === null || $clientRequestId === '') {
+            return null;
+        }
+
+        return Transaction::where('client_request_id', $clientRequestId)->first();
     }
 
     private function getLoanEligibilityError(User $targetUser, LoanProduct $product): ?string

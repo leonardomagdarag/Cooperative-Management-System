@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Jobs\SendAnnouncementEmailJob;
 use App\Jobs\SendEmailJob;
 use App\Jobs\SendSecurityAlertJob;
+use App\Mail\EmailVerificationMail;
 use App\Mail\LoanDueNotification;
 use App\Mail\LoanStatusNotification;
 use App\Mail\WithdrawalStatusNotification;
@@ -18,6 +19,7 @@ use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\URL;
 use Throwable;
 
 class NotificationService
@@ -494,6 +496,31 @@ class NotificationService
             'Please verify your email address to access all features.',
             'high',
             $this->routeIfExists('verification.notice', '/notifications')
+        );
+    }
+
+    /**
+     * Record an in-app "verify your email" notification and email the signed
+     * verification link to the user.
+     */
+    public function sendEmailVerification(User $user): void
+    {
+        if (! $user->email) {
+            return;
+        }
+
+        $this->notifyEmailVerification($user);
+
+        $verificationUrl = URL::temporarySignedRoute(
+            'verification.verify',
+            now()->addMinutes(60),
+            ['id' => $user->id, 'hash' => sha1((string) $user->email)]
+        );
+
+        $this->safeSendEmail(
+            $user->email,
+            new EmailVerificationMail($user, $verificationUrl),
+            'email.verification'
         );
     }
 

@@ -3,13 +3,19 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
+import { getServiceAvailability, type ServiceAvailabilityData } from '../../api/settings';
 import DepositWizard from './DepositWizard';
 import WithdrawalWizard from './WithdrawalWizard';
 import LoanApplicationWizard from './LoanApplicationWizard';
 import LoanPaymentWizard from './LoanPaymentWizard';
 import TransactionApproval from './TransactionApproval';
+import ServiceMaintenanceModal from '../../components/ServiceMaintenanceModal';
 
 type ServiceType = 'deposit' | 'withdraw' | 'loan' | 'payment' | 'approve' | 'loan-review' | null;
+
+const serviceLabelMap: Record<string, string> = {
+    deposit: 'Deposits', withdrawal: 'Withdrawals', loan_application: 'Loan Applications', loan_payment: 'Loan Payments',
+};
 
 export default function ServicesPage() {
     const { user } = useAuth();
@@ -25,9 +31,17 @@ export default function ServicesPage() {
     const [activeIndex, setActiveIndex] = useState(-1);
     const [selectedMember, setSelectedMember] = useState<any>(null);
     const [wizardDirty, setWizardDirty] = useState(false);
+    const [maintenanceService, setMaintenanceService] = useState<string | null>(null);
     const { requestClose, renderDialog } = useDiscardGuard(wizardDirty);
 
     const searchContainerRef = useRef<HTMLDivElement>(null);
+
+    // Fetch service availability
+    const { data: availabilityData } = useQuery({
+        queryKey: ['service-availability'],
+        queryFn: getServiceAvailability,
+    });
+    const availability = availabilityData?.data?.data as ServiceAvailabilityData | undefined;
 
     useEffect(() => {
         const t = setTimeout(() => {
@@ -115,17 +129,44 @@ export default function ServicesPage() {
         }
     };
 
+    const isServiceAvailable = (service: ServiceType): boolean => {
+        if (!service || !availability) return true;
+
+        const availKey = service === 'withdraw' ? 'withdrawal' :
+                         service === 'payment' ? 'loan_payment' :
+                         service === 'loan' ? 'loan_application' : service;
+
+        const flags = availability[availKey as keyof ServiceAvailabilityData];
+        if (!flags) return true;
+
+        const userType = isOfficer ? 'officer' : 'member';
+
+        // Check global
+        if (!flags.global) return false;
+        // Check user type
+        if (!flags[userType as keyof typeof flags]) return false;
+
+        return true;
+    };
+
     const openService = (svc: ServiceType) => {
+        if (!isServiceAvailable(svc)) {
+            const availKey = svc === 'withdraw' ? 'withdrawal' :
+                             svc === 'payment' ? 'loan_payment' :
+                             svc === 'loan' ? 'loan_application' : svc;
+            setMaintenanceService(serviceLabelMap[availKey] || availKey);
+            return;
+        }
         setWizardDirty(false);
         setActiveService(svc);
     };
 
     const renderWizard = () => {
         switch (activeService) {
-            case 'deposit': return <DepositWizard onComplete={() => setActiveService(null)} selectedMember={selectedMember} onDirtyChange={setWizardDirty} />;
-            case 'withdraw': return <WithdrawalWizard onComplete={() => setActiveService(null)} selectedMember={selectedMember} memberDetail={selectedMemberDetail} onDirtyChange={setWizardDirty} />;
-            case 'loan': return <LoanApplicationWizard onComplete={() => setActiveService(null)} selectedMember={selectedMember} onDirtyChange={setWizardDirty} />;
-            case 'payment': return <LoanPaymentWizard onComplete={() => setActiveService(null)} selectedMember={selectedMember} onDirtyChange={setWizardDirty} />;
+            case 'deposit': return <DepositWizard onComplete={() => setActiveService(null)} selectedMember={selectedMember} onDirtyChange={setWizardDirty} availability={availability?.deposit} />;
+            case 'withdraw': return <WithdrawalWizard onComplete={() => setActiveService(null)} selectedMember={selectedMember} memberDetail={selectedMemberDetail} onDirtyChange={setWizardDirty} availability={availability?.withdrawal} />;
+            case 'loan': return <LoanApplicationWizard onComplete={() => setActiveService(null)} selectedMember={selectedMember} onDirtyChange={setWizardDirty} availability={availability?.loan_application} />;
+            case 'payment': return <LoanPaymentWizard onComplete={() => setActiveService(null)} selectedMember={selectedMember} onDirtyChange={setWizardDirty} availability={availability?.loan_payment} />;
             case 'approve': return <TransactionApproval onComplete={() => setActiveService(null)} />;
             case 'loan-review': return <TransactionApproval onComplete={() => setActiveService(null)} />;
             default: return null;
@@ -300,6 +341,7 @@ export default function ServicesPage() {
                         label="Deposit Money"
                         desc={needsMember ? 'Add funds to savings or share capital' : 'Add funds to your savings or share capital account'}
                         locked={needsMember && !hasSelectedMember}
+                        maintenance={availability?.deposit?.global === false || availability?.deposit?.[isOfficer ? 'officer' : 'member'] === false}
                         onClick={() => openService('deposit')}
                     />
                     <ServiceCard
@@ -312,6 +354,7 @@ export default function ServicesPage() {
                         label="Withdraw Money"
                         desc={needsMember ? 'Request withdrawal from savings account' : 'Request withdrawal from your savings account'}
                         locked={needsMember && !hasSelectedMember}
+                        maintenance={availability?.withdrawal?.global === false || availability?.withdrawal?.[isOfficer ? 'officer' : 'member'] === false}
                         onClick={() => openService('withdraw')}
                     />
                     <ServiceCard
@@ -324,6 +367,7 @@ export default function ServicesPage() {
                         label="Apply for Loan"
                         desc={needsMember ? 'Apply for personal, housing, business or emergency loans' : 'Apply for personal, housing, business or emergency loans'}
                         locked={needsMember && !hasSelectedMember}
+                        maintenance={availability?.loan_application?.global === false || availability?.loan_application?.[isOfficer ? 'officer' : 'member'] === false}
                         onClick={() => openService('loan')}
                     />
                     <ServiceCard
@@ -337,6 +381,7 @@ export default function ServicesPage() {
                         label="Make Payment"
                         desc={needsMember ? "Pay a member's active loan installments" : 'Pay your active loan installments'}
                         locked={needsMember && !hasSelectedMember}
+                        maintenance={availability?.loan_payment?.global === false || availability?.loan_payment?.[isOfficer ? 'officer' : 'member'] === false}
                         onClick={() => openService('payment')}
                     />
                 </div>
@@ -359,12 +404,21 @@ export default function ServicesPage() {
                     </div>
                 </div>
             )}
+
+            {maintenanceService && (
+                <ServiceMaintenanceModal
+                    isOpen={true}
+                    onClose={() => setMaintenanceService(null)}
+                    serviceLabel={maintenanceService}
+                />
+            )}
+
             {renderDialog()}
         </div>
     );
 }
 
-function ServiceCard({ icon, color, label, desc, locked, onClick }: { icon: React.ReactNode; color: string; label: string; desc: string; locked?: boolean; onClick: () => void }) {
+function ServiceCard({ icon, color, label, desc, locked, maintenance, onClick }: { icon: React.ReactNode; color: string; label: string; desc: string; locked?: boolean; maintenance?: boolean; onClick: () => void }) {
     const bgMap: Record<string, string> = {
         green: 'bg-green-500', orange: 'bg-orange-500', purple: 'bg-purple-500', blue: 'bg-blue-500',
     };
@@ -375,12 +429,14 @@ function ServiceCard({ icon, color, label, desc, locked, onClick }: { icon: Reac
         blue: 'from-blue-50 to-cyan-100 hover:from-blue-100 hover:to-cyan-200',
     };
 
+    const isDisabled = locked || maintenance;
+
     return (
         <div className="relative group/card">
             <button
-                onClick={locked ? undefined : onClick}
-                className={`group w-full bg-gradient-to-br ${gradMap[color] || ''} rounded-xl p-5 text-left transition-all hover:shadow-lg ${locked ? 'opacity-50 cursor-not-allowed' : ''}`}
-                disabled={locked}
+                onClick={isDisabled ? undefined : onClick}
+                className={`group w-full bg-gradient-to-br ${gradMap[color] || ''} rounded-xl p-5 text-left transition-all hover:shadow-lg ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={isDisabled}
             >
                 <div className={`w-12 h-12 ${bgMap[color] || 'bg-gray-500'} rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
                     {icon}
@@ -392,6 +448,13 @@ function ServiceCard({ icon, color, label, desc, locked, onClick }: { icon: Reac
                 <div className="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none">
                     <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200">
                         <i className="fas fa-lock text-amber-500 mr-1 text-xs"></i>Select member
+                    </span>
+                </div>
+            )}
+            {maintenance && !locked && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none rounded-xl">
+                    <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200">
+                        <i className="fas fa-tools text-amber-500 mr-1 text-xs"></i>Under Maintenance
                     </span>
                 </div>
             )}

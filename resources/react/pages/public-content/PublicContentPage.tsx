@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
+import SettingsTabHeader from '../settings/SettingsTabHeader';
 
 function getByPath(obj: any, path: string): any {
     return path.split('.').reduce((acc, key) => (acc == null ? undefined : acc[key]), obj);
@@ -99,20 +100,13 @@ export default function PublicContentPage() {
 
     return (
         <div className="space-y-6">
-            <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
-                <div className="bg-gradient-to-r from-emerald-600 to-cyan-600 px-6 py-5 text-white">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-white/70">Content Management</p>
-                    <h1 className="text-xl font-bold mt-0.5">Public Content</h1>
-                    <p className="mt-1 text-sm text-white/80">The public pages read directly from the database. Pick a section, update the fields, then save — changes appear on the site immediately.</p>
-                </div>
-                {canManage && (
-                    <div className="px-6 py-3 border-b border-gray-200 bg-gray-50/50 flex justify-end">
-                        <button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
-                            {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
-                        </button>
-                    </div>
-                )}
-            </div>
+            <SettingsTabHeader
+                eyebrow="Content management"
+                title="Public Content"
+                description="Update the public website content and publish changes immediately."
+                icon="fas fa-globe"
+                action={canManage ? <button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">{saveMutation.isPending ? 'Saving...' : 'Save Changes'}</button> : undefined}
+            />
 
             {!canManage && (
                 <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">

@@ -8,6 +8,7 @@ use App\Models\Announcement;
 use App\Models\Contact;
 use App\Models\PersonalData;
 use App\Services\AuditLogService;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -292,6 +293,10 @@ class ProfileController extends Controller
             $user,
             ['email_changed' => $emailChanged],
         );
+
+        if ($emailChanged) {
+            app(NotificationService::class)->sendEmailVerification($user);
+        }
 
         return response()->json(['message' => 'Profile updated successfully.']);
     }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\SiteContent;
+use App\Support\HtmlSanitizer;
 use App\Support\SiteContentCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,9 +35,15 @@ class PublicContentController extends Controller
 
         DB::transaction(function () use ($validated) {
             foreach (SiteContentCatalog::recordsFromForm($validated['form']) as $record) {
+                $data = Arr::except($record, ['section', 'key']);
+
+                if (($record['type'] ?? 'text') === 'html') {
+                    $data['value'] = HtmlSanitizer::sanitize($data['value']);
+                }
+
                 SiteContent::query()->updateOrCreate(
                     ['section' => $record['section'], 'key' => $record['key']],
-                    Arr::except($record, ['section', 'key'])
+                    $data
                 );
             }
         });

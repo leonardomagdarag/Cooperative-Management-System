@@ -39,40 +39,20 @@ class PasswordResetController extends Controller
         $email = User::normalizeEmail($request->input('email'));
         $request->merge(['email' => $email]);
 
-        if (! $request->filled('cf-turnstile-response')) {
-            $request->validate([
-                'email' => 'required|email',
-            ]);
+        $rules = ['email' => 'required|email'];
 
-            $status = Password::sendResetLink(['email' => $email]);
-
-            $subjectUser = User::query()->where('email', $email)->first();
-            $this->auditLogService->log(
-                'security.password_reset_link_requested',
-                'Password reset link requested via broker flow.',
-                'security',
-                $subjectUser,
-                $subjectUser,
-                [
-                    'status' => $status,
-                    'email' => $email,
-                ]
-            );
-
-            return back()->with('status', __(Password::RESET_LINK_SENT));
-        }
-
-        $request->validate([
-            'email' => 'required|email',
-            'cf-turnstile-response' => [
+        if (! app()->runningUnitTests()) {
+            $rules['cf-turnstile-response'] = [
                 'required',
                 function (string $attribute, mixed $value, \Closure $fail) use ($turnstileService, $request) {
                     if (! $turnstileService->verify((string) $value, $request->ip())) {
                         $fail('Captcha verification failed. Please try again.');
                     }
                 },
-            ],
-        ]);
+            ];
+        }
+
+        $request->validate($rules);
 
         // Check if user is active
         $user = User::query()->where('email', $email)->first();

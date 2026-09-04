@@ -27,9 +27,9 @@ use Illuminate\Support\Facades\Route;
 
 // Public auth routes (rate-limited)
 Route::post('/login', [AuthController::class, 'login'])->middleware(['web', 'throttle:10,1']);
-Route::post('/logout', [AuthController::class, 'logout'])->middleware('web');
+Route::post('/logout', [AuthController::class, 'logout'])->middleware(['web', 'auth:web']);
 
-// Public routes (no auth required, rate-limited)
+// Public routes (no auth required, rate-limited, CSRF-protected)
 Route::post('/contact', function (Request $request) {
     $validated = $request->validate([
         'name' => 'required|string|max:255',
@@ -44,7 +44,7 @@ Route::post('/contact', function (Request $request) {
     );
 
     return response()->json(['message' => 'Message sent successfully.']);
-})->middleware('throttle:5,1');
+})->middleware(['web', 'throttle:5,1']);
 
 // Public content (no auth, but session-aware so can_manage reflects the logged-in user)
 Route::get('/public-content', [PublicContentController::class, 'index'])->middleware('web');
@@ -85,10 +85,18 @@ Route::get('/announcements/public', function (Request $request) {
     ]);
 })->middleware('throttle:30,1');
 
-// Protected routes
+// Current user (auth + OTP only — must remain reachable so the SPA can
+// surface the "verify your email" gate instead of a blank session failure)
 Route::middleware(['web', 'auth:web', 'otp.verified'])->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
+});
 
+// Resend the email verification link (no `verified` — that is what we gate on)
+Route::post('/auth/resend-verification', [AuthController::class, 'resendVerification'])
+    ->middleware(['web', 'auth:web', 'otp.verified', 'throttle:3,10']);
+
+// Protected routes
+Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(function () {
     // Profile
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::put('/profile', [ProfileController::class, 'update']);
@@ -152,6 +160,7 @@ Route::middleware(['web', 'auth:web', 'otp.verified'])->group(function () {
     // Reports
     Route::get('/reports/financial', [ReportController::class, 'financial']);
     Route::get('/reports/expenses', [ReportController::class, 'expenses']);
+    Route::get('/reports/member-activity', [ReportController::class, 'memberActivity']);
     Route::get('/reports/balance-sheet', [ReportController::class, 'balanceSheet']);
     Route::get('/reports/balance-sheet/download', [ReportController::class, 'downloadBalanceSheet']);
 
@@ -194,11 +203,15 @@ Route::middleware(['web', 'auth:web', 'otp.verified'])->group(function () {
 
     // Services
     Route::get('/services', [ServiceController::class, 'index']);
-    Route::post('/services/deposit', [ServiceController::class, 'deposit']);
-    Route::post('/services/withdrawal', [ServiceController::class, 'withdrawal']);
-    Route::post('/services/loan-application', [ServiceController::class, 'loanApplication']);
-    Route::post('/services/loan-payment', [ServiceController::class, 'loanPayment']);
+    Route::post('/services/deposit', [ServiceController::class, 'deposit'])->middleware('service.availability:deposit');
+    Route::post('/services/withdrawal', [ServiceController::class, 'withdrawal'])->middleware('service.availability:withdrawal');
+    Route::post('/services/loan-application', [ServiceController::class, 'loanApplication'])->middleware('service.availability:loan_application');
+    Route::post('/services/loan-payment', [ServiceController::class, 'loanPayment'])->middleware('service.availability:loan_payment');
     Route::post('/services/approve/{transaction}', [ServiceController::class, 'approveTransaction']);
     Route::post('/services/transactions/{transaction}/send-otp', [ServiceController::class, 'sendWithdrawalApprovalOtp']);
     Route::get('/services/pending', [ServiceController::class, 'pendingTransactions']);
+
+    // Service Availability Settings
+    Route::get('/settings/service-availability', [SettingsController::class, 'getServiceAvailability']);
+    Route::put('/settings/service-availability', [SettingsController::class, 'updateServiceAvailability']);
 });

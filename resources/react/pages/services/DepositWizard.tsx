@@ -1,20 +1,36 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
 import { validate, depositSchema, type FieldErrors } from '../../lib/validation';
 import ReceiptQR from '../../components/ReceiptQR';
 
-export default function DepositWizard({ onComplete, selectedMember, onDirtyChange }: { onComplete: () => void; selectedMember?: any; onDirtyChange?: (dirty: boolean) => void }) {
+interface AvailabilityFlags {
+    global?: boolean;
+    member?: boolean;
+    officer?: boolean;
+    counter?: boolean;
+    online?: boolean;
+}
+
+export default function DepositWizard({ onComplete, selectedMember, onDirtyChange, availability }: { onComplete: () => void; selectedMember?: any; onDirtyChange?: (dirty: boolean) => void; availability?: AvailabilityFlags }) {
     const [step, setStep] = useState(1);
     const [form, setForm] = useState({ amount: '', account_type: 'savings', transaction_mode: '', note: '' });
     const [proof, setProof] = useState<File | null>(null);
     const [receipt, setReceipt] = useState<any>(null);
     const { addToast } = useToast();
+    const requestIdRef = useRef<string | null>(null);
 
     useEffect(() => {
         onDirtyChange?.(form.amount !== '' || form.note !== '' || form.transaction_mode !== '' || !!proof);
     }, [form, proof, onDirtyChange]);
+
+    // Check if transaction mode is available
+    const isModeAvailable = (mode: 'counter' | 'online'): boolean => {
+        if (!availability) return true;
+        if (!availability.global) return false;
+        return availability[mode] !== false;
+    };
 
     const [errors, setErrors] = useState<FieldErrors>({});
     const setField = (key: string, value: string) => setForm(f => ({ ...f, [key]: value }));
@@ -35,6 +51,7 @@ export default function DepositWizard({ onComplete, selectedMember, onDirtyChang
             addToast(Object.values(errs)[0], 'error');
             return;
         }
+        requestIdRef.current = requestIdRef.current ?? crypto.randomUUID();
         submitMutation.mutate();
     };
 
@@ -44,12 +61,14 @@ export default function DepositWizard({ onComplete, selectedMember, onDirtyChang
             fd.append('amount', form.amount);
             fd.append('account_type', form.account_type);
             fd.append('transaction_mode', form.transaction_mode);
+            fd.append('client_request_id', requestIdRef.current!);
             if (form.note) fd.append('note', form.note);
             if (proof) fd.append('proof', proof);
             if (selectedMember) fd.append('user_id', selectedMember.id);
             return api.post('/api/services/deposit', fd);
         },
         onSuccess: (res) => {
+            requestIdRef.current = null;
             addToast('Deposit submitted successfully', 'success');
             setReceipt(res.data.data || { message: res.data.message });
         },
@@ -117,12 +136,21 @@ export default function DepositWizard({ onComplete, selectedMember, onDirtyChang
                 <div className="space-y-4">
                     <h3 className="font-medium text-gray-700">Transaction Mode</h3>
                     <div className="grid grid-cols-2 gap-3">
-                        {[{ key: 'counter', label: 'Counter', desc: 'In-person payment' }, { key: 'online', label: 'Online', desc: 'Online payment' }].map(m => (
-                            <button key={m.key} onClick={() => setForm(f => ({ ...f, transaction_mode: m.key }))} className={`rounded-lg border p-4 text-left ${form.transaction_mode === m.key ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200'}`}>
-                                <p className="font-medium text-gray-900">{m.label}</p>
-                                <p className="text-xs text-gray-500">{m.desc}</p>
-                            </button>
-                        ))}
+                        {[{ key: 'counter', label: 'Counter', desc: 'In-person payment' }, { key: 'online', label: 'Online', desc: 'Online payment' }].map(m => {
+                            const disabled = !isModeAvailable(m.key as 'counter' | 'online');
+                            return (
+                                <button
+                                    key={m.key}
+                                    onClick={() => !disabled && setForm(f => ({ ...f, transaction_mode: m.key }))}
+                                    disabled={disabled}
+                                    className={`rounded-lg border p-4 text-left transition-colors ${form.transaction_mode === m.key ? 'border-emerald-500 bg-emerald-50' : disabled ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed' : 'border-gray-200'}`}
+                                >
+                                    <p className="font-medium text-gray-900">{m.label}</p>
+                                    <p className="text-xs text-gray-500">{m.desc}</p>
+                                    {disabled && <p className="mt-1 text-xs text-amber-600"><i className="fas fa-tools mr-1"></i>Under maintenance</p>}
+                                </button>
+                            );
+                        })}
                     </div>
                     {form.transaction_mode === 'online' && (
                         <div>

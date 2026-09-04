@@ -47,6 +47,16 @@ class PageController extends Controller
         return $this->serveReactApp();
     }
 
+    public function forgotPassword()
+    {
+        return $this->serveReactApp();
+    }
+
+    public function resetPassword()
+    {
+        return $this->serveReactApp();
+    }
+
     public function submitContactMessage(Request $request): JsonResponse
     {
         // This is handled by the API route now

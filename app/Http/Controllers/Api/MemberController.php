@@ -14,6 +14,7 @@ use App\Models\MemberId;
 use App\Models\PersonalData;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Services\NotificationService;
 use App\Support\PersonPasswordPolicy;
 use App\Support\SearchFilter;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -96,7 +97,8 @@ class MemberController extends Controller
 
     public function show(User $user): JsonResponse
     {
-        abort_unless(Auth::user()?->can('members.view'), 403);
+        $viewer = Auth::user();
+        abort_unless($viewer?->can('members.view') || $viewer?->is($user), 403);
 
         $user->load([
             'personalData.address', 'personalData.contact', 'personalData.employment',
@@ -166,12 +168,15 @@ class MemberController extends Controller
 
         $this->normalizeBeneficiaries($request);
 
+        $minimumAge = max((int) config('settings.requirement.age', 18), 18);
+        $oldestAllowedBirthDate = now()->subYears($minimumAge)->toDateString();
+
         $validated = $request->validate([
             'first_name' => 'required|string|max:100',
             'last_name' => 'required|string|max:100',
             'mid_name' => 'nullable|string|max:100',
             'suffix' => 'nullable|string|max:50',
-            'birth_date' => 'required|date',
+            'birth_date' => 'required|date|before:today|before_or_equal:'.$oldestAllowedBirthDate,
             'birthplace' => 'nullable|string|max:255',
             'gender' => 'required|in:male,female,other',
             'civil_status' => 'required|in:single,married,widowed,separated',
@@ -184,7 +189,7 @@ class MemberController extends Controller
             'barangay' => 'nullable|string|max:100',
             'street' => 'nullable|string|max:255',
             'postal_code' => 'nullable|string|max:20',
-            'email' => 'required|email|unique:users,email',
+            'email' => 'required|email|unique:users,email|unique:contacts,email',
             'phone_number' => 'required|string|max:11',
             'facebook_link' => 'nullable|string|max:255',
             'national_id' => 'nullable|string|max:64',
@@ -222,7 +227,7 @@ class MemberController extends Controller
             $idPhotoPaths[$field] = $request->file($field)?->store('id-photos', 'public');
         }
 
-        DB::transaction(function () use ($validated, $request, $profilePhotoPath, $idPhotoPaths) {
+        $user = DB::transaction(function () use ($validated, $request, $profilePhotoPath, $idPhotoPaths) {
             $contact = Contact::create([
                 'phone_no' => $validated['phone_number'] ?? null,
                 'email' => $validated['email'],
@@ -230,6 +235,7 @@ class MemberController extends Controller
             ]);
 
             $address = null;
+
             if (! empty($validated['street']) || ! empty($validated['city'])) {
                 $address = Address::create([
                     'country' => $validated['country'] ?? null, 'region' => $validated['region'] ?? null,
@@ -295,8 +301,8 @@ class MemberController extends Controller
             }
 
             // Create default accounts
-            Account::create(['user_id' => $user->id, 'account_type' => 'savings', 'balance' => 0, 'status' => 'active']);
-            Account::create(['user_id' => $user->id, 'account_type' => 'share-capital', 'balance' => 0, 'status' => 'active']);
+            Account::create(['user_id' => $user->id, 'account_type' => 'savings', 'balance' => 0]);
+            Account::create(['user_id' => $user->id, 'account_type' => 'share-capital', 'balance' => 0]);
 
             // Create beneficiaries
             if (! empty($validated['beneficiaries'])) {
@@ -317,7 +323,11 @@ class MemberController extends Controller
                 $user,
                 Auth::user()
             );
+
+            return $user;
         });
+
+        app(NotificationService::class)->sendEmailVerification($user);
 
         if (config('mail.default') !== 'log') {
             $name = trim(($validated['first_name'] ?? '').' '.($validated['last_name'] ?? ''));
@@ -339,12 +349,15 @@ class MemberController extends Controller
 
         $this->normalizeBeneficiaries($request);
 
+        $minimumAge = max((int) config('settings.requirement.age', 18), 18);
+        $oldestAllowedBirthDate = now()->subYears($minimumAge)->toDateString();
+
         $validated = $request->validate([
             'first_name' => 'required|string|max:100',
             'last_name' => 'required|string|max:100',
             'mid_name' => 'nullable|string|max:100',
             'suffix' => 'nullable|string|max:50',
-            'birth_date' => 'nullable|date',
+            'birth_date' => 'nullable|date|before:today|before_or_equal:'.$oldestAllowedBirthDate,
             'birthplace' => 'nullable|string|max:255',
             'gender' => 'nullable|in:male,female,other',
             'civil_status' => 'nullable|in:single,married,widowed,separated',
@@ -503,6 +516,12 @@ class MemberController extends Controller
                 Auth::user()
             );
         });
+
+        $emailChanged = $user->email !== $validated['email'];
+        if ($emailChanged) {
+            $user->forceFill(['email_verified_at' => null])->save();
+            app(NotificationService::class)->sendEmailVerification($user->refresh());
+        }
 
         return response()->json(['message' => 'Member updated successfully.']);
     }

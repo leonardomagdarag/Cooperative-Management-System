@@ -38,6 +38,13 @@ export default defineConfig({
             '/reset-password': backendUrl,
             '/register': backendUrl,
             '/contact': backendUrl,
+            '/security': backendUrl,
+            '/verify-email': backendUrl,
+            '/confirm-password': backendUrl,
+            '/profile': backendUrl,
+            '/password': backendUrl,
+            '/notifications': backendUrl,
+            '/dashboard': backendUrl,
         },
     }
 });

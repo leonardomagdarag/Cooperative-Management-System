@@ -6,6 +6,7 @@ use App\Models\Contact;
 use App\Models\PersonalData;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Services\NotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -15,7 +16,10 @@ use Symfony\Component\HttpFoundation\Response;
 
 class ProfileController extends Controller
 {
-    public function __construct(private readonly AuditLogService $auditLogService) {}
+    public function __construct(
+        private readonly AuditLogService $auditLogService,
+        private readonly NotificationService $notificationService
+    ) {}
 
     public function edit(): Response
     {
@@ -70,6 +74,10 @@ class ProfileController extends Controller
 
             $user->save();
         });
+
+        if ($emailChanged) {
+            $this->notificationService->sendEmailVerification($user);
+        }
 
         $this->auditLogService->log(
             'profile.updated',
