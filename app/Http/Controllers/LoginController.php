@@ -361,6 +361,7 @@ class LoginController extends Controller
             // Membership Details
             'membership_type' => 'required|in:Regular,Associate',
             'referred_by' => 'nullable|string|max:255',
+            'branch_id' => 'nullable|integer|exists:branches,id',
 
             // Account Credentials
             'password' => array_merge(PersonPasswordPolicy::passwordRules(false, PersonPasswordPolicy::normalizedNameTokens([
@@ -445,6 +446,7 @@ class LoginController extends Controller
                 'account_status' => 'inactive',
                 'special_loan_eligible' => false,
                 'profile_completion_required' => true,
+                'branch_id' => $validated['branch_id'] ?? null,
             ]);
             Role::findOrCreate('member', 'web');
             $user->assignRole('member');
@@ -455,6 +457,7 @@ class LoginController extends Controller
             // 7. Record the membership application for officer review
             MemberApplication::create([
                 'user_id' => $user->id,
+                'branch_id' => $user->branch_id,
                 'original_email' => $user->email,
                 'first_name' => $validated['first_name'],
                 'last_name' => $validated['last_name'],

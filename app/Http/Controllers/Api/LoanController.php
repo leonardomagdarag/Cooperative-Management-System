@@ -9,6 +9,7 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\NotificationService;
+use App\Support\BranchScope;
 use App\Support\SearchFilter;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -24,10 +25,12 @@ class LoanController extends Controller
         $user = Auth::user();
         $canViewAll = $user && ($user->is_officer || $user->hasRole('admin'));
 
-        $query = Loan::with(['user.personalData', 'reviewer.personalData', 'groupMembers.personalData']);
+        $query = Loan::with(['branch', 'user.personalData', 'reviewer.personalData', 'groupMembers.personalData']);
 
         if (! $canViewAll) {
             $query->where('user_id', $user->id);
+        } else {
+            BranchScope::applyToLoans($query, $user, $request->input('branch_id'));
         }
 
         // Search
@@ -70,6 +73,8 @@ class LoanController extends Controller
                     'name' => trim($l->user->personalData->first_name.' '.$l->user->personalData->last_name),
                     'user_number' => $l->user->user_number,
                 ] : null,
+                'branch_id' => $l->branch_id,
+                'branch_name' => $l->branch?->name,
                 'review_status' => $l->review_status,
                 'review_status_label' => $l->review_status_label,
                 'interview_status' => $l->interview_status,
@@ -156,7 +161,7 @@ class LoanController extends Controller
 
         $members = User::query()
             ->memberUsers()
-            ->with('personalData')
+            ->with(['personalData', 'branch'])
             ->where(function ($query) use ($search) {
                 $query->where('user_number', 'like', "%{$search}%")
                     ->orWhereHas('personalData', function ($personalDataQuery) use ($search) {
@@ -164,14 +169,19 @@ class LoanController extends Controller
                             ->orWhere('last_name', 'like', "%{$search}%")
                             ->orWhere('mid_name', 'like', "%{$search}%");
                     });
-            })
-            ->orderBy('user_number')
+            });
+
+        BranchScope::applyToUsers($members, Auth::user());
+
+        $members = $members->orderBy('user_number')
             ->limit(8)
             ->get()
             ->map(fn ($m) => [
                 'id' => $m->id,
                 'name' => trim(($m->personalData->first_name ?? '').' '.($m->personalData->last_name ?? '')),
                 'user_number' => $m->user_number,
+                'branch_id' => $m->branch_id,
+                'branch_name' => $m->branch?->name,
             ]);
 
         return response()->json(['data' => $members]);
@@ -215,6 +225,7 @@ class LoanController extends Controller
             'term_months' => 'required|integer|min:1|max:360',
             'payment_frequency' => 'required|in:weekly,bi-weekly,monthly,quarterly,annually',
             'applied_at' => 'required|date|before_or_equal:today',
+            'branch_id' => 'nullable|exists:branches,id',
         ]);
 
         $isApproved = in_array($validated['loan_status'], ['approved', 'active', 'paid_off'], true);
@@ -222,6 +233,7 @@ class LoanController extends Controller
 
         $loan = Loan::create([
             'user_id' => $validated['user_id'],
+            'branch_id' => $validated['branch_id'] ?? User::whereKey($validated['user_id'])->value('branch_id'),
             'loan_type' => $validated['loan_type'],
             'loan_amount' => $validated['loan_amount'],
             'interest_rate' => $validated['interest_rate'],
@@ -291,6 +303,7 @@ class LoanController extends Controller
             Transaction::create([
                 'account_id' => $account->id,
                 'loan_id' => $loan->id,
+                'branch_id' => $loan->branch_id,
                 'transaction_type' => 'loan_disbursement',
                 'amount' => $loan->loan_amount,
                 'status' => 'completed',

@@ -3,13 +3,16 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Account;
 use App\Models\Announcement;
 use App\Models\Expense;
 use App\Models\Loan;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Support\BranchScope;
 use App\Support\PermissionCatalog;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,18 +20,19 @@ use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $user = Auth::user();
         $role = $user->primary_role;
+        $branchId = BranchScope::resolveBranchId($user, $request->integer('branch_id'));
 
         return match ($role) {
-            'admin' => $this->admin(),
-            'manager' => $this->manager(),
-            'accountant', 'treasurer' => $this->treasurer(),
-            'secretary' => $this->secretary(),
-            'loan' => $this->loan(),
-            default => $user->is_officer ? $this->officer() : $this->member(),
+            'admin' => $this->admin($branchId),
+            'manager' => $this->manager($branchId),
+            'accountant', 'treasurer' => $this->treasurer($branchId),
+            'secretary' => $this->secretary($branchId),
+            'loan' => $this->loan($branchId),
+            default => $user->is_officer ? $this->officer($branchId) : $this->member(),
         };
     }
 
@@ -126,53 +130,63 @@ class DashboardController extends Controller
 
     // ─── Admin ─────────────────────────────────────────────────
 
-    private function admin(): JsonResponse
+    private function admin(?int $branchId = null): JsonResponse
     {
         $now = now();
         $start = $now->copy()->startOfMonth();
         $end = $now->copy()->endOfMonth();
 
-        $totalMembers = User::query()->memberUsers()->count();
-        $totalStaff = User::query()->officerUsers()->count();
-        $newMembersThisMonth = User::query()->memberUsers()->whereBetween('created_at', [$start, $end])->count();
+        $totalMembers = BranchScope::applyToUsers(User::query()->memberUsers(), Auth::user(), $branchId)->count();
+        $totalStaff = BranchScope::applyToUsers(User::query()->officerUsers(), Auth::user(), $branchId)->count();
+        $newMembersThisMonth = BranchScope::applyToUsers(
+            User::query()->memberUsers()->whereBetween('created_at', [$start, $end]),
+            Auth::user(),
+            $branchId
+        )->count();
 
-        $totalSavings = (float) DB::table('accounts')->where('account_type', 'savings')->sum('balance');
-        $totalShareCapital = (float) DB::table('accounts')->where('account_type', 'share-capital')->sum('balance');
+        $accountTotals = $this->accountTotals($branchId);
+        $totalSavings = $accountTotals['savings'];
+        $totalShareCapital = $accountTotals['share_capital'];
 
-        $financialThisMonth = $this->financialSummary($start, $end);
+        $financialThisMonth = $this->financialSummary($start, $end, $branchId);
 
         $activeLoanStatuses = ['approved', 'active'];
         $paidLoanStatuses = ['paid', 'paid_off', 'paid-off'];
 
-        $activeLoansCount = Loan::query()->whereIn('loan_status', $activeLoanStatuses)->count();
-        $pendingLoansCount = Loan::query()->where('loan_status', 'pending')->count();
+        $activeLoansCount = BranchScope::applyToLoans(Loan::query()->whereIn('loan_status', $activeLoanStatuses), Auth::user(), $branchId)->count();
+        $pendingLoansCount = BranchScope::applyToLoans(Loan::query()->where('loan_status', 'pending'), Auth::user(), $branchId)->count();
 
-        $loanPrincipalActive = (float) Loan::query()->whereIn('loan_status', $activeLoanStatuses)->sum('loan_amount');
-        $loanPaymentsOnActive = (float) DB::table('transactions')
-            ->join('loans', 'transactions.loan_id', '=', 'loans.id')
-            ->where('transactions.transaction_type', 'loan_payment')
-            ->where('transactions.status', 'completed')
-            ->whereIn('loans.loan_status', $activeLoanStatuses)
-            ->sum('transactions.amount');
+        $loanPrincipalActive = (float) BranchScope::applyToLoans(Loan::query()->whereIn('loan_status', $activeLoanStatuses), Auth::user(), $branchId)->sum('loan_amount');
+        $loanPaymentsOnActive = (float) $this->loanPaymentsOnActiveLoans($branchId);
         $loanOutstanding = max(0, $loanPrincipalActive - $loanPaymentsOnActive);
 
-        $overdueLoansCount = Loan::query()
-            ->whereNotIn('loan_status', $paidLoanStatuses)
-            ->whereNotNull('due_date')
-            ->whereDate('due_date', '<', today())
-            ->count();
+        $overdueLoansCount = BranchScope::applyToLoans(
+            Loan::query()
+                ->whereNotIn('loan_status', $paidLoanStatuses)
+                ->whereNotNull('due_date')
+                ->whereDate('due_date', '<', today()),
+            Auth::user(),
+            $branchId
+        )->count();
 
-        $dueSoonLoansCount = Loan::query()
-            ->whereIn('loan_status', $activeLoanStatuses)
-            ->whereNotNull('due_date')
-            ->whereBetween('due_date', [today(), today()->copy()->addDays(14)])
-            ->count();
+        $dueSoonLoansCount = BranchScope::applyToLoans(
+            Loan::query()
+                ->whereIn('loan_status', $activeLoanStatuses)
+                ->whereNotNull('due_date')
+                ->whereBetween('due_date', [today(), today()->copy()->addDays(14)]),
+            Auth::user(),
+            $branchId
+        )->count();
 
-        $pendingTransactionsCount = Transaction::query()->where('status', 'pending')->count();
+        $pendingTransactionsCount = BranchScope::applyToTransactions(Transaction::query()->where('status', 'pending'), Auth::user(), $branchId)->count();
 
-        $pendingTransactions = Transaction::query()
-            ->with(['account.user.personalData'])
-            ->where('status', 'pending')
+        $pendingTransactions = BranchScope::applyToTransactions(
+            Transaction::query()
+                ->with(['account.user.personalData'])
+                ->where('status', 'pending'),
+            Auth::user(),
+            $branchId
+        )
             ->latest()
             ->take(8)
             ->get()
@@ -190,7 +204,7 @@ class DashboardController extends Controller
                 'created_at_raw' => $t->created_at->toISOString(),
             ]);
 
-        $recentExpenses = Expense::query()
+        $recentExpenses = BranchScope::applyToExpenses(Expense::query(), Auth::user(), $branchId)
             ->orderByDesc('expense_date')
             ->take(5)
             ->get()
@@ -243,9 +257,9 @@ class DashboardController extends Controller
             'month_withdrawals' => $financialThisMonth['total_withdrawals'],
             'month_expenses' => $financialThisMonth['total_expenses'],
             'month_net' => $financialThisMonth['net'],
-            'monthly_series' => $this->buildMonthlySeries(6),
+            'monthly_series' => $this->buildMonthlySeries(6, $branchId),
             'monthly_max_value' => $this->monthlyMax,
-            'loan_status_series' => $this->buildLoanStatusSeries(),
+            'loan_status_series' => $this->buildLoanStatusSeries($branchId),
             'pending_transactions_list' => $pendingTransactions,
             'recent_expenses' => $recentExpenses,
             'recent_announcements' => $recentAnnouncements,
@@ -254,33 +268,44 @@ class DashboardController extends Controller
 
     // ─── Manager ───────────────────────────────────────────────
 
-    private function manager(): JsonResponse
+    private function manager(?int $branchId = null): JsonResponse
     {
         $now = now();
         $start = $now->copy()->startOfMonth();
         $end = $now->copy()->endOfMonth();
 
-        $totalMembers = User::query()->memberUsers()->count();
-        $newMembersThisMonth = User::query()->memberUsers()->whereBetween('created_at', [$start, $end])->count();
-        $totalStaff = User::query()->officerUsers()->count();
-        $totalSavings = (float) DB::table('accounts')->where('account_type', 'savings')->sum('balance');
+        $totalMembers = BranchScope::applyToUsers(User::query()->memberUsers(), Auth::user(), $branchId)->count();
+        $newMembersThisMonth = BranchScope::applyToUsers(
+            User::query()->memberUsers()->whereBetween('created_at', [$start, $end]),
+            Auth::user(),
+            $branchId
+        )->count();
+        $totalStaff = BranchScope::applyToUsers(User::query()->officerUsers(), Auth::user(), $branchId)->count();
+        $totalSavings = $this->accountTotals($branchId)['savings'];
 
         $activeLoanStatuses = ['approved', 'active'];
-        $activeLoansCount = Loan::query()->whereIn('loan_status', $activeLoanStatuses)->count();
-        $pendingLoansCount = Loan::query()->where('loan_status', 'pending')->count();
+        $activeLoansCount = BranchScope::applyToLoans(Loan::query()->whereIn('loan_status', $activeLoanStatuses), Auth::user(), $branchId)->count();
+        $pendingLoansCount = BranchScope::applyToLoans(Loan::query()->where('loan_status', 'pending'), Auth::user(), $branchId)->count();
 
-        $overdueLoansCount = Loan::query()
-            ->whereNotIn('loan_status', ['paid', 'paid_off', 'paid-off'])
-            ->whereNotNull('due_date')
-            ->whereDate('due_date', '<', today())
-            ->count();
+        $overdueLoansCount = BranchScope::applyToLoans(
+            Loan::query()
+                ->whereNotIn('loan_status', ['paid', 'paid_off', 'paid-off'])
+                ->whereNotNull('due_date')
+                ->whereDate('due_date', '<', today()),
+            Auth::user(),
+            $branchId
+        )->count();
 
-        $financialThisMonth = $this->financialSummary($start, $end);
-        $pendingTxnCount = Transaction::query()->where('status', 'pending')->count();
+        $financialThisMonth = $this->financialSummary($start, $end, $branchId);
+        $pendingTxnCount = BranchScope::applyToTransactions(Transaction::query()->where('status', 'pending'), Auth::user(), $branchId)->count();
 
-        $pendingTransactions = Transaction::query()
-            ->with(['account.user.personalData'])
-            ->where('status', 'pending')
+        $pendingTransactions = BranchScope::applyToTransactions(
+            Transaction::query()
+                ->with(['account.user.personalData'])
+                ->where('status', 'pending'),
+            Auth::user(),
+            $branchId
+        )
             ->latest()
             ->take(8)
             ->get()
@@ -296,10 +321,13 @@ class DashboardController extends Controller
                 'created_at' => $t->created_at->format('M d, Y'),
             ]);
 
-        $recentMembers = User::query()
-            ->with('personalData')
-            ->memberUsers()
-            ->latest()
+        $recentMembers = BranchScope::applyToUsers(
+            User::query()
+                ->with('personalData')
+                ->memberUsers(),
+            Auth::user(),
+            $branchId
+        )->latest()
             ->take(6)
             ->get()
             ->map(fn ($m) => [
@@ -340,7 +368,7 @@ class DashboardController extends Controller
             'month_withdrawals' => $financialThisMonth['total_withdrawals'],
             'month_expenses' => $financialThisMonth['total_expenses'],
             'month_net' => $financialThisMonth['net'],
-            'monthly_series' => $this->buildMonthlySeries(6),
+            'monthly_series' => $this->buildMonthlySeries(6, $branchId),
             'monthly_max_value' => $this->monthlyMax,
             'pending_transactions_list' => $pendingTransactions,
             'recent_members' => $recentMembers,
@@ -350,22 +378,26 @@ class DashboardController extends Controller
 
     // ─── Treasurer / Accountant ────────────────────────────────
 
-    private function treasurer(): JsonResponse
+    private function treasurer(?int $branchId = null): JsonResponse
     {
         $now = now();
         $start = $now->copy()->startOfMonth();
         $end = $now->copy()->endOfMonth();
 
-        $totalSavings = (float) DB::table('accounts')->where('account_type', 'savings')->sum('balance');
-        $totalShareCapital = (float) DB::table('accounts')->where('account_type', 'share-capital')->sum('balance');
-        $financialThisMonth = $this->financialSummary($start, $end);
+        $accountTotals = $this->accountTotals($branchId);
+        $totalSavings = $accountTotals['savings'];
+        $totalShareCapital = $accountTotals['share_capital'];
+        $financialThisMonth = $this->financialSummary($start, $end, $branchId);
 
-        $pendingTxnCount = Transaction::query()->where('status', 'pending')->count();
+        $pendingTxnCount = BranchScope::applyToTransactions(Transaction::query()->where('status', 'pending'), Auth::user(), $branchId)->count();
 
-        $recentTransactions = Transaction::query()
-            ->with(['account.user.personalData'])
-            ->where('status', 'completed')
-            ->latest()
+        $recentTransactions = BranchScope::applyToTransactions(
+            Transaction::query()
+                ->with(['account.user.personalData'])
+                ->where('status', 'completed'),
+            Auth::user(),
+            $branchId
+        )->latest()
             ->take(8)
             ->get()
             ->map(fn ($t) => [
@@ -382,7 +414,7 @@ class DashboardController extends Controller
                 'created_at' => $t->created_at->toISOString(),
             ]);
 
-        $recentExpenses = Expense::query()
+        $recentExpenses = BranchScope::applyToExpenses(Expense::query(), Auth::user(), $branchId)
             ->orderByDesc('expense_date')
             ->take(6)
             ->get()
@@ -418,7 +450,7 @@ class DashboardController extends Controller
             'month_expenses' => $financialThisMonth['total_expenses'],
             'month_net' => $financialThisMonth['net'],
             'pending_transactions' => $pendingTxnCount,
-            'monthly_series' => $this->buildMonthlySeries(6),
+            'monthly_series' => $this->buildMonthlySeries(6, $branchId),
             'monthly_max_value' => $this->monthlyMax,
             'recent_transactions' => $recentTransactions,
             'recent_expenses' => $recentExpenses,
@@ -428,13 +460,13 @@ class DashboardController extends Controller
 
     // ─── Secretary ─────────────────────────────────────────────
 
-    private function secretary(): JsonResponse
+    private function secretary(?int $branchId = null): JsonResponse
     {
         $now = now();
         $start = $now->startOfMonth();
         $end = $now->endOfMonth();
 
-        $memberQuery = User::query()->where('role', 'member');
+        $memberQuery = BranchScope::applyToUsers(User::query()->where('role', 'member'), Auth::user(), $branchId);
 
         $recentMembers = (clone $memberQuery)
             ->with('personalData')
@@ -490,48 +522,52 @@ class DashboardController extends Controller
 
     // ─── Loan ──────────────────────────────────────────────────
 
-    private function loan(): JsonResponse
+    private function loan(?int $branchId = null): JsonResponse
     {
         $activeLoanStatuses = ['approved', 'active'];
         $paidLoanStatuses = ['paid', 'paid_off', 'paid-off'];
 
-        $pendingCount = Loan::query()->where('loan_status', 'pending')->count();
-        $activeCount = Loan::query()->whereIn('loan_status', $activeLoanStatuses)->count();
-        $rejectedCount = Loan::query()->where('loan_status', 'rejected')->count();
+        $pendingCount = BranchScope::applyToLoans(Loan::query()->where('loan_status', 'pending'), Auth::user(), $branchId)->count();
+        $activeCount = BranchScope::applyToLoans(Loan::query()->whereIn('loan_status', $activeLoanStatuses), Auth::user(), $branchId)->count();
+        $rejectedCount = BranchScope::applyToLoans(Loan::query()->where('loan_status', 'rejected'), Auth::user(), $branchId)->count();
 
-        $overdueCount = Loan::query()
-            ->whereNotIn('loan_status', $paidLoanStatuses)
-            ->whereNotNull('due_date')
-            ->whereDate('due_date', '<', today())
-            ->count();
+        $overdueCount = BranchScope::applyToLoans(
+            Loan::query()
+                ->whereNotIn('loan_status', $paidLoanStatuses)
+                ->whereNotNull('due_date')
+                ->whereDate('due_date', '<', today()),
+            Auth::user(),
+            $branchId
+        )->count();
 
-        $dueSoonCount = Loan::query()
-            ->whereIn('loan_status', $activeLoanStatuses)
-            ->whereNotNull('due_date')
-            ->whereBetween('due_date', [today(), today()->copy()->addDays(14)])
-            ->count();
+        $dueSoonCount = BranchScope::applyToLoans(
+            Loan::query()
+                ->whereIn('loan_status', $activeLoanStatuses)
+                ->whereNotNull('due_date')
+                ->whereBetween('due_date', [today(), today()->copy()->addDays(14)]),
+            Auth::user(),
+            $branchId
+        )->count();
 
-        $loanPrincipalActive = (float) Loan::query()
-            ->whereIn('loan_status', $activeLoanStatuses)
-            ->sum('loan_amount');
+        $loanPrincipalActive = (float) BranchScope::applyToLoans(
+            Loan::query()->whereIn('loan_status', $activeLoanStatuses),
+            Auth::user(),
+            $branchId
+        )->sum('loan_amount');
 
-        $loanPaymentsOnActive = (float) DB::table('transactions')
-            ->join('loans', 'transactions.loan_id', '=', 'loans.id')
-            ->where('transactions.transaction_type', 'loan_payment')
-            ->where('transactions.status', 'completed')
-            ->whereIn('loans.loan_status', $activeLoanStatuses)
-            ->sum('transactions.amount');
+        $loanOutstanding = max(0, $loanPrincipalActive - $this->loanPaymentsOnActiveLoans($branchId));
 
-        $loanOutstanding = max(0, $loanPrincipalActive - $loanPaymentsOnActive);
+        $totalLoanDisbursed = (float) BranchScope::applyToLoans(
+            Loan::query()->whereIn('loan_status', array_merge($activeLoanStatuses, $paidLoanStatuses)),
+            Auth::user(),
+            $branchId
+        )->sum('loan_amount');
 
-        $totalLoanDisbursed = (float) Loan::query()
-            ->whereIn('loan_status', array_merge($activeLoanStatuses, $paidLoanStatuses))
-            ->sum('loan_amount');
-
-        $pendingLoans = Loan::query()
-            ->with(['user.personalData'])
-            ->where('loan_status', 'pending')
-            ->latest()
+        $pendingLoans = BranchScope::applyToLoans(
+            Loan::query()->with(['user.personalData'])->where('loan_status', 'pending'),
+            Auth::user(),
+            $branchId
+        )->latest()
             ->take(8)
             ->get()
             ->map(fn ($l) => [
@@ -546,12 +582,15 @@ class DashboardController extends Controller
                 'created_at' => $l->created_at->format('M d, Y'),
             ]);
 
-        $overdueLoans = Loan::query()
-            ->with(['user.personalData'])
-            ->whereNotIn('loan_status', $paidLoanStatuses)
-            ->whereNotNull('due_date')
-            ->whereDate('due_date', '<', today())
-            ->orderBy('due_date')
+        $overdueLoans = BranchScope::applyToLoans(
+            Loan::query()
+                ->with(['user.personalData'])
+                ->whereNotIn('loan_status', $paidLoanStatuses)
+                ->whereNotNull('due_date')
+                ->whereDate('due_date', '<', today()),
+            Auth::user(),
+            $branchId
+        )->orderBy('due_date')
             ->take(6)
             ->get()
             ->map(fn ($l) => [
@@ -592,7 +631,7 @@ class DashboardController extends Controller
             'loans_outstanding' => $loanOutstanding,
             'outstanding_amount' => $loanOutstanding,
             'loans_disbursed' => $totalLoanDisbursed,
-            'loan_status_series' => $this->buildLoanStatusSeries(),
+            'loan_status_series' => $this->buildLoanStatusSeries($branchId),
             'pending_loans_list' => $pendingLoans,
             'overdue_loans_list' => $overdueLoans,
             'recent_announcements' => $recentAnnouncements,
@@ -601,7 +640,7 @@ class DashboardController extends Controller
 
     // ─── Officer (custom roles) ────────────────────────────────
 
-    private function officer(): JsonResponse
+    private function officer(?int $branchId = null): JsonResponse
     {
         $user = Auth::user();
         $now = now();
@@ -609,30 +648,37 @@ class DashboardController extends Controller
 
         $pendingTransactions = null;
         if ($user->can('transactions.approve') || $user->can('deposits.approve') || $user->can('withdrawals.approve')) {
-            $pendingTransactions = Transaction::query()->where('status', 'pending')->count();
+            $pendingTransactions = BranchScope::applyToTransactions(Transaction::query()->where('status', 'pending'), $user, $branchId)->count();
         }
 
         $pendingLoans = null;
         if ($user->can('loans.update') || $user->can('loans.approve')) {
-            $pendingLoans = Loan::query()->where('loan_status', 'pending')->count();
+            $pendingLoans = BranchScope::applyToLoans(Loan::query()->where('loan_status', 'pending'), $user, $branchId)->count();
         }
 
         $membersTotal = null;
         $newMembersThisMonth = null;
         if ($user->can('members.view')) {
-            $membersTotal = User::query()->memberUsers()->count();
-            $newMembersThisMonth = User::query()->memberUsers()->whereBetween('created_at', [$start, $now])->count();
+            $membersTotal = BranchScope::applyToUsers(User::query()->memberUsers(), $user, $branchId)->count();
+            $newMembersThisMonth = BranchScope::applyToUsers(
+                User::query()->memberUsers()->whereBetween('created_at', [$start, $now]),
+                $user,
+                $branchId
+            )->count();
         }
 
         $loansActive = null;
         $loansOverdue = null;
         if ($user->can('loans.view')) {
-            $loansActive = Loan::query()->whereIn('loan_status', ['approved', 'active'])->count();
-            $loansOverdue = Loan::query()
-                ->whereNotIn('loan_status', ['paid', 'paid_off', 'paid-off'])
-                ->whereNotNull('due_date')
-                ->whereDate('due_date', '<', today())
-                ->count();
+            $loansActive = BranchScope::applyToLoans(Loan::query()->whereIn('loan_status', ['approved', 'active']), $user, $branchId)->count();
+            $loansOverdue = BranchScope::applyToLoans(
+                Loan::query()
+                    ->whereNotIn('loan_status', ['paid', 'paid_off', 'paid-off'])
+                    ->whereNotNull('due_date')
+                    ->whereDate('due_date', '<', today()),
+                $user,
+                $branchId
+            )->count();
         }
 
         $recentAnnouncements = null;
@@ -675,6 +721,11 @@ class DashboardController extends Controller
                 'You are not authorized to view another member\'s loans.'
             );
             $targetUser = User::findOrFail($request->query('user_id'));
+
+            if (BranchScope::resolveBranchId($actor, null) !== null
+                && (int) BranchScope::resolveBranchId($actor, null) !== (int) $targetUser->branch_id) {
+                abort(403, 'You can only view loans of members in your branch.');
+            }
         }
 
         $user = $targetUser->load(['loans.payments']);
@@ -749,7 +800,41 @@ class DashboardController extends Controller
         };
     }
 
-    private function financialSummary(Carbon $start, Carbon $end): array
+    private function accountTotals(?int $branchId): array
+    {
+        $query = Account::query()->whereIn('account_type', ['savings', 'share-capital']);
+
+        if ($branchId !== null) {
+            $query->whereHas('user', fn ($q) => $q->where('users.branch_id', $branchId));
+        }
+
+        $totals = $query
+            ->selectRaw('account_type, SUM(balance) as total')
+            ->groupBy('account_type')
+            ->pluck('total', 'account_type');
+
+        return [
+            'savings' => (float) ($totals['savings'] ?? 0),
+            'share_capital' => (float) ($totals['share_capital'] ?? 0),
+        ];
+    }
+
+    private function loanPaymentsOnActiveLoans(?int $branchId): float
+    {
+        $query = DB::table('transactions')
+            ->join('loans', 'transactions.loan_id', '=', 'loans.id')
+            ->where('transactions.transaction_type', 'loan_payment')
+            ->where('transactions.status', 'completed')
+            ->whereIn('loans.loan_status', ['approved', 'active']);
+
+        if ($branchId !== null) {
+            $query->where('loans.branch_id', $branchId);
+        }
+
+        return (float) $query->sum('transactions.amount');
+    }
+
+    private function financialSummary(Carbon $start, Carbon $end, ?int $branchId = null): array
     {
         $totals = Transaction::query()
             ->where('status', 'completed')
@@ -760,7 +845,13 @@ class DashboardController extends Controller
                             ->whereBetween('created_at', [$start, $end]);
                     });
             })
-            ->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'fee'])
+            ->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'fee']);
+
+        if ($branchId !== null) {
+            $totals->where('transactions.branch_id', $branchId);
+        }
+
+        $totals = $totals
             ->selectRaw('transaction_type, SUM(amount) as total')
             ->groupBy('transaction_type')
             ->pluck('total', 'transaction_type');
@@ -773,6 +864,7 @@ class DashboardController extends Controller
 
         $totalExpenses = (float) Expense::query()
             ->whereBetween('expense_date', [$start, $end])
+            ->when($branchId !== null, fn ($q) => $q->where('expenses.branch_id', $branchId))
             ->sum('amount');
 
         $inflows = $totalDeposits + $totalLoanRepayments + $totalFees;
@@ -786,7 +878,7 @@ class DashboardController extends Controller
         ];
     }
 
-    private function buildMonthlySeries(int $months): array
+    private function buildMonthlySeries(int $months, ?int $branchId = null): array
     {
         $months = max(1, min(24, $months));
         $series = [];
@@ -796,7 +888,7 @@ class DashboardController extends Controller
         for ($i = $months - 1; $i >= 0; $i--) {
             $monthStart = $baseNow->copy()->subMonths($i)->startOfMonth();
             $monthEnd = $monthStart->copy()->endOfMonth();
-            $summary = $this->financialSummary($monthStart, $monthEnd);
+            $summary = $this->financialSummary($monthStart, $monthEnd, $branchId);
             $dep = (float) ($summary['total_deposits'] ?? 0);
             $out = (float) ($summary['total_withdrawals'] ?? 0) + (float) ($summary['total_expenses'] ?? 0);
             $this->monthlyMax = max($this->monthlyMax, $dep, $out);
@@ -813,9 +905,9 @@ class DashboardController extends Controller
         return $series;
     }
 
-    private function buildLoanStatusSeries(): array
+    private function buildLoanStatusSeries(?int $branchId = null): array
     {
-        $statusCounts = Loan::query()
+        $statusCounts = BranchScope::applyToLoans(Loan::query(), Auth::user(), $branchId)
             ->select('loan_status', DB::raw('COUNT(*) as total'))
             ->groupBy('loan_status')
             ->pluck('total', 'loan_status')

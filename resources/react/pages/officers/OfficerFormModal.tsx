@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import DatePicker from '../../components/DatePicker';
+import BranchSelect from '../../components/BranchSelect';
+import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
 import { validate, officerSchema, officerEditSchema, officerStepSchemas, passwordStrength, type FieldErrors } from '../../lib/validation';
@@ -31,6 +33,8 @@ export default function OfficerFormModal({ officer, onClose }: { officer?: any; 
     const [step, setStep] = useState(0);
     const queryClient = useQueryClient();
     const { addToast } = useToast();
+    const { user } = useAuth();
+    const canAssignBranch = !!user?.permissions?.includes('branches.view');
     const { markDirty, requestClose, renderDialog } = useDiscardGuard();
 
     const [form, setForm] = useState({
@@ -48,6 +52,7 @@ export default function OfficerFormModal({ officer, onClose }: { officer?: any; 
         city: officer?.address?.city_municipality || '',
         postal_code: officer?.address?.zip_code || '',
         role: officer?.primary_role || '',
+        branch_id: officer?.branch_id || '',
         password: '',
         password_confirmation: '',
     });
@@ -229,13 +234,20 @@ export default function OfficerFormModal({ officer, onClose }: { officer?: any; 
                         {step === 2 && (
                             <>
                                 <h3 className="font-semibold text-gray-900 flex items-center gap-2"><i className="fas fa-shield-alt text-indigo-600"></i>Role Assignment</h3>
-                                <div className="max-w-xs">
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">Role *</label>
-                                    <select value={form.role} onChange={e => { set('role', e.target.value); clearError('role'); }} className={`w-full rounded-lg border p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 ${errors.role ? 'border-red-400' : 'border-gray-300'}`}>
-                                        <option value="">Select Role</option>
-                                        {roleOptions.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                                    </select>
-                                    {errors.role && <p className="mt-1 text-xs text-red-600">{errors.role}</p>}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="max-w-xs">
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">Role *</label>
+                                        <select value={form.role} onChange={e => { set('role', e.target.value); clearError('role'); }} className={`w-full rounded-lg border p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 ${errors.role ? 'border-red-400' : 'border-gray-300'}`}>
+                                            <option value="">Select Role</option>
+                                            {roleOptions.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                                        </select>
+                                        {errors.role && <p className="mt-1 text-xs text-red-600">{errors.role}</p>}
+                                    </div>
+                                    {canAssignBranch && (
+                                        <div className="max-w-xs">
+                                            <BranchSelect value={form.branch_id} onChange={v => { set('branch_id', String(v)); clearError('branch_id'); }} error={errors.branch_id} />
+                                        </div>
+                                    )}
                                 </div>
                             </>
                         )}

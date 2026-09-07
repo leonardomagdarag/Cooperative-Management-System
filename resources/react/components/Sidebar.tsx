@@ -13,6 +13,7 @@ const NAV_ITEMS: NavItem[] = [
     { label: 'Dashboard', path: '/dashboard', icon: 'fas fa-tachometer-alt' },
     { label: 'Members', path: '/dashboard/members', icon: 'fas fa-users', permission: 'members.view' },
     { label: 'Officers', path: '/dashboard/officers', icon: 'fas fa-user-tie', permission: 'officers.view' },
+    { label: 'Branches', path: '/dashboard/branches', icon: 'fas fa-building', permission: 'branches.view' },
     { label: 'Services', path: '/dashboard/services', icon: 'fas fa-briefcase', permission: 'services.view' },
     { label: 'Loans', path: '/dashboard/loans', icon: 'fas fa-hand-holding-usd', permission: 'loans.view' },
     { label: 'Ledger', path: '/dashboard/ledger', icon: 'fas fa-book', permission: 'transactions.view' },

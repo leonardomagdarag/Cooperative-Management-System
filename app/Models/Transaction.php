@@ -26,6 +26,7 @@ class Transaction extends Model
         'proof_of_payment_uploaded_at',
         'note',
         'recorded_by',
+        'branch_id',
     ];
 
     protected $casts = [
@@ -80,6 +81,11 @@ class Transaction extends Model
     public function loan()
     {
         return $this->belongsTo(Loan::class);
+    }
+
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class);
     }
 
     public function recordedBy()
