@@ -6,9 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('users', function (Blueprint $table) {
@@ -16,6 +13,7 @@ return new class extends Migration
             $table->string('user_number', 20)->unique();
             $table->foreignId('personal_data_id')->nullable()->constrained('personal_data');
             $table->string('email')->unique();
+            $table->timestamp('email_verified_at')->nullable();
             $table->string('password', 255);
             $table->rememberToken();
             $table->enum('role', [
@@ -24,14 +22,21 @@ return new class extends Migration
                 'manager',
                 'member',
                 'loan',
-                'treasurer',
-                'secretary',
                 'accountant',
+                'secretary',
                 'inactive',
                 'terminated',
             ])->default('member');
+            $table->enum('account_status', ['active', 'inactive', 'terminated'])->default('active');
+            $table->boolean('is_officer')->default(false)->comment('Indicates if user is a system officer (staff) with custom permissions');
+            $table->boolean('special_loan_eligible')->default(false);
             $table->timestamps();
             $table->softDeletes();
+
+            $table->index('created_at', 'users_created_at_index');
+            $table->index('account_status', 'users_account_status_index');
+            $table->index('is_officer', 'users_is_officer_index');
+            $table->index('personal_data_id', 'users_personal_data_id_index');
         });
 
         Schema::create('password_reset_tokens', function (Blueprint $table) {
@@ -58,15 +63,27 @@ return new class extends Migration
             $table->date('birth_date')->nullable();
             $table->string('relationship', 100);
             $table->string('phone_no', 11)->nullable();
+            $table->string('street', 255)->nullable();
+            $table->string('barangay', 100)->nullable();
+            $table->string('city', 100)->nullable();
+            $table->string('province', 100)->nullable();
+            $table->string('postal_code', 10)->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('logs', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('user_id')->nullable()->constrained('users');
+            $table->string('activity', 255);
+            $table->text('description')->nullable();
+            $table->string('ip_address', 45)->nullable();
             $table->timestamps();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
+        Schema::dropIfExists('logs');
         Schema::dropIfExists('beneficiaries');
         Schema::dropIfExists('sessions');
         Schema::dropIfExists('password_reset_tokens');

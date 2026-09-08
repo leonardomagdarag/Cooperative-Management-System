@@ -31,10 +31,24 @@ return new class extends Migration
             $table->index(['is_active', 'sort_order']);
             $table->index('base_type');
         });
+
+        Schema::create('loan_documents', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('loan_id')->constrained('loans')->cascadeOnDelete();
+            $table->string('original_name', 255);
+            $table->string('storage_path', 255);
+            $table->string('mime_type', 120)->nullable();
+            $table->unsignedBigInteger('file_size')->default(0);
+            $table->foreignId('uploaded_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->timestamps();
+
+            $table->index(['loan_id', 'created_at']);
+        });
     }
 
     public function down(): void
     {
+        Schema::dropIfExists('loan_documents');
         Schema::dropIfExists('loan_products');
     }
 };
