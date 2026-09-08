@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
@@ -18,6 +18,7 @@ const serviceLabelMap: Record<string, string> = {
 };
 
 export default function ServicesPage() {
+    const queryClient = useQueryClient();
     const { user } = useAuth();
     const perms = user?.permissions || [];
     const isOfficer = user?.primary_role !== 'member' && user?.primary_role !== null;
@@ -93,6 +94,18 @@ export default function ServicesPage() {
     });
     const pendingCount = pendingData?.data?.length ?? pendingData?.data?.data?.length ?? 0;
 
+    const { data: myPendingData } = useQuery({
+        queryKey: ['my-pending-requests'],
+        queryFn: () => api.get('/api/history', { params: { status: 'pending', per_page: 5 } }),
+        enabled: !isOfficer,
+    });
+    const myPendingRequests = myPendingData?.data?.data ?? [];
+
+    const getPendingTypeColor = (t: string) => {
+        const c: Record<string, string> = { deposit: 'bg-emerald-100 text-emerald-700', withdrawal: 'bg-red-100 text-red-700', loan_payment: 'bg-blue-100 text-blue-700' };
+        return c[t] || 'bg-gray-100 text-gray-700';
+    };
+
     const financialData = isOfficer ? selectedMemberDetail : null;
     const savingsBalance = financialData?.accounts?.find((a: any) => a.account_type === 'savings')?.balance ?? 0;
     const shareCapitalBalance = financialData?.accounts?.find((a: any) => a.account_type === 'share-capital')?.balance ?? 0;
@@ -161,12 +174,23 @@ export default function ServicesPage() {
         setActiveService(svc);
     };
 
+    const handleWizardComplete = () => {
+        setActiveService(null);
+        setWizardDirty(false);
+        if (isOfficer) {
+            queryClient.invalidateQueries({ queryKey: ['services-pending'] });
+            queryClient.invalidateQueries({ queryKey: ['selected-member', selectedMember?.id] });
+        } else {
+            queryClient.invalidateQueries({ queryKey: ['my-pending-requests'] });
+        }
+    };
+
     const renderWizard = () => {
         switch (activeService) {
-            case 'deposit': return <DepositWizard onComplete={() => setActiveService(null)} selectedMember={selectedMember} onDirtyChange={setWizardDirty} availability={availability?.deposit} />;
-            case 'withdraw': return <WithdrawalWizard onComplete={() => setActiveService(null)} selectedMember={selectedMember} memberDetail={selectedMemberDetail} onDirtyChange={setWizardDirty} availability={availability?.withdrawal} />;
-            case 'loan': return <LoanApplicationWizard onComplete={() => setActiveService(null)} selectedMember={selectedMember} onDirtyChange={setWizardDirty} availability={availability?.loan_application} />;
-            case 'payment': return <LoanPaymentWizard onComplete={() => setActiveService(null)} selectedMember={selectedMember} onDirtyChange={setWizardDirty} availability={availability?.loan_payment} />;
+            case 'deposit': return <DepositWizard onComplete={handleWizardComplete} selectedMember={selectedMember} onDirtyChange={setWizardDirty} availability={availability?.deposit} />;
+            case 'withdraw': return <WithdrawalWizard onComplete={handleWizardComplete} selectedMember={selectedMember} memberDetail={selectedMemberDetail} onDirtyChange={setWizardDirty} availability={availability?.withdrawal} />;
+            case 'loan': return <LoanApplicationWizard onComplete={handleWizardComplete} selectedMember={selectedMember} onDirtyChange={setWizardDirty} availability={availability?.loan_application} />;
+            case 'payment': return <LoanPaymentWizard onComplete={handleWizardComplete} selectedMember={selectedMember} onDirtyChange={setWizardDirty} availability={availability?.loan_payment} />;
             case 'approve': return <TransactionApproval onComplete={() => setActiveService(null)} />;
             case 'loan-review': return <TransactionApproval onComplete={() => setActiveService(null)} />;
             default: return null;
@@ -386,6 +410,35 @@ export default function ServicesPage() {
                     />
                 </div>
             </div>
+
+            {!isOfficer && myPendingRequests.length > 0 && (
+                <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                    <h3 className="font-semibold text-gray-900">
+                        <i className="fas fa-hourglass-half mr-2 text-amber-500"></i>Your Pending Requests
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-500">Transactions awaiting approval by a treasurer</p>
+                    <div className="mt-4 space-y-3">
+                        {myPendingRequests.map((t: any) => (
+                            <div key={t.id} className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
+                                <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getPendingTypeColor(t.transaction_type)}`}>{t.transaction_type.replace('_', ' ')}</span>
+                                        <span className="text-sm font-medium text-gray-900">{t.transaction_number}</span>
+                                    </div>
+                                    <p className="mt-1 text-sm text-gray-500">
+                                        {t.account?.account_type ? `${t.account.account_type.replace('_', ' ')} · ` : ''}{new Date(t.created_at).toLocaleDateString()}
+                                        {t.loan?.loan_number ? ` · Loan ${t.loan.loan_number}` : ''}
+                                    </p>
+                                </div>
+                                <div className="flex shrink-0 flex-col items-end gap-1">
+                                    <p className="font-bold text-gray-900">&#8369;{Number(t.amount).toLocaleString()}</p>
+                                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Pending approval</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {activeService && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => requestClose(() => setActiveService(null))}>

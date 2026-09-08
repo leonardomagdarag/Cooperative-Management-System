@@ -15,6 +15,7 @@ use App\Models\PersonalData;
 use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\NotificationService;
+use App\Services\SecurityOtpService;
 use App\Support\PersonPasswordPolicy;
 use App\Support\SearchFilter;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -34,12 +35,23 @@ class MemberController extends Controller
         abort_unless(Auth::user()?->can('members.view'), 403);
 
         $query = User::query()
-            ->with(['personalData.address', 'personalData.contact', 'accounts']);
+            ->with(['personalData.address', 'personalData.contact', 'accounts', 'memberApplication']);
 
         if ($request->boolean('is_officer')) {
             $query->officerUsers();
         } else {
             $query->memberUsers();
+        }
+
+        // Status filter (pending = inactive self-registered applicants awaiting review)
+        $status = $request->string('status')->toString();
+        if (in_array($status, ['all', 'active', 'inactive', 'pending', 'terminated'], true)) {
+            if ($status === 'pending') {
+                $query->where('account_status', 'inactive')
+                    ->whereHas('memberApplication', fn ($q) => $q->where('status', 'pending'));
+            } elseif ($status !== 'all') {
+                $query->where('account_status', $status);
+            }
         }
 
         // Search
@@ -84,6 +96,7 @@ class MemberController extends Controller
                 'name' => trim(($u->personalData->first_name ?? '').' '.($u->personalData->last_name ?? '')),
                 'phone' => $u->personalData->contact?->phone_no,
                 'accounts' => $u->accounts->map(fn ($a) => ['id' => $a->id, 'type' => $a->account_type, 'balance' => $a->balance]),
+                'has_pending_application' => (bool) ($u?->memberApplication?->status === 'pending'),
                 'created_at' => $u->created_at->toISOString(),
             ]),
             'pagination' => [
@@ -92,6 +105,11 @@ class MemberController extends Controller
                 'per_page' => $paginator->perPage(),
                 'total' => $paginator->total(),
             ],
+            'pending_count' => User::query()
+                ->memberUsers()
+                ->where('account_status', 'inactive')
+                ->whereHas('memberApplication', fn ($q) => $q->where('status', 'pending'))
+                ->count(),
         ]);
     }
 
@@ -284,6 +302,7 @@ class MemberController extends Controller
                 'password' => Hash::make($validated['password']),
                 'personal_data_id' => $personalData->id,
                 'account_status' => 'active',
+                'profile_completion_required' => false,
             ]);
 
             if ($request->file('agreement_file')) {
@@ -388,6 +407,7 @@ class MemberController extends Controller
                 $request->input('mid_name'),
                 $request->input('last_name'),
             ])),
+            'otp_code' => ['nullable', 'required_with:password', 'string', 'digits:6'],
             'beneficiaries' => 'nullable|array',
             'beneficiaries.*.first_name' => 'required|string|max:100',
             'beneficiaries.*.last_name' => 'required|string|max:100',
@@ -400,6 +420,21 @@ class MemberController extends Controller
             'barangay_id_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:5120',
             'agreement_file' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
         ]);
+
+        if (! empty($validated['password'])) {
+            $actor = Auth::user();
+            $securityOtp = app(SecurityOtpService::class);
+            $verified = $securityOtp->verifyChallenge(
+                $actor,
+                $securityOtp->memberPasswordChangePurpose(),
+                $validated['otp_code'],
+                ['member_id' => $user->id],
+            );
+
+            if (! $verified) {
+                return response()->json(['message' => 'Invalid or expired verification code.'], 422);
+            }
+        }
 
         $profilePhotoPath = null;
         if ($request->file('profile_photo')) {
@@ -526,6 +561,25 @@ class MemberController extends Controller
         return response()->json(['message' => 'Member updated successfully.']);
     }
 
+    public function sendPasswordChangeOtp(User $user): JsonResponse
+    {
+        abort_unless(Auth::user()?->can('members.update'), 403);
+
+        $actor = Auth::user();
+        $securityOtp = app(SecurityOtpService::class);
+        $challenge = $securityOtp->issueChallenge(
+            $actor,
+            $securityOtp->memberPasswordChangePurpose(),
+            ['member_id' => $user->id],
+        );
+        $securityOtp->sendOtpMail($actor, $securityOtp->memberPasswordChangePurpose(), $challenge['otp_code']);
+
+        return response()->json([
+            'message' => 'A verification code was sent to your email.',
+            'expires_at' => $challenge['challenge']->expires_at->toISOString(),
+        ]);
+    }
+
     public function destroy(User $user): JsonResponse
     {
         abort_unless(Auth::user()?->can('members.delete'), 403);
@@ -542,6 +596,123 @@ class MemberController extends Controller
         $user->delete();
 
         return response()->json(['message' => 'Member deleted.']);
+    }
+
+    public function approve(User $user): JsonResponse
+    {
+        abort_unless(Auth::user()?->can('members.approve'), 403);
+
+        if ($user->account_status === 'active') {
+            return response()->json(['message' => 'Member is already active.'], 422);
+        }
+
+        $application = $user->memberApplication()->where('status', 'pending')->first();
+
+        DB::transaction(function () use ($user, $application) {
+            if ($application) {
+                $application->update([
+                    'status' => 'approved',
+                    'reviewed_by' => Auth::id(),
+                    'reviewed_at' => now(),
+                ]);
+            }
+
+            $user->update([
+                'account_status' => 'active',
+            ]);
+
+            if (! $user->accounts()->where('account_type', 'savings')->exists()) {
+                Account::create(['user_id' => $user->id, 'account_type' => 'savings', 'balance' => 500.00]);
+            }
+
+            if (! $user->accounts()->where('account_type', 'share-capital')->exists()) {
+                Account::create(['user_id' => $user->id, 'account_type' => 'share-capital', 'balance' => 500.00]);
+            }
+
+            app(AuditLogService::class)->log(
+                'member.approved',
+                'Membership application approved.',
+                'member',
+                $user,
+                Auth::user()
+            );
+        });
+
+        app(NotificationService::class)->sendMemberActivationEmail($user);
+
+        return response()->json(['message' => 'Application approved and activation email sent.']);
+    }
+
+    public function decline(Request $request, User $user): JsonResponse
+    {
+        abort_unless(Auth::user()?->can('members.approve'), 403);
+
+        if ($user->account_status === 'active') {
+            return response()->json(['message' => 'Member is already active.'], 422);
+        }
+
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $application = $user->memberApplication()->where('status', 'pending')->first();
+        if (! $application) {
+            return response()->json(['message' => 'No pending application found for this member.'], 422);
+        }
+
+        $originalEmail = $application->original_email ?: $user->email;
+        $applicantName = trim(($user->personalData->first_name ?? '').' '.($user->personalData->last_name ?? ''));
+        $reason = trim((string) $validated['reason']);
+
+        DB::transaction(function () use ($application, $user, $reason) {
+            $application->update([
+                'status' => 'declined',
+                'decline_reason' => $reason ?: null,
+                'reviewed_by' => Auth::id(),
+                'reviewed_at' => now(),
+            ]);
+
+            // Archive the account: soft-delete + release unique fields so the
+            // applicant can re-register with the same email later.
+            $user->update([
+                'email' => $this->scrambleArchivedEmail($user, $user->email),
+                'user_number' => 'ARCH-'.$user->user_number,
+            ]);
+
+            $contact = $user->personalData?->contact;
+            if ($contact) {
+                $contact->update([
+                    'email' => $this->scrambleArchivedEmail($user, $contact->email),
+                ]);
+            }
+
+            $user->account_status = 'inactive';
+            $user->save();
+
+            $user->delete();
+
+            app(AuditLogService::class)->log(
+                'member.declined',
+                'Membership application declined.',
+                'member',
+                $user,
+                Auth::user(),
+                ['reason' => $reason]
+            );
+        });
+
+        app(NotificationService::class)->sendMemberDeclineEmail($originalEmail, $applicantName, $reason);
+
+        return response()->json(['message' => 'Application declined and applicant notified.']);
+    }
+
+    private function scrambleArchivedEmail(User $user, ?string $email): ?string
+    {
+        if (! $email) {
+            return $email;
+        }
+
+        return 'archived_'.$user->id.'_'.strtolower(trim($email));
     }
 
     public function search(Request $request): JsonResponse

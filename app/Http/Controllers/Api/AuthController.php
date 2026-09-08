@@ -153,6 +153,7 @@ class AuthController extends Controller
             'email' => $user->email,
             'email_verified' => (bool) $user->hasVerifiedEmail(),
             'primary_role' => $user->primary_role,
+            'profile_completion_required' => $user->requiresProfileCompletion(),
             'permissions' => $permissions,
             'profile_photo_url' => $user->personalData?->profile_picture
                 ? asset('storage/'.$user->personalData->profile_picture)

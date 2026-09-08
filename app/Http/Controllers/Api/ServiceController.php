@@ -47,7 +47,7 @@ class ServiceController extends Controller
         $validated = $request->validate([
             'member_id' => 'nullable|exists:users,id',
             'user_id' => 'nullable|exists:users,id',
-            'amount' => 'required|numeric|min:1',
+            'amount' => 'required|numeric|min:100',
             'account_type' => 'required|in:savings,share-capital',
             'transaction_mode' => 'required|in:counter,online',
             'note' => 'nullable|string|max:500',
@@ -115,7 +115,7 @@ class ServiceController extends Controller
         $validated = $request->validate([
             'member_id' => 'nullable|exists:users,id',
             'user_id' => 'nullable|exists:users,id',
-            'amount' => 'required|numeric|min:1',
+            'amount' => 'required|numeric|min:100',
             'reason' => 'nullable|string|max:500',
             'note' => 'nullable|string|max:500',
             'transaction_mode' => 'required|in:counter,online,bank_transfer',
@@ -351,10 +351,6 @@ class ServiceController extends Controller
             'otp_code' => 'nullable|string|digits:6',
         ]);
 
-        if ($transaction->status !== 'pending') {
-            return response()->json(['message' => 'Transaction is not pending.'], 422);
-        }
-
         $otpThreshold = (float) SystemSetting::get('security_withdrawal_otp_threshold', 2000);
         $isHighValueWithdrawal = $transaction->transaction_type === 'withdrawal' && $transaction->amount >= $otpThreshold;
 
@@ -375,39 +371,47 @@ class ServiceController extends Controller
             }
         }
 
-        DB::transaction(function () use ($transaction, $validated, $user) {
-            if ($validated['action'] === 'approve') {
-                $lockedAccount = Account::whereKey($transaction->account_id)->lockForUpdate()->first();
+        $transaction = DB::transaction(function () use ($transaction, $validated, $user) {
+            $lockedTransaction = Transaction::whereKey($transaction->id)->lockForUpdate()->firstOrFail();
 
-                if (in_array($transaction->transaction_type, ['withdrawal', 'loan_payment'], true)) {
-                    if (! $lockedAccount || (float) $lockedAccount->balance < (float) $transaction->amount) {
+            if ($lockedTransaction->status !== 'pending') {
+                abort(422, 'Transaction is not pending.');
+            }
+
+            if ($validated['action'] === 'approve') {
+                $lockedAccount = Account::whereKey($lockedTransaction->account_id)->lockForUpdate()->first();
+
+                if (in_array($lockedTransaction->transaction_type, ['withdrawal', 'loan_payment'], true)) {
+                    if (! $lockedAccount || (float) $lockedAccount->balance < (float) $lockedTransaction->amount) {
                         abort(422, 'Insufficient available balance to approve this transaction.');
                     }
                 }
 
-                $transaction->update(['status' => 'completed', 'approved_by' => $user->id, 'approved_at' => now()]);
+                $lockedTransaction->update(['status' => 'completed', 'approved_by' => $user->id, 'approved_at' => now()]);
 
-                if ($transaction->transaction_type === 'deposit') {
-                    $lockedAccount->increment('balance', $transaction->amount);
-                } elseif ($transaction->transaction_type === 'withdrawal') {
-                    $lockedAccount->decrement('balance', $transaction->amount);
-                } elseif ($transaction->transaction_type === 'loan_payment') {
-                    $lockedAccount->decrement('balance', $transaction->amount);
+                if ($lockedTransaction->transaction_type === 'deposit') {
+                    $lockedAccount->increment('balance', $lockedTransaction->amount);
+                } elseif ($lockedTransaction->transaction_type === 'withdrawal') {
+                    $lockedAccount->decrement('balance', $lockedTransaction->amount);
+                } elseif ($lockedTransaction->transaction_type === 'loan_payment') {
+                    $lockedAccount->decrement('balance', $lockedTransaction->amount);
 
-                    $transaction->loan?->refresh();
-                    if ($transaction->loan && $transaction->loan->remainingBalance() <= 0 && $transaction->loan->loan_status !== 'paid_off') {
-                        $transaction->loan->update(['loan_status' => 'paid_off']);
+                    $lockedTransaction->loan?->refresh();
+                    if ($lockedTransaction->loan && $lockedTransaction->loan->remainingBalance() <= 0 && $lockedTransaction->loan->loan_status !== 'paid_off') {
+                        $lockedTransaction->loan->update(['loan_status' => 'paid_off']);
                     }
                 }
             } else {
-                $transaction->update(['status' => 'rejected', 'rejection_reason' => $validated['reason'] ?? null]);
+                $lockedTransaction->update(['status' => 'rejected', 'rejection_reason' => $validated['reason'] ?? null]);
             }
 
             app(AuditLogService::class)->log(
                 'service.transaction_'.$validated['action'],
                 'Transaction '.$validated['action'].'d.',
-                'transaction', $transaction, $user
+                'transaction', $lockedTransaction, $user
             );
+
+            return $lockedTransaction;
         });
 
         $this->notifyTransactionDecision($transaction->fresh(), $validated['action'], $validated['reason'] ?? null);
@@ -487,6 +491,11 @@ class ServiceController extends Controller
                 'transaction_type' => $t->transaction_type, 'amount' => $t->amount,
                 'status' => $t->status, 'account_holder' => $t->account?->user ? trim(($t->account->user->personalData->first_name ?? '').' '.($t->account->user->personalData->last_name ?? '')) : null,
                 'created_at' => $t->created_at->toISOString(),
+                'transaction_mode' => $t->transaction_mode,
+                'note' => $t->note,
+                'account_type' => $t->account?->account_type,
+                'proof_of_payment_api_url' => $t->proof_of_payment_path ? url('storage/'.$t->proof_of_payment_path) : null,
+                'loan_number' => $t->loan?->loan_number,
             ]);
 
         return response()->json(['data' => $transactions]);

@@ -5,15 +5,21 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Address;
 use App\Models\Announcement;
+use App\Models\Beneficiary;
 use App\Models\Contact;
+use App\Models\Employment;
+use App\Models\MemberId;
 use App\Models\PersonalData;
+use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\NotificationService;
+use App\Services\SecurityOtpService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Spatie\Activitylog\Models\Activity;
 
@@ -82,6 +88,7 @@ class ProfileController extends Controller
                 'primary_role' => $user->primary_role,
                 'is_officer' => $user->is_officer,
                 'account_status' => $user->account_status,
+                'profile_completion_required' => $user->requiresProfileCompletion(),
                 'created_at' => $user->created_at->toISOString(),
             ],
             'personal_data' => $personalData ? [
@@ -119,6 +126,13 @@ class ProfileController extends Controller
                 'monthly_income' => $personalData->employment->monthly_income,
                 'other_income_source' => $personalData->employment->other_income_source,
                 'other_income_amount' => $personalData->employment->other_income_amount,
+            ] : null,
+            'member_id' => $personalData?->memberId ? [
+                'national_id' => $personalData->memberId->national_id,
+                'tin' => $personalData->memberId->tin,
+                'sss' => $personalData->memberId->sss,
+                'philhealth' => $personalData->memberId->philhealth,
+                'barangay_id' => $personalData->memberId->barangay_id,
             ] : null,
             'accounts' => $accounts->map(fn ($a) => [
                 'id' => $a->id,
@@ -205,6 +219,7 @@ class ProfileController extends Controller
             'civil_status' => ['nullable', 'string', 'max:50'],
             'religion' => ['nullable', 'string', 'max:100'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+            'email_otp_code' => ['nullable', 'string', 'digits:6'],
             'phone_no' => ['nullable', 'string', 'max:20'],
             'facebook' => ['nullable', 'string', 'max:255'],
             'country' => ['nullable', 'string', 'max:100'],
@@ -215,9 +230,40 @@ class ProfileController extends Controller
             'street' => ['nullable', 'string', 'max:150'],
             'zip_code' => ['nullable', 'string', 'max:20'],
             'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,gif', 'max:2048'],
+            'national_id' => ['nullable', 'string', 'max:64'],
+            'tin' => ['nullable', 'string', 'max:64'],
+            'sss' => ['nullable', 'string', 'max:64'],
+            'philhealth' => ['nullable', 'string', 'max:64'],
+            'barangay_id' => ['nullable', 'string', 'max:64'],
+            'employment_type' => ['nullable', 'string', 'max:50'],
+            'employer_name' => ['nullable', 'string', 'max:150'],
+            'position' => ['nullable', 'string', 'max:100'],
+            'monthly_income' => ['nullable', 'numeric', 'min:0', 'max:9999999999'],
+            'beneficiaries' => ['nullable', 'array', 'max:5'],
+            'beneficiaries.*.first_name' => ['required', 'string', 'max:100'],
+            'beneficiaries.*.last_name' => ['required', 'string', 'max:100'],
+            'beneficiaries.*.relationship' => ['required', 'string', 'max:50'],
         ]);
 
-        $emailChanged = $user->email !== $validated['email'];
+        $emailChanged = Str::lower(trim($user->email)) !== Str::lower(trim($validated['email']));
+
+        if ($emailChanged) {
+            $securityOtp = app(SecurityOtpService::class);
+            $verified = ! empty($validated['email_otp_code'])
+                && $securityOtp->verifyChallenge(
+                    $user,
+                    $securityOtp->emailChangePurpose(),
+                    $validated['email_otp_code'],
+                    $this->emailChangeContext($validated['email']),
+                );
+
+            if (! $verified) {
+                return response()->json([
+                    'message' => 'A valid verification code sent to your current email is required to change it.',
+                    'errors' => ['email_otp_code' => ['Invalid or expired verification code.']],
+                ], 422);
+            }
+        }
 
         DB::transaction(function () use ($request, $user, $validated, $emailChanged) {
             $personalData = $user->personalData ?: new PersonalData;
@@ -268,11 +314,69 @@ class ProfileController extends Controller
             ]);
             $personalData->save();
 
+            $employment = $personalData->employment;
+            if (! empty($validated['employment_type'])) {
+                if ($employment) {
+                    $employment->update([
+                        'employment_type' => $validated['employment_type'],
+                        'company' => $validated['employer_name'] ?? null,
+                        'position' => $validated['position'] ?? null,
+                        'monthly_income' => $validated['monthly_income'] ?? null,
+                    ]);
+                } else {
+                    $employment = Employment::create([
+                        'employment_type' => $validated['employment_type'],
+                        'company' => $validated['employer_name'] ?? null,
+                        'position' => $validated['position'] ?? null,
+                        'monthly_income' => $validated['monthly_income'] ?? null,
+                    ]);
+                    $personalData->setAttribute('employment_id', $employment->id);
+                }
+            }
+
+            $hasGovtId = ! empty($validated['national_id']) || ! empty($validated['tin'])
+                || ! empty($validated['sss']) || ! empty($validated['philhealth'])
+                || ! empty($validated['barangay_id']);
+
+            $memberId = $personalData->memberId;
+            if ($hasGovtId) {
+                $memberIdData = [
+                    'national_id' => $validated['national_id'] ?? null,
+                    'tin' => $validated['tin'] ?? null,
+                    'sss' => $validated['sss'] ?? null,
+                    'philhealth' => $validated['philhealth'] ?? null,
+                    'barangay_id' => $validated['barangay_id'] ?? null,
+                ];
+                if ($memberId) {
+                    $memberId->update($memberIdData);
+                } else {
+                    $memberId = MemberId::create($memberIdData);
+                    $personalData->setAttribute('member_id', $memberId->id);
+                }
+            }
+
+            $personalData->save();
+
             $user->fill([
                 'email' => $validated['email'],
                 'personal_data_id' => $personalData->id,
             ]);
+            if ($emailChanged) {
+                $user->forceFill(['email_verified_at' => null]);
+            }
             $user->save();
+
+            if (array_key_exists('beneficiaries', $validated)) {
+                $user->beneficiaries()->delete();
+                foreach ($validated['beneficiaries'] as $b) {
+                    Beneficiary::create([
+                        'user_id' => $user->id,
+                        'first_name' => $b['first_name'],
+                        'last_name' => $b['last_name'],
+                        'relationship' => $b['relationship'],
+                    ]);
+                }
+            }
 
             // Handle profile photo upload
             if ($request->hasFile('profile_photo')) {
@@ -294,10 +398,133 @@ class ProfileController extends Controller
             ['email_changed' => $emailChanged],
         );
 
+        $this->clearProfileCompletionIfComplete($user);
+
         if ($emailChanged) {
             app(NotificationService::class)->sendEmailVerification($user);
         }
 
         return response()->json(['message' => 'Profile updated successfully.']);
+    }
+
+    /**
+     * Once the user's profile no longer has any missing required sections,
+     * clear the first-login profile-completion requirement.
+     */
+    private function clearProfileCompletionIfComplete(User $user): void
+    {
+        if (! $user->requiresProfileCompletion()) {
+            return;
+        }
+
+        $user->loadMissing([
+            'personalData.address',
+            'personalData.contact',
+            'personalData.memberId',
+            'beneficiaries',
+        ]);
+
+        $pd = $user->personalData;
+        if (! $pd) {
+            return;
+        }
+
+        $memberId = $pd->memberId;
+        $hasGovtId = $memberId && (filled($memberId->national_id) || filled($memberId->tin)
+            || filled($memberId->sss) || filled($memberId->philhealth) || filled($memberId->barangay_id));
+
+        $complete = filled($pd->civil_status)
+            && filled($pd->religion)
+            && filled($pd->birthplace)
+            && filled($pd->address?->street)
+            && filled($pd->address?->city_municipality)
+            && filled($pd->contact?->phone_no)
+            && $hasGovtId
+            && $user->beneficiaries()->count() > 0;
+
+        if ($complete) {
+            $user->update([
+                'profile_completion_required' => false,
+                'profile_completed_at' => now(),
+            ]);
+        }
+    }
+
+    public function completion(): JsonResponse
+    {
+        $user = Auth::user()->loadMissing([
+            'personalData.address',
+            'personalData.contact',
+            'personalData.memberId',
+            'beneficiaries',
+        ]);
+
+        $pd = $user->personalData;
+        $missing = [];
+
+        if (! $pd) {
+            $missing = ['personal', 'address', 'contact', 'ids', 'employment', 'beneficiaries', 'agreement'];
+        } else {
+            if (empty($pd->civil_status) || empty($pd->religion) || empty($pd->birthplace)) {
+                $missing[] = 'personal';
+            }
+
+            if (empty($pd->address?->street) || empty($pd->address?->city_municipality)) {
+                $missing[] = 'address';
+            }
+
+            if (empty($pd->contact?->phone_no) || empty($pd->contact?->email)) {
+                $missing[] = 'contact';
+            }
+
+            $memberId = $pd->memberId;
+            if (! $memberId || (empty($memberId->national_id) && empty($memberId->tin)
+                && empty($memberId->sss) && empty($memberId->philhealth) && empty($memberId->barangay_id))) {
+                $missing[] = 'ids';
+            }
+
+            if (empty($pd->employment?->employment_type)) {
+                $missing[] = 'employment';
+            }
+
+            if ($user->beneficiaries()->count() === 0) {
+                $missing[] = 'beneficiaries';
+            }
+        }
+
+        return response()->json([
+            'required' => $user->requiresProfileCompletion(),
+            'missing' => $missing,
+        ]);
+    }
+
+    public function sendEmailChangeOtp(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+        $validated = $request->validate([
+            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+        ]);
+
+        if (Str::lower(trim($user->email)) === Str::lower(trim($validated['email']))) {
+            return response()->json(['message' => 'Enter a new email address before requesting a verification code.'], 422);
+        }
+
+        $securityOtp = app(SecurityOtpService::class);
+        $challenge = $securityOtp->issueChallenge(
+            $user,
+            $securityOtp->emailChangePurpose(),
+            $this->emailChangeContext($validated['email']),
+        );
+        $securityOtp->sendOtpMail($user, $securityOtp->emailChangePurpose(), $challenge['otp_code']);
+
+        return response()->json([
+            'message' => 'A verification code was sent to your current email address.',
+            'expires_at' => $challenge['challenge']->expires_at->toISOString(),
+        ]);
+    }
+
+    private function emailChangeContext(string $email): array
+    {
+        return ['email' => Str::lower(trim($email))];
     }
 }

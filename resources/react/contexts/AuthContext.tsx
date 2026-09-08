@@ -9,6 +9,7 @@ interface User {
     primary_role: string;
     permissions: string[];
     profile_photo_url?: string;
+    profile_completion_required?: boolean;
 }
 
 interface AuthContextType {

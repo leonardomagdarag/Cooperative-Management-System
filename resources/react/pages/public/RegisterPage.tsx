@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { api } from '../../api/client';
 import DatePicker from '../../components/DatePicker';
+import AddressSelector, { type AddressValues } from '../../components/AddressSelector';
 import TurnstileWidget, { type TurnstileWidgetRef } from '../../components/TurnstileWidget';
 import { validate, registerStepSchemas, passwordStrength, type FieldErrors } from '../../lib/validation';
 
@@ -17,7 +18,7 @@ export default function RegisterPage() {
     const [step, setStep] = useState(0);
     const [form, setForm] = useState({
         first_name: '', middle_name: '', last_name: '', gender: '', birthdate: '', age: '',
-        phone: '', email: '', address: '',
+        phone: '', email: '', region: '', province: '', city: '', barangay: '', street: '', zip_code: '',
         occupation: '', monthly_income: '', membership_type: 'Regular', referred_by: '',
         password: '', password_confirmation: '', terms: false,
     });
@@ -194,9 +195,17 @@ export default function RegisterPage() {
                                             </div>
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-2">Complete Address <span className="text-red-500">*</span></label>
-                                            <textarea rows={3} value={form.address} onChange={e => set('address', e.target.value)} required className={`public-input py-2.5 text-sm ${errors.address ? 'border-red-400' : ''}`} placeholder="House No., Street, Barangay, City/Municipality, Province" />
-                                            {errors.address && <p className="mt-1 text-xs text-red-500">{errors.address}</p>}
+                                            <p className="block text-sm font-medium text-slate-700 mb-2">Complete Address <span className="text-red-500">*</span></p>
+                                            <AddressSelector
+                                                value={{ region: form.region, province: form.province, city: form.city, barangay: form.barangay, street: form.street, zip_code: form.zip_code }}
+                                                onChange={(v: AddressValues) => {
+                                                    set('region', v.region); set('province', v.province); set('city', v.city);
+                                                    set('barangay', v.barangay); set('street', v.street); set('zip_code', v.zip_code);
+                                                }}
+                                                errors={errors}
+                                                selectClassName="public-input py-2.5 text-sm"
+                                                inputClassName="public-input py-2.5 text-sm"
+                                            />
                                         </div>
                                     </>
                                 )}

@@ -129,6 +129,56 @@ class Loan extends Model
         return max(0, round($this->totalPayable() - $this->totalPaid(), 2));
     }
 
+    /**
+     * Return the instalments that reconcile exactly to this loan's payable
+     * amount. Amounts are split in cents so rounding cannot leave a balance
+     * after the final scheduled payment.
+     */
+    public function paymentSchedule(): ?array
+    {
+        $term = (int) ($this->term_months ?? 0);
+        if ($term <= 0) {
+            return null;
+        }
+
+        $principalCents = (int) round((float) $this->loan_amount * 100);
+        $payableCents = (int) round($this->totalPayable() * 100);
+        $interestCents = max(0, $payableCents - $principalCents);
+        $startDate = ($this->approved_at ?? $this->applied_at ?? $this->created_at)?->copy();
+
+        $principalPerPeriod = intdiv($principalCents, $term);
+        $principalRemainder = $principalCents % $term;
+        $interestPerPeriod = intdiv($interestCents, $term);
+        $interestRemainder = $interestCents % $term;
+        $balanceCents = $principalCents;
+        $totalInterestCents = 0;
+        $totalPaymentCents = 0;
+        $schedule = [];
+
+        for ($period = 1; $period <= $term; $period++) {
+            $principal = $principalPerPeriod + ($period === $term ? $principalRemainder : 0);
+            $interest = $interestPerPeriod + ($period === $term ? $interestRemainder : 0);
+            $payment = $principal + $interest;
+
+            $balanceCents -= $principal;
+            $totalInterestCents += $interest;
+            $totalPaymentCents += $payment;
+
+            $schedule[] = [
+                'period' => $period,
+                'due_date' => $startDate?->copy()->addMonths($period)->format('M d, Y'),
+                'payment' => $payment / 100,
+                'principal' => $principal / 100,
+                'interest' => $interest / 100,
+                'balance' => max(0, $balanceCents) / 100,
+                'total_interest' => $totalInterestCents / 100,
+                'total_payment' => $totalPaymentCents / 100,
+            ];
+        }
+
+        return $schedule;
+    }
+
     public function employment()
     {
         return $this->belongsTo(Employment::class);

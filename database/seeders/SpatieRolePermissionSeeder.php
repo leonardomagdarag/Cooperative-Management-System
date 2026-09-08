@@ -29,6 +29,7 @@ class SpatieRolePermissionSeeder extends Seeder
             'members.update',
             'members.delete',
             'members.view-full-details',
+            'members.approve',
 
             // Services
             'services.view',
@@ -148,6 +149,8 @@ class SpatieRolePermissionSeeder extends Seeder
         ];
 
         // Bootstrap roles without wiping settings-managed edits on later seeds.
+        // Officer roles also pick up newly added preset permissions (e.g. a fresh
+        // members.approve) while keeping any settings-driven customizations.
         foreach ($rolePermissions as $roleName => $grantedPermissions) {
             $role = Role::findOrCreate($roleName, 'web');
 
@@ -157,13 +160,11 @@ class SpatieRolePermissionSeeder extends Seeder
                 continue;
             }
 
-            if (! in_array($roleName, PermissionCatalog::officerRoles(), true)) {
-                $existingPermissions = $role->permissions()->pluck('name')->all();
-                $missingPermissions = array_values(array_diff($grantedPermissions, $existingPermissions));
+            $existingPermissions = $role->permissions()->pluck('name')->all();
+            $missingPermissions = array_values(array_diff($grantedPermissions, $existingPermissions));
 
-                if ($missingPermissions !== []) {
-                    $role->givePermissionTo($missingPermissions);
-                }
+            if ($missingPermissions !== []) {
+                $role->givePermissionTo($missingPermissions);
             }
         }
 

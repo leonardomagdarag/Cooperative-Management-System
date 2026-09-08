@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
@@ -6,6 +7,15 @@ import { useAuth } from '../../contexts/AuthContext';
 import MemberWizardForm from './MemberWizardForm';
 import MemberProfileModal from './MemberProfileModal';
 import MemberExportModal from './MemberExportModal';
+import DeclineApplicationModal from './DeclineApplicationModal';
+
+const STATUS_FILTERS = [
+    { value: 'all', label: 'All Members' },
+    { value: 'pending', label: 'Pending Applications' },
+    { value: 'active', label: 'Active' },
+    { value: 'inactive', label: 'Inactive' },
+    { value: 'terminated', label: 'Terminated' },
+] as const;
 
 export default function MembersPage() {
     const { user } = useAuth();
@@ -15,19 +25,23 @@ export default function MembersPage() {
     const canDelete = perms.includes('members.delete');
     const canExport = perms.includes('members.view');
     const canViewMemberId = perms.includes('members.view-full-details');
+    const canApprove = perms.includes('members.approve');
     const hasActions = canEdit || canDelete;
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [status, setStatus] = useState(searchParams.get('status') && STATUS_FILTERS.some(f => f.value === searchParams.get('status')) ? searchParams.get('status')! : 'all');
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
     const [showWizard, setShowWizard] = useState(false);
     const [editing, setEditing] = useState<any>(null);
     const [viewing, setViewing] = useState<any>(null);
     const [showExport, setShowExport] = useState(false);
+    const [declining, setDeclining] = useState<any>(null);
     const queryClient = useQueryClient();
     const { addToast } = useToast();
 
     const { data, isLoading, refetch } = useQuery({
-        queryKey: ['members', search, page],
-        queryFn: () => api.get('/api/members', { params: { search: search || undefined, page, per_page: 15 } }),
+        queryKey: ['members', search, page, status],
+        queryFn: () => api.get('/api/members', { params: { search: search || undefined, page, per_page: 15, status } }),
     });
 
     const deleteMutation = useMutation({
@@ -36,8 +50,31 @@ export default function MembersPage() {
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed', 'error'),
     });
 
+    const approveMutation = useMutation({
+        mutationFn: (id: number) => api.post(`/api/members/${id}/approve`),
+        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['members'] }); addToast('Application approved. Activation email sent.', 'success'); },
+        onError: (err: any) => addToast(err.response?.data?.message || 'Failed to approve application', 'error'),
+    });
+
+    const declineMutation = useMutation({
+        mutationFn: ({ id, reason }: { id: number; reason: string }) => api.post(`/api/members/${id}/decline`, { reason }),
+        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['members'] }); addToast('Application declined. Email sent to the applicant.', 'success'); setDeclining(null); },
+        onError: (err: any) => addToast(err.response?.data?.message || 'Failed to decline application', 'error'),
+    });
+
     const members = data?.data?.data ?? [];
     const pagination = data?.data?.pagination ?? {};
+    const pendingCount = data?.data?.pending_count ?? 0;
+
+    const selectStatus = (value: string) => {
+        setStatus(value);
+        setPage(1);
+        if (value === 'pending') {
+            setSearchParams({ status: 'pending' });
+        } else {
+            setSearchParams({});
+        }
+    };
 
     return (
         <div>
@@ -45,7 +82,7 @@ export default function MembersPage() {
                 <div className="w-full mb-1">
                     <div className="mb-4">
                         <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl">Members</h1>
-                        <p className="text-sm text-gray-500">Manage member profiles and information</p>
+                        <p className="text-sm text-gray-500">Manage member profiles, applications and information</p>
                     </div>
 
                     <div className="sm:flex">
@@ -78,6 +115,21 @@ export default function MembersPage() {
                             )}
                         </div>
                     </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                        {STATUS_FILTERS.map(f => (
+                            <button
+                                key={f.value}
+                                onClick={() => selectStatus(f.value)}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors ${status === f.value ? 'bg-blue-700 border-blue-700 text-white' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+                            >
+                                {f.label}
+                                {f.value === 'pending' && pendingCount > 0 && (
+                                    <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${status === f.value ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-700'}`}>{pendingCount}</span>
+                                )}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
 
@@ -102,6 +154,7 @@ export default function MembersPage() {
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Status</th>
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Email</th>
                                             {hasActions && <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Actions</th>}
+                                            {canApprove && <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Application</th>}
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
@@ -111,7 +164,11 @@ export default function MembersPage() {
                                                 <td className="p-4 text-sm font-medium text-gray-900 whitespace-nowrap">{m.name || 'Unknown'}</td>
                                                 {canViewMemberId && <td className="p-4 text-sm font-mono text-gray-500 whitespace-nowrap">{m.user_number || '—'}</td>}
                                                 <td className="p-4 whitespace-nowrap">
-                                                    <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${m.account_status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{m.account_status}</span>
+                                                    {m.has_pending_application ? (
+                                                        <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-100 text-amber-700">Pending Approval</span>
+                                                    ) : (
+                                                        <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${m.account_status === 'active' ? 'bg-emerald-100 text-emerald-700' : m.account_status === 'terminated' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>{m.account_status}</span>
+                                                    )}
                                                 </td>
                                                 <td className="p-4 text-sm text-gray-500">{m.email || '—'}</td>
                                                 {hasActions && (
@@ -121,6 +178,22 @@ export default function MembersPage() {
                                                             {canEdit && <button onClick={() => { setEditing(m); setShowWizard(true); }} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Edit"><i className="fas fa-edit text-sm"></i></button>}
                                                             {canDelete && <button onClick={() => { if (confirm('Delete this member?')) deleteMutation.mutate(m.id); }} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Delete"><i className="fas fa-trash text-sm"></i></button>}
                                                         </div>
+                                                    </td>
+                                                )}
+                                                {canApprove && (
+                                                    <td className="p-4 whitespace-nowrap">
+                                                        {m.has_pending_application ? (
+                                                            <div className="flex items-center gap-1.5">
+                                                                <button onClick={() => approveMutation.mutate(m.id)} disabled={approveMutation.isPending} className="px-2.5 py-1 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50" title="Approve application">
+                                                                    <i className="fas fa-check mr-1"></i>Approve
+                                                                </button>
+                                                                <button onClick={() => setDeclining(m)} className="px-2.5 py-1 text-xs font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700" title="Decline application">
+                                                                    <i className="fas fa-times mr-1"></i>Decline
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-xs text-gray-400">—</span>
+                                                        )}
                                                     </td>
                                                 )}
                                             </tr>
@@ -141,6 +214,7 @@ export default function MembersPage() {
                 </div>
             )}
 
+            {declining && <DeclineApplicationModal member={declining} onConfirm={(reason) => declineMutation.mutate({ id: declining.id, reason })} onClose={() => setDeclining(null)} submitting={declineMutation.isPending} />}
             {showWizard && <MemberWizardForm member={editing} onClose={() => { setShowWizard(false); setEditing(null); }} />}
             {viewing && <MemberProfileModal memberId={viewing.id} onClose={() => setViewing(null)} />}
             {showExport && <MemberExportModal onClose={() => setShowExport(false)} />}
