@@ -44,13 +44,14 @@
     .ui-badge-danger { color: rgb(185 28 28); background: rgb(254 226 226); }
     .ui-badge-info { color: rgb(29 78 216); background: rgb(219 234 254); }
     .ui-modal-backdrop { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 1rem; background: rgb(15 23 42 / .55); backdrop-filter: blur(2px); }
-    .ui-modal { width: 100%; max-height: min(90vh, 52rem); overflow: auto; border: 1px solid rgb(226 232 240); border-radius: .875rem; background: white; box-shadow: 0 24px 60px rgb(15 23 42 / .2); }
-    .ui-modal-sm { max-width: 28rem; } .ui-modal-md { max-width: 36rem; } .ui-modal-lg { max-width: 48rem; } .ui-modal-xl { max-width: 64rem; }
+    .ui-modal { width: 100%; max-height: 90vh; border: 1px solid rgb(226 232 240); border-radius: .875rem; background: white; box-shadow: 0 24px 60px rgb(15 23 42 / .2); }
+    .ui-modal-sm { max-width: 24rem; } .ui-modal-md { max-width: 28rem; } .ui-modal-lg { max-width: 42rem; } .ui-modal-xl { max-width: 48rem; } .ui-modal-2xl { max-width: 64rem; }
     .ui-modal-header, .ui-modal-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem; border-color: rgb(226 232 240); }
     .ui-modal-header { border-bottom-width: 1px; } .ui-modal-footer { justify-content: flex-end; border-top-width: 1px; }
     .ui-modal-title { color: rgb(15 23 42); font-size: 1.0625rem; font-weight: 700; }
     .ui-modal-body { padding: 1.25rem; }
     .ui-modal-close { flex: 0 0 auto; padding: .5rem; }
+    .ui-modal-gradient-header { background: linear-gradient(90deg, rgb(79 70 229), rgb(8 145 178)); color: white; border-bottom: 0; }
     .ui-empty-state { display: flex; min-height: 12rem; flex-direction: column; align-items: center; justify-content: center; gap: .5rem; border: 1px dashed rgb(203 213 225); border-radius: .75rem; background: white; padding: 2rem; text-align: center; }
     .ui-empty-state h3 { color: rgb(51 65 85); font-size: .9375rem; font-weight: 600; } .ui-empty-state p { color: rgb(100 116 139); font-size: .8125rem; }
     .ui-empty-icon { margin-bottom: .25rem; color: rgb(148 163 184); font-size: 2rem; }

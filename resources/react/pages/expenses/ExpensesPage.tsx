@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
+import { validate, expenseSchema, type FieldErrors } from '../../lib/validation';
 
 export default function ExpensesPage() {
     const [search, setSearch] = useState('');
@@ -11,6 +12,7 @@ export default function ExpensesPage() {
     const [showModal, setShowModal] = useState(false);
     const [editing, setEditing] = useState<any>(null);
     const [form, setForm] = useState({ category: '', description: '', amount: '', expense_date: new Date().toISOString().slice(0, 10) });
+    const [errors, setErrors] = useState<FieldErrors>({});
     const { markDirty, reset, requestClose, renderDialog } = useDiscardGuard();
     const queryClient = useQueryClient();
     const { addToast } = useToast();
@@ -38,14 +40,16 @@ export default function ExpensesPage() {
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed to delete expense', 'error'),
     });
 
-    const set = (key: string, value: string) => { markDirty(); setForm(f => ({ ...f, [key]: value })); };
+    const set = (key: string, value: string) => { markDirty(); setForm(f => ({ ...f, [key]: value })); setErrors(prev => { if (!prev[key]) return prev; const n = { ...prev }; delete n[key]; return n; }); };
 
-    const openAdd = () => { reset(); setEditing(null); setForm({ category: '', description: '', amount: '', expense_date: new Date().toISOString().slice(0, 10) }); setShowModal(true); };
-    const openEdit = (e: any) => { reset(); setEditing(e); setForm({ category: e.category, description: e.description || '', amount: String(e.amount), expense_date: e.expense_date }); setShowModal(true); };
+    const openAdd = () => { reset(); setErrors({}); setEditing(null); setForm({ category: '', description: '', amount: '', expense_date: new Date().toISOString().slice(0, 10) }); setShowModal(true); };
+    const openEdit = (e: any) => { reset(); setErrors({}); setEditing(e); setForm({ category: e.category, description: e.description || '', amount: String(e.amount), expense_date: e.expense_date }); setShowModal(true); };
 
     const handleSave = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!form.category || !form.amount) { addToast('Category and amount are required', 'error'); return; }
+        const errs = validate(expenseSchema, form);
+        setErrors(errs);
+        if (Object.keys(errs).length > 0) return;
         saveMutation.mutate({ category: form.category, description: form.description, amount: Number(form.amount), expense_date: form.expense_date });
     };
 
@@ -133,35 +137,43 @@ export default function ExpensesPage() {
             </div>
 
             {showModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => requestClose(() => setShowModal(false))}>
-                    <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-                        <div className="p-6">
-                            <h2 className="mb-4 text-lg font-bold text-gray-900">{editing ? 'Edit' : 'Add'} Expense</h2>
-                            <form onSubmit={handleSave} className="space-y-4">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => requestClose(() => setShowModal(false))}>
+                    <div className="w-full max-w-md max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+                        <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-5 text-white shrink-0">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-lg font-bold">{editing ? 'Edit' : 'Add'} Expense</h2>
+                                <button onClick={() => requestClose(() => setShowModal(false))} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white"><i className="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6">
+                            <form id="expense-form" onSubmit={handleSave} className="space-y-4">
                                 <div>
-                                    <label className="mb-1 block text-sm font-medium text-gray-700">Category</label>
-                                    <input type="text" list="expense-categories" value={form.category} onChange={e => set('category', e.target.value)} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" placeholder="e.g., Utilities, Salaries" />
+                                    <label className="mb-1 block text-sm font-medium text-gray-700">Category <span className="text-red-500">*</span></label>
+                                    <input type="text" list="expense-categories" value={form.category} onChange={e => set('category', e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${errors.category ? 'border-red-400' : 'border-gray-200'}`} placeholder="e.g., Utilities, Salaries" />
                                     <datalist id="expense-categories">
                                         {categories.map(c => <option key={c} value={c} />)}
                                     </datalist>
+                                    {errors.category && <p className="mt-1 text-xs text-red-600">{errors.category}</p>}
                                 </div>
                                 <div>
                                     <label className="mb-1 block text-sm font-medium text-gray-700">Description</label>
                                     <input type="text" value={form.description} onChange={e => set('description', e.target.value)} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" placeholder="Optional" />
                                 </div>
                                 <div>
-                                    <label className="mb-1 block text-sm font-medium text-gray-700">Amount</label>
-                                    <input type="number" step="0.01" value={form.amount} onChange={e => set('amount', e.target.value)} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" placeholder="0.00" />
+                                    <label className="mb-1 block text-sm font-medium text-gray-700">Amount <span className="text-red-500">*</span></label>
+                                    <input type="number" step="0.01" min="0" value={form.amount} onChange={e => set('amount', e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${errors.amount ? 'border-red-400' : 'border-gray-200'}`} placeholder="0.00" />
+                                    {errors.amount && <p className="mt-1 text-xs text-red-600">{errors.amount}</p>}
                                 </div>
                                 <div>
-                                    <label className="mb-1 block text-sm font-medium text-gray-700">Date</label>
-                                    <input type="date" value={form.expense_date} onChange={e => set('expense_date', e.target.value)} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
-                                </div>
-                                <div className="flex justify-end gap-3">
-                                    <button type="button" onClick={() => requestClose(() => setShowModal(false))} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
-                                    <button type="submit" disabled={saveMutation.isPending} className="bg-blue-700 hover:bg-blue-800 rounded-lg focus:ring-4 focus:ring-blue-300 text-white px-4 py-2 text-sm font-medium disabled:opacity-50">{saveMutation.isPending ? 'Saving...' : 'Save'}</button>
+                                    <label className="mb-1 block text-sm font-medium text-gray-700">Date <span className="text-red-500">*</span></label>
+                                    <input type="date" value={form.expense_date} onChange={e => set('expense_date', e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${errors.expense_date ? 'border-red-400' : 'border-gray-200'}`} />
+                                    {errors.expense_date && <p className="mt-1 text-xs text-red-600">{errors.expense_date}</p>}
                                 </div>
                             </form>
+                        </div>
+                        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 rounded-b-2xl">
+                            <button type="button" onClick={() => requestClose(() => setShowModal(false))} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
+                            <button type="submit" form="expense-form" disabled={saveMutation.isPending} className="bg-amber-600 hover:bg-amber-700 rounded-lg focus:ring-4 focus:ring-amber-300 text-white px-4 py-2 text-sm font-medium disabled:opacity-50">{saveMutation.isPending ? 'Saving...' : 'Save'}</button>
                         </div>
                     </div>
                     {renderDialog()}

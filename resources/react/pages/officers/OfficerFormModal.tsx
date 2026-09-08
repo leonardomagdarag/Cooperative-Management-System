@@ -127,16 +127,16 @@ export default function OfficerFormModal({ officer, onClose }: { officer?: any; 
     const requestCloseGuard = () => requestClose(onClose);
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={requestCloseGuard}>
-            <div className="w-full max-w-2xl max-h-[90vh] overflow-auto rounded-2xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={requestCloseGuard}>
+            <div className="w-full max-w-2xl h-[90vh] rounded-2xl bg-white shadow-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
                 <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white shrink-0">
                     <div className="flex items-center justify-between">
                         <h2 className="text-lg font-bold">{isEdit ? 'Edit Officer' : 'Add Officer'}</h2>
-                        <button onClick={requestCloseGuard} className="text-white/70 hover:text-white"><i className="fas fa-times"></i></button>
+                        <button onClick={requestCloseGuard} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white"><i className="fas fa-times"></i></button>
                     </div>
                 </div>
 
-                <div className="p-6">
+                <div className="p-6 flex-1 overflow-y-auto">
                     <div className="flex items-center mb-6">
                         {steps.map((s, i) => (
                             <div key={s.title} className="flex-1 flex items-center">
@@ -294,22 +294,22 @@ export default function OfficerFormModal({ officer, onClose }: { officer?: any; 
                             </>
                         )}
                     </div>
+                </div>
 
-                    <div className="mt-8 flex justify-between">
-                        <button onClick={() => step > 0 ? goBack() : requestCloseGuard()} className="px-4 py-2.5 text-sm font-medium border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
-                            {step === 0 ? 'Cancel' : 'Back'}
+                <div className="flex shrink-0 items-center justify-between border-t border-gray-200 bg-gray-50 px-6 py-4 rounded-b-2xl">
+                    <button onClick={() => step > 0 ? goBack() : requestCloseGuard()} className="px-4 py-2.5 text-sm font-medium border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                        {step === 0 ? 'Cancel' : 'Back'}
+                    </button>
+                    {step < 3 ? (
+                        <button onClick={goNext} className="px-4 py-2.5 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+                            Next <i className="fas fa-arrow-right ml-1"></i>
                         </button>
-                        {step < 3 ? (
-                            <button onClick={goNext} className="px-4 py-2.5 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-                                Next <i className="fas fa-arrow-right ml-1"></i>
-                            </button>
-                        ) : (
-                            <button onClick={handleSubmit} disabled={saveMutation.isPending} className="px-4 py-2.5 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-                                {saveMutation.isPending ? 'Saving...' : isEdit ? 'Update Officer' : 'Create Officer'}
-                                <i className="fas fa-check ml-1"></i>
-                            </button>
-                        )}
-                    </div>
+                    ) : (
+                        <button onClick={handleSubmit} disabled={saveMutation.isPending} className="px-4 py-2.5 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+                            {saveMutation.isPending ? 'Saving...' : isEdit ? 'Update Officer' : 'Create Officer'}
+                            <i className="fas fa-check ml-1"></i>
+                        </button>
+                    )}
                 </div>
             </div>
             {renderDialog()}
