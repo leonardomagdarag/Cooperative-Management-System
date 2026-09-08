@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
+use App\Support\BranchScope;
 use App\Support\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -29,14 +30,20 @@ class ServiceController extends Controller
         $canManage = $isAdmin || $this->isOfficer($user);
         $isLoanReview = $user->can('loans.update');
 
+        $pendingApprovalsQuery = Transaction::where('status', 'pending');
+        BranchScope::applyToTransactions($pendingApprovalsQuery, $user);
+
+        $pendingLoansQuery = Loan::where('loan_status', 'pending');
+        BranchScope::applyToLoans($pendingLoansQuery, $user);
+
         return response()->json([
             'is_admin' => $isAdmin,
             'is_treasurer' => $isTreasurer,
             'can_manage_member_services' => $canManage,
             'is_loan_review_mode' => $isLoanReview,
             'otp_threshold' => (float) SystemSetting::get('security_withdrawal_otp_threshold', 2000),
-            'pending_approvals' => Transaction::where('status', 'pending')->count(),
-            'pending_loans' => Loan::where('loan_status', 'pending')->count(),
+            'pending_approvals' => $pendingApprovalsQuery->count(),
+            'pending_loans' => $pendingLoansQuery->count(),
         ]);
     }
 
@@ -59,6 +66,7 @@ class ServiceController extends Controller
                 Rule::requiredIf($request->input('transaction_mode') === 'online'),
             ],
             'client_request_id' => 'nullable|string|min:8|max:100',
+            'branch_id' => 'nullable|exists:branches,id',
         ]);
 
         $targetUserId = $validated['member_id'] ?? $validated['user_id'] ?? $user->id;
@@ -66,6 +74,11 @@ class ServiceController extends Controller
         // Only officers/admins can deposit to other users' accounts
         if ($targetUserId !== $user->id && ! $this->canManageServicesForMembers($user)) {
             return response()->json(['message' => 'You can only deposit to your own account.'], 403);
+        }
+
+        $targetBranchId = User::whereKey($targetUserId)->value('branch_id');
+        if ($targetUserId !== $user->id && ! $this->canAccessBranch($user, $targetBranchId)) {
+            return response()->json(['message' => 'You can only manage members in your branch.'], 403);
         }
 
         if ($existing = $this->existingDuplicate($validated)) {
@@ -81,9 +94,10 @@ class ServiceController extends Controller
 
         $status = $validated['transaction_mode'] === 'counter' ? 'completed' : 'pending';
 
-        $transaction = DB::transaction(function () use ($account, $validated, $status, $proofPath, $user) {
+        $transaction = DB::transaction(function () use ($account, $validated, $status, $proofPath, $user, $targetBranchId) {
             $transaction = Transaction::create([
                 'account_id' => $account->id,
+                'branch_id' => $validated['branch_id'] ?? $targetBranchId,
                 'client_request_id' => $validated['client_request_id'] ?? null,
                 'transaction_type' => 'deposit',
                 'amount' => $validated['amount'],
@@ -123,6 +137,7 @@ class ServiceController extends Controller
             'account_number' => 'required_if:transaction_mode,bank_transfer|string|max:100',
             'account_holder' => 'required_if:transaction_mode,bank_transfer|string|max:255',
             'client_request_id' => 'nullable|string|min:8|max:100',
+            'branch_id' => 'nullable|exists:branches,id',
         ]);
 
         $targetUserId = $validated['member_id'] ?? $validated['user_id'] ?? $user->id;
@@ -130,6 +145,11 @@ class ServiceController extends Controller
         // Only officers/admins can withdraw from other users' accounts
         if ($targetUserId !== $user->id && ! $this->canManageServicesForMembers($user)) {
             return response()->json(['message' => 'You can only withdraw from your own account.'], 403);
+        }
+
+        $targetBranchId = User::whereKey($targetUserId)->value('branch_id');
+        if ($targetUserId !== $user->id && ! $this->canAccessBranch($user, $targetBranchId)) {
+            return response()->json(['message' => 'You can only manage members in your branch.'], 403);
         }
 
         if ($existing = $this->existingDuplicate($validated)) {
@@ -143,7 +163,7 @@ class ServiceController extends Controller
             return response()->json(['message' => 'Member has no savings account.'], 422);
         }
 
-        $transaction = DB::transaction(function () use ($account, $validated, $user) {
+        $transaction = DB::transaction(function () use ($account, $validated, $user, $targetBranchId) {
             // Lock the account row so concurrent withdrawals cannot overdraw.
             $lockedAccount = Account::whereKey($account->id)->lockForUpdate()->first();
 
@@ -156,6 +176,7 @@ class ServiceController extends Controller
 
             $transaction = Transaction::create([
                 'account_id' => $lockedAccount->id,
+                'branch_id' => $validated['branch_id'] ?? $targetBranchId,
                 'client_request_id' => $validated['client_request_id'] ?? null,
                 'transaction_type' => 'withdrawal',
                 'amount' => $validated['amount'],
@@ -189,6 +210,7 @@ class ServiceController extends Controller
             'interview_schedule' => 'nullable|date',
             'member_id' => 'nullable|exists:users,id',
             'user_id' => 'nullable|exists:users,id',
+            'branch_id' => 'nullable|exists:branches,id',
         ]);
 
         $product = LoanProduct::query()->active()->where('code', $validated['loan_product_code'])->first();
@@ -200,6 +222,11 @@ class ServiceController extends Controller
 
         if ($targetUserId !== $user->id && ! $this->canManageServicesForMembers($user)) {
             return response()->json(['message' => 'You can only apply for a loan on your own behalf.'], 403);
+        }
+
+        $targetBranchId = User::whereKey($targetUserId)->value('branch_id');
+        if ($targetUserId !== $user->id && ! $this->canAccessBranch($user, $targetBranchId)) {
+            return response()->json(['message' => 'You can only manage members in your branch.'], 403);
         }
 
         $targetUser = User::with('personalData.employment')->find($targetUserId);
@@ -222,9 +249,10 @@ class ServiceController extends Controller
             return response()->json(['message' => 'Interview schedule is required for this loan product.'], 422);
         }
 
-        $loan = DB::transaction(function () use ($validated, $product, $targetUser, $coMakers) {
+        $loan = DB::transaction(function () use ($validated, $product, $targetUser, $coMakers, $targetBranchId) {
             $loanData = [
                 'user_id' => $targetUser->id,
+                'branch_id' => $validated['branch_id'] ?? $targetBranchId,
                 'loan_type' => $product->base_type,
                 'loan_amount' => $validated['amount'],
                 'interest_rate' => $product->interest_rate,
@@ -274,6 +302,7 @@ class ServiceController extends Controller
             'member_id' => 'nullable|exists:users,id',
             'user_id' => 'nullable|exists:users,id',
             'client_request_id' => 'nullable|string|min:8|max:100',
+            'branch_id' => 'nullable|exists:branches,id',
         ]);
 
         $loan = Loan::findOrFail($validated['loan_id']);
@@ -281,6 +310,11 @@ class ServiceController extends Controller
 
         if ($loan->user_id && (int) $targetUserId !== (int) $loan->user_id && ! $this->canManageServicesForMembers($user)) {
             return response()->json(['message' => 'You can only pay your own loan.'], 403);
+        }
+
+        $targetBranchId = $loan->branch_id ?? $loan->user?->branch_id;
+        if (! $this->canAccessBranch($user, $targetBranchId)) {
+            return response()->json(['message' => 'You can only manage members in your branch.'], 403);
         }
 
         if ($existing = $this->existingDuplicate($validated)) {
@@ -303,7 +337,7 @@ class ServiceController extends Controller
 
         $status = $validated['transaction_mode'] === 'counter' ? 'completed' : 'pending';
 
-        $transaction = DB::transaction(function () use ($account, $loan, $validated, $status, $user) {
+        $transaction = DB::transaction(function () use ($account, $loan, $validated, $status, $user, $targetBranchId) {
             $lockedAccount = Account::whereKey($account->id)->lockForUpdate()->first();
 
             if ((float) $lockedAccount->balance < (float) $validated['amount']) {
@@ -313,6 +347,7 @@ class ServiceController extends Controller
             $transaction = Transaction::create([
                 'account_id' => $lockedAccount->id,
                 'loan_id' => $loan->id,
+                'branch_id' => $validated['branch_id'] ?? $targetBranchId,
                 'client_request_id' => $validated['client_request_id'] ?? null,
                 'transaction_type' => 'loan_payment',
                 'amount' => $validated['amount'],
@@ -344,6 +379,10 @@ class ServiceController extends Controller
     {
         $user = Auth::user();
         abort_unless($this->canApprove($user), 403);
+
+        if (! $this->canAccessBranch($user, $transaction->branch_id)) {
+            return response()->json(['message' => 'You can only approve transactions in your branch.'], 403);
+        }
 
         $validated = $request->validate([
             'action' => 'required|in:approve,reject',
@@ -455,6 +494,10 @@ class ServiceController extends Controller
         $user = Auth::user();
         abort_unless($this->canApprove($user), 403);
 
+        if (! $this->canAccessBranch($user, $transaction->branch_id)) {
+            return response()->json(['message' => 'You can only approve transactions in your branch.'], 403);
+        }
+
         abort_unless($transaction->transaction_type === 'withdrawal' && $transaction->status === 'pending', 422);
 
         $otpThreshold = (float) SystemSetting::get('security_withdrawal_otp_threshold', 2000);
@@ -483,7 +526,11 @@ class ServiceController extends Controller
         abort_unless($this->canApprove($user), 403);
 
         $transactions = Transaction::with(['account.user.personalData', 'loan'])
-            ->where('status', 'pending')
+            ->where('status', 'pending');
+
+        BranchScope::applyToTransactions($transactions, $user);
+
+        $transactions = $transactions
             ->latest()
             ->get()
             ->map(fn ($t) => [
@@ -562,5 +609,14 @@ class ServiceController extends Controller
     private function isOfficer($user): bool
     {
         return (bool) ($user && (($user->is_officer ?? false) || $user->hasAnyRole(PermissionCatalog::officerRoles())));
+    }
+
+    private function canAccessBranch($user, ?int $targetBranchId): bool
+    {
+        if (BranchScope::isUnrestricted($user)) {
+            return true;
+        }
+
+        return (int) $user->branch_id === (int) $targetBranchId;
     }
 }

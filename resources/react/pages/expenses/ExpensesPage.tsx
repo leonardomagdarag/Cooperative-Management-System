@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import BranchBadge from '../../components/BranchBadge';
+import BranchSelect from '../../components/BranchSelect';
+import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
 import { validate, expenseSchema, type FieldErrors } from '../../lib/validation';
@@ -8,18 +11,21 @@ import { validate, expenseSchema, type FieldErrors } from '../../lib/validation'
 export default function ExpensesPage() {
     const [search, setSearch] = useState('');
     const [category, setCategory] = useState('all');
+    const [branchFilter, setBranchFilter] = useState<number | ''>('');
     const [page, setPage] = useState(1);
     const [showModal, setShowModal] = useState(false);
     const [editing, setEditing] = useState<any>(null);
-    const [form, setForm] = useState({ category: '', description: '', amount: '', expense_date: new Date().toISOString().slice(0, 10) });
+    const [form, setForm] = useState({ category: '', description: '', amount: '', expense_date: new Date().toISOString().slice(0, 10), branch_id: '' });
     const [errors, setErrors] = useState<FieldErrors>({});
     const { markDirty, reset, requestClose, renderDialog } = useDiscardGuard();
     const queryClient = useQueryClient();
     const { addToast } = useToast();
+    const { user } = useAuth();
+    const canAssignBranch = !!user?.permissions?.includes('branches.view');
 
     const { data, isLoading } = useQuery({
-        queryKey: ['expenses', search, category, page],
-        queryFn: () => api.get('/api/expenses', { params: { search: search || undefined, category: category === 'all' ? undefined : category, page, per_page: 15 } }),
+        queryKey: ['expenses', search, category, page, branchFilter],
+        queryFn: () => api.get('/api/expenses', { params: { search: search || undefined, category: category === 'all' ? undefined : category, branch_id: branchFilter || undefined, page, per_page: 15 } }),
     });
 
     const expenses = data?.data?.data ?? [];
@@ -42,15 +48,15 @@ export default function ExpensesPage() {
 
     const set = (key: string, value: string) => { markDirty(); setForm(f => ({ ...f, [key]: value })); setErrors(prev => { if (!prev[key]) return prev; const n = { ...prev }; delete n[key]; return n; }); };
 
-    const openAdd = () => { reset(); setErrors({}); setEditing(null); setForm({ category: '', description: '', amount: '', expense_date: new Date().toISOString().slice(0, 10) }); setShowModal(true); };
-    const openEdit = (e: any) => { reset(); setErrors({}); setEditing(e); setForm({ category: e.category, description: e.description || '', amount: String(e.amount), expense_date: e.expense_date }); setShowModal(true); };
+    const openAdd = () => { reset(); setErrors({}); setEditing(null); setForm({ category: '', description: '', amount: '', expense_date: new Date().toISOString().slice(0, 10), branch_id: '' }); setShowModal(true); };
+    const openEdit = (e: any) => { reset(); setErrors({}); setEditing(e); setForm({ category: e.category, description: e.description || '', amount: String(e.amount), expense_date: e.expense_date, branch_id: e.branch_id || '' }); setShowModal(true); };
 
     const handleSave = (e: React.FormEvent) => {
         e.preventDefault();
         const errs = validate(expenseSchema, form);
         setErrors(errs);
         if (Object.keys(errs).length > 0) return;
-        saveMutation.mutate({ category: form.category, description: form.description, amount: Number(form.amount), expense_date: form.expense_date });
+        saveMutation.mutate({ category: form.category, description: form.description, amount: Number(form.amount), expense_date: form.expense_date, branch_id: form.branch_id || undefined });
     };
 
     return (
@@ -69,6 +75,11 @@ export default function ExpensesPage() {
                             <option value="all">All Categories</option>
                             {categories.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
+                        {canAssignBranch && (
+                            <div className="w-full sm:w-56">
+                                <BranchSelect label="" value={branchFilter} onChange={v => { setBranchFilter(v); setPage(1); }} allLabel="All branches" />
+                            </div>
+                        )}
                         {canManage && (
                             <button onClick={openAdd} className="inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-center text-white bg-blue-700 rounded-lg hover:bg-blue-800 focus:ring-4 focus:ring-blue-300">
                                 <i className="fas fa-plus mr-1"></i> Add Expense
@@ -101,6 +112,7 @@ export default function ExpensesPage() {
                                     <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Description</th>
                                     <th className="p-4 text-xs font-medium text-right text-gray-500 uppercase">Amount</th>
                                     <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Recorded By</th>
+                                    {canAssignBranch && <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Branch</th>}
                                     {canManage && <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Actions</th>}
                                 </tr>
                             </thead>
@@ -112,6 +124,7 @@ export default function ExpensesPage() {
                                         <td className="p-4 text-sm text-gray-700">{e.description || '—'}</td>
                                         <td className="p-4 text-sm font-medium text-right text-gray-900">₱{Number(e.amount).toLocaleString()}</td>
                                         <td className="p-4 text-sm text-gray-500">{e.recorded_by || '—'}</td>
+                                        {canAssignBranch && <td className="p-4 whitespace-nowrap"><BranchBadge name={e.branch_name} /></td>}
                                         {canManage && (
                                             <td className="p-4">
                                                 <div className="flex gap-1">
@@ -169,6 +182,9 @@ export default function ExpensesPage() {
                                     <input type="date" value={form.expense_date} onChange={e => set('expense_date', e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${errors.expense_date ? 'border-red-400' : 'border-gray-200'}`} />
                                     {errors.expense_date && <p className="mt-1 text-xs text-red-600">{errors.expense_date}</p>}
                                 </div>
+                                {canAssignBranch && (
+                                    <BranchSelect value={form.branch_id} onChange={v => set('branch_id', String(v))} error={errors.branch_id} />
+                                )}
                             </form>
                         </div>
                         <div className="flex shrink-0 items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 rounded-b-2xl">

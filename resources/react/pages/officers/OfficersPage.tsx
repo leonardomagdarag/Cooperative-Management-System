@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import BranchBadge from '../../components/BranchBadge';
+import BranchSelect from '../../components/BranchSelect';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
 import OfficerFormModal from './OfficerFormModal';
@@ -14,8 +16,10 @@ export default function OfficersPage() {
     const canEdit = perms.includes('officers.update');
     const canDelete = perms.includes('officers.delete');
     const canManagePermissions = perms.includes('officers.manage-permissions');
+    const canAssignBranch = perms.includes('branches.view');
     const hasActions = canEdit || canDelete || canManagePermissions;
     const [search, setSearch] = useState('');
+    const [branchFilter, setBranchFilter] = useState<number | ''>('');
     const [page, setPage] = useState(1);
     const [viewing, setViewing] = useState<any>(null);
     const [showForm, setShowForm] = useState(false);
@@ -25,8 +29,8 @@ export default function OfficersPage() {
     const { addToast } = useToast();
 
     const { data, isLoading, refetch } = useQuery({
-        queryKey: ['officers', search, page],
-        queryFn: () => api.get('/api/members', { params: { is_officer: true, search: search || undefined, page, per_page: 15 } }),
+        queryKey: ['officers', search, page, branchFilter],
+        queryFn: () => api.get('/api/members', { params: { is_officer: true, search: search || undefined, branch_id: branchFilter || undefined, page, per_page: 15 } }),
     });
 
     const deleteMutation = useMutation({
@@ -53,6 +57,11 @@ export default function OfficersPage() {
                                 <input type="text" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" placeholder="Search officers..." />
                             </div>
                         </div>
+                        {canAssignBranch && (
+                            <div className="mb-3 sm:mb-0 sm:ml-2 w-full sm:w-60">
+                                <BranchSelect label="" value={branchFilter} onChange={v => { setBranchFilter(v); setPage(1); }} allLabel="All branches" />
+                            </div>
+                        )}
                         <div className="flex items-center ml-auto space-x-2 sm:space-x-3">
                             <button type="button" onClick={() => refetch()} className="inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-center text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 focus:ring-4 focus:ring-blue-300">
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
@@ -87,6 +96,7 @@ export default function OfficersPage() {
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Name</th>
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Title</th>
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Role</th>
+                                            {canAssignBranch && <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Branch</th>}
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Status</th>
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Email</th>
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Actions</th>
@@ -100,6 +110,7 @@ export default function OfficersPage() {
                                                 <td className="p-4 text-sm font-medium text-gray-900 whitespace-nowrap">{o.name || 'Unknown'}</td>
                                                 <td className="p-4 whitespace-nowrap">{o.title ? <span className="px-2.5 py-0.5 text-xs font-medium bg-cyan-100 text-cyan-800 rounded">{o.title.replace(/_/g, ' ')?.replace(/\b\w/g, c => c.toUpperCase())}</span> : <span className="text-xs text-gray-400">N/A</span>}</td>
                                                 <td className="p-4 whitespace-nowrap"><span className="px-2.5 py-0.5 text-xs font-medium bg-purple-100 text-purple-800 rounded capitalize">{o.primary_role || 'Officer'}</span></td>
+                                                {canAssignBranch && <td className="p-4 whitespace-nowrap"><BranchBadge name={o.branch_name} /></td>}
                                                 <td className="p-4 whitespace-nowrap"><span className={`px-2.5 py-0.5 text-xs font-medium rounded ${o.account_status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{o.account_status === 'active' ? 'Active' : 'Inactive'}</span></td>
                                                 <td className="p-4 text-sm text-gray-500">{o.email || '—'}</td>
                                                 <td className="p-4 whitespace-nowrap">

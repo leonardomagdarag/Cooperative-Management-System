@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import BranchBadge from '../../components/BranchBadge';
+import BranchSelect from '../../components/BranchSelect';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { validate, loanEncodeSchema, loanEditSchema, type FieldErrors } from '../../lib/validation';
@@ -8,6 +10,7 @@ import { validate, loanEncodeSchema, loanEditSchema, type FieldErrors } from '..
 export default function LoansPage() {
     const { user } = useAuth();
     const [search, setSearch] = useState('');
+    const [branchFilter, setBranchFilter] = useState<number | ''>('');
     const [page, setPage] = useState(1);
     const [sort, setSort] = useState('created_at');
     const [direction, setDirection] = useState<'asc' | 'desc'>('desc');
@@ -17,17 +20,18 @@ export default function LoansPage() {
     const [showEditModal, setShowEditModal] = useState(false);
     const [editingLoan, setEditingLoan] = useState<any>(null);
     const [editForm, setEditForm] = useState({ loan_type: 'business', loan_amount: '', interest_rate: '3', term_months: '12', payment_frequency: 'monthly', loan_status: 'pending', due_date: '' });
-    const [encodeForm, setEncodeForm] = useState({ user_id: '', loan_product: 'business', loan_type: 'business', loan_status: 'pending', loan_amount: '', interest_rate: '3', term_months: '12', payment_frequency: 'monthly', applied_at: new Date().toISOString().split('T')[0] });
+    const [encodeForm, setEncodeForm] = useState({ user_id: '', loan_product: 'business', loan_type: 'business', loan_status: 'pending', loan_amount: '', interest_rate: '3', term_months: '12', payment_frequency: 'monthly', applied_at: new Date().toISOString().split('T')[0], branch_id: '' as number | '' });
     const [memberSearch, setMemberSearch] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [encodeErrors, setEncodeErrors] = useState<FieldErrors>({});
     const [editErrors, setEditErrors] = useState<FieldErrors>({});
     const queryClient = useQueryClient();
     const { addToast } = useToast();
+    const canAssignBranch = !!user?.permissions?.includes('branches.view');
 
     const { data, isLoading } = useQuery({
-        queryKey: ['loans', search, page, sort, direction],
-        queryFn: () => api.get('/api/loans', { params: { search: search || undefined, page, per_page: 10, sort, direction } }),
+        queryKey: ['loans', search, page, sort, direction, branchFilter],
+        queryFn: () => api.get('/api/loans', { params: { search: search || undefined, branch_id: branchFilter || undefined, page, per_page: 10, sort, direction } }),
     });
 
     const { data: loanDetail } = useQuery({
@@ -194,6 +198,12 @@ export default function LoansPage() {
                     className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 mb-4"
                 />
 
+                {canAssignBranch && (
+                    <div className="mb-4 w-full sm:w-64">
+                        <BranchSelect label="" value={branchFilter} onChange={v => { setBranchFilter(v); setPage(1); }} allLabel="All branches" />
+                    </div>
+                )}
+
                 {isLoading ? (
                     <div className="space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-14 animate-pulse rounded-lg bg-gray-100" />)}</div>
                 ) : loans.length === 0 ? (
@@ -211,6 +221,7 @@ export default function LoansPage() {
                                     {sortableTh('Amount', 'loan_amount')}
                                     {sortableTh('Type', 'loan_type')}
                                     {sortableTh('Status', 'loan_status')}
+                                    {canAssignBranch && <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Branch</th>}
                                     {sortableTh('Date', 'created_at')}
                                     <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Actions</th>
                                 </tr>
@@ -225,6 +236,7 @@ export default function LoansPage() {
                                         <td className="p-4">
                                             <span className={`px-2.5 py-0.5 text-xs font-medium rounded ${getStatusColor(l.loan_status)}`}>{getStatusLabel(l.loan_status)}</span>
                                         </td>
+                                        {canAssignBranch && <td className="p-4 whitespace-nowrap"><BranchBadge name={l.branch_name} /></td>}
                                         <td className="p-4 text-sm text-gray-900">{l.created_at}</td>
                                         <td className="p-4">
                                             <div className="flex items-center gap-1">
@@ -470,6 +482,11 @@ export default function LoansPage() {
                                     <div><label className="mb-1 block text-sm font-medium text-gray-700">Term (months)</label><input type="number" value={encodeForm.term_months} onChange={e => setEncodeForm(f => ({ ...f, term_months: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm ${encodeErrors.term_months ? 'border-red-400' : 'border-gray-200'}`} />{encodeErrors.term_months && <p className="mt-1 text-xs text-red-600">{encodeErrors.term_months}</p>}</div>
                                     <div><label className="mb-1 block text-sm font-medium text-gray-700">Frequency</label><select value={encodeForm.payment_frequency} onChange={e => setEncodeForm(f => ({ ...f, payment_frequency: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"><option value="weekly">Weekly</option><option value="bi-weekly">Bi-weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annually">Annually</option></select></div>
                                 </div>
+                                {canAssignBranch && (
+                                    <div className="max-w-xs">
+                                        <BranchSelect value={encodeForm.branch_id} onChange={v => setEncodeForm(f => ({ ...f, branch_id: v }))} error={encodeErrors.branch_id} />
+                                    </div>
+                                )}
                             </form>
                         </div>
                         <div className="flex shrink-0 items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 rounded-b-2xl">

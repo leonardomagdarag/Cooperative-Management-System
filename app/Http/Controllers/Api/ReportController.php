@@ -8,6 +8,7 @@ use App\Models\Expense;
 use App\Models\Loan;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Support\BranchScope;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -23,9 +24,10 @@ class ReportController extends Controller
         abort_unless(Auth::user()?->can('reports.view'), 403);
 
         [$start, $end] = $this->resolveRange($request);
+        $branchId = BranchScope::resolveBranchId(Auth::user(), $request->integer('branch_id'));
 
         $totals = $this->applyWindowToTransactions(
-            $this->completedTransactions()->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'fee']),
+            $this->completedTransactions($branchId)->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'fee']),
             $start,
             $end
         )
@@ -33,15 +35,22 @@ class ReportController extends Controller
             ->groupBy('transaction_type')
             ->pluck('total', 'transaction_type');
 
-        $totalExpenses = (float) Expense::query()->whereBetween('expense_date', [$start, $end])->sum('amount');
+        $totalExpenses = (float) Expense::query()
+            ->when($branchId !== null, fn ($q) => $q->where('expenses.branch_id', $branchId))
+            ->whereBetween('expense_date', [$start, $end])
+            ->sum('amount');
 
-        $totalInterestEarned = (float) Loan::query()
-            ->where(function ($q) use ($start, $end) {
-                $q->whereBetween('applied_at', [$start, $end])
-                    ->orWhere(function ($q2) use ($start, $end) {
-                        $q2->whereNull('applied_at')->whereBetween('created_at', [$start, $end]);
-                    });
-            })
+        $totalInterestEarned = (float) BranchScope::applyToLoans(
+            Loan::query()
+                ->where(function ($q) use ($start, $end) {
+                    $q->whereBetween('applied_at', [$start, $end])
+                        ->orWhere(function ($q2) use ($start, $end) {
+                            $q2->whereNull('applied_at')->whereBetween('created_at', [$start, $end]);
+                        });
+                }),
+            Auth::user(),
+            $branchId
+        )
             ->get(['loan_amount', 'interest_rate', 'term_months'])
             ->sum(fn (Loan $loan) => $loan->totalInterest());
 
@@ -59,7 +68,7 @@ class ReportController extends Controller
             'total_fees' => (float) ($totals['fee'] ?? 0),
             'total_expenses' => $totalExpenses,
             'net' => $inflows - $outflows,
-            'monthly_series' => $this->monthlySeries($end),
+            'monthly_series' => $this->monthlySeries($end, $branchId),
         ]);
     }
 
@@ -69,10 +78,12 @@ class ReportController extends Controller
 
         [$start, $end] = $this->resolveRange($request);
         $category = $request->string('category')->toString();
+        $branchId = BranchScope::resolveBranchId(Auth::user(), $request->integer('branch_id'));
 
         $query = Expense::query()
             ->with('recordedBy.personalData')
             ->whereBetween('expense_date', [$start, $end])
+            ->when($branchId !== null, fn ($q) => $q->where('expenses.branch_id', $branchId))
             ->when($category !== '', fn ($q) => $q->where('category', $category))
             ->orderByDesc('expense_date');
 
@@ -91,6 +102,7 @@ class ReportController extends Controller
 
         $total = (float) Expense::query()
             ->whereBetween('expense_date', [$start, $end])
+            ->when($branchId !== null, fn ($q) => $q->where('expenses.branch_id', $branchId))
             ->when($category !== '', fn ($q) => $q->where('category', $category))
             ->sum('amount');
 
@@ -107,9 +119,10 @@ class ReportController extends Controller
         [$start, $end] = $this->resolveRange($request);
         $activityType = $request->string('activity_type', 'all')->toString();
         $memberId = $request->integer('member_id');
+        $branchId = BranchScope::resolveBranchId(Auth::user(), $request->integer('branch_id'));
         $allowedTypes = ['all', 'deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'fee'];
 
-        $query = $this->completedTransactions()
+        $query = $this->completedTransactions($branchId)
             ->with(['account.user.personalData', 'loan.user.personalData'])
             ->where(function ($builder) {
                 $builder->whereHas('account.user')
@@ -156,11 +169,13 @@ class ReportController extends Controller
 
         [$start, $end] = $this->resolveRange($request);
         $memberId = $request->integer('member_id');
+        $branchId = BranchScope::resolveBranchId(Auth::user(), $request->integer('branch_id'));
 
         $accounts = Account::query()
             ->where('account_type', 'savings')
             ->whereNotNull('user_id')
             ->when($memberId, fn ($q) => $q->where('user_id', $memberId))
+            ->when($branchId !== null, fn ($q) => $q->whereHas('user', fn ($u) => $u->where('users.branch_id', $branchId)))
             ->with('user.personalData')
             ->orderBy('id', 'desc')
             ->paginate(10, ['id', 'user_id', 'balance']);
@@ -170,7 +185,7 @@ class ReportController extends Controller
         $totals = collect();
         if ($accountIds->isNotEmpty()) {
             $totals = $this->applyWindowToTransactions(
-                $this->completedTransactions()->whereIn('account_id', $accountIds),
+                $this->completedTransactions($branchId)->whereIn('account_id', $accountIds),
                 $start,
                 $end
             )
@@ -208,16 +223,21 @@ class ReportController extends Controller
 
         [$start, $end] = $this->resolveRange($request);
         $loanFilter = $request->string('filter', 'all')->toString();
+        $branchId = BranchScope::resolveBranchId(Auth::user(), $request->integer('branch_id'));
         $completedStatuses = ['paid', 'paid_off'];
 
-        $query = Loan::query()
-            ->with('user.personalData')
-            ->where(function ($q) use ($start, $end) {
-                $q->whereBetween('applied_at', [$start, $end])
-                    ->orWhere(function ($q2) use ($start, $end) {
-                        $q2->whereNull('applied_at')->whereBetween('created_at', [$start, $end]);
-                    });
-            });
+        $query = BranchScope::applyToLoans(
+            Loan::query()
+                ->with('user.personalData')
+                ->where(function ($q) use ($start, $end) {
+                    $q->whereBetween('applied_at', [$start, $end])
+                        ->orWhere(function ($q2) use ($start, $end) {
+                            $q2->whereNull('applied_at')->whereBetween('created_at', [$start, $end]);
+                        });
+                }),
+            Auth::user(),
+            $branchId
+        );
 
         if ($loanFilter === 'active') {
             $query->whereIn('loan_status', ['approved', 'active']);
@@ -268,11 +288,13 @@ class ReportController extends Controller
         abort_unless(Auth::user()?->can('reports.view'), 403);
 
         [$start, $end] = $this->resolveRange($request);
+        $branchId = BranchScope::resolveBranchId(Auth::user(), $request->integer('branch_id'));
 
         $query = Transaction::query()
             ->with('loan.user.personalData')
             ->where('transaction_type', 'loan_payment')
-            ->where('status', 'completed');
+            ->where('status', 'completed')
+            ->when($branchId !== null, fn ($q) => $q->where('transactions.branch_id', $branchId));
 
         $paginator = $this->applyWindowToTransactions($query, $start, $end)
             ->orderByDesc('transaction_date')
@@ -298,19 +320,25 @@ class ReportController extends Controller
     {
         abort_unless(Auth::user()?->can('reports.view'), 403);
 
-        $members = User::query()
-            ->memberUsers()
-            ->with('personalData')
-            ->orderBy('id', 'desc')
+        $branchId = BranchScope::resolveBranchId(Auth::user(), $request->integer('branch_id'));
+
+        $members = BranchScope::applyToUsers(
+            User::query()->memberUsers()->with('personalData'),
+            Auth::user(),
+            $branchId
+        )->orderBy('id', 'desc')
             ->get()
             ->map(fn (User $user) => [
                 'id' => $user->id,
                 'name' => $user->personalData
                     ? trim(($user->personalData->first_name ?? '').' '.($user->personalData->last_name ?? ''))
                     : ($user->email ?? 'N/A'),
+                'branch_id' => $user->branch_id,
+                'branch_name' => $user->branch?->name,
             ]);
 
         $categories = Expense::query()
+            ->when($branchId !== null, fn ($q) => $q->where('expenses.branch_id', $branchId))
             ->select('category')
             ->distinct()
             ->orderBy('category')
@@ -327,8 +355,9 @@ class ReportController extends Controller
         abort_unless(Auth::user()?->can('reports.financial'), 403);
 
         [$start, $end] = $this->resolveRange($request);
+        $branchId = BranchScope::resolveBranchId(Auth::user(), $request->integer('branch_id'));
 
-        return response()->json($this->buildBalanceSheet($start, $end));
+        return response()->json($this->buildBalanceSheet($start, $end, $branchId));
     }
 
     public function downloadBalanceSheet(Request $request)
@@ -336,13 +365,16 @@ class ReportController extends Controller
         abort_unless(Auth::user()?->can('reports.financial'), 403);
 
         [$start, $end] = $this->resolveRange($request);
-        $balanceSheet = $this->buildBalanceSheet($start, $end);
+        $branchId = BranchScope::resolveBranchId(Auth::user(), $request->integer('branch_id'));
+        $balanceSheet = $this->buildBalanceSheet($start, $end, $branchId);
+        $branchName = $branchId !== null ? $balanceSheet['branch_name'] : null;
 
         $pdf = Pdf::loadView('reports.balance-sheet-pdf', [
             'balanceSheet' => $balanceSheet,
             'appName' => config('app.name', 'Cooperative Management System'),
             'generatedAt' => now(),
             'generatedBy' => Auth::user(),
+            'branchName' => $branchName,
         ]);
 
         $filename = 'balance-sheet-'.$end->format('Y-m-d').'.pdf';
@@ -352,9 +384,11 @@ class ReportController extends Controller
         }, $filename, ['Content-Type' => 'application/pdf']);
     }
 
-    private function buildBalanceSheet(Carbon $start, Carbon $end): array
+    private function buildBalanceSheet(Carbon $start, Carbon $end, ?int $branchId = null): array
     {
-        $totalsByType = $this->completedTransactions()
+        $branchName = $branchId !== null ? \App\Models\Branch::find($branchId)?->name : null;
+
+        $totalsByType = $this->completedTransactions($branchId)
             ->where(function ($q) use ($end) {
                 $q->whereDate('transaction_date', '<=', $end->toDateString())
                     ->orWhere(function ($q2) use ($end) {
@@ -370,21 +404,30 @@ class ReportController extends Controller
         $cashInflows = (float) ($totalsByType['deposit'] ?? 0) + (float) ($totalsByType['loan_payment'] ?? 0) + (float) ($totalsByType['fee'] ?? 0);
         $cashOutflows = (float) ($totalsByType['withdrawal'] ?? 0) + (float) ($totalsByType['loan_disbursement'] ?? 0);
 
-        $totalExpenses = (float) Expense::query()->whereDate('expense_date', '<=', $end->toDateString())->sum('amount');
+        $totalExpenses = (float) Expense::query()
+            ->when($branchId !== null, fn ($q) => $q->where('expenses.branch_id', $branchId))
+            ->whereDate('expense_date', '<=', $end->toDateString())
+            ->sum('amount');
 
         $cashAndCashEquivalents = $cashInflows - $cashOutflows - $totalExpenses;
 
         $activeLoanStatuses = ['approved', 'active'];
-        $loanPrincipalActive = (float) Loan::query()->whereIn('loan_status', $activeLoanStatuses)->sum('loan_amount');
+        $loanPrincipalActive = (float) BranchScope::applyToLoans(
+            Loan::query()->whereIn('loan_status', $activeLoanStatuses),
+            Auth::user(),
+            $branchId
+        )->sum('loan_amount');
         $loanPaymentsOnActive = (float) Transaction::query()
             ->where('transaction_type', 'loan_payment')
             ->where('status', 'completed')
-            ->whereHas('loan', fn ($q) => $q->whereIn('loan_status', $activeLoanStatuses))
+            ->when($branchId !== null, fn ($q) => $q->where('transactions.branch_id', $branchId))
+            ->whereHas('loan', fn ($q) => $q->when($branchId !== null, fn ($l) => $l->where('loans.branch_id', $branchId))->whereIn('loan_status', $activeLoanStatuses))
             ->sum('amount');
         $netLoansReceivable = max(0, $loanPrincipalActive - $loanPaymentsOnActive);
 
-        $memberSavingsLiability = (float) Account::query()->where('account_type', 'savings')->sum('balance');
-        $shareCapital = (float) Account::query()->where('account_type', 'share-capital')->sum('balance');
+        $accountTotals = $this->accountTotals($branchId);
+        $memberSavingsLiability = $accountTotals['savings'];
+        $shareCapital = $accountTotals['share_capital'];
 
         $totalAssets = $cashAndCashEquivalents + $netLoansReceivable;
         $totalLiabilities = $memberSavingsLiability;
@@ -395,6 +438,7 @@ class ReportController extends Controller
             'start' => $start,
             'end' => $end,
             'as_of' => $end,
+            'branch_name' => $branchName,
             'assets' => [
                 ['label' => 'Cash and Cash Equivalents', 'amount' => $cashAndCashEquivalents],
                 ['label' => 'Loans Receivable (Net)', 'amount' => $netLoansReceivable],
@@ -415,7 +459,7 @@ class ReportController extends Controller
         ];
     }
 
-    private function monthlySeries(Carbon $end): array
+    private function monthlySeries(Carbon $end, ?int $branchId = null): array
     {
         $series = [];
 
@@ -425,7 +469,7 @@ class ReportController extends Controller
             $to = $month->copy()->endOfMonth();
 
             $totals = $this->applyWindowToTransactions(
-                $this->completedTransactions()->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'fee']),
+                $this->completedTransactions($branchId)->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'fee']),
                 $from,
                 $to
             )
@@ -433,7 +477,10 @@ class ReportController extends Controller
                 ->groupBy('transaction_type')
                 ->pluck('total', 'transaction_type');
 
-            $expenses = (float) Expense::query()->whereBetween('expense_date', [$from, $to])->sum('amount');
+            $expenses = (float) Expense::query()
+                ->when($branchId !== null, fn ($q) => $q->where('expenses.branch_id', $branchId))
+                ->whereBetween('expense_date', [$from, $to])
+                ->sum('amount');
 
             $deposits = (float) ($totals['deposit'] ?? 0);
             $withdrawals = (float) ($totals['withdrawal'] ?? 0);
@@ -450,9 +497,30 @@ class ReportController extends Controller
         return $series;
     }
 
-    private function completedTransactions()
+    private function completedTransactions(?int $branchId = null)
     {
-        return Transaction::query()->where('status', 'completed');
+        $query = Transaction::query()->where('status', 'completed');
+
+        return $branchId === null ? $query : $query->where('transactions.branch_id', $branchId);
+    }
+
+    private function accountTotals(?int $branchId): array
+    {
+        $query = Account::query()->whereIn('account_type', ['savings', 'share-capital']);
+
+        if ($branchId !== null) {
+            $query->whereHas('user', fn ($q) => $q->where('users.branch_id', $branchId));
+        }
+
+        $totals = $query
+            ->selectRaw('account_type, SUM(balance) as total')
+            ->groupBy('account_type')
+            ->pluck('total', 'account_type');
+
+        return [
+            'savings' => (float) ($totals['savings'] ?? 0),
+            'share_capital' => (float) ($totals['share_capital'] ?? 0),
+        ];
     }
 
     private function applyWindowToTransactions(Builder $query, Carbon $start, Carbon $end): Builder

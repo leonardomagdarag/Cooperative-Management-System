@@ -19,6 +19,9 @@ class DatabaseSeeder extends Seeder
             // Reference data (Philippine geographic codes used by the address selector)
             PSGCSeeder::class,
 
+            // Branch/office reference data (users are tied to a branch)
+            BranchSeeder::class,
+
             // Core data
             UserSeeder::class,
             SpatieRolePermissionSeeder::class,  // 2nd pass: backfill roles & permissions to seeded users

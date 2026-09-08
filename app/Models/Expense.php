@@ -15,6 +15,7 @@ class Expense extends Model
         'amount',
         'expense_date',
         'recorded_by',
+        'branch_id',
     ];
 
     protected $casts = [
@@ -25,5 +26,10 @@ class Expense extends Model
     public function recordedBy()
     {
         return $this->belongsTo(User::class, 'recorded_by');
+    }
+
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class);
     }
 }

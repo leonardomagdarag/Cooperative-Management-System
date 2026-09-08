@@ -9,6 +9,7 @@ use App\Models\Loan;
 use App\Models\LoanProduct;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Support\BranchScope;
 use App\Support\SearchFilter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -60,22 +61,22 @@ class SearchController extends Controller
         $this->appendPages($groups, $q, $isAdmin, $isMember, $can);
 
         if ($can('members.view')) {
-            $this->appendMembers($groups, $needle);
+            $this->appendMembers($groups, $needle, $user);
         }
 
         if ($can('officers.view')) {
-            $this->appendOfficers($groups, $needle);
+            $this->appendOfficers($groups, $needle, $user);
         }
 
         if ($canViewAll && $can('loans.view')) {
-            $this->appendLoans($groups, $needle, '/dashboard/loans');
+            $this->appendLoans($groups, $needle, '/dashboard/loans', null, $user);
         } elseif ($can('loans.view')) {
-            $this->appendLoans($groups, $needle, '/dashboard/member-loans', $user->id);
+            $this->appendLoans($groups, $needle, '/dashboard/member-loans', $user->id, $user);
         }
 
         if ($canViewAll && $can('transactions.view')) {
-            $this->appendLedger($groups, $needle);
-            $this->appendExpenses($groups, $needle);
+            $this->appendLedger($groups, $needle, $user);
+            $this->appendExpenses($groups, $needle, $user);
         } elseif ($can('transactions.view')) {
             $this->appendHistory($groups, $needle, $user);
         }
@@ -126,10 +127,12 @@ class SearchController extends Controller
         }
     }
 
-    private function appendMembers(array &$groups, string $needle): void
+    private function appendMembers(array &$groups, string $needle, User $viewer): void
     {
-        $members = User::query()->memberUsers()->with('personalData')
-            ->where(function ($query) use ($needle) {
+        $members = BranchScope::applyToUsers(
+            User::query()->memberUsers()->with('personalData'),
+            $viewer
+        )->where(function ($query) use ($needle) {
                 $query->where('user_number', 'like', $needle)
                     ->orWhere('email', 'like', $needle)
                     ->orWhereHas('personalData', fn ($pd) => $pd
@@ -152,10 +155,12 @@ class SearchController extends Controller
         }
     }
 
-    private function appendOfficers(array &$groups, string $needle): void
+    private function appendOfficers(array &$groups, string $needle, User $viewer): void
     {
-        $officers = User::query()->officerUsers()->with('personalData')
-            ->where(function ($query) use ($needle) {
+        $officers = BranchScope::applyToUsers(
+            User::query()->officerUsers()->with('personalData'),
+            $viewer
+        )->where(function ($query) use ($needle) {
                 $query->where('user_number', 'like', $needle)
                     ->orWhere('email', 'like', $needle)
                     ->orWhereHas('personalData', fn ($pd) => $pd
@@ -178,12 +183,14 @@ class SearchController extends Controller
         }
     }
 
-    private function appendLoans(array &$groups, string $needle, string $url, ?int $userId = null): void
+    private function appendLoans(array &$groups, string $needle, string $url, ?int $userId = null, ?User $viewer = null): void
     {
         $query = Loan::query()->with(['user.personalData']);
 
         if ($userId !== null) {
             $query->where('user_id', $userId);
+        } elseif ($viewer !== null) {
+            BranchScope::applyToLoans($query, $viewer);
         }
 
         $loans = $query->where(function ($q) use ($needle) {
@@ -209,10 +216,12 @@ class SearchController extends Controller
         }
     }
 
-    private function appendLedger(array &$groups, string $needle): void
+    private function appendLedger(array &$groups, string $needle, User $viewer): void
     {
-        $transactions = Transaction::query()->with(['account.user.personalData', 'loan'])
-            ->where(function ($query) use ($needle) {
+        $transactions = BranchScope::applyToTransactions(
+            Transaction::query()->with(['account.user.personalData', 'loan']),
+            $viewer
+        )->where(function ($query) use ($needle) {
                 $query->where('transaction_number', 'like', $needle)
                     ->orWhere('status', 'like', $needle)
                     ->orWhere('transaction_type', 'like', $needle)
@@ -270,9 +279,9 @@ class SearchController extends Controller
         }
     }
 
-    private function appendExpenses(array &$groups, string $needle): void
+    private function appendExpenses(array &$groups, string $needle, User $viewer): void
     {
-        $expenses = Expense::query()
+        $expenses = BranchScope::applyToExpenses(Expense::query(), $viewer)
             ->where(function ($query) use ($needle) {
                 $query->where('description', 'like', $needle)
                     ->orWhere('category', 'like', $needle);
