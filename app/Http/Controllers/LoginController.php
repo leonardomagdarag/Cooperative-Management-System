@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Account;
 use App\Models\Address;
 use App\Models\Contact;
 use App\Models\Employment;
+use App\Models\MemberApplication;
 use App\Models\MemberId;
 use App\Models\PersonalData;
 use App\Models\User;
@@ -321,7 +321,12 @@ class LoginController extends Controller
                 'birthdate' => $request->input('birthdate', now()->subYears($minimumAge)->toDateString()),
                 'age' => (int) $request->input('age', $minimumAge),
                 'phone' => $request->input('phone', '09123456789'),
-                'address' => $request->input('address', 'Test Address'),
+                'region' => $request->input('region', 'NCR'),
+                'province' => $request->input('province', 'Metro Manila'),
+                'city' => $request->input('city', 'Manila'),
+                'barangay' => $request->input('barangay', 'Test Barangay'),
+                'street' => $request->input('street', 'Test Street'),
+                'zip_code' => $request->input('zip_code', '1000'),
                 'occupation' => $request->input('occupation', 'Unspecified'),
                 'monthly_income' => $request->input('monthly_income', 'Below 10000'),
                 'membership_type' => $request->input('membership_type', 'Regular'),
@@ -339,7 +344,14 @@ class LoginController extends Controller
             'age' => 'required|integer|min:18',
             'phone' => 'required|string|max:20',
             'email' => 'required|email|unique:users,email|unique:contacts,email',
-            'address' => 'required|string',
+
+            // Address
+            'region' => 'nullable|string|max:100',
+            'province' => 'nullable|string|max:100',
+            'city' => 'required|string|max:100',
+            'barangay' => 'required|string|max:100',
+            'street' => 'required|string|max:255',
+            'zip_code' => 'nullable|string|max:20',
 
             // Employment & Income
             'occupation' => 'required|string|max:255',
@@ -375,18 +387,15 @@ class LoginController extends Controller
             // Use database transaction to ensure all records are created or none
             DB::beginTransaction();
 
-            // Parse the address into components (you may need to adjust this based on your address format)
-            $addressParts = $this->parseAddress($validated['address']);
-
             // 1. Create Address
             $address = Address::create([
-                'country' => $addressParts['country'] ?? 'Philippines',
-                'region' => $addressParts['region'] ?? null,
-                'province' => $addressParts['province'] ?? null,
-                'city_municipality' => $addressParts['city'] ?? null,
-                'barangay' => $addressParts['barangay'] ?? null,
-                'street' => $addressParts['street'] ?? $validated['address'],
-                'zip_code' => $addressParts['zip'] ?? null,
+                'country' => 'Philippines',
+                'region' => $validated['region'] ?? null,
+                'province' => $validated['province'] ?? null,
+                'city_municipality' => $validated['city'] ?? null,
+                'barangay' => $validated['barangay'] ?? null,
+                'street' => $validated['street'] ?? null,
+                'zip_code' => $validated['zip_code'] ?? null,
             ]);
 
             // 2. Create Contact
@@ -426,40 +435,38 @@ class LoginController extends Controller
                 'member_id' => $memberId->id,
             ]);
 
-            // 6. Create User Account
+            // 6. Create User Account (inactive until approved by an officer)
             $user = User::create([
                 'personal_data_id' => $personalData->id,
                 'email' => $validated['email'],
                 'password' => Hash::make($validated['password']),
                 'role' => 'member', // Default role for new registrations
-                'account_status' => 'active',
+                'account_status' => 'inactive',
                 'special_loan_eligible' => false,
+                'profile_completion_required' => true,
             ]);
             Role::findOrCreate('member', 'web');
             $user->assignRole('member');
 
-            // 7. Create Initial Savings Account (₱500 initial deposit)
-            Account::create([
-                'user_id' => $user->id,
-                'account_type' => 'savings',
-                'balance' => 500.00, // Initial deposit
-            ]);
-
-            // 8. Create Share Capital Account (₱500 minimum)
-            Account::create([
-                'user_id' => $user->id,
-                'account_type' => 'share-capital',
-                'balance' => 500.00, // Minimum share capital
-            ]);
-
             // Commit the transaction
             DB::commit();
 
-            $this->notificationService->sendEmailVerification($user);
+            // 7. Record the membership application for officer review
+            MemberApplication::create([
+                'user_id' => $user->id,
+                'original_email' => $user->email,
+                'first_name' => $validated['first_name'],
+                'last_name' => $validated['last_name'],
+                'phone' => $validated['phone'],
+                'membership_type' => $validated['membership_type'],
+                'status' => 'pending',
+            ]);
+
+            $this->notificationService->notifyMemberApplicationSubmitted($user);
 
             $this->auditLogService->log(
                 'member.registered',
-                'New member account registered.',
+                'New member account registered (pending approval).',
                 'member',
                 $user,
                 $user,
@@ -476,7 +483,7 @@ class LoginController extends Controller
             // Redirect to login page with success message
             return redirect()->route('login_page')->with(
                 'success',
-                'Registration successful! Your account is now active. You may log in to access cooperative services.'
+                'Your application has been submitted! An officer will review your membership application. You will receive an email once it has been approved.'
             );
         } catch (\Exception $e) {
             // Rollback the transaction in case of error
@@ -490,26 +497,6 @@ class LoginController extends Controller
                 'error' => 'An error occurred during registration. Please try again or contact support.',
             ]);
         }
-    }
-
-    /**
-     * Parse address string into components
-     * This is a basic implementation - adjust based on your address format
-     */
-    private function parseAddress($addressString)
-    {
-        // Basic parsing - you can enhance this based on your needs
-        $parts = array_map('trim', explode(',', $addressString));
-
-        return [
-            'street' => $parts[0] ?? $addressString,
-            'barangay' => $parts[1] ?? null,
-            'city' => $parts[2] ?? null,
-            'province' => $parts[3] ?? null,
-            'region' => null,
-            'zip' => null,
-            'country' => 'Philippines',
-        ];
     }
 
     /**

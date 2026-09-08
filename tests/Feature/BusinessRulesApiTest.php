@@ -4,13 +4,16 @@ use App\Models\Account;
 use App\Models\Contact;
 use App\Models\Loan;
 use App\Models\LoanProduct;
+use App\Models\OtpChallenge;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\SecurityOtpService;
 use App\Support\PersonPasswordPolicy;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\UserSeeder;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -90,6 +93,78 @@ test('member edit allows a blank password', function () {
     ])->assertOk();
 });
 
+test('member password changes require an OTP bound to the member', function () {
+    $member = User::factory()->create(['email' => 'member.password@example.com']);
+    $payload = [
+        'first_name' => 'Jane',
+        'last_name' => 'Doe',
+        'email' => $member->email,
+        'password' => 'Securepass123',
+    ];
+
+    actingAs($this->admin);
+
+    $this->postJson('/api/members/'.$member->id.'/password/send-otp')->assertOk();
+    expect(OtpChallenge::query()
+        ->where('user_id', $this->admin->id)
+        ->where('purpose', 'member_password_change')
+        ->latest('id')
+        ->first()?->context)->toBe(['member_id' => $member->id]);
+
+    $this->putJson('/api/members/'.$member->id, $payload)
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('otp_code');
+
+    $securityOtp = app(SecurityOtpService::class);
+    $issued = $securityOtp->issueChallenge(
+        $this->admin,
+        $securityOtp->memberPasswordChangePurpose(),
+        ['member_id' => $member->id],
+    );
+
+    $this->putJson('/api/members/'.$member->id, array_merge($payload, ['otp_code' => $issued['otp_code']]))
+        ->assertOk();
+
+    expect(Hash::check('Securepass123', $member->fresh()->password))->toBeTrue();
+});
+
+test('profile email changes require an OTP bound to the new email address', function () {
+    $member = User::factory()->create([
+        'email' => 'member.current@example.com',
+    ]);
+    $payload = [
+        'title' => $member->personalData->title ?: 'Member',
+        'first_name' => $member->personalData->first_name,
+        'last_name' => $member->personalData->last_name,
+        'email' => 'member.next@example.com',
+    ];
+
+    actingAs($member);
+
+    $this->postJson('/api/profile/email/send-otp', ['email' => $payload['email']])->assertOk();
+    expect(OtpChallenge::query()
+        ->where('user_id', $member->id)
+        ->where('purpose', 'email_change')
+        ->latest('id')
+        ->first()?->context)->toBe(['email' => 'member.next@example.com']);
+
+    $this->putJson('/api/profile', $payload)->assertUnprocessable()
+        ->assertJsonValidationErrors('email_otp_code');
+
+    $securityOtp = app(SecurityOtpService::class);
+    $issued = $securityOtp->issueChallenge(
+        $member,
+        $securityOtp->emailChangePurpose(),
+        ['email' => 'member.next@example.com'],
+    );
+
+    $this->putJson('/api/profile', array_merge($payload, ['email_otp_code' => $issued['otp_code']]))
+        ->assertOk();
+
+    expect($member->fresh()->email)->toBe('member.next@example.com')
+        ->and($member->fresh()->email_verified_at)->toBeNull();
+});
+
 test('loan total payable applies interest per month across the term', function () {
     $loan = Loan::factory()->make([
         'loan_amount' => 3000,
@@ -100,6 +175,23 @@ test('loan total payable applies interest per month across the term', function (
     expect($loan->totalInterest())->toBe(270.0)
         ->and($loan->totalPayable())->toBe(3270.0)
         ->and($loan->monthlyPayment())->toBe(1090.0);
+});
+
+test('loan payment schedule reconciles exactly to the model payable amount', function () {
+    $loan = Loan::factory()->make([
+        'loan_amount' => 3000,
+        'interest_rate' => 3,
+        'term_months' => 3,
+        'approved_at' => now()->startOfDay(),
+    ]);
+
+    $schedule = $loan->paymentSchedule();
+
+    expect($schedule)->toHaveCount(3)
+        ->and(array_sum(array_column($schedule, 'payment')))->toEqual(3270.0)
+        ->and($schedule[2]['total_payment'])->toEqual($loan->totalPayable())
+        ->and($schedule[0]['due_date'])->toBe(now()->startOfDay()->addMonth()->format('M d, Y'))
+        ->and($schedule[2]['balance'])->toEqual(0.0);
 });
 
 test('counter loan payment covers the full payable amount and marks the loan paid off', function () {

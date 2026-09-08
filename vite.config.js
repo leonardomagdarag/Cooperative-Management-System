@@ -45,6 +45,7 @@ export default defineConfig({
             '/password': backendUrl,
             '/notifications': backendUrl,
             '/dashboard': backendUrl,
+            '/psgc': backendUrl,
         },
     }
 });

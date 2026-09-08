@@ -24,7 +24,7 @@ class LoanController extends Controller
         $user = Auth::user();
         $canViewAll = $user && ($user->is_officer || $user->hasRole('admin'));
 
-        $query = Loan::with(['user.personalData']);
+        $query = Loan::with(['user.personalData', 'reviewer.personalData', 'groupMembers.personalData']);
 
         if (! $canViewAll) {
             $query->where('user_id', $user->id);
@@ -69,6 +69,17 @@ class LoanController extends Controller
                     'name' => trim($l->user->personalData->first_name.' '.$l->user->personalData->last_name),
                     'user_number' => $l->user->user_number,
                 ] : null,
+                'review_status' => $l->review_status,
+                'review_status_label' => $l->review_status_label,
+                'interview_status' => $l->interview_status,
+                'interview_schedule' => $l->interview_schedule?->format('Y-m-d\TH:i'),
+                'review_notes' => $l->review_notes,
+                'reviewer' => $l->reviewer?->personalData ? trim($l->reviewer->personalData->first_name.' '.$l->reviewer->personalData->last_name) : null,
+                'co_makers' => $l->groupMembers->map(fn ($m) => [
+                    'name' => $m->personalData ? trim($m->personalData->first_name.' '.$m->personalData->last_name) : ($m->user_number ?? "Member #{$m->id}"),
+                    'user_number' => $m->user_number,
+                    'has_approved' => (bool) $m->pivot->has_approved,
+                ])->values(),
             ]),
             'pagination' => [
                 'current_page' => $paginator->currentPage(),
@@ -104,6 +115,7 @@ class LoanController extends Controller
             'applied_at' => $loan->applied_at?->format('Y-m-d'),
             'approved_at' => $loan->approved_at?->format('Y-m-d'),
             'due_date' => $loan->due_date,
+            'payment_schedule' => $loan->paymentSchedule(),
             'borrower' => $loan->user?->personalData ? [
                 'name' => trim($loan->user->personalData->first_name.' '.$loan->user->personalData->last_name),
                 'user_number' => $loan->user->user_number,
@@ -349,7 +361,7 @@ class LoanController extends Controller
         Gate::authorize('review', $loan);
 
         $validated = $request->validate([
-            'action' => 'required|in:start_review,endorse,reject,interview_complete',
+            'action' => 'required|in:start_review,endorse,reject,interview_complete,approve,return_for_review',
             'notes' => 'nullable|string|max:1000',
             'interview_schedule' => 'nullable|date|after:now',
         ]);
@@ -387,6 +399,32 @@ class LoanController extends Controller
                 if ($validated['interview_schedule'] ?? null) {
                     $loan->update(['interview_schedule' => $validated['interview_schedule']]);
                 }
+                break;
+
+            case 'approve':
+                Gate::authorize('finalApprove', $loan);
+                if ($loan->review_status !== 'endorsed_for_approval') {
+                    return response()->json(['message' => 'Loan must be endorsed before it can be approved.'], 422);
+                }
+                $loan->update([
+                    'loan_status' => 'approved',
+                    'approved_by' => $user->id,
+                    'approved_at' => now(),
+                ]);
+                app(NotificationService::class)->notifyLoanApproved($loan);
+                break;
+
+            case 'return_for_review':
+                Gate::authorize('finalApprove', $loan);
+                if ($loan->review_status !== 'endorsed_for_approval') {
+                    return response()->json(['message' => 'Only endorsed loans can be returned for review.'], 422);
+                }
+                $loan->update([
+                    'review_status' => 'under_review',
+                    'review_notes' => $validated['notes'] ?? null,
+                    'reviewed_by' => $user->id,
+                    'reviewed_at' => now(),
+                ]);
                 break;
         }
 

@@ -17,6 +17,7 @@ class PermissionCatalog
                 'members.create',
                 'members.update',
                 'members.delete',
+                'members.approve',
                 'members.view-full-details',
             ],
             'Services' => [
@@ -115,6 +116,7 @@ class PermissionCatalog
                 'members.create',
                 'members.update',
                 'members.delete',
+                'members.approve',
                 'members.view-full-details',
                 'services.view',
                 'services.create',
@@ -207,6 +209,7 @@ class PermissionCatalog
                 'members.view',
                 'members.create',
                 'members.update',
+                'members.approve',
                 'loans.view',
                 'transactions.view',
                 'transactions.export',

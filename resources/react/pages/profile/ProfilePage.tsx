@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { getProfile, updateProfile, type ProfileData } from '../../api/profile';
+// import EmailChangeVerification from '../../components/EmailChangeVerification';
 import DatePicker from '../../components/DatePicker';
 import { useToast } from '../../contexts/ToastContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
@@ -338,6 +339,7 @@ function EditProfileModal({ profile, onClose, onSave, isSaving }: {
                             <Field label="Facebook" name="facebook" defaultValue={cont?.facebook || ''} />
                             <div className="col-span-2">
                                 <Field label="Email" name="email" type="email" value={email} onChange={setEmailD} required error={errors.email} />
+                                <EmailChangeVerification originalEmail={user.email} email={email} />
                             </div>
                         </div>
                     </div>
