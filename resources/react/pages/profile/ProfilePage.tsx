@@ -311,12 +311,12 @@ function EditProfileModal({ profile, onClose, onSave, isSaving }: {
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={requestCloseGuard}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={requestCloseGuard}>
             <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
                 <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white shrink-0">
                     <div className="flex items-center justify-between">
                         <h2 className="text-lg font-bold">Edit Profile</h2>
-                        <button onClick={requestCloseGuard} className="rounded-lg p-1 text-white/70 hover:bg-white/10 hover:text-white"><i className="fas fa-times"></i></button>
+                        <button onClick={requestCloseGuard} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white"><i className="fas fa-times"></i></button>
                     </div>
                 </div>
                 <div className="p-6">

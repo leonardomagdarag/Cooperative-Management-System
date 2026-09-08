@@ -441,9 +441,9 @@ export default function ServicesPage() {
             )}
 
             {activeService && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => requestClose(() => setActiveService(null))}>
-                    <div className="w-full max-w-md rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-                        <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-6 text-white">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => requestClose(() => setActiveService(null))}>
+                    <div className="w-full max-w-md max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+                        <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-6 text-white shrink-0">
                             <div className="flex items-center justify-between">
                                 <h2 className="text-lg font-bold">{activeLabel}</h2>
                                 <button onClick={() => requestClose(() => setActiveService(null))} className="rounded-full p-1 text-white/80 hover:bg-white/20 hover:text-white">
@@ -451,7 +451,7 @@ export default function ServicesPage() {
                                 </button>
                             </div>
                         </div>
-                        <div className="bg-white p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                        <div className="bg-white p-6 space-y-4 flex-1 overflow-y-auto">
                             {renderWizard()}
                         </div>
                     </div>

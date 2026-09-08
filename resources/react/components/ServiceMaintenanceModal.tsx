@@ -18,7 +18,7 @@ export default function ServiceMaintenanceModal({
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={onClose}>
             <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between rounded-t-2xl bg-amber-50 border-b border-amber-200 p-4">
                     <div className="flex items-center gap-3">

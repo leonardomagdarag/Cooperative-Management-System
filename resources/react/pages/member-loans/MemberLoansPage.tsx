@@ -61,8 +61,8 @@ export default function MemberLoansPage() {
             )}
 
             {selected && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setSelected(null)}>
-                    <div className="w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => setSelected(null)}>
+                    <div className="w-full max-w-5xl h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
                         <div className="bg-gradient-to-r from-cyan-500 to-emerald-500 px-6 py-4 text-white flex items-center justify-between shrink-0">
                             <div>
                                 <h2 className="text-lg font-bold">Loan Details — {selected.loan_number}</h2>

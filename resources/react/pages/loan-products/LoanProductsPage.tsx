@@ -161,10 +161,16 @@ export default function LoanProductsPage() {
             )}
 
             {showModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={requestCloseGuard}>
-                    <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl" onClick={e => e.stopPropagation()}>
-                        <h2 className="mb-4 text-lg font-bold text-gray-900">{editing ? 'Edit' : 'New'} Loan Product</h2>
-                        <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={requestCloseGuard}>
+                    <div className="w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-xl flex flex-col" onClick={e => e.stopPropagation()}>
+                        <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white shrink-0">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-lg font-bold">{editing ? 'Edit' : 'New'} Loan Product</h2>
+                                <button onClick={requestCloseGuard} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white"><i className="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6">
+                            <form id="loan-product-form" onSubmit={handleSubmit} className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <Field label="Code" value={form.code} onChange={v => setField('code', v)} error={errors.code} required />
                                 <Field label="Name" value={form.name} onChange={v => setField('name', v)} error={errors.name} required />
@@ -188,13 +194,14 @@ export default function LoanProductsPage() {
                                 <Toggle label="Requires Interview" checked={form.requires_interview} onChange={v => setField('requires_interview', v)} />
                                 <Toggle label="Requires Special Eligibility" checked={form.requires_special_eligibility} onChange={v => setField('requires_special_eligibility', v)} />
                             </div>
-                            <div className="flex justify-end gap-3">
-                                <button type="button" onClick={requestCloseGuard} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
-                                <button type="submit" disabled={saveMutation.isPending} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
-                                    {saveMutation.isPending ? 'Saving...' : 'Save'}
-                                </button>
-                            </div>
                         </form>
+                        </div>
+                        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 rounded-b-2xl">
+                            <button type="button" onClick={requestCloseGuard} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
+                            <button type="submit" form="loan-product-form" disabled={saveMutation.isPending} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+                                {saveMutation.isPending ? 'Saving...' : 'Save'}
+                            </button>
+                        </div>
                     </div>
                     {renderDialog()}
                 </div>

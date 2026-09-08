@@ -32,7 +32,7 @@ export function useDiscardGuard(controlledDirty?: boolean) {
     const renderDialog = useCallback(() => {
         if (!pendingClose) return null;
         return (
-            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" onClick={keepEditing}>
+            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={keepEditing}>
                 <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center gap-3 mb-4">
                         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-600"><i className="fas fa-exclamation-triangle"></i></div>

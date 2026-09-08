@@ -47,12 +47,12 @@ export default function MemberExportModal({ onClose }: { onClose: () => void }) 
     const valid = startDate !== '' && endDate !== '' && startDate <= endDate;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={onClose}>
             <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
                 <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white">
                     <div className="flex items-center justify-between">
                         <h2 className="text-lg font-bold">Export Members</h2>
-                        <button onClick={onClose} className="text-white/70 hover:text-white"><i className="fas fa-times"></i></button>
+                        <button onClick={onClose} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white"><i className="fas fa-times"></i></button>
                     </div>
                     <p className="mt-1 text-sm text-white/80">Download member records within a date range</p>
                 </div>

@@ -182,15 +182,17 @@ export default function NotificationsPage() {
 
             {/* Detail Modal */}
             {selected && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setSelected(null)}>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => setSelected(null)}>
                     <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-                        <div className="p-6">
-                            <div className="mb-4 flex items-center justify-between">
-                                <h2 className="text-lg font-bold text-gray-900">{selected.title}</h2>
-                                <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600">
+                        <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white shrink-0">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-lg font-bold">{selected.title}</h2>
+                                <button onClick={() => setSelected(null)} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white">
                                     <i className="fas fa-times"></i>
                                 </button>
                             </div>
+                        </div>
+                        <div className="p-6">
                             <p className="text-sm text-gray-500">{selected.message}</p>
                             <p className="mt-4 text-xs text-gray-400">{selected.time_ago}</p>
                             <div className="mt-6 flex justify-end border-t border-gray-100 pt-4">

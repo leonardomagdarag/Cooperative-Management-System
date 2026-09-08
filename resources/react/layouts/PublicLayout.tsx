@@ -217,7 +217,7 @@ export default function PublicLayout() {
             </footer>
 
             {policyModal && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={() => setPolicyModal(null)}>
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => setPolicyModal(null)}>
                     <div className="relative max-h-[80vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-8 shadow-2xl" onClick={e => e.stopPropagation()}>
                         <button onClick={() => setPolicyModal(null)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
                             <i className="fas fa-times text-xl"></i>
