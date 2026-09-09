@@ -18,7 +18,14 @@ class TurnstileService
             return false;
         }
 
-        $response = Http::asForm()->post('https://challenges.cloudflare.com/turnstile/v0/siteverify', [
+        $caBundle = config('services.turnstile.ca_bundle');
+        $verify = match (true) {
+            $caBundle === null => true,
+            in_array(strtolower((string) $caBundle), ['false', '0', ''], true) => false,
+            default => $caBundle,
+        };
+
+        $response = Http::withOptions(['verify' => $verify])->asForm()->post('https://challenges.cloudflare.com/turnstile/v0/siteverify', [
             'secret' => $secret,
             'response' => $token,
             'remoteip' => $remoteIp,

@@ -54,11 +54,12 @@ function Invoke-OpenCodeStage {
 function Read-VerificationStatus {
     param([string]$ReportPath)
 
+    $statusPattern = '^\s*(?:[-*+]\s*)?(?:\*\*)?STATUS:\s*(PASS|RETRY)\s*(?:\*\*)?\s*$'
     $statusLine = Get-Content -LiteralPath $ReportPath |
-        Where-Object { $_ -match '^STATUS:\s*(PASS|RETRY)\s*$' } |
+        Where-Object { $_ -match $statusPattern } |
         Select-Object -First 1
 
-    if (-not $statusLine -or $statusLine -notmatch '^STATUS:\s*(PASS|RETRY)\s*$') {
+    if (-not $statusLine -or $statusLine -notmatch $statusPattern) {
         throw "Verification report '$ReportPath' must contain a line with STATUS: PASS or STATUS: RETRY."
     }
 
@@ -312,11 +313,20 @@ $pipeDir = Join-Path ([System.IO.Path]::GetTempPath()) "opencode-audit-$PID"
 Assert-CleanWorktree
 $totalWorkflows = $workflows.Count
 $workflowNumber = 0
+$successfulWorkflows = [System.Collections.Generic.List[string]]::new()
+$failedWorkflows = [System.Collections.Generic.List[string]]::new()
+$workflowIssues = [System.Collections.Generic.List[string]]::new()
+$worktreeParent = Split-Path -Parent $repositoryRoot
 Write-Host "Pipeline ready: $totalWorkflows workflows queued." -ForegroundColor Cyan
 $confirmation = Read-Host "This will let OpenCode inspect and modify the repository, then create commits. Type YES to continue"
 if ($confirmation -notmatch '^(?i:yes|y)$') {
     Write-Host "Pipeline cancelled. No files were changed." -ForegroundColor Yellow
     exit 0
+}
+
+$worktreePruneOutput = git worktree prune --expire now 2>&1
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to prune stale Git worktree metadata: $worktreePruneOutput"
 }
 
 New-Item -ItemType Directory -Path $pipeDir | Out-Null
@@ -327,10 +337,27 @@ foreach ($workflow in $workflows) {
     $paths = $workflow.Paths
     $workflowHead = (git rev-parse HEAD).Trim()
     $workflowStarted = Get-Date
+    $branchName = "audit/$name-$PID"
+    $worktreePath = Join-Path $worktreeParent "$($name)-audit-$PID"
+    $workflowSucceeded = $false
+    $unmergedCommitExists = $false
+    $cleanupFailure = $null
 
     Write-Host "`n=======================================================" -ForegroundColor Cyan
     Write-Host " WORKFLOW [$workflowNumber/$totalWorkflows]: $name" -ForegroundColor Yellow
     Write-Host "=======================================================" -ForegroundColor Cyan
+
+    try {
+        if (Test-Path -LiteralPath $worktreePath) {
+            throw "Worktree path already exists: $worktreePath"
+        }
+
+        Write-Host "Creating isolated worktree: $worktreePath" -ForegroundColor DarkCyan
+        git worktree add -b $branchName $worktreePath $workflowHead
+        if ($LASTEXITCODE -ne 0) {
+            throw "Unable to create isolated worktree for '$name'."
+        }
+        Set-Location -LiteralPath $worktreePath
 
     $draftPlan   = "$pipeDir/${name}_draft_plan.md"
     $refinedPlan = "$pipeDir/${name}_approved_plan.md"
@@ -353,6 +380,12 @@ security vulnerabilities, missing validation, IDOR/data-scope problems, role con
 and mismatches between frontend PermissionGate checks and backend authorization.
 For shared pages, compare member behavior with each officer role that can access the page.
 Treat hidden navigation as insufficient security: verify the server-side enforcement.
+
+For React pages and components, also inspect consistency with the existing design system:
+reuse established components, layout patterns, spacing, typography, colors, icons, form
+controls, loading/empty/error states, and responsive behavior. Identify visual or interaction
+inconsistencies that make the workflow feel broken or inaccessible, but do not propose a broad
+redesign when the existing pattern already works.
 
 For every finding, cite the exact file and function/line where the problem lives, and state
 why the current behavior is wrong (what an attacker or misbehaving client could do). Do not
@@ -386,7 +419,9 @@ Check for:
 2. Backend authorization gaps, IDORs, over-broad queries, and role/permission bypasses.
 3. Unhandled state transitions, validation, concurrency, OTP, and service-availability cases.
 4. Member/officer feature leakage caused by relying only on React navigation or gates.
-5. Ambiguous instructions or plans that lack a focused regression test.
+5. Inconsistent UI patterns, missing responsive states, accessibility problems, and duplicated
+    components where an existing shared component should be reused.
+6. Ambiguous instructions or plans that lack a focused regression test.
 
 Drop any draft finding you cannot confirm against the actual code at a specific file and
 function/line; do not carry forward unverifiable or vague items. It is a valid and expected
@@ -433,7 +468,10 @@ production code to match it.
 
 Preserve framework conventions, use existing style patterns, and ensure complete, untruncated
 functions. Never rely on frontend visibility for authorization. Preserve legitimate
-differences between members and officers.
+differences between members and officers. For frontend changes, make the design consistent
+with neighboring pages by reusing existing components and conventions for layout, spacing,
+typography, colors, icons, forms, feedback states, responsiveness, and accessibility. Fix
+only concrete inconsistencies or usability defects; do not introduce a new visual language.
 Do NOT run Git add, commit, reset, restore, checkout, or switch commands.
 "@
         } else {
@@ -445,6 +483,9 @@ undo valid fixes.
 
 Only change this workflow and its direct dependencies. Do NOT create or modify database
 migrations or schema. Never weaken authorization, validation, or policies to make tests pass.
+For frontend changes, preserve the existing design system and fix concrete inconsistencies
+in layout, spacing, typography, colors, icons, forms, feedback states, responsiveness, and
+accessibility rather than introducing a new visual language.
 Do NOT run Git add, commit, reset, restore, checkout, or switch commands.
 "@
         }
@@ -461,7 +502,10 @@ Run the narrowest relevant Laravel/Pest tests for this workflow, plus route and 
 syntax checks where available. Verify member and officer authorization both positively and
 negatively, including direct API requests that bypass the UI. Ensure no unintended regressions,
 missing imports, or frontend/backend permission mismatches were introduced. Confirm no fix
-weakened an authorization check, validation rule, or policy merely to make a test pass.
+weakened an authorization check, validation rule, or policy merely to make a test pass. For
+frontend changes, verify the result is consistent with neighboring pages and shared components
+in layout, spacing, typography, colors, icons, forms, loading/empty/error states, responsive
+behavior, keyboard access, and other relevant accessibility behavior.
 
 If minor syntax, import, or test failures remain within files already changed in this
 workflow, fix them now and rerun the focused checks. Do not broaden the change to unrelated
@@ -472,7 +516,8 @@ in this workflow, or a schema/migration change, report the failure as RETRY inst
 that edit yourself.
 
 Write a concise report to '$verificationReport'. The report MUST contain exactly one status
-line in this format: STATUS: PASS or STATUS: RETRY. Use STATUS: PASS only when the workflow
+line in this format: STATUS: PASS or STATUS: RETRY, with no Markdown formatting, bullet,
+backticks, or extra characters on that line. Use STATUS: PASS only when the workflow
 is fully verified and no actionable issue remains. Use STATUS: RETRY when any issue, failed
 test, unverified authorization path, or blocker remains. Put the status line near the top,
 then list the evidence, tests run, and any remaining issues.
@@ -491,25 +536,91 @@ Do NOT run Git add, commit, reset, restore, checkout, or switch commands.
     # --- GIT AUTO-COMMIT ---
     [string[]]$workflowChanges = @(git status --porcelain)
     if ($workflowChanges.Count -eq 0) {
+        Set-Location -LiteralPath $repositoryRoot
+        git merge --ff-only $branchName | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Fast-forward merge failed for '$name'." }
+        $successfulWorkflows.Add($name)
+        $workflowSucceeded = $true
         Write-Host (">>> FINISHED [$workflowNumber/$totalWorkflows] $name; no fixes were required. Total: {0}" -f ((Get-Date) - $workflowStarted).ToString("hh\:mm\:ss")) -ForegroundColor Green
-        continue
+    } else {
+        Write-Host "Committing verified changes for $name in isolated worktree..." -ForegroundColor DarkGray
+        git add -A
+        $changedFiles = ($workflowChanges | ForEach-Object { $_.Substring(3) }) -join "`n- "
+        $commitMessage = "fix(workflow): audited and patched $name via pipeline`n`nFiles changed:`n- $changedFiles"
+        git commit -m $commitMessage
+        if ($LASTEXITCODE -ne 0) {
+            throw "Git commit failed for workflow '$name' with exit code $LASTEXITCODE."
+        }
+
+        $commitHash = (git rev-parse --short HEAD).Trim()
+        $unmergedCommitExists = $true
+        Set-Location -LiteralPath $repositoryRoot
+        git merge --ff-only $branchName | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Fast-forward merge failed for '$name'." }
+        $unmergedCommitExists = $false
+        $successfulWorkflows.Add($name)
+        $workflowSucceeded = $true
+        Write-Host (">>> FINISHED [$workflowNumber/$totalWorkflows] $name; merged $commitHash into main. Total: {0}" -f ((Get-Date) - $workflowStarted).ToString("hh\:mm\:ss")) -ForegroundColor Green
+    }
+    } catch {
+        Set-Location -LiteralPath $repositoryRoot
+        $issue = "$name attempt failed: $($_.Exception.Message)"
+        $workflowIssues.Add($issue)
+        Write-Host "[ISSUE] $issue" -ForegroundColor Red
+        Write-Host "Discarding this worktree and proceeding to the next workflow." -ForegroundColor Yellow
+    } finally {
+        Set-Location -LiteralPath $repositoryRoot
+        if (Test-Path -LiteralPath $worktreePath) {
+            git worktree remove --force -- $worktreePath 2>$null
+            if ($LASTEXITCODE -ne 0) {
+                $cleanupFailure = "Failed to remove worktree '$worktreePath'."
+            }
+        }
+        if (-not $cleanupFailure) {
+            git show-ref --verify --quiet "refs/heads/$branchName"
+            $branchExists = $LASTEXITCODE -eq 0
+        } else {
+            $branchExists = $false
+        }
+        if ($branchExists) {
+            if ($unmergedCommitExists) {
+                Write-Host "Preserving unmerged recovery branch '$branchName'." -ForegroundColor Yellow
+            } else {
+                git branch -D $branchName 2>$null | Out-Null
+                if ($LASTEXITCODE -ne 0) {
+                    $cleanupFailure = "Failed to delete temporary branch '$branchName'."
+                }
+            }
+        }
     }
 
-    Write-Host "Committing verified changes for $name..." -ForegroundColor DarkGray
-    # The worktree was clean before the workflow and artifacts live outside it, so this
-    # stages every verified implementation or test change, including justified dependencies.
-    git add -A
-    $changedFiles = ($workflowChanges | ForEach-Object { $_.Substring(3) }) -join "`n- "
-    $commitMessage = "fix(workflow): audited and patched $name via pipeline`n`nFiles changed:`n- $changedFiles"
-    git commit -m $commitMessage
-    if ($LASTEXITCODE -ne 0) {
-        throw "Git commit failed for workflow '$name' with exit code $LASTEXITCODE."
+    if ($cleanupFailure) {
+        $workflowIssues.Add($cleanupFailure)
+        Write-Host "[ISSUE] $cleanupFailure Clean it up manually before the next run." -ForegroundColor Red
     }
-    
-    $commitHash = (git rev-parse --short HEAD).Trim()
-    Write-Host (">>> FINISHED [$workflowNumber/$totalWorkflows] $name; committed $commitHash. Total: {0}" -f ((Get-Date) - $workflowStarted).ToString("hh\:mm\:ss")) -ForegroundColor Green
+    if (-not $workflowSucceeded) {
+        $failedWorkflows.Add($name)
+    }
 }
 
-# Cleanup temporary markdown artifacts after a successful complete run.
-Remove-Item -LiteralPath $pipeDir -Recurse -Force
-Write-Host "`nALL WORKFLOWS PROCESSED SUCCESSFULLY." -ForegroundColor Cyan
+# Only clean up temporary markdown artifacts after a fully successful run. If any workflow
+# failed, its draft plan, refined plan, and verification report are the primary evidence for
+# what went wrong, so keep them on disk rather than deleting them with everything else.
+if ($failedWorkflows.Count -eq 0) {
+    Remove-Item -LiteralPath $pipeDir -Recurse -Force
+} else {
+    Write-Host "`nArtifacts for failed/skipped workflows preserved at: $pipeDir" -ForegroundColor Yellow
+}
+Write-Host "`nPIPELINE SUMMARY" -ForegroundColor Cyan
+Write-Host ("Successful: {0}/{1}" -f $successfulWorkflows.Count, $totalWorkflows) -ForegroundColor Green
+Write-Host ("Skipped workflows: {0}" -f $failedWorkflows.Count) -ForegroundColor Yellow
+Write-Host ("Issues: {0}" -f $workflowIssues.Count) -ForegroundColor Yellow
+if ($workflowIssues.Count -gt 0) {
+    Write-Host "Issues:" -ForegroundColor Red
+    $workflowIssues | ForEach-Object { Write-Host "- $_" -ForegroundColor Red }
+}
+if ($failedWorkflows.Count -eq 0) {
+    Write-Host "ALL WORKFLOWS PROCESSED SUCCESSFULLY." -ForegroundColor Cyan
+} else {
+    Write-Host "PIPELINE FINISHED WITH SKIPPED WORKFLOWS." -ForegroundColor Yellow
+}
