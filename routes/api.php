@@ -163,6 +163,10 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     Route::get('/reports/financial', [ReportController::class, 'financial']);
     Route::get('/reports/expenses', [ReportController::class, 'expenses']);
     Route::get('/reports/member-activity', [ReportController::class, 'memberActivity']);
+    Route::get('/reports/member-savings', [ReportController::class, 'memberSavings']);
+    Route::get('/reports/loans', [ReportController::class, 'loanReport']);
+    Route::get('/reports/payments', [ReportController::class, 'payments']);
+    Route::get('/reports/options', [ReportController::class, 'options']);
     Route::get('/reports/balance-sheet', [ReportController::class, 'balanceSheet']);
     Route::get('/reports/balance-sheet/download', [ReportController::class, 'downloadBalanceSheet']);
 

@@ -1,16 +1,33 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import { useAuth } from '../../contexts/AuthContext';
+
+const peso = (n: number | string | undefined | null, d = 2) =>
+    '₱' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+const num = (n: number | string | undefined | null) => (Number(n) || 0).toLocaleString();
+const md = (v: string | undefined) => {
+    if (!v) return '';
+    const t = new Date(v);
+    return isNaN(t.getTime()) ? v : t.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
+};
+const titleCase = (v: string) => (v || '').replace(/[_-]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
 
 export default function LoanOverview() {
+    const { user } = useAuth();
     const { data, isLoading } = useQuery({ queryKey: ['overview-loan'], queryFn: () => api.get('/api/dashboard') });
     const d = data?.data || {};
-    if (isLoading) return <div className="space-y-4"><div className="h-36 animate-pulse rounded-2xl bg-slate-100" /><div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">{[...Array(4)].map((_, i) => <div key={i} className="h-24 animate-pulse rounded-2xl bg-slate-100" />)}</div></div>;
+    if (isLoading) return <Skeleton />;
 
-    const totalAlerts = (Number(d.pending_loans) || 0) + (Number(d.loans_overdue) || 0);
+    const pending = Number(d.pending_loans || d.loans_pending || 0);
+    const overdue = Number(d.loans_overdue || d.overdue_loans || 0);
+    const dueSoon = Number(d.loans_due_soon || 0);
+    const showChips = pending > 0 || overdue > 0;
     const pendingLoans = d.pending_loans_list || [];
     const overdueLoans = d.overdue_loans_list || [];
     const announcements = d.recent_announcements || [];
     const loanSeries = d.loan_status_series || [];
+    const loanTotal = loanSeries.reduce((sum: number, r: any) => sum + (Number(r.count) || 0), 0);
+    const periodLabel = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
     return (
         <div className="space-y-6">
@@ -20,8 +37,8 @@ export default function LoanOverview() {
                 <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                     <div>
                         <p className="text-amber-200 text-sm font-medium uppercase tracking-widest mb-1">Loan Officer</p>
-                        <h1 className="text-3xl font-extrabold leading-tight">{d.greeting}</h1>
-                        <p className="mt-1 text-amber-200">Loan portfolio overview</p>
+                        <h1 className="text-3xl font-extrabold leading-tight">{d.greeting}, {user?.first_name || 'Officer'}</h1>
+                        <p className="mt-1 text-amber-200">Loan portfolio overview — {periodLabel}</p>
                     </div>
                     <div className="sm:text-right shrink-0">
                         <p className="text-amber-200 text-xs uppercase tracking-wide">Today</p>
@@ -29,66 +46,184 @@ export default function LoanOverview() {
                         <p className="text-amber-200 text-sm">{new Date().toLocaleDateString('en-US', { weekday: 'long' })}</p>
                     </div>
                 </div>
-                {totalAlerts > 0 && (
+                {showChips && (
                     <div className="relative mt-5 flex flex-wrap gap-3">
-                        {Number(d.pending_loans) > 0 && <span className="inline-flex items-center gap-1.5 bg-amber-400/20 border border-amber-300/40 text-amber-100 text-xs font-semibold px-3 py-1.5 rounded-full">{d.pending_loans} applications awaiting review</span>}
-                        {Number(d.loans_overdue) > 0 && <span className="inline-flex items-center gap-1.5 bg-red-400/20 border border-red-300/40 text-red-100 text-xs font-semibold px-3 py-1.5 rounded-full">{d.loans_overdue} overdue</span>}
-                        {Number(d.loans_due_soon) > 0 && <span className="inline-flex items-center gap-1.5 bg-white/15 border border-white/20 text-white text-xs font-semibold px-3 py-1.5 rounded-full">{d.loans_due_soon} due within 14 days</span>}
+                        {pending > 0 && (
+                            <span className="inline-flex items-center gap-1.5 bg-white/15 border border-white/20 text-amber-50 text-xs font-semibold px-3 py-1.5 rounded-full">
+                                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd"/></svg>
+                                {num(pending)} application{pending !== 1 ? 's' : ''} awaiting review
+                            </span>
+                        )}
+                        {overdue > 0 && (
+                            <span className="inline-flex items-center gap-1.5 bg-red-500/20 border border-red-300/30 text-red-100 text-xs font-semibold px-3 py-1.5 rounded-full">
+                                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"/></svg>
+                                {num(overdue)} overdue loan{overdue !== 1 ? 's' : ''}
+                            </span>
+                        )}
+                        {dueSoon > 0 && (
+                            <span className="inline-flex items-center gap-1.5 bg-white/15 border border-white/20 text-amber-50 text-xs font-semibold px-3 py-1.5 rounded-full">
+                                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/></svg>
+                                {num(dueSoon)} due within 14 days
+                            </span>
+                        )}
                     </div>
                 )}
             </div>
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <KpiCard label="Pending Applications" value={Number(d.pending_loans || d.loans_pending || 0).toLocaleString()} icon="clock" color="amber" alert={Number(d.pending_loans) > 0} />
-                <KpiCard label="Active Loans" value={Number(d.active_loans || d.loans_active || 0).toLocaleString()} icon="file-invoice" color="blue" detail={`Outstanding ₱${Number(d.outstanding_amount || d.loans_outstanding || 0).toLocaleString()}`} />
-                <KpiCard label="Overdue Loans" value={Number(d.overdue_loans || d.loans_overdue || 0).toLocaleString()} icon="exclamation-triangle" color="red" alert={Number(d.loans_overdue) > 0} />
-                <KpiCard label="Due in 14 Days" value={Number(d.loans_due_soon || 0).toLocaleString()} icon="calendar" color="cyan" detail={`Total disbursed: ₱${Number(d.loans_disbursed || 0).toLocaleString()}`} />
-            </div>
+                <div className={`bg-white rounded-2xl shadow-sm border p-5 ${pending > 0 ? 'border-amber-200' : 'border-gray-100'}`}>
+                    <div className="flex items-center justify-between mb-3">
+                        <div className={`w-10 h-10 ${pending > 0 ? 'bg-amber-50' : 'bg-gray-50'} rounded-xl flex items-center justify-center`}>
+                            <i className={`fas fa-clock w-5 h-5 ${pending > 0 ? 'text-amber-600' : 'text-gray-400'}`}></i>
+                        </div>
+                    </div>
+                    <p className={`text-2xl font-extrabold ${pending > 0 ? 'text-amber-600' : 'text-gray-900'}`}>{num(pending)}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Pending Applications</p>
+                </div>
 
-            <div className="grid xl:grid-cols-2 gap-6">
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between"><h2 className="text-base font-bold text-gray-900">Pending Loan Applications</h2>{Number(d.pending_loans) > 0 && <span className="text-xs font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{d.pending_loans} pending</span>}</div>
-                    <div className="overflow-x-auto">
-                        {pendingLoans.length > 0 ? (
-                            <table className="min-w-full text-sm"><thead><tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100"><th className="px-6 py-3">Member</th><th className="px-6 py-3">Product</th><th className="px-6 py-3">Amount</th><th className="px-6 py-3">Applied</th></tr></thead><tbody className="divide-y divide-gray-50">{pendingLoans.map((l: any) => (<tr key={l.id} className="hover:bg-gray-50/50"><td className="px-6 py-3 text-xs">{l.member_name}</td><td className="px-6 py-3 text-xs">{l.loan_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</td><td className="px-6 py-3 font-medium">₱{Number(l.loan_amount).toLocaleString()}</td><td className="px-6 py-3 text-xs text-gray-400">{l.created_at}</td></tr>))}</tbody></table>
-                        ) : (
-                            <div className="p-8 text-center"><svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><p className="text-sm text-gray-400">No pending loan applications</p></div>
-                        )}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center">
+                            <i className="fas fa-file-invoice w-5 h-5 text-emerald-600"></i>
+                        </div>
+                    </div>
+                    <p className="text-2xl font-extrabold text-gray-900">{num(d.active_loans || d.loans_active)}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Active Loans</p>
+                    <div className="mt-2 pt-2 border-t border-gray-50 text-xs text-gray-500">
+                        <div className="flex justify-between"><span>Outstanding</span><span className="font-medium text-gray-700">{peso(d.outstanding_amount || d.loans_outstanding, 0)}</span></div>
                     </div>
                 </div>
 
-                <div className="space-y-6">
+                <div className={`bg-white rounded-2xl shadow-sm border p-5 ${overdue > 0 ? 'border-red-200' : 'border-gray-100'}`}>
+                    <div className="flex items-center justify-between mb-3">
+                        <div className={`w-10 h-10 ${overdue > 0 ? 'bg-red-50' : 'bg-gray-50'} rounded-xl flex items-center justify-center`}>
+                            <i className={`fas fa-exclamation-triangle w-5 h-5 ${overdue > 0 ? 'text-red-500' : 'text-gray-400'}`}></i>
+                        </div>
+                    </div>
+                    <p className={`text-2xl font-extrabold ${overdue > 0 ? 'text-red-600' : 'text-gray-900'}`}>{num(overdue)}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Overdue Loans</p>
+                </div>
+
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center">
+                            <i className="fas fa-calendar w-5 h-5 text-orange-500"></i>
+                        </div>
+                    </div>
+                    <p className="text-2xl font-extrabold text-gray-900">{num(dueSoon)}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Due in 14 Days</p>
+                    <div className="mt-2 pt-2 border-t border-gray-50 text-xs text-gray-500">
+                        <div className="flex justify-between"><span>Total disbursed</span><span className="font-medium text-gray-700">{peso(d.loans_disbursed, 0)}</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                <div className="xl:col-span-2 space-y-6">
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                            <div>
+                                <h2 className="text-base font-bold text-gray-900">Pending Loan Applications</h2>
+                                <p className="text-xs text-gray-500">Applications awaiting review or approval</p>
+                            </div>
+                            {pending > 0 && <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-full">{num(pending)} pending</span>}
+                        </div>
+                        <div className="overflow-x-auto">
+                            {pendingLoans.length > 0 ? (
+                                <table className="min-w-full text-sm">
+                                    <thead><tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100"><th className="px-6 py-3">Member</th><th className="px-6 py-3">Product</th><th className="px-6 py-3">Amount</th><th className="px-6 py-3">Applied</th></tr></thead>
+                                    <tbody className="divide-y divide-gray-50">
+                                        {pendingLoans.map((l: any) => (
+                                            <tr key={l.id} className="hover:bg-gray-50/50 transition-colors">
+                                                <td className="px-6 py-3 font-medium text-gray-900">{l.member_name}</td>
+                                                <td className="px-6 py-3 text-gray-600 text-xs">{titleCase(l.loan_type)}</td>
+                                                <td className="px-6 py-3 font-bold text-gray-900">{peso(l.loan_amount)}</td>
+                                                <td className="px-6 py-3 text-xs text-gray-400">{md(l.created_at)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center py-12 text-center">
+                                    <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center mb-3">
+                                        <svg className="w-6 h-6 text-emerald-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
+                                    </div>
+                                    <p className="text-sm font-medium text-gray-700">No pending applications</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
                     {overdueLoans.length > 0 && (
                         <div className="bg-white rounded-2xl shadow-sm border border-red-200 overflow-hidden">
-                            <div className="px-6 py-4 border-b border-red-100 bg-red-50/50"><h2 className="text-base font-bold text-gray-900">Overdue Loans</h2></div>
+                            <div className="px-6 py-4 border-b border-red-100 flex items-center justify-between bg-red-50/50">
+                                <div>
+                                    <h2 className="text-base font-bold text-red-700">Overdue Loans</h2>
+                                    <p className="text-xs text-red-500">Past due date — follow-up required</p>
+                                </div>
+                                <span className="text-xs font-semibold text-red-700 bg-red-100 px-2.5 py-1 rounded-full">{num(overdue)} overdue</span>
+                            </div>
                             <div className="overflow-x-auto">
-                                <table className="min-w-full text-sm"><thead><tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100"><th className="px-6 py-3">Member</th><th className="px-6 py-3">Amount</th><th className="px-6 py-3">Due Date</th><th className="px-6 py-3">Days Overdue</th></tr></thead><tbody className="divide-y divide-gray-50">{overdueLoans.map((l: any) => (<tr key={l.id} className="hover:bg-gray-50/50"><td className="px-6 py-3 text-xs">{l.member_name}</td><td className="px-6 py-3 font-medium">₱{Number(l.loan_amount).toLocaleString()}</td><td className="px-6 py-3 text-xs text-red-600">{l.due_date}</td><td className="px-6 py-3"><span className="inline-flex px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">{l.days_overdue}d</span></td></tr>))}</tbody></table>
+                                <table className="min-w-full text-sm">
+                                    <thead><tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100"><th className="px-6 py-3">Member</th><th className="px-6 py-3">Amount</th><th className="px-6 py-3">Due Date</th><th className="px-6 py-3">Days Overdue</th></tr></thead>
+                                    <tbody className="divide-y divide-gray-50">
+                                        {overdueLoans.map((l: any) => (
+                                            <tr key={l.id} className="hover:bg-red-50/30 transition-colors">
+                                                <td className="px-6 py-3 font-medium text-gray-900">{l.member_name}</td>
+                                                <td className="px-6 py-3 font-bold text-gray-900">{peso(l.loan_amount)}</td>
+                                                <td className="px-6 py-3 text-xs text-red-600">{l.due_date}</td>
+                                                <td className="px-6 py-3">
+                                                    <span className="text-xs font-semibold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">{num(l.days_overdue)}d</span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     )}
+                </div>
 
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                        <div className="px-6 py-4 border-b border-gray-100"><h2 className="text-base font-bold text-gray-900">Loan Distribution</h2></div>
-                        <div className="p-5">
-                            {loanSeries.length > 0 ? (
-                                <div className="space-y-2">
-                                    {loanSeries.map((s: any, i: number) => (
-                                        <div key={i}>
-                                            <div className="flex justify-between text-xs mb-1"><span className="text-gray-600">{s.label}</span><span className="font-semibold text-gray-700">{s.count} ({s.percent}%)</span></div>
-                                            <div className="w-full bg-gray-100 rounded-full h-2"><div className={`${s.color} h-2 rounded-full`} style={{ width: `${Math.max(2, s.percent)}%` }}></div></div>
-                                        </div>
-                                    ))}
+                <div className="space-y-5">
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-sm font-bold text-gray-900">Loan Distribution</h3>
+                            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-lg">{num(loanTotal)} total</span>
+                        </div>
+                        <div className="space-y-3">
+                            {loanSeries.length > 0 ? loanSeries.map((s: any, i: number) => (
+                                <div key={i}>
+                                    <div className="flex items-center justify-between text-xs mb-1">
+                                        <span className="font-medium text-gray-700">{s.label}</span>
+                                        <span className="text-gray-500">{num(s.count)} <span className="text-gray-400">({Number(s.percent).toFixed(1)}%)</span></span>
+                                    </div>
+                                    <div className="w-full bg-gray-100 rounded-full h-2">
+                                        <div className={`h-2 rounded-full ${s.color}`} style={{ width: `${Math.min(100, Number(s.percent))}%` }}></div>
+                                    </div>
                                 </div>
-                            ) : <div className="py-4 text-center text-sm text-gray-400">No loan data</div>}
+                            )) : (
+                                <p className="text-sm text-gray-400 text-center py-4">No loans yet.</p>
+                            )}
                         </div>
                     </div>
 
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                        <div className="px-6 py-4 border-b border-gray-100"><h2 className="text-base font-bold text-gray-900">Announcements</h2></div>
-                        <div className="p-4 space-y-3">
-                            {announcements.length > 0 ? announcements.map((a: any) => (
-                                <div key={a.id} className="flex gap-3"><div className="w-1 rounded-full bg-amber-400 self-stretch shrink-0"></div><div><p className="text-sm font-semibold text-gray-800">{a.title}</p><p className="text-xs text-gray-500 line-clamp-2">{a.content}</p><p className="text-xs text-gray-400 mt-1">{a.created_at_diff}</p></div></div>
-                            )) : <div className="py-4 text-center text-sm text-gray-400">No announcements</div>}
+                        <div className="px-5 py-3.5 border-b border-gray-100"><h3 className="text-sm font-bold text-gray-900">Announcements</h3></div>
+                        <div className="p-5 space-y-3.5">
+                            {announcements.length > 0 ? (
+                                announcements.map((a: any) => (
+                                    <div key={a.id} className="flex gap-3">
+                                        <div className="w-1 shrink-0 rounded-full bg-amber-400 self-stretch"></div>
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-semibold text-gray-900 truncate">{a.title}</p>
+                                            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{a.content}</p>
+                                            <p className="text-xs text-gray-400 mt-1">{a.created_at_diff}</p>
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-sm text-gray-400 text-center py-4">No announcements.</p>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -97,21 +232,11 @@ export default function LoanOverview() {
     );
 }
 
-function KpiCard({ label, value, icon, color, alert, detail }: { label: string; value: string; icon: string; color: string; alert?: boolean; detail?: string }) {
-    const cols: Record<string, { bg: string; text: string }> = {
-        amber: { bg: 'bg-amber-50', text: 'text-amber-600' },
-        blue: { bg: 'bg-blue-50', text: 'text-blue-600' },
-        red: { bg: 'bg-red-50', text: 'text-red-600' },
-        cyan: { bg: 'bg-cyan-50', text: 'text-cyan-600' },
-    };
-    const c = cols[color] || cols.amber;
+function Skeleton() {
     return (
-        <div className={`bg-white rounded-2xl shadow-sm border p-5 ${alert ? 'border-amber-200 bg-amber-50' : 'border-gray-100'}`}>
-            <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 ${c.bg} rounded-xl flex items-center justify-center shrink-0`}><i className={`fas fa-${icon} ${c.text}`}></i></div>
-                <div><p className="text-2xl font-bold text-gray-900">{value}</p><p className="text-xs text-gray-500">{label}</p></div>
-            </div>
-            {detail && <p className="mt-2 pt-2 border-t border-gray-50 text-xs text-gray-500">{detail}</p>}
+        <div className="space-y-4">
+            <div className="h-36 animate-pulse rounded-2xl bg-slate-100" />
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">{[...Array(4)].map((_, i) => <div key={i} className="h-24 animate-pulse rounded-2xl bg-slate-100" />)}</div>
         </div>
     );
 }
