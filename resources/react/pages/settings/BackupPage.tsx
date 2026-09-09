@@ -24,6 +24,16 @@ import {
 
 const SCOPE_LABELS: Record<string, string> = { db: 'Database', files: 'Files', both: 'Database + Files' };
 
+const SCHEDULE_PRESETS = [
+    { value: '0 2 * * *', label: 'Every day at 2:00 AM' },
+    { value: '0 3 * * 1', label: 'Every Monday at 3:00 AM' },
+    { value: '0 2 * * 0', label: 'Every Sunday at 2:00 AM' },
+];
+
+function scheduleLabel(schedule: string): string {
+    return SCHEDULE_PRESETS.find(option => option.value === schedule)?.label ?? 'Custom schedule';
+}
+
 function formatBytes(bytes: number | null): string {
     if (bytes === null || bytes === undefined) return '—';
     if (bytes === 0) return '0 B';
@@ -54,7 +64,7 @@ function CredFieldBadge({ field, creds }: { field: CredFieldKey; creds?: CloudCr
     return <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">Not set</span>;
 }
 
-function ConfirmModal({ open, title, description, children, onCancel, onConfirm, confirmLabel, danger }: {
+function ConfirmModal({ open, title, description, children, onCancel, onConfirm, confirmLabel, danger, confirmDisabled }: {
     open: boolean;
     title: string;
     description?: string;
@@ -63,6 +73,7 @@ function ConfirmModal({ open, title, description, children, onCancel, onConfirm,
     onConfirm: () => void;
     confirmLabel: string;
     danger?: boolean;
+    confirmDisabled?: boolean;
 }) {
     if (!open) return null;
     return (
@@ -78,7 +89,7 @@ function ConfirmModal({ open, title, description, children, onCancel, onConfirm,
                 <div className="max-h-[70vh] overflow-y-auto p-5">{children}</div>
                 <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-4">
                     <button type="button" onClick={onCancel} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
-                    <button type="button" onClick={onConfirm} className={`rounded-lg px-4 py-2 text-sm font-medium text-white ${danger ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}>{confirmLabel}</button>
+                    <button type="button" onClick={onConfirm} disabled={confirmDisabled} className={`rounded-lg px-4 py-2 text-sm font-medium text-white ${danger ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'} disabled:cursor-not-allowed disabled:opacity-50`}>{confirmLabel}</button>
                 </div>
             </div>
         </div>
@@ -199,7 +210,14 @@ export default function BackupPage() {
     }, [draft, payload]);
 
     const editTier = (tier: 'local' | 'cloud', patch: Partial<BackupTierSettings>) => {
-        setDraft(d => d ? { ...d, mesh: { ...d.mesh, [tier]: { ...d.mesh[tier], ...patch } } } : d);
+        setDraft(d => {
+            const base = d ?? payload!.settings;
+            return { ...base, mesh: { ...base.mesh, [tier]: { ...base.mesh[tier], ...patch } } };
+        });
+    };
+
+    const editEncryption = (enabled: boolean) => {
+        setDraft(d => ({ ...(d ?? payload!.settings), encryption_enabled: enabled }));
     };
 
     if (isLoading) return <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-24 animate-pulse rounded-xl bg-gray-100" />)}</div>;
@@ -217,6 +235,19 @@ export default function BackupPage() {
                 description="Schedule encrypted backups, download archives, and restore the cooperative database or files."
                 icon="fas fa-hard-drive"
             />
+
+            <section className="grid grid-cols-1 gap-3 md:grid-cols-3" aria-label="How backups work">
+                {[
+                    ['1', 'Choose where', 'Keep a quick copy on the server, or add Google Drive for an off-site copy.'],
+                    ['2', 'Set a schedule', 'The system creates copies automatically at the times you choose.'],
+                    ['3', 'Recover when needed', 'Download a copy, or restore selected data after confirming your identity.'],
+                ].map(([number, title, text]) => (
+                    <div key={number} className="flex gap-3 rounded-xl border border-emerald-100 bg-emerald-50/60 p-4">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-xs font-bold text-white">{number}</span>
+                        <div><p className="text-sm font-semibold text-gray-900">{title}</p><p className="mt-1 text-xs leading-5 text-gray-600">{text}</p></div>
+                    </div>
+                ))}
+            </section>
 
             {/* Encryption notice */}
             <div className={`rounded-xl border p-4 text-sm ${payload!.settings.encryption_enabled ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-gray-200 bg-gray-50 text-gray-600'}`}>
@@ -237,7 +268,7 @@ export default function BackupPage() {
                                 <input
                                     type="checkbox"
                                     checked={draft ? draft.encryption_enabled : payload!.settings.encryption_enabled}
-                                    onChange={e => setDraft(d => d ? { ...d, encryption_enabled: e.target.checked } : d === null ? { ...payload!.settings, encryption_enabled: e.target.checked } : null)}
+                                    onChange={e => editEncryption(e.target.checked)}
                                     className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
                                 />
                                 Encrypt archives
@@ -262,8 +293,13 @@ export default function BackupPage() {
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
-                                            <label className="mb-1 block text-xs font-medium text-gray-600">Schedule (cron)</label>
-                                            <input value={s.schedule} onChange={e => editTier(tier, { schedule: e.target.value })} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" placeholder="0 2 * * *" />
+                                            <label className="mb-1 block text-xs font-medium text-gray-600">How often should this run?</label>
+                                            <select value={SCHEDULE_PRESETS.some(option => option.value === s.schedule) ? s.schedule : 'custom'} onChange={e => editTier(tier, { schedule: e.target.value === 'custom' ? '' : e.target.value })} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
+                                                {SCHEDULE_PRESETS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                                <option value="custom">Custom schedule</option>
+                                            </select>
+                                            {!SCHEDULE_PRESETS.some(option => option.value === s.schedule) && <input value={s.schedule} onChange={e => editTier(tier, { schedule: e.target.value })} className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" placeholder="Example: 0 2 * * *" aria-label="Custom schedule expression" />}
+                                            <p className="mt-1 text-[11px] text-gray-500">{scheduleLabel(s.schedule)}{!SCHEDULE_PRESETS.some(option => option.value === s.schedule) ? ' — use a cron expression above' : ''}</p>
                                         </div>
                                         <div>
                                             <label className="mb-1 block text-xs font-medium text-gray-600">Retention (days)</label>
@@ -491,6 +527,7 @@ export default function BackupPage() {
                 onCancel={() => { setRestoreTarget(null); setRestoreForm({ scope: 'both', current_password: '', confirmation: '', archive_password: '' }); }}
                 onConfirm={() => restoreTarget && restoreMutation.mutate()}
                 confirmLabel={restoreMutation.isPending ? 'Restoring...' : 'Restore Now'}
+                confirmDisabled={restoreMutation.isPending || restoreForm.current_password.length === 0 || restoreForm.archive_password.length === 0 || restoreForm.confirmation !== 'RESTORE'}
             >
                 <div className="space-y-4">
                     <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -510,8 +547,8 @@ export default function BackupPage() {
                         <input type="password" value={restoreForm.current_password} onChange={e => setRestoreForm(f => ({ ...f, current_password: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
                     </div>
                     <div>
-                        <label className="mb-1 block text-xs font-medium text-gray-600">Archive encryption password</label>
-                        <input type="password" value={restoreForm.archive_password} onChange={e => setRestoreForm(f => ({ ...f, archive_password: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" placeholder="BACKUP_ARCHIVE_PASSWORD" />
+                        <label className="mb-1 block text-xs font-medium text-gray-600">Backup password <span className="font-normal text-gray-400">(ask your system administrator)</span></label>
+                        <input type="password" value={restoreForm.archive_password} onChange={e => setRestoreForm(f => ({ ...f, archive_password: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" placeholder="Enter the backup password" />
                     </div>
                     <div>
                         <label className="mb-1 block text-xs font-medium text-gray-600">Type <strong>RESTORE</strong> to confirm</label>

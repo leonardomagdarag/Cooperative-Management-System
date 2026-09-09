@@ -520,7 +520,7 @@ class SiteContentCatalog
     {
         return [
             'home' => [
-                'hero_subtitle' => 'Homing <span class="font-bold text-primary2">Strength</span> in members through financial excellence and community partnership',
+                'hero_subtitle' => 'Homing Strength in members through financial excellence and community partnership',
                 'active_members' => '567',
                 'total_assets' => '₱2M+',
                 'years_service' => '10',
@@ -530,7 +530,7 @@ class SiteContentCatalog
                 'about1' => 'Services and community support. Our mission is to provide accessible and affordable financial solutions that help our members achieve their goals.',
                 'about2' => "Founded with a vision to strengthen ottlers Credit Cooperative is dedicated to empowering our members through financial sur community, we've been serving our members with integrity, innovation, and unwavering commitment to their financial well-being.",
                 'history' => 'Founded in 2016, Settlers Credit Cooperative (previously known as Southville 7 Credit Cooperative) has grown from a small group of community members into a trusted financial organization serving hundreds of members. <br><br> Over the years, we have expanded our services and strengthened our commitment to member satisfaction and community development. Our journey reflects our dedication to financial excellence and community empowerment. ',
-                'mission' => 'Ang Settlers Credi Cooperative ay nagbibigay ng pangunahing serbisyo sa mga kasapi sa pamamagitan ng pagbibigay ng pagkakataon na maka-ipon at makapagpahiram sa mababang interest',
+                'mission' => 'Ang Settlers Credit Cooperative ay nagbibigay ng pangunahing serbisyo sa mga kasapi sa pamamagitan ng pagbibigay ng pagkakataon na maka-ipon at makapagpahiram sa mababang interest',
                 'vision' => "Kooperatibang naghuhubog sa kakayahan ng Settlers Credit Cooperative sa pamamahala ng iba't ibang proyekto",
                 'values' => [
                     ['title' => 'Integrity', 'description' => 'Honesty in all dealings'],
