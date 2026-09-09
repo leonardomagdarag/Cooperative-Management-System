@@ -67,10 +67,6 @@ function Invoke-OpenCodeStage {
     )
 
     for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
-        if ($RequiredArtifact) {
-            Remove-Item -LiteralPath $RequiredArtifact -Force -ErrorAction SilentlyContinue
-        }
-
         $attemptLog = $null
         if ($LogDirectory) {
             if (-not (Test-Path -LiteralPath $LogDirectory -PathType Container)) {
@@ -92,6 +88,26 @@ function Invoke-OpenCodeStage {
             (Test-Path -LiteralPath $RequiredArtifact -PathType Leaf) -and
             (Get-Item -LiteralPath $RequiredArtifact).Length -gt 0
         )
+
+        if ($RequiredArtifact -and -not $artifactIsValid) {
+            Write-Host "    [DIAG] Required artifact was not found or is empty: $RequiredArtifact" -ForegroundColor DarkYellow
+            $artifactParent = Split-Path -Parent $RequiredArtifact
+            if (Test-Path -LiteralPath $artifactParent -PathType Container) {
+                $nearbyArtifacts = @(Get-ChildItem -LiteralPath $artifactParent -File -ErrorAction SilentlyContinue |
+                    Sort-Object LastWriteTime -Descending |
+                    Select-Object -First 12 Name,Length,LastWriteTime)
+                if ($nearbyArtifacts.Count -gt 0) {
+                    Write-Host "    [DIAG] Recent files in artifact directory:" -ForegroundColor DarkYellow
+                    $nearbyArtifacts | ForEach-Object {
+                        Write-Host ("        {0} | {1} bytes | {2}" -f $_.Name, $_.Length, $_.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss.fff")) -ForegroundColor DarkYellow
+                    }
+                } else {
+                    Write-Host "    [DIAG] Artifact directory exists but contains no files: $artifactParent" -ForegroundColor DarkYellow
+                }
+            } else {
+                Write-Host "    [DIAG] Artifact directory does not exist: $artifactParent" -ForegroundColor DarkYellow
+            }
+        }
 
         # A written, non-empty deliverable is accepted even when OpenCode reports a
         # non-zero exit. The code remains visible as a warning and the output is logged.
@@ -382,7 +398,7 @@ $maxRepairAttempts = 3
 # or preserved failure artifacts.
 $runId = "{0}-{1}" -f (Get-Date -Format "yyyyMMdd-HHmmssfff"), ([guid]::NewGuid().ToString("N").Substring(0, 8))
 # Failed-workflow artifacts are copied here before their worktree is discarded.
-$failureArtifactDir = Join-Path ([System.IO.Path]::GetTempPath()) "opencode-audit-$runId"
+$failureArtifactDir = Join-Path $repositoryRoot (".pipeline\failures\{0}" -f $runId)
 
 Assert-CleanWorktree
 $totalWorkflows = $workflows.Count
@@ -392,6 +408,7 @@ $failedWorkflows = [System.Collections.Generic.List[string]]::new()
 $workflowIssues = [System.Collections.Generic.List[string]]::new()
 $worktreeParent = Split-Path -Parent $repositoryRoot
 Write-Host "Pipeline ready: $totalWorkflows workflows queued." -ForegroundColor Cyan
+Write-Host "Failure diagnostics will be preserved under: $failureArtifactDir" -ForegroundColor DarkGray
 $confirmation = Read-Host "This will let OpenCode inspect and modify the repository, then create commits. Type YES to continue"
 if ($confirmation -notmatch '^(?i:yes|y)$') {
     Write-Host "Pipeline cancelled. No files were changed." -ForegroundColor Yellow
@@ -644,7 +661,9 @@ Do NOT run Git add, commit, reset, restore, checkout, or switch commands.
     }
     } catch {
         if (Test-Path -LiteralPath $workflowPipeDir) {
-            Copy-Item -LiteralPath $workflowPipeDir -Destination (Join-Path $failureArtifactDir "$name-$runId") -Recurse -Force
+            $preservedFailureDir = Join-Path $failureArtifactDir "$name-$runId"
+            Copy-Item -LiteralPath $workflowPipeDir -Destination $preservedFailureDir -Recurse -Force
+            Write-Host "[DEBUG] Preserved workflow diagnostics at: $preservedFailureDir" -ForegroundColor DarkYellow
         }
         Set-Location -LiteralPath $repositoryRoot
         $issue = "$name attempt failed: $($_.Exception.Message)"
