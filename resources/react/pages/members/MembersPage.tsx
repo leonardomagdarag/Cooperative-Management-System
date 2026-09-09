@@ -15,6 +15,7 @@ const STATUS_FILTERS = [
     { value: 'active', label: 'Active' },
     { value: 'inactive', label: 'Inactive' },
     { value: 'terminated', label: 'Terminated' },
+    { value: 'archived', label: 'Archived' },
 ] as const;
 
 export default function MembersPage() {
@@ -27,6 +28,7 @@ export default function MembersPage() {
     const canViewMemberId = perms.includes('members.view-full-details');
     const canApprove = perms.includes('members.approve');
     const hasActions = canEdit || canDelete;
+    const isAdmin = user?.primary_role === 'admin';
     const [searchParams, setSearchParams] = useSearchParams();
     const [status, setStatus] = useState(searchParams.get('status') && STATUS_FILTERS.some(f => f.value === searchParams.get('status')) ? searchParams.get('status')! : 'all');
     const [search, setSearch] = useState('');
@@ -52,14 +54,26 @@ export default function MembersPage() {
 
     const approveMutation = useMutation({
         mutationFn: (id: number) => api.post(`/api/members/${id}/approve`),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['members'] }); addToast('Application approved. Activation email sent.', 'success'); },
+        onSuccess: (_, id) => { queryClient.invalidateQueries({ queryKey: ['members'] }); queryClient.invalidateQueries({ queryKey: ['member', id] }); addToast('Application approved. Activation email sent.', 'success'); },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed to approve application', 'error'),
     });
 
     const declineMutation = useMutation({
         mutationFn: ({ id, reason }: { id: number; reason: string }) => api.post(`/api/members/${id}/decline`, { reason }),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['members'] }); addToast('Application declined. Email sent to the applicant.', 'success'); setDeclining(null); },
+        onSuccess: (_, { id }) => { queryClient.invalidateQueries({ queryKey: ['members'] }); queryClient.invalidateQueries({ queryKey: ['member', id] }); addToast('Application declined. Email sent to the applicant.', 'success'); setDeclining(null); },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed to decline application', 'error'),
+    });
+
+    const restoreMutation = useMutation({
+        mutationFn: (id: number) => api.post(`/api/members/${id}/restore`),
+        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['members'] }); addToast('Member restored', 'success'); },
+        onError: (err: any) => addToast(err.response?.data?.message || 'Failed to restore member', 'error'),
+    });
+
+    const forceDeleteMutation = useMutation({
+        mutationFn: (id: number) => api.delete(`/api/members/${id}/force`),
+        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['members'] }); addToast('Member permanently deleted', 'success'); },
+        onError: (err: any) => addToast(err.response?.data?.message || 'Failed to permanently delete member', 'error'),
     });
 
     const members = data?.data?.data ?? [];
@@ -149,12 +163,11 @@ export default function MembersPage() {
                                     <thead className="bg-gray-100">
                                         <tr>
                                             <th scope="col" className="p-4 w-10"><div className="flex items-center"><input type="checkbox" className="w-4 h-4 bg-gray-50 rounded border-gray-300 focus:ring-3 focus:ring-blue-300" /></div></th>
-                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Name</th>
-                                            {canViewMemberId && <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Member ID</th>}
-                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Status</th>
-                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Email</th>
-                                            {hasActions && <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Actions</th>}
-                                            {canApprove && <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Application</th>}
+                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-[24%]">Name</th>
+                                            {canViewMemberId && <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-32">Member ID</th>}
+                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-32">Status</th>
+                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-[30%]">Email</th>
+                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-28">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
@@ -164,38 +177,33 @@ export default function MembersPage() {
                                                 <td className="p-4 text-sm font-medium text-gray-900 whitespace-nowrap">{m.name || 'Unknown'}</td>
                                                 {canViewMemberId && <td className="p-4 text-sm font-mono text-gray-500 whitespace-nowrap">{m.user_number || '—'}</td>}
                                                 <td className="p-4 whitespace-nowrap">
-                                                    {m.has_pending_application ? (
+                                                    {m.archived_at ? (
+                                                        <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">Archived</span>
+                                                    ) : m.has_pending_application ? (
                                                         <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-100 text-amber-700">Pending Approval</span>
                                                     ) : (
                                                         <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${m.account_status === 'active' ? 'bg-emerald-100 text-emerald-700' : m.account_status === 'terminated' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>{m.account_status}</span>
                                                     )}
                                                 </td>
-                                                <td className="p-4 text-sm text-gray-500">{m.email || '—'}</td>
-                                                {hasActions && (
-                                                    <td className="p-4 whitespace-nowrap">
-                                                        <div className="flex items-center gap-1">
-                                                            <button onClick={() => setViewing(m)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="View"><i className="fas fa-eye text-sm"></i></button>
-                                                            {canEdit && <button onClick={() => { setEditing(m); setShowWizard(true); }} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Edit"><i className="fas fa-edit text-sm"></i></button>}
-                                                            {canDelete && <button onClick={() => { if (confirm('Delete this member?')) deleteMutation.mutate(m.id); }} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Delete"><i className="fas fa-trash text-sm"></i></button>}
-                                                        </div>
-                                                    </td>
-                                                )}
-                                                {canApprove && (
-                                                    <td className="p-4 whitespace-nowrap">
-                                                        {m.has_pending_application ? (
-                                                            <div className="flex items-center gap-1.5">
-                                                                <button onClick={() => approveMutation.mutate(m.id)} disabled={approveMutation.isPending} className="px-2.5 py-1 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50" title="Approve application">
-                                                                    <i className="fas fa-check mr-1"></i>Approve
-                                                                </button>
-                                                                <button onClick={() => setDeclining(m)} className="px-2.5 py-1 text-xs font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700" title="Decline application">
-                                                                    <i className="fas fa-times mr-1"></i>Decline
-                                                                </button>
-                                                            </div>
+                                                <td className="p-4 min-w-0">
+                                                    <span className="block truncate text-sm text-gray-500" title={m.email}>{m.email || '—'}</span>
+                                                </td>
+                                                <td className="p-4 whitespace-nowrap">
+                                                    <div className="flex items-center gap-1">
+                                                        <button onClick={() => setViewing(m)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="View"><i className="fas fa-eye text-sm"></i></button>
+                                                        {m.archived_at ? (
+                                                            isAdmin && <>
+                                                                <button onClick={() => { if (confirm('Restore this archived member?')) restoreMutation.mutate(m.id); }} disabled={restoreMutation.isPending} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg" title="Restore"><i className="fas fa-undo text-sm"></i></button>
+                                                                <button onClick={() => { if (confirm('Permanently delete this member? This cannot be undone.')) forceDeleteMutation.mutate(m.id); }} disabled={forceDeleteMutation.isPending} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Permanent delete"><i className="fas fa-trash text-sm"></i></button>
+                                                            </>
                                                         ) : (
-                                                            <span className="text-xs text-gray-400">—</span>
+                                                            <>
+                                                                {canEdit && <button onClick={() => { setEditing(m); setShowWizard(true); }} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Edit"><i className="fas fa-edit text-sm"></i></button>}
+                                                                {canDelete && <button onClick={() => { if (confirm('Delete this member?')) deleteMutation.mutate(m.id); }} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Delete"><i className="fas fa-trash text-sm"></i></button>}
+                                                            </>
                                                         )}
-                                                    </td>
-                                                )}
+                                                    </div>
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -214,9 +222,9 @@ export default function MembersPage() {
                 </div>
             )}
 
-            {declining && <DeclineApplicationModal member={declining} onConfirm={(reason) => declineMutation.mutate({ id: declining.id, reason })} onClose={() => setDeclining(null)} submitting={declineMutation.isPending} />}
             {showWizard && <MemberWizardForm member={editing} onClose={() => { setShowWizard(false); setEditing(null); }} />}
-            {viewing && <MemberProfileModal memberId={viewing.id} onClose={() => setViewing(null)} />}
+            {viewing && <MemberProfileModal memberId={viewing.id} onClose={() => setViewing(null)} canApprove={canApprove} onApprove={(id) => approveMutation.mutate(id)} onDecline={() => setDeclining(viewing)} isApproving={approveMutation.isPending} isDeclining={declineMutation.isPending} />}
+            {declining && <DeclineApplicationModal member={declining} onConfirm={(reason) => declineMutation.mutate({ id: declining.id, reason })} onClose={() => setDeclining(null)} submitting={declineMutation.isPending} />}
             {showExport && <MemberExportModal onClose={() => setShowExport(false)} />}
         </div>
     );

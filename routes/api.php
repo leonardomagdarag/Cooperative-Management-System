@@ -201,6 +201,8 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     Route::post('/members', [MemberController::class, 'store']);
     Route::put('/members/{user}', [MemberController::class, 'update']);
     Route::delete('/members/{user}', [MemberController::class, 'destroy']);
+    Route::post('/members/{user}/restore', [MemberController::class, 'restore']);
+    Route::delete('/members/{user}/force', [MemberController::class, 'forceDestroy']);
 
     // Officer permission overrides (admin)
     Route::get('/officers/{user}/permissions', [OfficerPermissionController::class, 'index']);

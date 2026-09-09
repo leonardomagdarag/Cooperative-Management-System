@@ -14,7 +14,7 @@ const TABS = [
     { key: 'activity', label: 'Activity' },
 ];
 
-export default function MemberProfileModal({ memberId, onClose }: { memberId: number; onClose: () => void }) {
+export default function MemberProfileModal({ memberId, onClose, canApprove, onApprove, onDecline, isApproving, isDeclining }: { memberId: number; onClose: () => void; canApprove?: boolean; onApprove?: (id: number) => void; onDecline?: () => void; isApproving?: boolean; isDeclining?: boolean }) {
     const [activeTab, setActiveTab] = useState('overview');
 
     const { data, isLoading } = useQuery({
@@ -66,8 +66,24 @@ export default function MemberProfileModal({ memberId, onClose }: { memberId: nu
                                             <p className="text-sm text-gray-500">{m.user_number} &middot; {m.email}</p>
                                         </div>
                                     </div>
+                                    {m.has_pending_application && (
+                                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                                            <p className="text-sm font-semibold text-amber-800">Pending membership application</p>
+                                            <p className="mt-0.5 text-xs text-amber-700">Review this applicant's information below, then approve or decline their application.</p>
+                                            {canApprove && (
+                                                <div className="mt-3 flex items-center gap-2">
+                                                    <button onClick={() => onApprove?.(m.id)} disabled={isApproving || isDeclining} className="px-3.5 py-1.5 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50">
+                                                        <i className="fas fa-check mr-1"></i>{isApproving ? 'Approving...' : 'Approve'}
+                                                    </button>
+                                                    <button onClick={onDecline} disabled={isApproving || isDeclining} className="px-3.5 py-1.5 text-xs font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50">
+                                                        <i className="fas fa-times mr-1"></i>{isDeclining ? 'Declining...' : 'Decline'}
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                     <div className="grid grid-cols-2 gap-3">
-                                        <InfoRow label="Account Status" value={<span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${m.account_status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{m.account_status}</span>} />
+                                        <InfoRow label="Account Status" value={<span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${m.archived_at ? 'bg-gray-100 text-gray-600' : m.account_status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{m.archived_at ? 'Archived' : m.account_status}</span>} />
                                         <InfoRow label="Primary Role" value={m.primary_role} />
                                         <InfoRow label="Gender" value={m.personal_data?.gender} />
                                         <InfoRow label="Civil Status" value={m.personal_data?.civil_status} />
