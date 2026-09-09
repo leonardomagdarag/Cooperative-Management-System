@@ -223,7 +223,7 @@ export default function MembersPage() {
             )}
 
             {showWizard && <MemberWizardForm member={editing} onClose={() => { setShowWizard(false); setEditing(null); }} />}
-            {viewing && <MemberProfileModal memberId={viewing.id} onClose={() => setViewing(null)} canApprove={canApprove} onApprove={(id) => approveMutation.mutate(id)} onDecline={() => setDeclining(viewing)} isApproving={approveMutation.isPending} isDeclining={declineMutation.isPending} onEdit={() => { setViewing(null); setEditing(viewing); setShowWizard(true); }} canEdit={canEdit} canViewFullId={canViewMemberId} />}
+            {viewing && <MemberProfileModal memberId={viewing.id} onClose={() => setViewing(null)} canApprove={canApprove} onApprove={(id) => approveMutation.mutate(id)} onDecline={() => setDeclining(viewing)} isApproving={approveMutation.isPending} isDeclining={declineMutation.isPending} onEdit={() => { setViewing(null); setEditing(viewing); setShowWizard(true); }} canEdit={canEdit} canViewFullId={canViewMemberId} isAdmin={isAdmin} onRestore={() => { if (confirm('Restore this archived member?')) { restoreMutation.mutate(viewing.id); setViewing(null); } }} onForceDelete={() => { if (confirm('Permanently delete this member? This cannot be undone.')) { forceDeleteMutation.mutate(viewing.id); setViewing(null); } }} isRestoring={restoreMutation.isPending} isForceDeleting={forceDeleteMutation.isPending} />}
             {declining && <DeclineApplicationModal member={declining} onConfirm={(reason) => declineMutation.mutate({ id: declining.id, reason })} onClose={() => setDeclining(null)} submitting={declineMutation.isPending} />}
             {showExport && <MemberExportModal onClose={() => setShowExport(false)} />}
         </div>

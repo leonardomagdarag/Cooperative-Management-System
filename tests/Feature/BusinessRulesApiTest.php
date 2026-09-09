@@ -142,6 +142,22 @@ test('member profile returns education and special loan eligibility fields', fun
         ->assertJsonPath('personal_data.education', $member->personalData->education);
 });
 
+test('member profile returns recent activity logs', function () {
+    $member = User::factory()->create([
+        'email' => 'member.logs@example.com',
+    ]);
+
+    actingAs($this->admin);
+
+    $this->postJson('/api/members/'.$member->id.'/toggle-special-loan')->assertOk();
+
+    $this->getJson('/api/members/'.$member->id)
+        ->assertOk()
+        ->assertJsonPath('recent_logs', fn ($logs) => is_array($logs)
+            && count($logs) > 0
+            && collect($logs)->contains('event', 'member.special-loan-eligibility'));
+});
+
 test('member special loan eligibility toggle flips the flag and audits the change', function () {
     $member = User::factory()->create([
         'email' => 'member.eligible@example.com',

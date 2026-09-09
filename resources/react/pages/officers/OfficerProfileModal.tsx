@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import Modal from '../../components/ui/Modal';
+import ModalHeader from '../../components/ui/ModalHeader';
+import ModalTabs, { type TabItem } from '../../components/ui/ModalTabs';
 import { api } from '../../api/client';
 
-const TABS = [
-    { key: 'overview', label: 'Overview' },
-    { key: 'contact', label: 'Contact & IDs' },
-    { key: 'documents', label: 'Documents' },
+const TABS: TabItem[] = [
+    { key: 'overview', label: 'Overview', icon: 'fas fa-user' },
+    { key: 'contact', label: 'Contact & IDs', icon: 'fas fa-address-card' },
+    { key: 'documents', label: 'Documents', icon: 'fas fa-folder-open' },
 ];
 
 const ROLE_COLORS: Record<string, string> = {
@@ -38,24 +41,11 @@ export default function OfficerProfileModal({ officer, onClose, onEdit, onManage
         queryFn: () => api.get(`/api/members/${officer.id}`),
     });
 
-    if (isLoading) {
-        return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4">
-                <div className="w-full max-w-6xl rounded-lg bg-white p-10 shadow">
-                    <div className="space-y-3">{[...Array(6)].map((_, i) => <div key={i} className="h-10 animate-pulse rounded bg-gray-100" />)}</div>
-                </div>
-            </div>
-        );
-    }
-
     const m = data?.data;
-    if (!m) {
-        return null;
-    }
 
-    const pd = m.personal_data || {};
+    const pd = m?.personal_data || {};
     const fullName = [pd.first_name, pd.mid_name ? (pd.mid_name[0] + '.') : '', pd.last_name, pd.suffix].filter(Boolean).join(' ') || officer.name || 'N/A';
-    const primaryRole = m.primary_role || officer.primary_role || 'officer';
+    const primaryRole = m?.primary_role || officer.primary_role || 'officer';
     const roleColor = ROLE_COLORS[primaryRole] || ROLE_COLORS.officer;
     const chips = ROLE_CHIPS[primaryRole] || ROLE_CHIPS.default;
     const chipColor = ROLE_CHIP_COLORS[primaryRole] || ROLE_CHIP_COLORS.default;
@@ -67,156 +57,156 @@ export default function OfficerProfileModal({ officer, onClose, onEdit, onManage
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4" onClick={onClose}>
-            <div className="relative w-full max-w-6xl max-h-[90vh] mx-auto my-6" onClick={e => e.stopPropagation()}>
-                <div className="relative flex max-h-[90vh] flex-col rounded-lg bg-white shadow overflow-hidden">
-                    <div className="flex items-center justify-between border-b border-gray-200 bg-gradient-to-r from-cyan-600 to-emerald-600 p-5 shrink-0">
-                        <h3 className="text-xl font-semibold text-white">Officer Profile</h3>
-                        <button onClick={onClose} className="inline-flex items-center rounded-lg p-1.5 text-white bg-transparent hover:bg-cyan-800 transition-colors">
-                            <i className="fas fa-times text-lg"></i>
+        <Modal
+            open
+            onClose={onClose}
+            size="6xl"
+            fixed
+            header={
+                <ModalHeader title="Officer Profile" subtitle={m ? `ID: ${m.user_number}` : undefined} onClose={onClose} gradientClassName="from-cyan-600 to-emerald-600" />
+            }
+            footer={
+                <div className="flex w-full flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                        {canDelete && onDelete && (
+                            <button
+                                onClick={onDelete}
+                                className="inline-flex items-center rounded-lg bg-red-600 px-5 py-2.5 text-center text-sm font-medium text-white transition-colors hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-300"
+                            >
+                                <i className="fas fa-trash mr-2"></i>Delete Officer
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        {canManagePermissions && onManagePermissions && (
+                            <button
+                                onClick={onManagePermissions}
+                                className="inline-flex items-center rounded-lg bg-purple-600 px-5 py-2.5 text-center text-sm font-medium text-white transition-colors hover:bg-purple-700 focus:outline-none focus:ring-4 focus:ring-purple-300"
+                            >
+                                <i className="fas fa-user-shield mr-2"></i>Manage Permissions
+                            </button>
+                        )}
+                        {canEdit && onEdit && (
+                            <button
+                                onClick={() => onEdit(m)}
+                                className="inline-flex items-center rounded-lg bg-cyan-600 px-5 py-2.5 text-center text-sm font-medium text-white transition-colors hover:bg-cyan-700 focus:outline-none focus:ring-4 focus:ring-cyan-300"
+                            >
+                                <i className="fas fa-edit mr-2"></i>Edit Officer
+                            </button>
+                        )}
+                        <button
+                            onClick={onClose}
+                            className="inline-flex items-center rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 focus:z-10 focus:outline-none focus:ring-4 focus:ring-gray-200"
+                        >
+                            Close
                         </button>
                     </div>
-
-                    <div className="border-b border-gray-200 bg-gray-50 shrink-0">
-                        <div className="flex space-x-1 px-6">
-                            {TABS.map(tab => (
-                                <button
-                                    key={tab.key}
-                                    onClick={() => setActiveTab(tab.key)}
-                                    className={`px-6 py-3 text-sm font-medium whitespace-nowrap transition-colors ${activeTab === tab.key ? 'text-cyan-600 border-b-2 border-cyan-600 bg-white' : 'text-gray-600 hover:text-gray-800'}`}
-                                >
-                                    {tab.label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto p-6">
-                        {activeTab === 'overview' && (
-                            <div className="flex flex-col gap-6 md:flex-row">
-                                <div className="w-full md:w-64 flex-shrink-0">
-                                    {pd.profile_picture ? (
-                                        <img src={pd.profile_picture} alt="Profile" className="w-full h-64 rounded-lg shadow-lg object-cover border-4 border-cyan-100" />
-                                    ) : (
-                                        <div className="w-full h-64 rounded-lg shadow-lg bg-gradient-to-br from-cyan-100 to-emerald-100 flex items-center justify-center border-4 border-cyan-100">
-                                            <svg className="w-32 h-32 text-cyan-600" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                                            </svg>
+                </div>
+            }
+            bodyClassName="p-0"
+        >
+            <div className="flex h-full flex-col">
+                <ModalTabs
+                    tabs={TABS}
+                    activeTab={activeTab}
+                    onChange={setActiveTab}
+                    activeClassName="text-cyan-600 border-b-2 border-cyan-600 bg-white"
+                    inactiveClassName="text-gray-600 hover:text-gray-800 hover:border-gray-300"
+                />
+                <div className="flex-1 overflow-y-auto p-6">
+                    {isLoading ? (
+                        <div className="space-y-3">{[...Array(6)].map((_, i) => <div key={i} className="h-10 animate-pulse rounded bg-gray-100" />)}</div>
+                    ) : m ? (
+                        <>
+                            {activeTab === 'overview' && (
+                                <div className="flex flex-col gap-6 md:flex-row">
+                                    <div className="w-full flex-shrink-0 md:w-64">
+                                        {pd.profile_picture ? (
+                                            <img src={pd.profile_picture} alt="Profile" className="h-64 w-full rounded-lg border-4 border-cyan-100 object-cover shadow-lg" />
+                                        ) : (
+                                            <div className="flex h-64 w-full items-center justify-center rounded-lg border-4 border-cyan-100 bg-gradient-to-br from-cyan-100 to-emerald-100 shadow-lg">
+                                                <svg className="h-32 w-32 text-cyan-600" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                                                </svg>
+                                            </div>
+                                        )}
+                                        <div className="mt-4 text-center">
+                                            <h4 className="text-xl font-bold text-gray-800">{fullName}</h4>
+                                            <p className="mt-1 font-semibold text-cyan-600">{pd.title ? pd.title.charAt(0).toUpperCase() + pd.title.slice(1) : 'Officer'}</p>
+                                            <p className="mt-1 text-sm text-gray-600">ID: {m.user_number}</p>
+                                            <span className={`mt-3 inline-block px-3 py-1 text-xs font-semibold rounded-full border-2 ${roleColor}`}>
+                                                {primaryRole.toUpperCase()}
+                                            </span>
                                         </div>
-                                    )}
-                                    <div className="mt-4 text-center">
-                                        <h4 className="text-xl font-bold text-gray-800">{fullName}</h4>
-                                        <p className="text-cyan-600 font-semibold mt-1">{pd.title ? pd.title.charAt(0).toUpperCase() + pd.title.slice(1) : 'Officer'}</p>
-                                        <p className="text-sm text-gray-600 mt-1">ID: {m.user_number}</p>
-                                        <span className={`inline-block mt-3 px-3 py-1 text-xs font-semibold rounded-full border-2 ${roleColor}`}>
-                                            {primaryRole.toUpperCase()}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div className="flex-1">
-                                    <h5 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b-2 border-cyan-100">Personal Information</h5>
-                                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                                        <InfoField label="Date of Birth" value={fmtDate(pd.birth_date)} />
-                                        <InfoField label="Place of Birth" value={pd.birthplace} />
-                                        <InfoField label="Gender" value={pd.gender ? pd.gender.charAt(0).toUpperCase() + pd.gender.slice(1) : 'N/A'} />
-                                        <InfoField label="Civil Status" value={pd.civil_status ? pd.civil_status.charAt(0).toUpperCase() + pd.civil_status.slice(1) : 'N/A'} />
-                                        <InfoField label="Religion" value={pd.religion} />
-                                        <InfoField label="Education" value={pd.education} />
                                     </div>
 
-                                    <h5 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b-2 border-cyan-100 mt-6">Role & Permissions</h5>
-                                    <div className="bg-gradient-to-r from-cyan-50 to-emerald-50 p-4 rounded-lg border border-cyan-200">
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <InfoField label="System Role" value={primaryRole.charAt(0).toUpperCase() + primaryRole.slice(1)} strong />
-                                            <InfoField label="Position" value={pd.title ? pd.title.charAt(0).toUpperCase() + pd.title.slice(1) : 'N/A'} strong />
+                                    <div className="flex-1">
+                                        <h5 className="mb-4 border-b-2 border-cyan-100 text-lg font-semibold text-gray-800 pb-2">Personal Information</h5>
+                                        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                            <InfoField label="Date of Birth" value={fmtDate(pd.birth_date)} />
+                                            <InfoField label="Place of Birth" value={pd.birthplace} />
+                                            <InfoField label="Gender" value={pd.gender ? pd.gender.charAt(0).toUpperCase() + pd.gender.slice(1) : 'N/A'} />
+                                            <InfoField label="Civil Status" value={pd.civil_status ? pd.civil_status.charAt(0).toUpperCase() + pd.civil_status.slice(1) : 'N/A'} />
+                                            <InfoField label="Religion" value={pd.religion} />
+                                            <InfoField label="Education" value={pd.education} />
                                         </div>
-                                        <div className="mt-4">
-                                            <span className="text-sm font-medium text-gray-600 block mb-2">Permissions:</span>
-                                            <div className="flex flex-wrap gap-2">
-                                                {chips.map(chip => (
-                                                    <span key={chip} className={`px-2 py-1 text-xs ${chipColor} rounded`}>{chip}</span>
-                                                ))}
+
+                                        <h5 className="mt-6 mb-4 border-b-2 border-cyan-100 text-lg font-semibold text-gray-800 pb-2">Role & Permissions</h5>
+                                        <div className="rounded-lg border border-cyan-200 bg-gradient-to-r from-cyan-50 to-emerald-50 p-4">
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <InfoField label="System Role" value={primaryRole.charAt(0).toUpperCase() + primaryRole.slice(1)} strong />
+                                                <InfoField label="Position" value={pd.title ? pd.title.charAt(0).toUpperCase() + pd.title.slice(1) : 'N/A'} strong />
+                                            </div>
+                                            <div className="mt-4">
+                                                <span className="mb-2 block text-sm font-medium text-gray-600">Permissions:</span>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {chips.map(chip => (
+                                                        <span key={chip} className={`px-2 py-1 text-xs ${chipColor} rounded`}>{chip}</span>
+                                                    ))}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
 
-                        {activeTab === 'contact' && (
-                            <div>
-                                <h5 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b-2 border-cyan-100">Contact Information</h5>
-                                <div className="grid grid-cols-2 gap-6">
-                                    <InfoField label="Email Address" value={m.contact?.email || m.email} />
-                                    <InfoField label="Phone Number" value={m.contact?.phone_no} />
-                                    <InfoField label="Facebook" value={m.contact?.facebook} />
+                            {activeTab === 'contact' && (
+                                <div>
+                                    <h5 className="mb-4 border-b-2 border-cyan-100 text-lg font-semibold text-gray-800 pb-2">Contact Information</h5>
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <InfoField label="Email Address" value={m.contact?.email || m.email} />
+                                        <InfoField label="Phone Number" value={m.contact?.phone_no} />
+                                        <InfoField label="Facebook" value={m.contact?.facebook} />
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
 
-                        {activeTab === 'documents' && (
-                            <div>
-                                <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">Profile Photo</h4>
-                                {pd.profile_picture ? (
-                                    <div className="flex items-center gap-4">
-                                        <img src={pd.profile_picture} alt="Profile photo" className="w-32 h-32 rounded-full object-cover border-2 border-gray-200 shadow-sm" />
-                                        <div>
-                                            <p className="text-sm text-gray-600">Profile photo on file</p>
-                                            <a href={pd.profile_picture} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800">
-                                                <i className="fas fa-external-link-alt text-xs"></i> View full size
-                                            </a>
+                            {activeTab === 'documents' && (
+                                <div>
+                                    <h4 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-700">Profile Photo</h4>
+                                    {pd.profile_picture ? (
+                                        <div className="flex items-center gap-4">
+                                            <img src={pd.profile_picture} alt="Profile photo" className="h-32 w-32 rounded-full border-2 border-gray-200 object-cover shadow-sm" />
+                                            <div>
+                                                <p className="text-sm text-gray-600">Profile photo on file</p>
+                                                <a href={pd.profile_picture} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800">
+                                                    <i className="fas fa-external-link-alt text-xs"></i> View full size
+                                                </a>
+                                            </div>
                                         </div>
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center gap-3 text-gray-400 py-4">
-                                        <div className="w-16 h-16 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center"><i className="fas fa-user text-2xl"></i></div>
-                                        <p className="text-sm">No profile photo uploaded</p>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 space-x-2 border-t border-gray-200 bg-gray-50 shrink-0">
-                        <div className="flex items-center space-x-2">
-                            {canDelete && onDelete && (
-                                <button
-                                    onClick={onDelete}
-                                    className="inline-flex items-center text-white bg-red-600 hover:bg-red-700 focus:ring-4 focus:outline-none focus:ring-red-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center transition-colors"
-                                >
-                                    <i className="fas fa-trash mr-2"></i>Delete Officer
-                                </button>
+                                    ) : (
+                                        <div className="flex items-center gap-3 py-4 text-gray-400">
+                                            <div className="flex h-16 w-16 items-center justify-center rounded-full border border-gray-200 bg-gray-100"><i className="fas fa-user text-2xl"></i></div>
+                                            <p className="text-sm">No profile photo uploaded</p>
+                                        </div>
+                                    )}
+                                </div>
                             )}
-                        </div>
-                        <div className="flex items-center space-x-2">
-                            {canManagePermissions && onManagePermissions && (
-                                <button
-                                    onClick={onManagePermissions}
-                                    className="inline-flex items-center text-white bg-purple-600 hover:bg-purple-700 focus:ring-4 focus:outline-none focus:ring-purple-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center transition-colors"
-                                >
-                                    <i className="fas fa-user-shield mr-2"></i>Manage Permissions
-                                </button>
-                            )}
-                            {canEdit && onEdit && (
-                                <button
-                                    onClick={() => onEdit(m)}
-                                    className="inline-flex items-center text-white bg-cyan-600 hover:bg-cyan-700 focus:ring-4 focus:outline-none focus:ring-cyan-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center transition-colors"
-                                >
-                                    <i className="fas fa-edit mr-2"></i>Edit Officer
-                                </button>
-                            )}
-                            <button
-                                onClick={onClose}
-                                className="text-gray-500 bg-white hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-200 rounded-lg border border-gray-200 text-sm font-medium px-5 py-2.5 hover:text-gray-900 focus:z-10 transition-colors"
-                            >
-                                Close
-                            </button>
-                        </div>
-                    </div>
+                        </>
+                    ) : null}
                 </div>
             </div>
-        </div>
+        </Modal>
     );
 }
 

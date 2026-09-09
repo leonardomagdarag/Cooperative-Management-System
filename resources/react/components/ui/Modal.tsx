@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
 import Button from './Button';
 
-export type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+export type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '6xl';
 
 const maxWidths: Record<ModalSize, string> = {
     sm: 'max-w-sm',
@@ -9,6 +9,7 @@ const maxWidths: Record<ModalSize, string> = {
     lg: 'max-w-2xl',
     xl: 'max-w-3xl',
     '2xl': 'max-w-5xl',
+    '6xl': 'max-w-6xl',
 };
 
 export interface ModalProps {
