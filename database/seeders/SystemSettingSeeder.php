@@ -38,13 +38,48 @@ class SystemSettingSeeder extends Seeder
                 'label' => 'Maintenance Mode',
                 'description' => 'Enable maintenance mode to block access',
             ],
+            // REGISTRATION SETTINGS
             [
-                'key' => 'member_registration_enabled',
+                'key' => 'service_registration_enabled',
                 'value' => '1',
                 'type' => 'boolean',
-                'group' => 'general',
-                'label' => 'Member Registration',
+                'group' => 'service_availability',
+                'label' => 'Registration (Global)',
+                'description' => 'Enable public member registration',
+            ],
+            [
+                'key' => 'service_registration_member_enabled',
+                'value' => '1',
+                'type' => 'boolean',
+                'group' => 'service_availability',
+                'label' => 'Registration (Member)',
                 'description' => 'Allow new member registration',
+            ],
+
+            // LOGIN SETTINGS
+            [
+                'key' => 'service_login_enabled',
+                'value' => '1',
+                'type' => 'boolean',
+                'group' => 'service_availability',
+                'label' => 'Login (Global)',
+                'description' => 'Enable public login access',
+            ],
+            [
+                'key' => 'service_login_member_enabled',
+                'value' => '1',
+                'type' => 'boolean',
+                'group' => 'service_availability',
+                'label' => 'Login (Member)',
+                'description' => 'Allow members to log in',
+            ],
+            [
+                'key' => 'service_login_officer_enabled',
+                'value' => '1',
+                'type' => 'boolean',
+                'group' => 'service_availability',
+                'label' => 'Login (Officer)',
+                'description' => 'Allow officers to log in',
             ],
 
             // LOAN SETTINGS

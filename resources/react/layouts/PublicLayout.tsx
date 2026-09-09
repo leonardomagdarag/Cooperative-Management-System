@@ -19,6 +19,7 @@ export default function PublicLayout() {
 
     const termsContent = pc?.data?.form?.policies?.terms_and_conditions;
     const privacyContent = pc?.data?.form?.policies?.privacy_policy;
+    const loginEnabled = pc?.data?.availability?.login?.global !== false;
 
     useEffect(() => { setMobileOpen(false); }, [location]);
 
@@ -116,9 +117,9 @@ export default function PublicLayout() {
                                     <i className="fas fa-envelope mr-2"></i>Contact
                                 </a>
                             </div>
-                            <Link to="/login" className="public-btn public-btn-primary px-5 py-2.5">
+                            {loginEnabled && <Link to="/login" className="public-btn public-btn-primary px-5 py-2.5">
                                 <i className="fas fa-sign-in-alt mr-2"></i>Login
-                            </Link>
+                            </Link>}
                         </div>
 
                         <button
@@ -149,9 +150,9 @@ export default function PublicLayout() {
                             >
                                 <i className="fas fa-envelope mr-3"></i>Contact
                             </a>
-                            <Link to="/login" className="public-btn public-btn-primary w-full">
+                            {loginEnabled && <Link to="/login" className="public-btn public-btn-primary w-full">
                                 <i className="fas fa-sign-in-alt mr-2"></i>Login
-                            </Link>
+                            </Link>}
                         </div>
                     </div>
                 )}
@@ -184,7 +185,7 @@ export default function PublicLayout() {
                                 <li><Link to="/about" className="hover:text-white transition-colors inline-flex items-center gap-2"><i className="fas fa-chevron-right text-xs"></i>About Us</Link></li>
                                 <li><Link to="/news" className="hover:text-white transition-colors inline-flex items-center gap-2"><i className="fas fa-chevron-right text-xs"></i>News</Link></li>
                                 <li><a href={isHome ? '#Contact' : '/#Contact'} onClick={scrollToContact} className="hover:text-white transition-colors inline-flex items-center gap-2"><i className="fas fa-chevron-right text-xs"></i>Contact</a></li>
-                                <li><Link to="/login" className="hover:text-white transition-colors inline-flex items-center gap-2"><i className="fas fa-chevron-right text-xs"></i>Login</Link></li>
+                                {loginEnabled && <li><Link to="/login" className="hover:text-white transition-colors inline-flex items-center gap-2"><i className="fas fa-chevron-right text-xs"></i>Login</Link></li>}
                             </ul>
                         </div>
 

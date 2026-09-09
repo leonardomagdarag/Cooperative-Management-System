@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\CheckServiceAvailability;
 use App\Http\Middleware\EnsureOtpVerified;
+use App\Http\Middleware\EnsurePublicLoginEnabled;
 use App\Http\Middleware\EnsurePublicMemberRegistrationEnabled;
 use App\Http\Middleware\RoleMiddleware;
 use Illuminate\Auth\AuthenticationException;
@@ -35,6 +36,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role_or_permission' => RoleOrPermissionMiddleware::class,
             'spatie_role' => Spatie\Permission\Middleware\RoleMiddleware::class,
             'public.registration.enabled' => EnsurePublicMemberRegistrationEnabled::class,
+            'public.login.enabled' => EnsurePublicLoginEnabled::class,
             'otp.verified' => EnsureOtpVerified::class,
             'service.availability' => CheckServiceAvailability::class,
         ]);

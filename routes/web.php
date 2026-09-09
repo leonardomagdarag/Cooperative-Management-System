@@ -44,7 +44,7 @@ Route::prefix('/')->group(function () {
     Route::get('/login', [
         PageController::class,
         'login',
-    ])->name('login_page');
+    ])->middleware('public.login.enabled')->name('login_page');
 
     // Registration Page
     Route::get('/register', [
@@ -56,7 +56,7 @@ Route::prefix('/')->group(function () {
 // === Authentication Routes ===
 
 // Handle Login Submission
-Route::post('/login', [LoginController::class, 'login'])->middleware('throttle:10,1')->name('login');
+Route::post('/login', [LoginController::class, 'login'])->middleware(['public.login.enabled', 'throttle:10,1'])->name('login');
 // Handle Registration Submission
 Route::post('/register', [LoginController::class, 'register'])->middleware(['public.registration.enabled', 'throttle:5,10'])->name('register');
 Route::post('/contact', [PageController::class, 'submitContactMessage'])->middleware('throttle:5,10')->name('contact.send');

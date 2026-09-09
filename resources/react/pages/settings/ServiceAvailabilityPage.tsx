@@ -8,6 +8,13 @@ type ServiceKey = keyof ServiceAvailabilityData;
 type AvailabilityFlag = keyof ServiceAvailabilityFlags;
 
 const serviceConfig: Record<ServiceKey, { label: string; description: string; icon: string; flags: Array<{ key: AvailabilityFlag; label: string; description: string }> }> = {
+    registration: { label: 'Member Registration', description: 'Control whether visitors can create member accounts from the public website.', icon: 'fas fa-user-plus', flags: [
+        { key: 'member', label: 'Members', description: 'Allow new member registration from the public site.' },
+    ] },
+    login: { label: 'Login', description: 'Control whether users can log in to the system.', icon: 'fas fa-sign-in-alt', flags: [
+        { key: 'member', label: 'Members', description: 'Allow members to log in.' },
+        { key: 'officer', label: 'Officers', description: 'Allow officers to log in.' },
+    ] },
     deposit: { label: 'Deposits', description: 'Members and officers adding money to cooperative accounts.', icon: 'fas fa-plus-circle', flags: [
         { key: 'member', label: 'Members', description: 'Allow members to make deposits.' }, { key: 'officer', label: 'Officers', description: 'Allow officers to process deposits.' },
         { key: 'counter', label: 'Counter (OTC)', description: 'Allow over-the-counter deposits.' }, { key: 'online', label: 'Online', description: 'Allow online deposits.' },
