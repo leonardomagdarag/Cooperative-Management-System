@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { DayPicker, type DayPickerProps } from 'react-day-picker';
 
 function parseISODate(value: string | undefined): Date | undefined {
@@ -16,12 +16,50 @@ function toISODate(d: Date): string {
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const FULL_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 function formatDisplay(value: string | undefined): string {
     if (!value) return '';
     const m = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (!m) return value;
     return `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]}`;
+}
+
+function toUTCDate(year: number, monthIndex: number, day: number): Date | undefined {
+    const d = new Date(Date.UTC(year, monthIndex, day));
+    if (d.getUTCFullYear() !== year || d.getUTCMonth() !== monthIndex || d.getUTCDate() !== day) return undefined;
+    return d;
+}
+
+function monthFromWord(word: string): number | undefined {
+    const w = word.toLowerCase();
+    const idx = FULL_MONTHS.findIndex(name => name.toLowerCase().startsWith(w));
+    return idx >= 0 ? idx : undefined;
+}
+
+function parseFlexibleDate(raw: string): Date | undefined {
+    const s = raw.trim();
+    if (!s) return undefined;
+
+    let m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+    if (m) return toUTCDate(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+
+    m = s.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/);
+    if (m) return toUTCDate(Number(m[3]), Number(m[1]) - 1, Number(m[2]));
+
+    m = s.match(/^([A-Za-z]+)[\s,]+(\d{1,2})[\s,]+(\d{4})$/);
+    if (m) {
+        const mi = monthFromWord(m[1]);
+        if (mi !== undefined) return toUTCDate(Number(m[3]), mi, Number(m[2]));
+    }
+
+    m = s.match(/^(\d{1,2})[\s,]+([A-Za-z]+)[\s,]+(\d{4})$/);
+    if (m) {
+        const mi = monthFromWord(m[2]);
+        if (mi !== undefined) return toUTCDate(Number(m[3]), mi, Number(m[1]));
+    }
+
+    return undefined;
 }
 
 interface DatePickerProps {
@@ -38,19 +76,21 @@ interface DatePickerProps {
 
 export default function DatePicker({ value, onChange, className = '', minDate, maxDate, clearable = true, placeholder = 'Select date', fromYear, toYear }: DatePickerProps) {
     const [open, setOpen] = useState(false);
+    const [text, setText] = useState<string>(() => (value ? formatDisplay(value) : ''));
     const selected = parseISODate(value);
     const initialMonth = selected || parseISODate(maxDate) || new Date();
     const [viewMonth, setViewMonth] = useState(initialMonth);
     const wrapRef = useRef<HTMLDivElement>(null);
-    const triggerRef = useRef<HTMLButtonElement>(null);
+    const anchorRef = useRef<HTMLInputElement>(null);
+    const popupRef = useRef<HTMLDivElement>(null);
     const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
     const position = useCallback(() => {
-        const el = triggerRef.current;
+        const el = anchorRef.current;
         if (!el) return;
         const rect = el.getBoundingClientRect();
-        const calendarWidth = 320;
-        const calendarHeight = 340;
+        const calendarWidth = popupRef.current ? popupRef.current.offsetWidth : 320;
+        const calendarHeight = popupRef.current ? popupRef.current.offsetHeight : 340;
         let left = rect.left;
         if (left + calendarWidth > window.innerWidth - 8) left = Math.max(8, window.innerWidth - calendarWidth - 8);
         let top = rect.bottom + 4;
@@ -68,6 +108,12 @@ export default function DatePicker({ value, onChange, className = '', minDate, m
 
     useEffect(() => {
         if (!open) return;
+        const id = requestAnimationFrame(position);
+        return () => cancelAnimationFrame(id);
+    }, [open, position, viewMonth]);
+
+    useEffect(() => {
+        if (!open) return;
         const onDown = (e: MouseEvent) => {
             if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
         };
@@ -81,7 +127,9 @@ export default function DatePicker({ value, onChange, className = '', minDate, m
     }, [open]);
 
     useEffect(() => {
-        if (selected) setViewMonth(selected);
+        setText(value ? formatDisplay(value) : '');
+        const s = parseISODate(value);
+        if (s) setViewMonth(s);
     }, [value]);
 
     const viewYear = viewMonth.getUTCFullYear();
@@ -107,7 +155,6 @@ export default function DatePicker({ value, onChange, className = '', minDate, m
         classNames: {
             months: 'flex',
             month: 'space-y-3',
-            // The month/year controls above the calendar must not be covered by the navigation layer.
             nav: 'absolute inset-x-0 top-0 z-10 flex items-center justify-between px-1',
             button_previous: 'h-8 w-8 rounded-lg text-gray-500 hover:bg-emerald-50 hover:text-emerald-700 flex items-center justify-center transition-colors',
             button_next: 'h-8 w-8 rounded-lg text-gray-500 hover:bg-emerald-50 hover:text-emerald-700 flex items-center justify-center transition-colors',
@@ -130,36 +177,69 @@ export default function DatePicker({ value, onChange, className = '', minDate, m
         },
     };
 
+    const handleTextChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const raw = e.target.value;
+        setText(raw);
+        const clean = raw.trim();
+        if (clean === '') {
+            onChange('');
+            return;
+        }
+        const parsed = parseFlexibleDate(clean);
+        if (parsed) onChange(toISODate(parsed));
+    };
+
+    const handleBlur = () => {
+        const clean = text.trim();
+        const parsed = parseFlexibleDate(clean);
+        if (!parsed || toISODate(parsed) !== value) setText(value ? formatDisplay(value) : '');
+    };
+
     return (
         <div ref={wrapRef} className="relative">
-            <button
-                ref={triggerRef}
-                type="button"
-                onClick={() => setOpen(o => !o)}
-                aria-haspopup="dialog"
-                aria-expanded={open}
-                aria-label={value ? `Selected date ${formatDisplay(value)}` : placeholder}
-                className={`flex items-center justify-between gap-2 text-left ${className}`}
-            >
-                <span className={value ? '' : 'text-gray-400'}>{value ? formatDisplay(value) : placeholder}</span>
-                <span className="flex items-center gap-1 shrink-0">
+            <div className="relative">
+                <input
+                    ref={anchorRef}
+                    type="text"
+                    value={text}
+                    onChange={handleTextChange}
+                    onBlur={handleBlur}
+                    onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); }}
+                    placeholder={placeholder}
+                    autoComplete="off"
+                    aria-haspopup="dialog"
+                    aria-expanded={open}
+                    aria-label={value ? `Selected date ${formatDisplay(value)}` : placeholder}
+                    className={`pr-8 ${className}`}
+                />
+                <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 pr-2">
                     {value && clearable && (
-                        <span
-                            role="button"
-                            tabIndex={0}
+                        <button
+                            type="button"
                             aria-label="Clear date"
-                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onChange(''); } }}
+                            title="Clear date"
+                            onMouseDown={(e) => e.preventDefault()}
                             onClick={(e) => { e.stopPropagation(); onChange(''); }}
-                            className="rounded px-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                            className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                         >
                             <i className="fas fa-times text-xs"></i>
-                        </span>
+                        </button>
                     )}
-                    <i className="fas fa-calendar text-gray-400 text-xs"></i>
-                </span>
-            </button>
+                    <button
+                        type="button"
+                        aria-label="Open calendar"
+                        title="Open calendar"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => setOpen(o => !o)}
+                        className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                    >
+                        <i className={`fas fa-calendar text-xs ${open ? 'text-emerald-600' : ''}`}></i>
+                    </button>
+                </div>
+            </div>
             {open && pos && (
                 <div
+                    ref={popupRef}
                     role="dialog"
                     aria-label="Choose date"
                     className="fixed z-[80] max-w-[calc(100vw-1rem)] rounded-xl border border-gray-200 bg-white p-3 shadow-2xl"
