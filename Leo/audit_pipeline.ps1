@@ -9,7 +9,7 @@ if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -Scope Global -Er
     $PSNativeCommandUseErrorActionPreference = $false
 }
 
-$repositoryRoot = Split-Path -Parent $PSScriptRoot
+$repositoryRoot = $PSScriptRoot
 Set-Location -LiteralPath $repositoryRoot
 
 if ((git rev-parse --is-inside-work-tree).Trim() -ne "true") {
@@ -68,21 +68,76 @@ function Invoke-OpenCodeStage {
 
     for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
         $attemptLog = $null
+        $attemptMeta = $null
+
         if ($LogDirectory) {
             if (-not (Test-Path -LiteralPath $LogDirectory -PathType Container)) {
                 New-Item -ItemType Directory -Path $LogDirectory -Force | Out-Null
             }
+
             $attemptLog = Join-Path $LogDirectory ("{0}-attempt{1}.log" -f $StageName, $attempt)
+            $attemptMeta = Join-Path $LogDirectory ("{0}-attempt{1}.meta.txt" -f $StageName, $attempt)
+
+            @(
+                "Stage: $StageName"
+                "Model: $Model"
+                "Attempt: $attempt/$MaxAttempts"
+                "Started: $(Get-Date -Format o)"
+                "RequiredArtifact: $RequiredArtifact"
+                "WorkingDirectory: $(Get-Location)"
+                "ExpectedArtifactParentExists: $(if ($RequiredArtifact) { Test-Path -LiteralPath (Split-Path -Parent $RequiredArtifact) -PathType Container } else { 'n/a' })"
+            ) | Set-Content -LiteralPath $attemptMeta -Encoding UTF8
         }
 
         Write-Host "    [RUN] OpenCode stage '$StageName' with model '$Model' (attempt $attempt/$MaxAttempts)..." -ForegroundColor DarkGray
 
-        if ($attemptLog) {
-            & $openCodeCommand run -m $Model $Prompt 2>&1 | Tee-Object -FilePath $attemptLog
-        } else {
-            & $openCodeCommand run -m $Model $Prompt
+        # Capture output without relying on Tee-Object's handling of a native .cmd pipeline.
+        # All output is retained in memory first, then written to the persistent log.
+        $capturedOutput = @()
+        try {
+            $capturedOutput = @(& $openCodeCommand run -m $Model $Prompt 2>&1)
+            $stageExitCode = $LASTEXITCODE
         }
-        $stageExitCode = $LASTEXITCODE
+        catch {
+            $stageExitCode = if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } else { 1 }
+            $capturedOutput = @("PowerShell/native-command exception: $($_.Exception.Message)")
+        }
+
+        if ($attemptLog) {
+            $capturedOutput | ForEach-Object { "$_" } | Set-Content -LiteralPath $attemptLog -Encoding UTF8
+            Add-Content -LiteralPath $attemptMeta -Value "Finished: $(Get-Date -Format o)"
+            Add-Content -LiteralPath $attemptMeta -Value "ExitCode: $stageExitCode"
+            Add-Content -LiteralPath $attemptMeta -Value "CapturedOutputLines: $($capturedOutput.Count)"
+        }
+
+        # IMPORTANT: for artifact-producing stages, the script owns the artifact write.
+        # The model emits the artifact between explicit markers; this avoids depending on
+        # an agent successfully navigating a Windows filesystem path.
+        if ($RequiredArtifact -and
+            -not (
+                (Test-Path -LiteralPath $RequiredArtifact -PathType Leaf) -and
+                ((Get-Item -LiteralPath $RequiredArtifact).Length -gt 0)
+            )) {
+            $allOutput = ($capturedOutput | ForEach-Object { "$_" }) -join "`n"
+            $beginMarker = '===BEGIN_ARTIFACT==='
+            $endMarker = '===END_ARTIFACT==='
+            $beginIndex = $allOutput.IndexOf($beginMarker, [System.StringComparison]::Ordinal)
+            $endIndex = if ($beginIndex -ge 0) {
+                $allOutput.IndexOf($endMarker, $beginIndex + $beginMarker.Length, [System.StringComparison]::Ordinal)
+            } else { -1 }
+
+            if ($beginIndex -ge 0 -and $endIndex -gt $beginIndex) {
+                $artifactTextStart = $beginIndex + $beginMarker.Length
+                $artifactText = $allOutput.Substring($artifactTextStart, $endIndex - $artifactTextStart).Trim()
+
+                if ($artifactText.Length -gt 0) {
+                    $artifactParent = Split-Path -Parent $RequiredArtifact
+                    New-Item -ItemType Directory -Path $artifactParent -Force | Out-Null
+                    Set-Content -LiteralPath $RequiredArtifact -Value $artifactText -Encoding UTF8
+                    Write-Host "    [INFO] Reconstructed required artifact from OpenCode output: $RequiredArtifact" -ForegroundColor DarkCyan
+                }
+            }
+        }
 
         $artifactIsValid = -not $RequiredArtifact -or (
             (Test-Path -LiteralPath $RequiredArtifact -PathType Leaf) -and
@@ -92,25 +147,27 @@ function Invoke-OpenCodeStage {
         if ($RequiredArtifact -and -not $artifactIsValid) {
             Write-Host "    [DIAG] Required artifact was not found or is empty: $RequiredArtifact" -ForegroundColor DarkYellow
             $artifactParent = Split-Path -Parent $RequiredArtifact
+
             if (Test-Path -LiteralPath $artifactParent -PathType Container) {
                 $nearbyArtifacts = @(Get-ChildItem -LiteralPath $artifactParent -File -ErrorAction SilentlyContinue |
                     Sort-Object LastWriteTime -Descending |
                     Select-Object -First 12 Name,Length,LastWriteTime)
+
                 if ($nearbyArtifacts.Count -gt 0) {
                     Write-Host "    [DIAG] Recent files in artifact directory:" -ForegroundColor DarkYellow
                     $nearbyArtifacts | ForEach-Object {
                         Write-Host ("        {0} | {1} bytes | {2}" -f $_.Name, $_.Length, $_.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss.fff")) -ForegroundColor DarkYellow
                     }
-                } else {
+                }
+                else {
                     Write-Host "    [DIAG] Artifact directory exists but contains no files: $artifactParent" -ForegroundColor DarkYellow
                 }
-            } else {
+            }
+            else {
                 Write-Host "    [DIAG] Artifact directory does not exist: $artifactParent" -ForegroundColor DarkYellow
             }
         }
 
-        # A written, non-empty deliverable is accepted even when OpenCode reports a
-        # non-zero exit. The code remains visible as a warning and the output is logged.
         if ($artifactIsValid -and $stageExitCode -eq 0) {
             return
         }
@@ -123,19 +180,25 @@ function Invoke-OpenCodeStage {
 
         if ($attempt -lt $MaxAttempts) {
             $delaySeconds = 5 * $attempt
-            $reason = if ($stageExitCode -ne 0) { "exit code $stageExitCode" } else { "missing or empty required artifact" }
+            $reason = if ($stageExitCode -ne 0) {
+                "exit code $stageExitCode"
+            }
+            else {
+                "missing or empty required artifact"
+            }
             $logNote = if ($attemptLog) { " See $attemptLog" } else { "" }
             Write-Host "    [RETRY] OpenCode stage '$StageName' failed ($reason). Retrying in $delaySeconds seconds ($attempt/$MaxAttempts)...$logNote" -ForegroundColor Yellow
             Start-Sleep -Seconds $delaySeconds
         }
     }
 
+    $finalLogNote = if ($attemptLog) { " Last output log: $attemptLog" } else { "" }
+
     if ($stageExitCode -ne 0) {
-        $logNote = if ($attemptLog) { " Last output log: $attemptLog" } else { "" }
-        throw "OpenCode stage '$StageName' failed for model '$Model' after $MaxAttempts attempts with exit code $stageExitCode.$logNote"
+        throw "OpenCode stage '$StageName' failed for model '$Model' after $MaxAttempts attempts with exit code $stageExitCode.$finalLogNote"
     }
 
-    throw "OpenCode stage '$StageName' completed after $MaxAttempts attempts without creating a non-empty '$RequiredArtifact'."
+    throw "OpenCode stage '$StageName' completed after $MaxAttempts attempts without creating a non-empty '$RequiredArtifact'.$finalLogNote"
 }
 
 function Read-VerificationStatus {
@@ -491,9 +554,15 @@ finding to pad the plan.
 
 Do NOT modify any code.
 Do NOT run Git add, commit, reset, restore, checkout, or switch commands.
-Write an actionable, numbered implementation plan and save it directly to '$draftPlan'.
+Write an actionable, numbered implementation plan.
+Do NOT use a file-writing tool for the final deliverable. In your final response, output the complete
+plan between these exact markers, with no commentary outside them:
+===BEGIN_ARTIFACT===
+[complete plan]
+===END_ARTIFACT===
+The pipeline will save that content to '$draftPlan' itself.
 "@
-    Invoke-OpenCodeStage -Model $plannerModel -Prompt $planPrompt -RequiredArtifact $draftPlan -StageName "planner" -LogDirectory $workflowPipeDir
+    Invoke-OpenCodeStage -Model $plannerModel -Prompt $planPrompt -RequiredArtifact $draftPlan -StageName "planner" -LogDirectory (Join-Path (Join-Path $failureArtifactDir $name) "logs")
     Assert-GitHead -ExpectedHead $workflowHead
     Assert-NoCodeChanges -StageName "planner"
     Write-Host ("    [DONE] Plan created ({0})" -f ((Get-Date) - $stageStarted).ToString("hh\:mm\:ss")) -ForegroundColor DarkCyan
@@ -524,13 +593,18 @@ outcome for this workflow to need no changes at all -- do not manufacture a find
 have something to report. Every retained item must cite its exact location and include a
 concrete, narrow regression test.
 
-Rewrite the plan into a strict, finalized implementation specification and save it to
-'$refinedPlan'. If no changes are warranted, save a specification to '$refinedPlan' that
-states this explicitly and instructs the next stage to make no changes.
+Rewrite the plan into a strict, finalized implementation specification. If no changes are warranted,
+save a specification stating this explicitly and instructing the next stage to make no changes.
+Do NOT use a file-writing tool for the final deliverable. In your final response, output the complete
+specification between these exact markers, with no commentary outside them:
+===BEGIN_ARTIFACT===
+[complete specification]
+===END_ARTIFACT===
+The pipeline will save that content to '$refinedPlan' itself.
 Do NOT modify application code.
 Do NOT run Git add, commit, reset, restore, checkout, or switch commands.
 "@
-    Invoke-OpenCodeStage -Model $auditorModel -Prompt $auditPrompt -RequiredArtifact $refinedPlan -StageName "plan-auditor" -LogDirectory $workflowPipeDir
+    Invoke-OpenCodeStage -Model $auditorModel -Prompt $auditPrompt -RequiredArtifact $refinedPlan -StageName "plan-auditor" -LogDirectory (Join-Path (Join-Path $failureArtifactDir $name) "logs")
     Assert-GitHead -ExpectedHead $workflowHead
     Assert-NoCodeChanges -StageName "plan-auditor"
     Write-Host ("    [DONE] Plan approved ({0})" -f ((Get-Date) - $stageStarted).ToString("hh\:mm\:ss")) -ForegroundColor DarkCyan
@@ -585,7 +659,7 @@ accessibility rather than introducing a new visual language.
 Do NOT run Git add, commit, reset, restore, checkout, or switch commands.
 "@
         }
-        Invoke-OpenCodeStage -Model $coderModel -Prompt $execPrompt -StageName "implementation-$repairAttempt" -LogDirectory $workflowPipeDir -AcceptNonZeroExitWithValidArtifact:$false
+        Invoke-OpenCodeStage -Model $coderModel -Prompt $execPrompt -StageName "implementation-$repairAttempt" -LogDirectory (Join-Path (Join-Path $failureArtifactDir $name) "logs") -AcceptNonZeroExitWithValidArtifact:$false
         Assert-GitHead -ExpectedHead $workflowHead
         Write-Host ("    [DONE] Implementation stage finished ({0})" -f ((Get-Date) - $stageStarted).ToString("hh\:mm\:ss")) -ForegroundColor DarkCyan
 
@@ -612,15 +686,22 @@ If fixing a remaining failure would require editing a file that has not already 
 in this workflow, or a schema/migration change, report the failure as RETRY instead of making
 that edit yourself.
 
-Write a concise report to '$verificationReport'. The report MUST contain exactly one status
+Write a concise verification report. The report MUST contain exactly one status
 line in this format: STATUS: PASS or STATUS: RETRY, with no Markdown formatting, bullet,
 backticks, or extra characters on that line. Use STATUS: PASS only when the workflow
 is fully verified and no actionable issue remains. Use STATUS: RETRY when any issue, failed
 test, unverified authorization path, or blocker remains. Put the status line near the top,
 then list the evidence, tests run, and any remaining issues.
+
+Do NOT use a file-writing tool for the final deliverable. In your final response, output the complete
+report between these exact markers, with no commentary outside them:
+===BEGIN_ARTIFACT===
+[complete verification report]
+===END_ARTIFACT===
+The pipeline will save that content to '$verificationReport' itself.
 Do NOT run Git add, commit, reset, restore, checkout, or switch commands.
 "@
-        Invoke-OpenCodeStage -Model $auditorModel -Prompt $verifyPrompt -RequiredArtifact $verificationReport -StageName "verification-$repairAttempt" -LogDirectory $workflowPipeDir
+        Invoke-OpenCodeStage -Model $auditorModel -Prompt $verifyPrompt -RequiredArtifact $verificationReport -StageName "verification-$repairAttempt" -LogDirectory (Join-Path (Join-Path $failureArtifactDir $name) "logs")
         Assert-GitHead -ExpectedHead $workflowHead
         $verificationStatus = Read-VerificationStatus -ReportPath $verificationReport
         Write-Host ("    [DONE] Verification attempt $repairAttempt returned $verificationStatus ({0})" -f ((Get-Date) - $stageStarted).ToString("hh\:mm\:ss")) -ForegroundColor DarkCyan
