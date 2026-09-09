@@ -5,6 +5,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
 import OfficerFormModal from './OfficerFormModal';
 import OfficerPermissionModal from './OfficerPermissionModal';
+import OfficerProfileModal from './OfficerProfileModal';
 
 export default function OfficersPage() {
     const { user } = useAuth();
@@ -123,47 +124,9 @@ export default function OfficersPage() {
                 </div>
             )}
 
-            {viewing && <OfficerDetailModal officer={viewing} onClose={() => setViewing(null)} onEdit={() => { setViewing(null); setEditingOfficer(viewing); setShowForm(true); }} canEdit={canEdit} />}
+            {viewing && <OfficerProfileModal officer={viewing} onClose={() => setViewing(null)} onEdit={(fullOfficer) => { setViewing(null); setEditingOfficer(fullOfficer); setShowForm(true); }} onManagePermissions={() => { setViewing(null); setEditingOfficer(viewing); setShowPermissions(true); }} onDelete={() => { if (confirm('Remove this officer?')) { deleteMutation.mutate(viewing.id); setViewing(null); } }} canEdit={canEdit} canDelete={canDelete} canManagePermissions={canManagePermissions} />}
             {showForm && <OfficerFormModal officer={editingOfficer} onClose={() => { setShowForm(false); setEditingOfficer(null); }} />}
             {showPermissions && editingOfficer && <OfficerPermissionModal officer={editingOfficer} onClose={() => { setShowPermissions(false); setEditingOfficer(null); }} />}
-        </div>
-    );
-}
-
-function OfficerDetailModal({ officer, onClose, onEdit, canEdit }: { officer: any; onClose: () => void; onEdit?: () => void; canEdit?: boolean }) {
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={onClose}>
-            <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-                <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white">
-                    <div className="flex items-center justify-between">
-                        <h2 className="text-lg font-bold">Officer Details</h2>
-                        <div className="flex items-center gap-2">
-                            {canEdit && <button onClick={onEdit} className="text-white/70 hover:text-white" title="Edit"><i className="fas fa-edit"></i></button>}
-                            <button onClick={onClose} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white"><i className="fas fa-times"></i></button>
-                        </div>
-                    </div>
-                </div>
-                    <div className="p-6 space-y-4">
-                    <div className="flex items-center gap-4">
-                        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-indigo-100 text-xl font-bold text-indigo-600">{officer.name?.charAt(0) || '?'}</div>
-                        <div>
-                            <p className="font-semibold text-lg text-gray-900">{officer.name || 'Unknown'}</p>
-                            <p className="text-sm text-gray-500">{officer.email} · {officer.user_number}</p>
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <InfoRow label="Primary Role" value={officer.primary_role} />
-                        <InfoRow label="Account Status" value={officer.account_status} />
-                        <InfoRow label="Is Officer" value={officer.is_officer ? 'Yes' : 'No'} />
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function InfoRow({ label, value }: { label: string; value: any }) {
-    return (
-        <div><p className="text-xs text-gray-500">{label}</p><p className="text-sm font-medium text-gray-900 capitalize">{value || '—'}</p></div>
+</div>
     );
 }
