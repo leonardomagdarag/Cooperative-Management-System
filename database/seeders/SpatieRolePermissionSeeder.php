@@ -80,6 +80,11 @@ class SpatieRolePermissionSeeder extends Seeder
             'settings.view',
             'settings.update',
 
+            // Backups (admin-only)
+            'backups.view',
+            'backups.manage',
+            'backups.restore',
+
             // Audit Logs
             'logs.view',
             'logs.export',

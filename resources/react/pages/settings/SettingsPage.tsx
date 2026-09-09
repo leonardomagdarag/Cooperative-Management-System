@@ -12,6 +12,7 @@ import PublicContentPage from '../public-content/PublicContentPage';
 import LoanProductsPage from '../loan-products/LoanProductsPage';
 import RolePermissionsPage from '../role-permissions/RolePermissionsPage';
 import ServiceAvailabilityPage from './ServiceAvailabilityPage';
+import BackupPage from './BackupPage';
 import SettingsTabHeader from './SettingsTabHeader';
 // import EmailChangeVerification from '../../components/EmailChangeVerification';
 
@@ -28,6 +29,7 @@ export default function SettingsPage() {
     const isMember = user?.primary_role === 'member';
     const canManageSettings = user?.permissions?.includes('settings.update');
     const isAdmin = user?.primary_role === 'admin';
+    const canManageBackups = user?.permissions?.includes('backups.manage') || user?.permissions?.includes('backups.view');
 
     const tabs: SettingsTab[] = [
         { key: 'account', label: 'My Account', icon: 'fas fa-user-cog', visible: true },
@@ -35,6 +37,7 @@ export default function SettingsPage() {
         { key: 'loan-products', label: 'Loan Products', icon: 'fas fa-hand-holding-usd', visible: !isMember && canManageSettings },
         { key: 'role-permissions', label: 'Roles & Permissions', icon: 'fas fa-user-shield', visible: !isMember && isAdmin },
         { key: 'service-availability', label: 'Service Availability', icon: 'fas fa-toggle-on', visible: !isMember && canManageSettings },
+        { key: 'backups', label: 'Backup & Restore', icon: 'fas fa-hard-drive', visible: !isMember && canManageBackups },
     ];
 
     const visibleTabs = tabs.filter(t => t.visible);
@@ -61,6 +64,7 @@ export default function SettingsPage() {
               activeTab === 'loan-products' ? <LoanProductsPage /> :
               activeTab === 'role-permissions' ? <RolePermissionsPage /> :
               activeTab === 'service-availability' ? <ServiceAvailabilityPage /> :
+              activeTab === 'backups' ? <BackupPage /> :
               <MemberSettings />}
         </div>
     );

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AnnouncementController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BackupController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\ExpenseController;
 use App\Http\Controllers\Api\HistoryController;
@@ -226,4 +227,18 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     // Service Availability Settings
     Route::get('/settings/service-availability', [SettingsController::class, 'getServiceAvailability']);
     Route::put('/settings/service-availability', [SettingsController::class, 'updateServiceAvailability']);
+
+    // Backups (admin only — permission-gated inside the controller)
+    Route::get('/backups', [BackupController::class, 'index']);
+    Route::get('/backups/runs', [BackupController::class, 'runs']);
+    Route::put('/backups/settings', [BackupController::class, 'updateSettings']);
+    Route::get('/backups/cloud-credentials', [BackupController::class, 'cloudCredentials']);
+    Route::put('/backups/cloud-credentials', [BackupController::class, 'updateCloudCredentials']);
+    Route::post('/backups/cloud-credentials/test', [BackupController::class, 'testCloudCredentials']);
+    Route::delete('/backups/cloud-credentials', [BackupController::class, 'clearCloudCredentials']);
+    Route::post('/backups/{tier}/run', [BackupController::class, 'run']);
+    Route::post('/backups/{tier}/cleanup', [BackupController::class, 'cleanup']);
+    Route::get('/backups/{tier}/download', [BackupController::class, 'download']);
+    Route::delete('/backups/{tier}/backup', [BackupController::class, 'destroy']);
+    Route::post('/backups/restore', [BackupController::class, 'restore']);
 });
