@@ -83,7 +83,9 @@ export default function OfficersPage() {
                                     <thead className="bg-gray-100">
                                         <tr>
                                             <th scope="col" className="p-4 w-10"><input type="checkbox" className="w-4 h-4 bg-gray-50 rounded border-gray-300 focus:ring-3 focus:ring-blue-300" /></th>
+                                            {canEdit && <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Officer ID</th>}
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Name</th>
+                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Title</th>
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Role</th>
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Status</th>
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Email</th>
@@ -94,9 +96,11 @@ export default function OfficersPage() {
                                         {officers.map((o: any) => (
                                             <tr key={o.id} className="hover:bg-gray-50">
                                                 <td className="p-4 w-10"><input type="checkbox" className="w-4 h-4 bg-gray-50 rounded border-gray-300 focus:ring-3 focus:ring-blue-300" /></td>
+                                                {canEdit && <td className="p-4 text-sm font-semibold text-gray-900 whitespace-nowrap">{o.user_number}</td>}
                                                 <td className="p-4 text-sm font-medium text-gray-900 whitespace-nowrap">{o.name || 'Unknown'}</td>
-                                                <td className="p-4 text-sm text-gray-500 whitespace-nowrap capitalize">{o.primary_role || 'Officer'}</td>
-                                                <td className="p-4 whitespace-nowrap"><span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${o.account_status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{o.account_status}</span></td>
+                                                <td className="p-4 whitespace-nowrap">{o.title ? <span className="px-2.5 py-0.5 text-xs font-medium bg-cyan-100 text-cyan-800 rounded">{o.title.replace(/_/g, ' ')?.replace(/\b\w/g, c => c.toUpperCase())}</span> : <span className="text-xs text-gray-400">N/A</span>}</td>
+                                                <td className="p-4 whitespace-nowrap"><span className="px-2.5 py-0.5 text-xs font-medium bg-purple-100 text-purple-800 rounded capitalize">{o.primary_role || 'Officer'}</span></td>
+                                                <td className="p-4 whitespace-nowrap"><span className={`px-2.5 py-0.5 text-xs font-medium rounded ${o.account_status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{o.account_status === 'active' ? 'Active' : 'Inactive'}</span></td>
                                                 <td className="p-4 text-sm text-gray-500">{o.email || '—'}</td>
                                                 <td className="p-4 whitespace-nowrap">
                                                     <div className="flex items-center gap-1">
@@ -119,7 +123,7 @@ export default function OfficersPage() {
             {pagination.last_page > 1 && (
                 <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 flex items-center justify-center gap-2">
                     <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50">Previous</button>
-                    <span className="text-sm text-gray-500">Page {page} of {pagination.last_page}</span>
+                    <span className="text-sm font-normal text-gray-500">Showing <span className="font-semibold text-gray-900">{((page - 1) * pagination.per_page + 1)}-{Math.min(page * pagination.per_page, pagination.total)}</span> of <span className="font-semibold text-gray-900">{pagination.total}</span></span>
                     <button onClick={() => setPage(p => Math.min(pagination.last_page, p + 1))} disabled={page === pagination.last_page} className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50">Next</button>
                 </div>
             )}

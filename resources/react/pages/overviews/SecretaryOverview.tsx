@@ -1,8 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function SecretaryOverview() {
     const { data, isLoading } = useQuery({ queryKey: ['overview-secretary'], queryFn: () => api.get('/api/dashboard') });
+    const { user } = useAuth();
     const d = data?.data || {};
     if (isLoading) return <div className="space-y-4"><div className="h-36 animate-pulse rounded-2xl bg-slate-100" /><div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">{[...Array(4)].map((_, i) => <div key={i} className="h-24 animate-pulse rounded-2xl bg-slate-100" />)}</div></div>;
 
@@ -17,8 +19,8 @@ export default function SecretaryOverview() {
                 <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                     <div>
                         <p className="text-teal-200 text-sm font-medium uppercase tracking-widest mb-1">Secretary</p>
-                        <h1 className="text-3xl font-extrabold leading-tight">{d.greeting}</h1>
-                        <p className="mt-1 text-teal-200">Member records — {d.period_label || ''}</p>
+                        <h1 className="text-3xl font-extrabold leading-tight">{d.greeting}, {user?.first_name || 'Secretary'}</h1>
+                        <p className="mt-1 text-teal-200">Member records and communications - {d.period_label || ''}</p>
                     </div>
                     <div className="sm:text-right shrink-0">
                         <p className="text-teal-200 text-xs uppercase tracking-wide">Today</p>
@@ -37,33 +39,39 @@ export default function SecretaryOverview() {
 
             <div className="grid xl:grid-cols-3 gap-6">
                 <div className="xl:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="px-6 py-4 border-b border-gray-100"><h2 className="text-base font-bold text-gray-900">Recently Registered Members</h2></div>
-                    <div className="p-4">
+                    <div className="px-6 py-4 border-b border-gray-100">
+                        <h2 className="text-base font-bold text-gray-900">Recently Registered Members</h2>
+                        <p className="text-xs text-gray-500">Latest member enrollments</p>
+                    </div>
+                    <div className="p-6">
                         {members.length > 0 ? (
-                            <div className="grid sm:grid-cols-2 gap-3">
+                            <div>
                                 {members.map((m: any) => (
-                                    <div key={m.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50">
-                                        <div className="w-9 h-9 rounded-full bg-teal-100 flex items-center justify-center text-xs font-bold text-teal-600">{m.name?.charAt(0) || '?'}</div>
+                                    <div key={m.id} className="flex items-center gap-4 border-b border-gray-50 py-2 last:border-0">
+                                        <div className="w-9 h-9 rounded-full bg-teal-100 flex items-center justify-center text-sm font-bold text-teal-700 shrink-0">{m.name?.charAt(0).toUpperCase() || 'M'}</div>
                                         <div className="min-w-0 flex-1">
-                                            <p className="text-sm font-medium text-gray-800 truncate">{m.name}</p>
+                                            <p className="text-sm font-semibold text-gray-900 truncate">{m.name}</p>
                                             <p className="text-xs text-gray-400">{m.user_number}</p>
                                         </div>
-                                        <div className="text-right"><span className={`px-2 py-0.5 text-xs rounded-full ${m.account_status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{m.account_status}</span><p className="text-xs text-gray-400 mt-0.5">{m.created_at}</p></div>
+                                        <div className="shrink-0 text-right">
+                                            <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${m.account_status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{m.account_status ? m.account_status.charAt(0).toUpperCase() + m.account_status.slice(1) : 'Active'}</span>
+                                            <p className="text-xs text-gray-400 mt-1">{m.created_at}</p>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
                         ) : (
-                            <div className="py-8 text-center text-sm text-gray-400">No recent member registrations</div>
+                            <p className="py-8 text-center text-sm text-gray-400">No members registered yet.</p>
                         )}
                     </div>
                 </div>
 
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="px-6 py-4 border-b border-gray-100"><h2 className="text-base font-bold text-gray-900">Announcements</h2></div>
-                    <div className="p-4 space-y-3">
+                    <div className="px-5 py-3.5 border-b border-gray-100"><h3 className="text-sm font-bold text-gray-900">Announcements</h3></div>
+                    <div className="p-5 space-y-4">
                         {announcements.length > 0 ? announcements.map((a: any) => (
-                            <div key={a.id} className="flex gap-3"><div className="w-1 rounded-full bg-teal-400 self-stretch shrink-0"></div><div><p className="text-sm font-semibold text-gray-800">{a.title}</p><p className="text-xs text-gray-500 line-clamp-1">{a.content}</p><div className="flex items-center gap-2 mt-0.5 text-xs text-gray-400"><span>{a.creator_name}</span><span>{a.created_at_diff}</span></div></div></div>
-                        )) : <div className="py-4 text-center text-sm text-gray-400">No announcements</div>}
+                            <div key={a.id} className="flex gap-3"><div className="w-1 rounded-full bg-teal-400 self-stretch shrink-0"></div><div className="min-w-0"><p className="text-sm font-semibold text-gray-800 truncate">{a.title}</p><p className="text-xs text-gray-500 line-clamp-1 mt-0.5">{a.content}</p><div className="flex items-center gap-2 mt-1 text-xs text-gray-400"><span>{a.creator_name}</span><span>{a.created_at_diff}</span></div></div></div>
+                        )) : <p className="py-4 text-center text-sm text-gray-400">No announcements yet.</p>}
                     </div>
                 </div>
             </div>

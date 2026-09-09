@@ -40,7 +40,7 @@ export default function ManagerOverview() {
             </div>
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <KpiCard label="Total Members" value={Number(d.members_new_month || 0).toLocaleString()} icon="users" color="emerald" badge={`+${Number(d.members_new_month || 0).toLocaleString()} mo.`} />
+                <KpiCard label="Total Members" value={Number(d.members_total || d.total_members || 0).toLocaleString()} icon="users" color="emerald" badge={`+${Number(d.members_new_month || 0).toLocaleString()} mo.`} />
                 <KpiCard label="Total Savings" value={`₱${Number(d.savings_total || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`} icon="piggy-bank" color="cyan" />
                 <KpiCard label="Active Loans" value={Number(d.loans_active || 0).toLocaleString()} icon="file-invoice" color="blue" detail={`Overdue: ${Number(d.loans_overdue || 0)}`} />
                 <div className={`bg-white rounded-2xl shadow-sm border p-5 ${Number(d.pending_transactions) > 0 ? 'border-amber-200 bg-amber-50' : 'border-gray-100'}`}>

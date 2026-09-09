@@ -26,32 +26,33 @@ export default function HistoryPage() {
     const transactions: Transaction[] = data?.data?.data ?? [];
     const pagination = data?.data?.pagination;
 
+    const getTypeStyle = (type: string) => {
+        const c: Record<string, { bg: string; icon: string; text: string }> = {
+            deposit: { bg: 'bg-green-100', icon: 'fas fa-plus-circle', text: 'text-green-600' },
+            withdrawal: { bg: 'bg-orange-100', icon: 'fas fa-minus-circle', text: 'text-orange-600' },
+            loan_disbursement: { bg: 'bg-purple-100', icon: 'fas fa-file-invoice-dollar', text: 'text-purple-600' },
+            loan_payment: { bg: 'bg-blue-100', icon: 'fas fa-hand-holding-usd', text: 'text-blue-600' },
+        };
+        return c[type] || { bg: 'bg-blue-100', icon: 'fas fa-receipt', text: 'text-blue-600' };
+    };
+
     const getTypeColor = (type: string) => {
         switch (type) {
-            case 'deposit': return 'bg-emerald-100 text-emerald-700';
-            case 'withdrawal': return 'bg-red-100 text-red-700';
-            case 'loan_payment': return 'bg-blue-100 text-blue-700';
-            case 'loan_disbursement': return 'bg-amber-100 text-amber-700';
-            default: return 'bg-gray-100 text-gray-700';
+            case 'deposit': return 'bg-green-100 text-green-800';
+            case 'withdrawal': return 'bg-orange-100 text-orange-800';
+            case 'loan_payment': return 'bg-blue-100 text-blue-800';
+            case 'loan_disbursement': return 'bg-purple-100 text-purple-800';
+            default: return 'bg-gray-100 text-gray-800';
         }
     };
 
     const getStatusColor = (s: string) => {
         switch (s) {
-            case 'completed': case 'approved': return 'bg-emerald-100 text-emerald-700';
-            case 'pending': return 'bg-amber-100 text-amber-700';
-            case 'rejected': return 'bg-red-100 text-red-700';
-            default: return 'bg-gray-100 text-gray-700';
-        }
-    };
-
-    const getTypeIcon = (type: string) => {
-        switch (type) {
-            case 'deposit': return 'fas fa-plus-circle text-emerald-600';
-            case 'withdrawal': return 'fas fa-minus-circle text-red-600';
-            case 'loan_payment': return 'fas fa-hand-holding-usd text-blue-600';
-            case 'loan_disbursement': return 'fas fa-file-invoice-dollar text-amber-600';
-            default: return 'fas fa-receipt text-gray-600';
+            case 'completed': return 'bg-green-100 text-green-800';
+            case 'pending': return 'bg-yellow-100 text-yellow-800';
+            case 'approved': return 'bg-blue-100 text-blue-800';
+            case 'rejected': return 'bg-red-100 text-red-800';
+            default: return 'bg-gray-100 text-gray-800';
         }
     };
 
@@ -121,12 +122,15 @@ export default function HistoryPage() {
                 </div>
             ) : (
                 <div className="space-y-3">
-                    {transactions.map(t => (
+                    {transactions.map(t => {
+                        const ts = getTypeStyle(t.transaction_type);
+                        const amountColor = t.transaction_type === 'deposit' ? 'text-green-600' : t.transaction_type === 'withdrawal' ? 'text-orange-600' : 'text-blue-600';
+                        return (
                         <div key={t.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100">
-                                        <i className={`${getTypeIcon(t.transaction_type)} text-lg`}></i>
+                                    <div className={`flex h-10 w-10 items-center justify-center rounded-full ${ts.bg}`}>
+                                        <i className={`${ts.icon} ${ts.text} text-lg`}></i>
                                     </div>
                                     <div>
                                         <div className="flex items-center gap-2">
@@ -139,7 +143,7 @@ export default function HistoryPage() {
                                     </div>
                                 </div>
                                 <div className="text-right">
-                                    <p className="font-bold text-gray-900">&#8369;{Number(t.amount).toLocaleString()}</p>
+                                    <p className={`text-xl font-bold ${amountColor}`}>{(t.transaction_type === 'deposit' ? '+' : '-')}&#8369;{Number(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                     <div className="mt-1 flex items-center gap-2 justify-end">
                                         <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusColor(t.status)}`}>
                                             {t.status}
@@ -149,7 +153,8 @@ export default function HistoryPage() {
                                 </div>
                             </div>
                         </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 

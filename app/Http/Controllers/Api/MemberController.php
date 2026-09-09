@@ -99,6 +99,7 @@ class MemberController extends Controller
                 'is_officer' => $u->is_officer,
                 'primary_role' => $u->primary_role,
                 'name' => trim(($u->personalData->first_name ?? '').' '.($u->personalData->last_name ?? '')),
+                'title' => $u->personalData?->title,
                 'phone' => $u->personalData->contact?->phone_no,
                 'accounts' => $u->accounts->map(fn ($a) => ['id' => $a->id, 'type' => $a->account_type, 'balance' => $a->balance]),
                 'has_pending_application' => (bool) ($u?->memberApplication?->status === 'pending'),

@@ -4,6 +4,16 @@ import { api } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 
+function txBadgeClass(type: string): string {
+    const c: Record<string, string> = { deposit: 'bg-blue-100 text-blue-800', withdrawal: 'bg-orange-100 text-orange-800', loan_payment: 'bg-green-100 text-green-800', loan_disbursement: 'bg-purple-100 text-purple-800', fee: 'bg-red-100 text-red-800' };
+    return c[type] || 'bg-gray-100 text-gray-800';
+}
+
+function txBadgeText(type: string): string {
+    const c: Record<string, string> = { deposit: 'Deposit', withdrawal: 'Withdrawal', loan_payment: 'Loan Payment', loan_disbursement: 'Loan Disbursement', fee: 'Fee' };
+    return c[type] || type?.replace(/_/g, ' ') || 'Unknown';
+}
+
 export default function ReportsPage() {
     const { user } = useAuth();
     const { addToast } = useToast();
@@ -239,7 +249,7 @@ export default function ReportsPage() {
                                 <div className="overflow-x-auto">
                                     <table className="min-w-full divide-y divide-gray-100">
                                         <thead className="bg-gray-50"><tr><th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-500">Date</th><th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-500">Member</th><th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-500">Activity</th><th className="px-4 py-2 text-right text-xs font-medium uppercase text-gray-500">Amount</th></tr></thead>
-                                        <tbody className="divide-y divide-gray-50">{memberActivityRows.length === 0 ? <tr><td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-500">No member activity in range</td></tr> : memberActivityRows.map((row: any) => <tr key={row.id} className="hover:bg-gray-50"><td className="px-4 py-2 text-sm text-gray-500">{row.transaction_date}</td><td className="px-4 py-2 text-sm text-gray-700">{row.member_name}</td><td className="px-4 py-2 text-sm capitalize text-gray-700">{row.transaction_type.replace('_', ' ')}</td><td className="px-4 py-2 text-right text-sm font-medium text-gray-900">{formatCurrency(row.amount)}</td></tr>)}</tbody>
+                                        <tbody className="divide-y divide-gray-50">{memberActivityRows.length === 0 ? <tr><td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-500">No member activity in range</td></tr> : memberActivityRows.map((row: any) => <tr key={row.id} className="hover:bg-gray-50"><td className="px-4 py-2 text-sm text-gray-500">{row.transaction_date}</td><td className="px-4 py-2 text-sm text-gray-700">{row.member_name}</td><td className="px-4 py-2 text-sm text-gray-700"><span className={`inline-flex rounded px-2 py-0.5 text-xs font-medium ${txBadgeClass(row.transaction_type)}`}>{txBadgeText(row.transaction_type)}</span></td><td className="px-4 py-2 text-right text-sm font-medium text-gray-900">{formatCurrency(row.amount)}</td></tr>)}</tbody>
                                     </table>
                                 </div>
                             </div>
@@ -359,7 +369,7 @@ export default function ReportsPage() {
                                                         <tr key={t.id} className="hover:bg-gray-50">
                                                             <td className="px-4 py-2 text-sm font-medium text-gray-900">{t.transaction_number}</td>
                                                             <td className="px-4 py-2 text-sm text-gray-500">{t.member_name}</td>
-                                                            <td className="px-4 py-2 text-sm text-gray-500">{t.transaction_type}</td>
+                                                            <td className="px-4 py-2 text-sm text-gray-500"><span className={`inline-flex rounded px-2 py-0.5 text-xs font-medium ${txBadgeClass(t.transaction_type)}`}>{txBadgeText(t.transaction_type)}</span></td>
                                                             <td className="px-4 py-2 text-sm text-right font-medium text-gray-900">{formatCurrency(t.amount)}</td>
                                                             <td className="px-4 py-2 text-sm text-gray-500">{t.created_at}</td>
                                                         </tr>

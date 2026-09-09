@@ -64,6 +64,7 @@ class LoanController extends Controller
                 'payment_frequency' => $l->payment_frequency,
                 'loan_status' => $l->loan_status,
                 'applied_at' => $l->applied_at?->format('Y-m-d'),
+                'created_at' => $l->created_at->format('M d, Y'),
                 'due_date' => $l->due_date,
                 'borrower' => $l->user?->personalData ? [
                     'name' => trim($l->user->personalData->first_name.' '.$l->user->personalData->last_name),

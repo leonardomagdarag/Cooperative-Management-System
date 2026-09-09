@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
+import { formatPermissionLabel } from '../../lib/permissions';
 
 type State = 'inherit' | 'allow' | 'disallow';
 
@@ -84,7 +85,7 @@ export default function OfficerPermissionModal({ officer, onClose }: { officer: 
         const result: Record<string, string[]> = {};
         Object.entries(groups).forEach(([groupName, permissions]) => {
             const filtered = permissions.filter(p => {
-                const matchesSearch = search === '' || p.toLowerCase().includes(search.toLowerCase()) || formatLabel(p).toLowerCase().includes(search.toLowerCase());
+                const matchesSearch = search === '' || p.toLowerCase().includes(search.toLowerCase()) || formatPermissionLabel(p).toLowerCase().includes(search.toLowerCase());
                 if (!matchesSearch) return false;
                 if (showOnlyOverrides && states[p] === 'inherit') return false;
                 return true;
@@ -207,7 +208,7 @@ export default function OfficerPermissionModal({ officer, onClose }: { officer: 
                                                 <div key={permission} className={`flex flex-col gap-3 px-5 py-4 lg:flex-row lg:items-center lg:justify-between ${changed ? 'bg-amber-50/50' : ''}`}>
                                                     <div className="min-w-0 flex-1">
                                                         <div className="flex flex-wrap items-center gap-2">
-                                                            <p className="text-sm font-semibold text-gray-900">{formatLabel(permission)}</p>
+                                                            <p className="text-sm font-semibold text-gray-900">{formatPermissionLabel(permission)}</p>
                                                             {changed && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-bold uppercase tracking-wide text-amber-700">Modified</span>}
                                                         </div>
                                                         <p className="mt-0.5 font-mono text-xs text-gray-400">{permission}</p>
@@ -285,14 +286,4 @@ function TriButton({ active, activeClass, inactiveClass, onClick, title, childre
             {children}
         </button>
     );
-}
-
-function formatLabel(permission: string): string {
-    const parts = permission.split('.');
-    if (parts.length < 2) {
-        return permission.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    }
-    const resource = parts[0];
-    const action = parts.slice(1).join(' ');
-    return `${action.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} ${resource.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}`;
 }
