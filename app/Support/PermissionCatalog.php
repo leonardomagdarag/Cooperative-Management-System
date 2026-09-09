@@ -74,6 +74,12 @@ class PermissionCatalog
                 'officers.delete',
                 'officers.manage-permissions',
             ],
+            'Branches' => [
+                'branches.view',
+                'branches.create',
+                'branches.update',
+                'branches.delete',
+            ],
             'Logs' => [
                 'logs.view',
                 'logs.export',

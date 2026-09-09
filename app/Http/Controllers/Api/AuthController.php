@@ -158,6 +158,8 @@ class AuthController extends Controller
             'first_name' => $user->personalData?->first_name,
             'profile_completion_required' => $user->requiresProfileCompletion(),
             'permissions' => $permissions,
+            'branch_id' => $user->branch_id,
+            'branch_name' => $user->branch?->name,
             'profile_photo_url' => $user->personalData?->profile_picture
                 ? asset('storage/'.$user->personalData->profile_picture)
                 : null,

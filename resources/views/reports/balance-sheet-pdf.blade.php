@@ -29,6 +29,9 @@
         <div class="meta">
             <div>As of: {{ $balanceSheet['as_of']->format('F d, Y') }}</div>
             <div>Range Basis: {{ $balanceSheet['start']->format('F d, Y') }} - {{ $balanceSheet['end']->format('F d, Y') }}</div>
+            @if (!empty($balanceSheet['branch_name'] ?? null))
+                <div>Branch: {{ $balanceSheet['branch_name'] }}</div>
+            @endif
         </div>
     </div>
 

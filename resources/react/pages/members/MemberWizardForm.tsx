@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import DatePicker from '../../components/DatePicker';
+import BranchSelect from '../../components/BranchSelect';
+import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
 import { validate, memberStepSchemas, memberEditStepSchemas, memberSchema, memberEditSchema, passwordStrength, type FieldErrors } from '../../lib/validation';
@@ -45,6 +47,7 @@ const emptyForm = {
     national_id: '', tin: '', sss: '', philhealth: '', barangay_id: '',
     employment_type: '', employer_name: '', position: '', monthly_income: '',
     password: '', password_confirmation: '',
+    branch_id: '' as number | '',
     agreement: false,
     beneficiaries: [] as any[],
     profile_photo: null as File | null,
@@ -62,6 +65,8 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
     const [form, setForm] = useState(emptyForm);
     const [previews, setPreviews] = useState<Record<string, string>>({});
     const [errors, setErrors] = useState<FieldErrors>({});
+    const { user } = useAuth();
+    const canAssignBranch = !!user?.permissions?.includes('branches.view');
     const { markDirty, requestClose, renderDialog } = useDiscardGuard();
     const queryClient = useQueryClient();
     const { addToast } = useToast();
@@ -106,6 +111,7 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
             employer_name: d.employment?.company ?? '',
             position: d.employment?.position ?? '',
             monthly_income: d.employment?.monthly_income ?? '',
+            branch_id: d.branch_id ?? '',
             beneficiaries: (d.beneficiaries ?? []).map((b: any) => ({
                 first_name: b.first_name ?? '',
                 last_name: b.last_name ?? '',
@@ -364,6 +370,9 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
                                 <Field label="Company/Employer Name" value={form.employer_name} onChange={v => set('employer_name', v)} />
                                 <Field label="Position" value={form.position} onChange={v => set('position', v)} />
                                 <Field label="Monthly Income" type="number" value={form.monthly_income} onChange={v => { set('monthly_income', v); clearError('monthly_income'); }} error={errors.monthly_income} placeholder="0.00" />
+                                {canAssignBranch && (
+                                    <BranchSelect value={form.branch_id} onChange={v => { set('branch_id', v); clearError('branch_id'); }} error={errors.branch_id} />
+                                )}
                             </div>
                         </div>
                     )}

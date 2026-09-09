@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Branch;
 use App\Models\PersonalData;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -16,6 +17,10 @@ class UserSeeder extends Seeder
         $existing = User::query()->where('email', $attributes['email'])->first();
 
         if ($existing) {
+            if ($existing->branch_id === null && ! empty($attributes['branch_id'])) {
+                $existing->forceFill(['branch_id' => $attributes['branch_id']])->save();
+            }
+
             return $existing;
         }
 
@@ -42,9 +47,19 @@ class UserSeeder extends Seeder
      */
     public function run(): void
     {
+        // Branch records must exist before users can be tied to them. Keeping
+        // the call here lets feature tests seed UserSeeder directly.
+        $this->call(BranchSeeder::class);
+
         // ===================================
         // CORE ACCOUNTS (Keep for testing)
         // ===================================
+        $mainBranch = Branch::query()->where('code', 'BR000001')->first();
+        $branchOffice = Branch::query()->where('code', 'BR000002')->first();
+
+        if (! $mainBranch || ! $branchOffice) {
+            throw new \RuntimeException('BranchSeeder must run before UserSeeder.');
+        }
 
         // Create developer account
         $developer = $this->createSeedUser([
@@ -52,6 +67,7 @@ class UserSeeder extends Seeder
             'email' => 'developer@example.com',
             'password' => Hash::make('password'),
             'role' => 'developer',
+            'branch_id' => $mainBranch->id,
         ], [
             'first_name' => 'Leo',
             'last_name' => 'Magdarag',
@@ -60,13 +76,14 @@ class UserSeeder extends Seeder
         ]);
         $developer->assignRole('developer');
 
-        // Create one seeded user for each officer role.
+        // Create one seeded user for each officer role. Officers are tied to a
+        // branch so branch-scoping can be demonstrated for managers/staff.
         $officers = [
-            ['role' => 'admin', 'firstName' => 'Quennie Joy', 'lastName' => 'Almazan', 'title' => 'Chairman', 'userNumber' => 'USR000002', 'birthDate' => '1985-01-01'],
-            ['role' => 'manager', 'firstName' => 'Carl Michael', 'lastName' => 'Bigal', 'title' => 'Vice Chairman', 'userNumber' => 'USR000003'],
-            ['role' => 'accountant', 'firstName' => 'Jasmin', 'lastName' => 'Latayan', 'title' => 'Accountant', 'userNumber' => 'USR000004'],
-            ['role' => 'loan', 'firstName' => 'Leanard', 'lastName' => 'Guiriba', 'title' => 'Loan Officer', 'userNumber' => 'USR000005'],
-            ['role' => 'secretary', 'firstName' => 'Jenica', 'lastName' => 'Malveda', 'title' => 'Secretary', 'userNumber' => 'USR000006'],
+            ['role' => 'admin', 'firstName' => 'Quennie Joy', 'lastName' => 'Almazan', 'title' => 'Chairman', 'userNumber' => 'USR000002', 'birthDate' => '1985-01-01', 'branch' => $mainBranch->id],
+            ['role' => 'manager', 'firstName' => 'Carl Michael', 'lastName' => 'Bigal', 'title' => 'Vice Chairman', 'userNumber' => 'USR000003', 'branch' => $mainBranch->id],
+            ['role' => 'accountant', 'firstName' => 'Jasmin', 'lastName' => 'Latayan', 'title' => 'Accountant', 'userNumber' => 'USR000004', 'branch' => $mainBranch->id],
+            ['role' => 'loan', 'firstName' => 'Leanard', 'lastName' => 'Guiriba', 'title' => 'Loan Officer', 'userNumber' => 'USR000005', 'branch' => $branchOffice->id],
+            ['role' => 'secretary', 'firstName' => 'Jenica', 'lastName' => 'Malveda', 'title' => 'Secretary', 'userNumber' => 'USR000006', 'branch' => $branchOffice->id],
         ];
 
         foreach ($officers as $officerData) {
@@ -86,6 +103,7 @@ class UserSeeder extends Seeder
                 'password' => Hash::make('password'),
                 'role' => $officerData['role'],
                 'is_officer' => true,
+                'branch_id' => $officerData['branch'],
             ], $personalData);
             $officer->assignRole($officerData['role']);
         }
@@ -95,15 +113,15 @@ class UserSeeder extends Seeder
         // ===================================
 
         $members = [
-            ['userNumber' => 'USR000007', 'firstName' => 'Arjay', 'lastName' => 'Ramos'],
-            ['userNumber' => 'USR000008', 'firstName' => 'Cris David', 'lastName' => 'Jarabejo'],
-            ['userNumber' => 'USR000009', 'firstName' => 'Glendo', 'lastName' => 'Camarines'],
-            ['userNumber' => 'USR000010', 'firstName' => 'Jerrelyn', 'lastName' => 'Amper'],
-            ['userNumber' => 'USR000011', 'firstName' => 'Jean Leslie', 'lastName' => 'Velasco'],
-            ['userNumber' => 'USR000012', 'firstName' => 'Jeral Jean', 'lastName' => 'Cabillon'],
-            ['userNumber' => 'USR000013', 'firstName' => 'Leo Angelo', 'lastName' => 'Centeno'],
-            ['userNumber' => 'USR000014', 'firstName' => 'Alyson', 'lastName' => 'Penano'],
-            ['userNumber' => 'USR000015', 'firstName' => 'Ravie', 'lastName' => 'Premor'],
+            ['userNumber' => 'USR000007', 'firstName' => 'Arjay', 'lastName' => 'Ramos', 'branch' => $mainBranch->id],
+            ['userNumber' => 'USR000008', 'firstName' => 'Cris David', 'lastName' => 'Jarabejo', 'branch' => $mainBranch->id],
+            ['userNumber' => 'USR000009', 'firstName' => 'Glendo', 'lastName' => 'Camarines', 'branch' => $mainBranch->id],
+            ['userNumber' => 'USR000010', 'firstName' => 'Jerrelyn', 'lastName' => 'Amper', 'branch' => $mainBranch->id],
+            ['userNumber' => 'USR000011', 'firstName' => 'Jean Leslie', 'lastName' => 'Velasco', 'branch' => $mainBranch->id],
+            ['userNumber' => 'USR000012', 'firstName' => 'Jeral Jean', 'lastName' => 'Cabillon', 'branch' => $branchOffice->id],
+            ['userNumber' => 'USR000013', 'firstName' => 'Leo Angelo', 'lastName' => 'Centeno', 'branch' => $branchOffice->id],
+            ['userNumber' => 'USR000014', 'firstName' => 'Alyson', 'lastName' => 'Penano', 'branch' => $branchOffice->id],
+            ['userNumber' => 'USR000015', 'firstName' => 'Ravie', 'lastName' => 'Premor', 'branch' => $branchOffice->id],
             [
                 'userNumber' => 'USR000016',
                 'firstName' => 'Leo',
@@ -111,6 +129,7 @@ class UserSeeder extends Seeder
                 'midName' => 'Baluyot',
                 'birthDate' => '1995-06-15',
                 'email' => 'leo.baluyot.magdarag039@gmail.com',
+                'branch' => $branchOffice->id,
             ],
         ];
 
@@ -134,6 +153,7 @@ class UserSeeder extends Seeder
                 'email' => $memberData['email'] ?? $this->buildMemberEmail($memberData['firstName'], $memberData['lastName']),
                 'password' => Hash::make('password'),
                 'role' => 'member',
+                'branch_id' => $memberData['branch'],
             ], $personalData);
             $member->assignRole('member');
         }

@@ -25,6 +25,7 @@ import TicketsPage from './pages/tickets/TicketsPage';
 import LedgerPage from './pages/ledger/LedgerPage';
 import ExpensesPage from './pages/expenses/ExpensesPage';
 import OfficersPage from './pages/officers/OfficersPage';
+import BranchesPage from './pages/branches/BranchesPage';
 import LoansPage from './pages/loans/LoansPage';
 import ReportsPage from './pages/reports/ReportsPage';
 import ServicesPage from './pages/services/ServicesPage';
@@ -104,6 +105,7 @@ function DashboardRouter() {
         'public-content': { permission: 'settings.update' },
         'role-permissions': { role: 'admin' },
         'officers': { permission: 'officers.view' },
+        'branches': { permission: 'branches.view' },
         'loans': { permission: 'loans.view' },
         'reports': { permission: 'reports.view' },
         'services': { permission: 'services.view' },
@@ -128,6 +130,7 @@ function DashboardRouter() {
                  section === 'ledger' ? <LedgerPage /> :
                  section === 'expenses' ? <ExpensesPage /> :
                  section === 'officers' ? <OfficersPage /> :
+                 section === 'branches' ? <BranchesPage /> :
                  section === 'loans' ? <LoansPage /> :
                  section === 'reports' ? <ReportsPage /> :
                  section === 'services' ? <ServicesPage /> :

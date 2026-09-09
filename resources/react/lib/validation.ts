@@ -22,6 +22,8 @@ const amount = (min: number, label = 'Amount') =>
 
 const dateOrEmpty = z.string().refine(v => v === '' || !isNaN(Date.parse(v)), { message: 'Enter a valid date' });
 
+export const optionalId = z.coerce.number({ invalid_type_error: 'Select a valid option' }).int('Select a valid option').positive('Select a valid option').optional().or(z.literal(''));
+
 export const enumFrom = (values: readonly string[], msg: string) =>
     z.string().refine(v => values.includes(v), { message: msg });
 
@@ -90,6 +92,7 @@ export const memberSchema = z.object({
     password: passwordPolicy,
     password_confirmation: z.string(),
     monthly_income: z.coerce.number().min(0, 'Monthly income cannot be negative').optional().or(z.literal('')),
+    branch_id: optionalId,
 }).refine(d => d.password === d.password_confirmation, {
     message: 'Passwords do not match',
     path: ['password_confirmation'],
@@ -133,6 +136,7 @@ export const memberStepSchemas: Record<string, z.ZodTypeAny> = {
         employer_name: optionalString(255),
         position: optionalString(100),
         monthly_income: z.coerce.number().min(0, 'Monthly income cannot be negative').optional().or(z.literal('')),
+        branch_id: optionalId,
     }),
     login: z.object({
         password: passwordPolicy,
@@ -162,6 +166,7 @@ export const memberEditSchema = z.object({
     phone_number: optionalString(MAX_PHONE),
     facebook_link: optionalString(255),
     password: optionalPassword,
+    branch_id: optionalId,
 });
 
 export const memberEditStepSchemas: Record<string, z.ZodTypeAny> = {
@@ -199,6 +204,7 @@ export const officerStepSchemas: z.ZodTypeAny[] = [
     }),
     z.object({
         role: enumFrom(['admin', 'manager', 'accountant', 'secretary', 'loan'], 'Select a role'),
+        branch_id: optionalId,
     }),
     z.object({
         password: passwordPolicy,
@@ -225,6 +231,7 @@ export const officerEditSchema = z.object({
     postal_code: optionalString(20),
     role: enumFrom(['admin', 'manager', 'accountant', 'secretary', 'loan'], 'Select a role'),
     password: optionalPassword,
+    branch_id: optionalId,
 });
 
 export const officerSchema = z.object({
@@ -244,6 +251,7 @@ export const officerSchema = z.object({
     role: enumFrom(['admin', 'manager', 'accountant', 'secretary', 'loan'], 'Select a role'),
     password: passwordPolicy,
     password_confirmation: z.string(),
+    branch_id: optionalId,
 }).refine(d => d.password === d.password_confirmation, {
     message: 'Passwords do not match',
     path: ['password_confirmation'],
@@ -254,6 +262,7 @@ export const depositSchema = z.object({
     account_type: enumFrom(['savings', 'share-capital'], 'Select a valid account type'),
     transaction_mode: enumFrom(['counter', 'online'], 'Select a transaction mode'),
     note: optionalString(500),
+    branch_id: optionalId,
 });
 
 export function withdrawalSchema(available: number) {
@@ -264,6 +273,7 @@ export function withdrawalSchema(available: number) {
         bank_name: optionalString(100),
         account_number: optionalString(50),
         account_holder: optionalString(100),
+        branch_id: optionalId,
     }).superRefine((d, ctx) => {
         if (d.transaction_mode === 'bank_transfer') {
             if (!d.bank_name) ctx.addIssue({ code: 'custom', path: ['bank_name'], message: 'Bank name is required for bank transfer' });
@@ -279,6 +289,7 @@ export const loanApplicationSchema = z.object({
     term_months: z.coerce.number().int('Term must be a whole number').min(1, 'Term must be at least 1 month').max(360, 'Term cannot exceed 360 months'),
     payment_frequency: enumFrom(['weekly', 'bi-weekly', 'monthly', 'quarterly', 'annually'], 'Select a payment frequency'),
     purpose: requiredString('Purpose is required', 500),
+    branch_id: optionalId,
 });
 
 export const loanPaymentSchema = z.object({
@@ -286,6 +297,7 @@ export const loanPaymentSchema = z.object({
     account_id: requiredString('Select an account'),
     amount: amount(1),
     transaction_mode: enumFrom(['counter', 'online'], 'Select a transaction mode'),
+    branch_id: optionalId,
 });
 
 export const loanEncodeSchema = z.object({
@@ -298,6 +310,7 @@ export const loanEncodeSchema = z.object({
     term_months: z.coerce.number().int('Term must be a whole number').min(1, 'Term must be at least 1 month').max(360, 'Term cannot exceed 360 months'),
     payment_frequency: enumFrom(['weekly', 'bi-weekly', 'monthly', 'quarterly', 'annually'], 'Select a payment frequency'),
     applied_at: z.string().trim().min(1, 'Applied date is required').refine(v => !isNaN(Date.parse(v)), { message: 'Enter a valid date' }),
+    branch_id: optionalId,
 });
 
 export const loanReviewSchema = z.object({
@@ -321,6 +334,7 @@ export const ledgerSchema = z.object({
     note: optionalString(500),
     account_id: optionalString(50),
     loan_id: optionalString(50),
+    branch_id: optionalId,
 }).superRefine((d, ctx) => {
     if ((d.transaction_type === 'deposit' || d.transaction_type === 'withdrawal') && !d.account_id) {
         ctx.addIssue({ code: 'custom', path: ['account_id'], message: 'Account is required for this transaction type' });
@@ -335,6 +349,7 @@ export const expenseSchema = z.object({
     description: optionalString(255),
     amount: z.coerce.number({ invalid_type_error: 'Enter a valid amount' }).finite('Enter a valid amount').positive('Amount must be greater than 0').min(0.01, 'Amount must be at least 0.01'),
     expense_date: requiredString('Date is required').refine(v => !isNaN(Date.parse(v)), { message: 'Enter a valid date' }),
+    branch_id: optionalId,
 });
 
 export const loanEditSchema = z.object({
@@ -345,6 +360,7 @@ export const loanEditSchema = z.object({
     term_months: z.coerce.number().int('Term must be a whole number').min(1, 'Term must be at least 1 month').max(360, 'Term cannot exceed 360 months'),
     payment_frequency: enumFrom(['weekly', 'bi-weekly', 'monthly', 'quarterly', 'annually'], 'Select a payment frequency'),
     due_date: dateOrEmpty.optional(),
+    branch_id: optionalId,
 });
 
 export const announcementSchema = z.object({
@@ -385,6 +401,7 @@ export const registerSchema = z.object({
     monthly_income: requiredString('Select an income range'),
     membership_type: enumFrom(['Regular', 'Associate'], 'Select a membership type'),
     referred_by: optionalString(255),
+    branch_id: optionalId,
     password: passwordPolicy,
     password_confirmation: requiredString('Please confirm your password'),
     terms: z.boolean().refine(v => v === true, { message: 'You must accept the terms and conditions' }),
@@ -414,6 +431,7 @@ export const registerStepSchemas: Record<number, z.ZodTypeAny> = {
         monthly_income: requiredString('Select an income range'),
         membership_type: enumFrom(['Regular', 'Associate'], 'Select a membership type'),
         referred_by: optionalString(255),
+        branch_id: optionalId,
     }),
     3: z.object({
         password: passwordPolicy,

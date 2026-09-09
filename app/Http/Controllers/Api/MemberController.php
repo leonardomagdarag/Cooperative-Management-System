@@ -17,6 +17,7 @@ use App\Services\AuditLogService;
 use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
 use App\Support\PersonPasswordPolicy;
+use App\Support\BranchScope;
 use App\Support\SearchFilter;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -37,13 +38,17 @@ class MemberController extends Controller
         abort_unless(Auth::user()?->can('members.view'), 403);
 
         $query = User::query()
-            ->with(['personalData.address', 'personalData.contact', 'accounts', 'memberApplication']);
+            ->with(['branch', 'personalData.address', 'personalData.contact', 'accounts', 'memberApplication']);
 
         if ($request->boolean('is_officer')) {
             $query->officerUsers();
         } else {
             $query->memberUsers();
         }
+
+        // Branch filter: admins (and unrestricted users) may narrow by a
+        // specific branch; branch-assigned officers are auto-scoped.
+        BranchScope::applyToUsers($query, Auth::user(), $request->input('branch_id'));
 
         // Status filter (pending = inactive self-registered applicants awaiting review;
         // archived = soft-deleted accounts)
@@ -101,6 +106,8 @@ class MemberController extends Controller
                 'name' => trim(($u->personalData->first_name ?? '').' '.($u->personalData->last_name ?? '')),
                 'title' => $u->personalData?->title,
                 'phone' => $u->personalData->contact?->phone_no,
+                'branch_id' => $u->branch_id,
+                'branch_name' => $u->branch?->name,
                 'accounts' => $u->accounts->map(fn ($a) => ['id' => $a->id, 'type' => $a->account_type, 'balance' => $a->balance]),
                 'has_pending_application' => (bool) ($u?->memberApplication?->status === 'pending'),
                 'created_at' => $u->created_at->toISOString(),
@@ -112,11 +119,14 @@ class MemberController extends Controller
                 'per_page' => $paginator->perPage(),
                 'total' => $paginator->total(),
             ],
-            'pending_count' => User::query()
-                ->memberUsers()
-                ->where('account_status', 'inactive')
-                ->whereHas('memberApplication', fn ($q) => $q->where('status', 'pending'))
-                ->count(),
+            'pending_count' => BranchScope::applyToUsers(
+                User::query()
+                    ->memberUsers()
+                    ->where('account_status', 'inactive')
+                    ->whereHas('memberApplication', fn ($q) => $q->where('status', 'pending')),
+                Auth::user(),
+                $request->input('branch_id')
+            )->count(),
         ]);
     }
 
@@ -125,8 +135,14 @@ class MemberController extends Controller
         $viewer = Auth::user();
         abort_unless($viewer?->can('members.view') || $viewer?->is($user), 403);
 
+        if ($viewer && ! BranchScope::isUnrestricted($viewer)) {
+            $target = User::withTrashed()->find($user);
+            abort_unless($target && (int) $target->branch_id === (int) $viewer->branch_id, 403);
+        }
+
         $user = User::withTrashed()
             ->with([
+                'branch',
                 'personalData.address', 'personalData.contact', 'personalData.employment',
                 'personalData.memberId', 'accounts', 'loans', 'beneficiaries', 'memberApplication',
             ])
@@ -150,6 +166,8 @@ class MemberController extends Controller
             'account_status' => $user->account_status,
             'is_officer' => $user->is_officer,
             'primary_role' => $user->primary_role,
+            'branch_id' => $user->branch_id,
+            'branch_name' => $user->branch?->name,
             'special_loan_eligible' => (bool) $user->special_loan_eligible,
             'created_at' => $user->created_at->toISOString(),
             'archived_at' => $user->deleted_at?->toISOString(),
@@ -249,6 +267,7 @@ class MemberController extends Controller
             'civil_status' => 'required|in:single,married,widowed,separated',
             'religion' => 'nullable|string|max:64',
             'title' => 'nullable|string|max:50',
+            'branch_id' => 'nullable|exists:branches,id',
             'country' => 'nullable|string|max:100',
             'region' => 'nullable|string|max:100',
             'province' => 'nullable|string|max:100',
@@ -350,6 +369,7 @@ class MemberController extends Controller
                 'email' => $validated['email'],
                 'password' => Hash::make($validated['password']),
                 'personal_data_id' => $personalData->id,
+                'branch_id' => $this->resolveMemberBranch($validated),
                 'account_status' => 'active',
                 'profile_completion_required' => false,
             ]);
@@ -431,6 +451,7 @@ class MemberController extends Controller
             'civil_status' => 'nullable|in:single,married,widowed,separated',
             'religion' => 'nullable|string|max:64',
             'title' => 'nullable|string|max:50',
+            'branch_id' => 'nullable|exists:branches,id',
             'country' => 'nullable|string|max:100',
             'region' => 'nullable|string|max:100',
             'province' => 'nullable|string|max:100',
@@ -569,6 +590,9 @@ class MemberController extends Controller
             }
 
             $userData = ['email' => $validated['email']];
+            if (array_key_exists('branch_id', $validated)) {
+                $userData['branch_id'] = $this->resolveMemberBranch($validated);
+            }
             if (! empty($validated['password'])) {
                 $userData['password'] = Hash::make($validated['password']);
             }
@@ -778,6 +802,7 @@ class MemberController extends Controller
 
             $user->update([
                 'account_status' => 'active',
+                'branch_id' => $application?->branch_id ?? $user->branch_id,
             ]);
 
             if (! $user->accounts()->where('account_type', 'savings')->exists()) {
@@ -921,7 +946,7 @@ class MemberController extends Controller
                     ->orWhereHas('personalData', fn ($pd) => $pd->where('first_name', 'like', "%{$search}%")->orWhere('last_name', 'like', "%{$search}%"));
             })
             ->limit(10)->get()
-            ->map(fn ($m) => ['id' => $m->id, 'name' => trim(($m->personalData->first_name ?? '').' '.($m->personalData->last_name ?? '')), 'user_number' => $m->user_number]);
+            ->map(fn ($m) => ['id' => $m->id, 'name' => trim(($m->personalData->first_name ?? '').' '.($m->personalData->last_name ?? '')), 'user_number' => $m->user_number, 'branch_id' => $m->branch_id, 'branch_name' => $m->branch?->name]);
 
         return response()->json(['data' => $members]);
     }
@@ -943,10 +968,12 @@ class MemberController extends Controller
 
         $members = User::query()
             ->memberUsers()
-            ->with(['personalData.address', 'personalData.contact'])
-            ->whereBetween('users.created_at', [$start, $end])
-            ->orderByDesc('created_at')
-            ->get();
+            ->with(['branch', 'personalData.address', 'personalData.contact'])
+            ->whereBetween('users.created_at', [$start, $end]);
+
+        BranchScope::applyToUsers($members, Auth::user(), $request->input('branch_id'));
+
+        $members = $members->orderByDesc('created_at')->get();
 
         return $validated['export_type'] === 'pdf'
             ? $this->downloadMembersPdf($members, $start, $end)
@@ -1090,6 +1117,22 @@ class MemberController extends Controller
         if (! Auth::user()?->can($permission)) {
             abort(403, 'You do not have permission to assign officer roles.');
         }
+    }
+
+    /**
+     * Branch-scoped officers cannot place members in another branch.
+     */
+    private function resolveMemberBranch(array $validated): ?int
+    {
+        $viewer = Auth::user();
+
+        if (BranchScope::isUnrestricted($viewer)) {
+            return isset($validated['branch_id']) && $validated['branch_id'] !== null && $validated['branch_id'] !== ''
+                ? (int) $validated['branch_id']
+                : null;
+        }
+
+        return $viewer?->branch_id;
     }
 
     private function normalizeBeneficiaries(Request $request): void

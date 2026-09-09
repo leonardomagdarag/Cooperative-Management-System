@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import BranchBadge from '../../components/BranchBadge';
+import BranchSelect from '../../components/BranchSelect';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
 import MemberWizardForm from './MemberWizardForm';
@@ -27,11 +29,13 @@ export default function MembersPage() {
     const canExport = perms.includes('members.view');
     const canViewMemberId = perms.includes('members.view-full-details');
     const canApprove = perms.includes('members.approve');
+    const canAssignBranch = perms.includes('branches.view');
     const hasActions = canEdit || canDelete;
     const isAdmin = user?.primary_role === 'admin';
     const [searchParams, setSearchParams] = useSearchParams();
     const [status, setStatus] = useState(searchParams.get('status') && STATUS_FILTERS.some(f => f.value === searchParams.get('status')) ? searchParams.get('status')! : 'all');
     const [search, setSearch] = useState('');
+    const [branchFilter, setBranchFilter] = useState<number | ''>('');
     const [page, setPage] = useState(1);
     const [showWizard, setShowWizard] = useState(false);
     const [editing, setEditing] = useState<any>(null);
@@ -42,8 +46,8 @@ export default function MembersPage() {
     const { addToast } = useToast();
 
     const { data, isLoading, refetch } = useQuery({
-        queryKey: ['members', search, page, status],
-        queryFn: () => api.get('/api/members', { params: { search: search || undefined, page, per_page: 15, status } }),
+        queryKey: ['members', search, page, status, branchFilter],
+        queryFn: () => api.get('/api/members', { params: { search: search || undefined, page, per_page: 15, status, branch_id: branchFilter || undefined } }),
     });
 
     const deleteMutation = useMutation({
@@ -143,6 +147,11 @@ export default function MembersPage() {
                                 )}
                             </button>
                         ))}
+                        {canAssignBranch && (
+                            <div className="ml-auto w-64">
+                                <BranchSelect label="Filter by Branch" value={branchFilter} onChange={v => { setBranchFilter(v); setPage(1); }} allLabel="All branches" />
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -166,6 +175,7 @@ export default function MembersPage() {
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-[24%]">Name</th>
                                             {canViewMemberId && <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-32">Member ID</th>}
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-32">Status</th>
+                                            {canAssignBranch && <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-28">Branch</th>}
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-28">Join Date</th>
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-[30%]">Email</th>
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-28">Actions</th>
@@ -186,6 +196,7 @@ export default function MembersPage() {
                                                         <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${m.account_status === 'active' ? 'bg-emerald-100 text-emerald-700' : m.account_status === 'terminated' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>{m.account_status}</span>
                                                     )}
                                                 </td>
+                                                {canAssignBranch && <td className="p-4 whitespace-nowrap"><BranchBadge name={m.branch_name} /></td>}
                                                 <td className="p-4 text-sm text-gray-500 whitespace-nowrap">{m.created_at ? new Date(m.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : '—'}</td>
                                                 <td className="p-4 min-w-0">
                                                     <span className="block truncate text-sm text-gray-500" title={m.email}>{m.email || '—'}</span>

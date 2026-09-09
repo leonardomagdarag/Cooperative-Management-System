@@ -12,6 +12,8 @@ interface User {
     permissions: string[];
     profile_photo_url?: string;
     profile_completion_required?: boolean;
+    branch_id?: number | null;
+    branch_name?: string | null;
 }
 
 interface AuthContextType {

@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Account;
 use App\Models\Loan;
 use App\Models\Transaction;
+use App\Models\User;
+use App\Support\BranchScope;
 use App\Support\SearchFilter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,7 +20,9 @@ class LedgerController extends Controller
     {
         abort_unless(Auth::user()?->can('transactions.view'), 403);
 
-        $query = Transaction::with(['account.user.personalData', 'loan.user.personalData', 'recordedBy']);
+        $query = Transaction::with(['branch', 'account.user.personalData', 'loan.user.personalData', 'recordedBy']);
+
+        BranchScope::applyToTransactions($query, Auth::user(), $request->input('branch_id'));
 
         // Category filter
         $category = $request->string('category')->toString();
@@ -64,6 +68,8 @@ class LedgerController extends Controller
                 'account_holder' => $t->account?->user ? trim(($t->account->user->personalData->first_name ?? '').' '.($t->account->user->personalData->last_name ?? '')) : null,
                 'user_number' => $t->account?->user?->user_number,
                 'loan_number' => $t->loan?->loan_number,
+                'branch_id' => $t->branch_id,
+                'branch_name' => $t->branch?->name,
                 'recorded_by' => $t->recordedBy ? trim(($t->recordedBy->personalData->first_name ?? '').' '.($t->recordedBy->personalData->last_name ?? '')) : null,
                 'created_at' => $t->created_at->toISOString(),
             ]),
@@ -83,14 +89,21 @@ class LedgerController extends Controller
 
         $range = $request->string('range', 'today')->toString();
 
-        $transactionCounts = Transaction::query()->where('status', 'completed')
+        $transactionCountsQuery = Transaction::query()->where('status', 'completed')
             ->applyRange($range)
             ->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_payment', 'loan_disbursement'])
             ->selectRaw('transaction_type, COUNT(*) as count')
-            ->groupBy('transaction_type')
-            ->pluck('count', 'transaction_type');
+            ->groupBy('transaction_type');
 
-        $loanCount = Loan::query()->applyRange($range)->count();
+        BranchScope::applyToTransactions($transactionCountsQuery, Auth::user(), $request->input('branch_id'));
+
+        $transactionCounts = $transactionCountsQuery->pluck('count', 'transaction_type');
+
+        $loanCount = BranchScope::applyToLoans(
+            Loan::query()->applyRange($range),
+            Auth::user(),
+            $request->input('branch_id')
+        )->count();
 
         return response()->json([
             'range' => $range,
@@ -107,6 +120,8 @@ class LedgerController extends Controller
         abort_unless(Auth::user()?->can('transactions.view'), 403);
 
         $query = Transaction::with(['account.user.personalData', 'loan', 'recordedBy']);
+
+        BranchScope::applyToTransactions($query, Auth::user(), $request->input('branch_id'));
 
         $category = $request->string('category')->toString();
         if ($category !== '' && $category !== 'all') {
@@ -164,6 +179,7 @@ class LedgerController extends Controller
             'note' => 'nullable|string|max:500',
             'account_id' => 'required_if:transaction_type,deposit,withdrawal|nullable|exists:accounts,id',
             'loan_id' => 'required_if:transaction_type,loan_payment,loan_disbursement|nullable|exists:loans,id',
+            'branch_id' => 'nullable|exists:branches,id',
         ]);
 
         $transaction = DB::transaction(function () use ($validated) {
@@ -173,6 +189,7 @@ class LedgerController extends Controller
                 'note' => $validated['note'] ?? null,
                 'account_id' => $validated['account_id'] ?? null,
                 'loan_id' => $validated['loan_id'] ?? null,
+                'branch_id' => $validated['branch_id'] ?? $this->resolveTransactionBranch($validated),
                 'transaction_date' => now(),
                 'recorded_by' => Auth::id(),
             ]);
@@ -195,6 +212,7 @@ class LedgerController extends Controller
             'note' => 'nullable|string|max:500',
             'account_id' => 'nullable|exists:accounts,id',
             'loan_id' => 'nullable|exists:loans,id',
+            'branch_id' => 'nullable|exists:branches,id',
         ]);
 
         DB::transaction(function () use ($transaction, $validated) {
@@ -207,6 +225,7 @@ class LedgerController extends Controller
                 'note' => $validated['note'] ?? null,
                 'account_id' => $validated['account_id'] ?? null,
                 'loan_id' => $validated['loan_id'] ?? null,
+                'branch_id' => $validated['branch_id'] ?? $this->resolveTransactionBranch($validated),
             ]);
 
             $this->applyBalanceEffect($transaction->fresh());
@@ -225,6 +244,30 @@ class LedgerController extends Controller
         });
 
         return response()->json(['message' => 'Transaction deleted.']);
+    }
+
+    /**
+     * Default a new transaction to the target member's branch, falling back to
+     * the recording officer's branch when no account/loan is involved.
+     */
+    private function resolveTransactionBranch(array $validated): ?int
+    {
+        if (! empty($validated['account_id'])) {
+            $userId = Account::whereKey($validated['account_id'])->value('user_id');
+            $branchId = $userId ? User::whereKey($userId)->value('branch_id') : null;
+            if ($branchId) {
+                return (int) $branchId;
+            }
+        }
+
+        if (! empty($validated['loan_id'])) {
+            $branchId = Loan::whereKey($validated['loan_id'])->value('branch_id');
+            if ($branchId) {
+                return (int) $branchId;
+            }
+        }
+
+        return Auth::user()?->branch_id;
     }
 
     /**
