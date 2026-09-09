@@ -28,7 +28,7 @@ class DashboardController extends Controller
             'accountant', 'treasurer' => $this->treasurer(),
             'secretary' => $this->secretary(),
             'loan' => $this->loan(),
-            default => $this->member(),
+            default => $user->is_officer ? $this->officer() : $this->member(),
         };
     }
 
@@ -595,6 +595,68 @@ class DashboardController extends Controller
             'loan_status_series' => $this->buildLoanStatusSeries(),
             'pending_loans_list' => $pendingLoans,
             'overdue_loans_list' => $overdueLoans,
+            'recent_announcements' => $recentAnnouncements,
+        ]);
+    }
+
+    // ─── Officer (custom roles) ────────────────────────────────
+
+    private function officer(): JsonResponse
+    {
+        $user = Auth::user();
+        $now = now();
+        $start = $now->copy()->startOfMonth();
+
+        $pendingTransactions = null;
+        if ($user->can('transactions.approve') || $user->can('deposits.approve') || $user->can('withdrawals.approve')) {
+            $pendingTransactions = Transaction::query()->where('status', 'pending')->count();
+        }
+
+        $pendingLoans = null;
+        if ($user->can('loans.update') || $user->can('loans.approve')) {
+            $pendingLoans = Loan::query()->where('loan_status', 'pending')->count();
+        }
+
+        $membersTotal = null;
+        $newMembersThisMonth = null;
+        if ($user->can('members.view')) {
+            $membersTotal = User::query()->memberUsers()->count();
+            $newMembersThisMonth = User::query()->memberUsers()->whereBetween('created_at', [$start, $now])->count();
+        }
+
+        $loansActive = null;
+        $loansOverdue = null;
+        if ($user->can('loans.view')) {
+            $loansActive = Loan::query()->whereIn('loan_status', ['approved', 'active'])->count();
+            $loansOverdue = Loan::query()
+                ->whereNotIn('loan_status', ['paid', 'paid_off', 'paid-off'])
+                ->whereNotNull('due_date')
+                ->whereDate('due_date', '<', today())
+                ->count();
+        }
+
+        $recentAnnouncements = null;
+        if ($user->can('announcements.view')) {
+            $recentAnnouncements = Announcement::query()
+                ->latest()
+                ->take(4)
+                ->get()
+                ->map(fn ($a) => [
+                    'id' => $a->id,
+                    'title' => $a->title,
+                    'content' => $a->content,
+                    'created_at_diff' => $a->created_at->diffForHumans(),
+                ]);
+        }
+
+        return response()->json([
+            'greeting' => $this->greeting(),
+            'pending_transactions' => $pendingTransactions,
+            'pending_loans' => $pendingLoans,
+            'members_total' => $membersTotal,
+            'members_new_month' => $newMembersThisMonth,
+            'loans_active' => $loansActive,
+            'loans_overdue' => $loansOverdue,
             'recent_announcements' => $recentAnnouncements,
         ]);
     }
