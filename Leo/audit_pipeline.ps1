@@ -318,7 +318,7 @@ $workflows = @(
 
 # OpenCode Zen model roles
 $plannerModel    = "opencode/muse-spark-1.3-free"
-$auditorModel    = "opencode/nemotron-3-free"
+$auditorModel    = "opencode/nemotron-3-ultra-free"
 $coderModel      = "opencode/big-pickle"
 $maxRepairAttempts = 3
 
