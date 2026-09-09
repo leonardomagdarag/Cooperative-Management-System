@@ -13,6 +13,7 @@ class Loan extends Model
     protected $fillable = [
         'loan_number',
         'user_id',
+        'branch_id',
         'account_id',
         'loan_type',
         'loan_amount',
@@ -71,6 +72,11 @@ class Loan extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class);
     }
 
     public function approvedBy()

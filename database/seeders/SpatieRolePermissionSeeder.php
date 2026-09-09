@@ -96,6 +96,12 @@ class SpatieRolePermissionSeeder extends Seeder
             'officers.delete',
             'officers.manage-permissions',
 
+            // Branch/Office Management
+            'branches.view',
+            'branches.create',
+            'branches.update',
+            'branches.delete',
+
             // Notifications
             'notifications.view',
             'notifications.manage',

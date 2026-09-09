@@ -12,6 +12,7 @@ class MemberApplication extends Model
 
     protected $fillable = [
         'user_id',
+        'branch_id',
         'application_number',
         'original_email',
         'first_name',
@@ -50,6 +51,11 @@ class MemberApplication extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
     }
 
     public function reviewer(): BelongsTo

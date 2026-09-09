@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Expense;
 use App\Services\AuditLogService;
+use App\Support\BranchScope;
 use App\Support\SearchFilter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,7 +17,9 @@ class ExpenseController extends Controller
     {
         abort_unless(Auth::user()?->can('transactions.view'), 403);
 
-        $query = Expense::with('recordedBy.personalData');
+        $query = Expense::with(['recordedBy.personalData', 'branch']);
+
+        BranchScope::applyToExpenses($query, Auth::user(), $request->input('branch_id'));
 
         if ($search = SearchFilter::escapeLike($request->string('search')->toString())) {
             $query->where(function ($q) use ($search) {
@@ -55,6 +58,8 @@ class ExpenseController extends Controller
                 'recorded_by' => $e->recordedBy?->personalData
                     ? trim(($e->recordedBy->personalData->first_name ?? '').' '.($e->recordedBy->personalData->last_name ?? ''))
                     : null,
+                'branch_id' => $e->branch_id,
+                'branch_name' => $e->branch?->name,
             ]),
             'pagination' => [
                 'current_page' => $paginator->currentPage(),
@@ -62,7 +67,11 @@ class ExpenseController extends Controller
                 'per_page' => $paginator->perPage(),
                 'total' => $paginator->total(),
             ],
-            'total_amount' => (float) Expense::query()->sum('amount'),
+            'total_amount' => (float) BranchScope::applyToExpenses(
+                Expense::query(),
+                Auth::user(),
+                $request->input('branch_id')
+            )->sum('amount'),
             'categories' => $this->categories(),
             'can_manage' => Auth::user()?->can('transactions.update'),
         ]);
@@ -77,6 +86,7 @@ class ExpenseController extends Controller
             'description' => 'nullable|string|max:500',
             'amount' => 'required|numeric|min:0.01',
             'expense_date' => 'required|date',
+            'branch_id' => 'nullable|exists:branches,id',
         ]);
 
         $expense = Expense::create([
@@ -85,6 +95,7 @@ class ExpenseController extends Controller
             'amount' => $validated['amount'],
             'expense_date' => $validated['expense_date'],
             'recorded_by' => Auth::id(),
+            'branch_id' => $validated['branch_id'] ?? Auth::user()?->branch_id,
         ]);
 
         app(AuditLogService::class)->log('expense.created', 'Expense recorded.', 'expense', $expense, Auth::user());
@@ -101,6 +112,7 @@ class ExpenseController extends Controller
             'description' => 'nullable|string|max:500',
             'amount' => 'required|numeric|min:0.01',
             'expense_date' => 'required|date',
+            'branch_id' => 'nullable|exists:branches,id',
         ]);
 
         $expense->update([
@@ -108,6 +120,7 @@ class ExpenseController extends Controller
             'description' => $validated['description'] ?? null,
             'amount' => $validated['amount'],
             'expense_date' => $validated['expense_date'],
+            'branch_id' => $validated['branch_id'] ?? $expense->branch_id,
         ]);
 
         app(AuditLogService::class)->log('expense.updated', 'Expense updated.', 'expense', $expense, Auth::user());

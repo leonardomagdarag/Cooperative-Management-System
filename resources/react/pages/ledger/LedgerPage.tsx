@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import DatePicker from '../../components/DatePicker';
+import BranchBadge from '../../components/BranchBadge';
+import BranchSelect from '../../components/BranchSelect';
+import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
 import { validate, ledgerSchema, type FieldErrors } from '../../lib/validation';
@@ -9,26 +12,29 @@ import { validate, ledgerSchema, type FieldErrors } from '../../lib/validation';
 export default function LedgerPage() {
     const [category, setCategory] = useState('all');
     const [search, setSearch] = useState('');
+    const [branchFilter, setBranchFilter] = useState<number | ''>('');
     const [page, setPage] = useState(1);
     const [showAddModal, setShowAddModal] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
-    const [form, setForm] = useState({ transaction_type: 'deposit', amount: '', note: '', account_id: '', loan_id: '', transaction_date: new Date().toISOString().slice(0, 10) });
+    const [form, setForm] = useState({ transaction_type: 'deposit', amount: '', note: '', account_id: '', loan_id: '', branch_id: '' as number | '', transaction_date: new Date().toISOString().slice(0, 10) });
     const [formErrors, setFormErrors] = useState<FieldErrors>({});
     const { markDirty, reset, requestClose, renderDialog } = useDiscardGuard();
     const queryClient = useQueryClient();
     const { addToast } = useToast();
+    const { user } = useAuth();
+    const canAssignBranch = !!user?.permissions?.includes('branches.view');
 
     const setFormD = (updater: (f: typeof form) => typeof form) => { markDirty(); setForm(updater); };
     const requestCloseGuard = () => requestClose(() => setShowAddModal(false));
 
     const { data, isLoading } = useQuery({
-        queryKey: ['ledger', category, search, page],
-        queryFn: () => api.get('/api/ledger', { params: { category: category === 'all' ? undefined : category, search: search || undefined, page, per_page: 10 } }),
+        queryKey: ['ledger', category, search, page, branchFilter],
+        queryFn: () => api.get('/api/ledger', { params: { category: category === 'all' ? undefined : category, search: search || undefined, branch_id: branchFilter || undefined, page, per_page: 10 } }),
     });
 
     const { data: summaryData } = useQuery({
-        queryKey: ['ledger-summary'],
-        queryFn: () => api.get('/api/ledger/summary', { params: { range: 'today' } }),
+        queryKey: ['ledger-summary', branchFilter],
+        queryFn: () => api.get('/api/ledger/summary', { params: { range: 'today', branch_id: branchFilter || undefined } }),
     });
 
     const saveMutation = useMutation({
@@ -59,8 +65,8 @@ export default function LedgerPage() {
         return c[t] || t.replace(/_/g, ' ');
     };
 
-    const openAdd = () => { reset(); setEditingId(null); setForm({ transaction_type: 'deposit', amount: '', note: '', account_id: '', loan_id: '', transaction_date: new Date().toISOString().slice(0, 10) }); setShowAddModal(true); };
-    const openEdit = (t: any) => { reset(); setEditingId(t.id); setForm({ transaction_type: t.transaction_type, amount: t.amount, note: t.note || '', account_id: t.account_id || '', loan_id: t.loan_id || '', transaction_date: t.transaction_date || new Date().toISOString().slice(0, 10) }); setShowAddModal(true); };
+    const openAdd = () => { reset(); setEditingId(null); setForm({ transaction_type: 'deposit', amount: '', note: '', account_id: '', loan_id: '', branch_id: '', transaction_date: new Date().toISOString().slice(0, 10) }); setShowAddModal(true); };
+    const openEdit = (t: any) => { reset(); setEditingId(t.id); setForm({ transaction_type: t.transaction_type, amount: t.amount, note: t.note || '', account_id: t.account_id || '', loan_id: t.loan_id || '', branch_id: t.branch_id || '', transaction_date: t.transaction_date || new Date().toISOString().slice(0, 10) }); setShowAddModal(true); };
 
     const exportCsv = async () => {
         try {
@@ -141,6 +147,12 @@ export default function LedgerPage() {
                     className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 mb-4"
                 />
 
+                {canAssignBranch && (
+                    <div className="mb-4 w-full sm:w-64">
+                        <BranchSelect label="" value={branchFilter} onChange={v => { setBranchFilter(v); setPage(1); }} allLabel="All branches" />
+                    </div>
+                )}
+
                 {/* Table */}
                 {isLoading ? (
                     <div className="space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-14 animate-pulse rounded-lg bg-gray-100" />)}</div>
@@ -159,6 +171,7 @@ export default function LedgerPage() {
                                     <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Type</th>
                                     <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Amount</th>
                                     <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Status</th>
+                                    {canAssignBranch && <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Branch</th>}
                                     <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Note</th>
                                     <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Date</th>
                                     {canEdit && <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Actions</th>}
@@ -172,6 +185,7 @@ export default function LedgerPage() {
                                         <td className="p-4"><span className={`px-2.5 py-0.5 text-xs font-medium rounded ${getTypeColor(t.transaction_type)}`}>{getTypeLabel(t.transaction_type)}</span></td>
                                         <td className={`p-4 text-sm font-semibold whitespace-nowrap ${t.transaction_type === 'withdrawal' || t.transaction_type === 'fee' ? 'text-red-600' : 'text-green-600'}`}>{(t.transaction_type === 'withdrawal' || t.transaction_type === 'fee') ? '-' : '+'}₱{Number(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                         <td className="p-4"><span className={`text-xs font-medium ${t.status === 'completed' ? 'text-emerald-600' : 'text-amber-600'}`}>{t.status}</span></td>
+                                        {canAssignBranch && <td className="p-4 whitespace-nowrap"><BranchBadge name={t.branch_name} /></td>}
                                         <td className="p-4 text-sm text-gray-500">{t.note || '—'}</td>
                                         <td className="p-4 text-sm text-gray-500">{t.transaction_date || '—'}</td>
                                         {canEdit && (
@@ -240,6 +254,9 @@ export default function LedgerPage() {
                                     <label className="mb-1 block text-sm font-medium text-gray-700">Note</label>
                                     <input type="text" value={form.note} onChange={e => setFormD(f => ({ ...f, note: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
                                 </div>
+                                {canAssignBranch && (
+                                    <BranchSelect value={form.branch_id} onChange={v => setFormD(f => ({ ...f, branch_id: v }))} error={formErrors.branch_id} />
+                                )}
                             </form>
                         </div>
                         <div className="flex shrink-0 items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 rounded-b-2xl">

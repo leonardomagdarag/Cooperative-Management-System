@@ -30,6 +30,7 @@ class User extends Authenticatable implements MustVerifyEmail
     protected $fillable = [
         'user_number',
         'personal_data_id',
+        'branch_id',
         'email',
         'password',
         'role',
@@ -189,6 +190,11 @@ class User extends Authenticatable implements MustVerifyEmail
     public function personalData()
     {
         return $this->belongsTo(PersonalData::class);
+    }
+
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class);
     }
 
     public function contact()

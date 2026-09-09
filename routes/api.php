@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AnnouncementController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BackupController;
+use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\ExpenseController;
 use App\Http\Controllers\Api\HistoryController;
@@ -194,6 +195,13 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
 
     // Public Content (admin edit only — read is public)
     Route::put('/public-content', [PublicContentController::class, 'save']);
+
+    // Branches / Offices
+    Route::get('/branches/options', [BranchController::class, 'options']);
+    Route::get('/branches', [BranchController::class, 'index']);
+    Route::post('/branches', [BranchController::class, 'store']);
+    Route::put('/branches/{branch}', [BranchController::class, 'update']);
+    Route::delete('/branches/{branch}', [BranchController::class, 'destroy']);
 
     // Members
     Route::get('/members', [MemberController::class, 'index']);
