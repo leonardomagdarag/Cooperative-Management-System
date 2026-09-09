@@ -16,6 +16,9 @@ class DatabaseSeeder extends Seeder
         $this->call([
             SpatieRolePermissionSeeder::class,  // 1st pass: create roles & permissions
 
+            // Reference data (Philippine geographic codes used by the address selector)
+            PSGCSeeder::class,
+
             // Core data
             UserSeeder::class,
             SpatieRolePermissionSeeder::class,  // 2nd pass: backfill roles & permissions to seeded users
