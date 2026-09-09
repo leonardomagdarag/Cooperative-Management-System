@@ -31,24 +31,39 @@ function Invoke-OpenCodeStage {
     param(
         [string]$Model,
         [string]$Prompt,
-        [string]$RequiredArtifact
+        [string]$RequiredArtifact,
+        [int]$MaxAttempts = 3
     )
 
-    if ($RequiredArtifact) {
-        Remove-Item -LiteralPath $RequiredArtifact -Force -ErrorAction SilentlyContinue
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        if ($RequiredArtifact) {
+            Remove-Item -LiteralPath $RequiredArtifact -Force -ErrorAction SilentlyContinue
+        }
+
+        & $openCodeCommand run -m $Model $Prompt
+        $stageExitCode = $LASTEXITCODE
+        $artifactIsValid = -not $RequiredArtifact -or (
+            (Test-Path -LiteralPath $RequiredArtifact -PathType Leaf) -and
+            (Get-Item -LiteralPath $RequiredArtifact).Length -gt 0
+        )
+
+        if ($stageExitCode -eq 0 -and $artifactIsValid) {
+            return
+        }
+
+        if ($attempt -lt $MaxAttempts) {
+            $delaySeconds = 5 * $attempt
+            $reason = if ($stageExitCode -ne 0) { "exit code $stageExitCode" } else { "missing or empty required artifact" }
+            Write-Host "    [RETRY] OpenCode stage for '$Model' failed ($reason). Retrying in $delaySeconds seconds ($attempt/$MaxAttempts)..." -ForegroundColor Yellow
+            Start-Sleep -Seconds $delaySeconds
+        }
     }
 
-    & $openCodeCommand run -m $Model $Prompt
-    if ($LASTEXITCODE -ne 0) {
-        throw "OpenCode stage failed for model '$Model' with exit code $LASTEXITCODE."
+    if ($stageExitCode -ne 0) {
+        throw "OpenCode stage failed for model '$Model' after $MaxAttempts attempts with exit code $stageExitCode."
     }
 
-    if ($RequiredArtifact -and (
-        -not (Test-Path -LiteralPath $RequiredArtifact -PathType Leaf) -or
-        (Get-Item -LiteralPath $RequiredArtifact).Length -eq 0
-    )) {
-        throw "OpenCode stage completed without creating a non-empty '$RequiredArtifact'."
-    }
+    throw "OpenCode stage completed after $MaxAttempts attempts without creating a non-empty '$RequiredArtifact'."
 }
 
 function Read-VerificationStatus {
