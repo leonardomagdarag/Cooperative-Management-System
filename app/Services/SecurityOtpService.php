@@ -9,6 +9,7 @@ use App\Models\OtpChallenge;
 use App\Models\SystemSetting;
 use App\Models\TrustedDevice;
 use App\Models\User;
+use Illuminate\Contracts\Session\Session;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -214,7 +215,16 @@ class SecurityOtpService
 
     public function sendOtpMail(User $user, string $purpose, string $otpCode): void
     {
-        if (! $user->email || config('mail.default') === 'log') {
+        if (! $user->email) {
+            return;
+        }
+
+        // Always surface the code in the application log as a fallback so the
+        // flow stays usable even when the queued email cannot be delivered
+        // (e.g., no queue worker running or the SMTP transport silently fails).
+        Log::info("OTP email ({$purpose}) for {$user->email}: {$otpCode}");
+
+        if (config('mail.default') === 'log') {
             return;
         }
 
@@ -229,6 +239,15 @@ class SecurityOtpService
             } catch (Throwable $e2) {
                 Log::error("OTP email failed for user {$user->id}: {$e2->getMessage()}");
             }
+        }
+    }
+
+    public function stashDebugCode(Session $session, string $otpCode): void
+    {
+        // Development-only: let the OTP page surface the code so local testing
+        // is never blocked by email delivery. Never stored outside local env.
+        if (config('app.env') === 'local') {
+            $session->put('security.pending_otp_debug_code', $otpCode);
         }
     }
 

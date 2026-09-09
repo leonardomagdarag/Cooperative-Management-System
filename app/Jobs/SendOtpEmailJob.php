@@ -10,6 +10,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Throwable;
 
@@ -33,7 +34,13 @@ class SendOtpEmailJob implements ShouldQueue
     {
         $user = User::find($this->userId);
 
-        if (! $user || ! $user->email || config('mail.default') === 'log') {
+        if (! $user || ! $user->email) {
+            return;
+        }
+
+        if (config('mail.default') === 'log') {
+            Log::info("OTP email ({$this->purpose}) for {$user->email}: {$this->otpCode}");
+
             return;
         }
 

@@ -60,6 +60,7 @@ class OtpChallengeController extends Controller
             'security.pending_otp',
             'security.pending_otp_purpose',
             'security.pending_otp_fingerprint',
+            'security.pending_otp_debug_code',
         ]);
 
         $intended = (string) $request->session()->pull('security.intended_url', route('dashboard', absolute: false));
@@ -97,6 +98,7 @@ class OtpChallengeController extends Controller
 
         $issued = $this->securityOtpService->issueChallenge($user, $purpose, ['fingerprint' => $fingerprint]);
         $this->securityOtpService->sendOtpMail($user, $purpose, $issued['otp_code']);
+        $this->securityOtpService->stashDebugCode($request->session(), $issued['otp_code']);
 
         return back()->with('success', 'A new verification code was sent to your email.');
     }
