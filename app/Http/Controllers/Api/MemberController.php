@@ -132,6 +132,7 @@ class MemberController extends Controller
             'account_status' => $user->account_status,
             'is_officer' => $user->is_officer,
             'primary_role' => $user->primary_role,
+            'special_loan_eligible' => (bool) $user->special_loan_eligible,
             'created_at' => $user->created_at->toISOString(),
             'personal_data' => $pd ? [
                 'first_name' => $pd->first_name, 'mid_name' => $pd->mid_name,
@@ -139,6 +140,7 @@ class MemberController extends Controller
                 'birth_date' => $pd->birth_date?->format('Y-m-d'), 'birthplace' => $pd->birthplace,
                 'gender' => $pd->gender, 'civil_status' => $pd->civil_status,
                 'religion' => $pd->religion, 'title' => $pd->title,
+                'education' => $pd->education,
                 'profile_picture' => $pd->profile_picture ? asset('storage/'.$pd->profile_picture) : null,
             ] : null,
             'address' => $pd?->address ? [
@@ -155,6 +157,8 @@ class MemberController extends Controller
                 'employment_type' => $pd->employment->employment_type,
                 'company' => $pd->employment->company, 'position' => $pd->employment->position,
                 'monthly_income' => $pd->employment->monthly_income,
+                'other_income_source' => $pd->employment->other_income_source,
+                'other_income_amount' => $pd->employment->other_income_amount,
             ] : null,
             'member_ids' => $pd?->memberId ? [
                 'national_id' => $pd->memberId->national_id, 'tin' => $pd->memberId->tin,
@@ -166,14 +170,33 @@ class MemberController extends Controller
                 'philhealth_photo' => $pd->memberId->philhealth_photo ? asset('storage/'.$pd->memberId->philhealth_photo) : null,
                 'barangay_id_photo' => $pd->memberId->barangay_id_photo ? asset('storage/'.$pd->memberId->barangay_id_photo) : null,
                 'agreement_url' => $pd->memberId->proof_of_registration_path ? asset('storage/'.$pd->memberId->proof_of_registration_path) : null,
+                'other_document' => $pd->memberId->other_document_path ? asset('storage/'.$pd->memberId->other_document_path) : null,
             ] : null,
             'accounts' => $user->accounts->map(fn ($a) => [
                 'id' => $a->id, 'account_number' => $a->account_number,
                 'account_type' => $a->account_type, 'balance' => $a->balance,
             ]),
             'beneficiaries' => $user->beneficiaries->map(fn ($b) => [
-                'id' => $b->id, 'first_name' => $b->first_name, 'last_name' => $b->last_name,
-                'relationship' => $b->relationship, 'percentage' => $b->percentage ?? null,
+                'id' => $b->id, 'first_name' => $b->first_name, 'mid_name' => $b->mid_name,
+                'last_name' => $b->last_name, 'relationship' => $b->relationship,
+                'birth_date' => $b->birth_date?->toDateString(),
+                'phone_no' => $b->phone_no,
+                'street' => $b->street, 'barangay' => $b->barangay, 'city' => $b->city,
+                'province' => $b->province, 'postal_code' => $b->postal_code,
+            ]),
+            'loans' => $user->loans->map(fn ($l) => [
+                'id' => $l->id,
+                'loan_number' => $l->loan_number,
+                'loan_type' => $l->loan_type,
+                'loan_status' => $l->loan_status,
+                'loan_amount' => $l->loan_amount,
+                'interest_rate' => $l->interest_rate,
+                'term_months' => $l->term_months,
+                'payment_frequency' => $l->payment_frequency,
+                'applied_at' => $l->applied_at?->toISOString(),
+                'approved_at' => $l->approved_at?->toISOString(),
+                'due_date' => $l->due_date?->toDateString(),
+                'remaining_balance' => $l->remainingBalance(),
             ]),
         ]);
     }
@@ -704,6 +727,31 @@ class MemberController extends Controller
         app(NotificationService::class)->sendMemberDeclineEmail($originalEmail, $applicantName, $reason);
 
         return response()->json(['message' => 'Application declined and applicant notified.']);
+    }
+
+    public function toggleSpecialLoanEligibility(User $user): JsonResponse
+    {
+        abort_unless(Auth::user()?->can('members.update'), 403);
+
+        $user->update([
+            'special_loan_eligible' => ! ($user->special_loan_eligible ?? false),
+        ]);
+
+        $user->refresh();
+
+        app(AuditLogService::class)->log(
+            'member.special-loan-eligibility',
+            $user->special_loan_eligible
+                ? 'Special loan eligibility enabled.'
+                : 'Special loan eligibility disabled.',
+            'member',
+            $user,
+            Auth::user()
+        );
+
+        return response()->json([
+            'special_loan_eligible' => (bool) $user->special_loan_eligible,
+        ]);
     }
 
     private function scrambleArchivedEmail(User $user, ?string $email): ?string

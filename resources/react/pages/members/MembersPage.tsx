@@ -216,7 +216,7 @@ export default function MembersPage() {
 
             {declining && <DeclineApplicationModal member={declining} onConfirm={(reason) => declineMutation.mutate({ id: declining.id, reason })} onClose={() => setDeclining(null)} submitting={declineMutation.isPending} />}
             {showWizard && <MemberWizardForm member={editing} onClose={() => { setShowWizard(false); setEditing(null); }} />}
-            {viewing && <MemberProfileModal memberId={viewing.id} onClose={() => setViewing(null)} />}
+            {viewing && <MemberProfileModal memberId={viewing.id} onClose={() => setViewing(null)} onEdit={() => { setViewing(null); setEditing(viewing); setShowWizard(true); }} canEdit={canEdit} canViewFullId={canViewMemberId} />}
             {showExport && <MemberExportModal onClose={() => setShowExport(false)} />}
         </div>
     );
