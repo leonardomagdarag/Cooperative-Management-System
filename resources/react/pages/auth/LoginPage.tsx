@@ -30,7 +30,8 @@ export default function LoginPage() {
         queryKey: ['public-content'],
         queryFn: () => api.get('/api/public-content'),
     });
-    const registrationEnabled = pc?.data?.form?.registration?.online_member_registration_enabled !== false;
+    const registrationEnabled = pc?.data?.availability?.registration?.global !== false && pc?.data?.availability?.registration?.member !== false;
+    const loginEnabled = pc?.data?.availability?.login?.global !== false;
 
     const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>({
         resolver: zodResolver(loginSchema),
@@ -70,7 +71,7 @@ export default function LoginPage() {
                         </p>
                     </div>
 
-                    <form className="space-y-3" onSubmit={handleSubmit(onSubmit)}>
+                    {loginEnabled ? <form className="space-y-3" onSubmit={handleSubmit(onSubmit)}>
                         <div>
                             <label htmlFor="email" className="block text-xs font-medium text-slate-500 mb-1.5">Email</label>
                             <input
@@ -151,7 +152,17 @@ export default function LoginPage() {
                                 <span className="font-medium">Back to Home</span>
                             </Link>
                         </div>
-                    </form>
+                    </form> : (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
+                            <i className="fas fa-sign-in-alt text-3xl text-amber-600 mb-3"></i>
+                            <p className="font-semibold text-amber-900">Login is currently unavailable</p>
+                            <p className="mt-1 text-sm text-amber-800">Online access has been temporarily suspended. Please check back later.</p>
+                            <Link to="/" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors">
+                                <i className="fas fa-arrow-left text-sm"></i>
+                                <span>Back to Home</span>
+                            </Link>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

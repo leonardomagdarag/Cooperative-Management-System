@@ -172,6 +172,19 @@ class SettingsController extends Controller
             $result[$service] = $base;
         }
 
+        // Registration settings
+        $result['registration'] = [
+            'global' => (bool) SystemSetting::get('service_registration_enabled', true),
+            'member' => (bool) SystemSetting::get('service_registration_member_enabled', true),
+        ];
+
+        // Login settings
+        $result['login'] = [
+            'global' => (bool) SystemSetting::get('service_login_enabled', true),
+            'member' => (bool) SystemSetting::get('service_login_member_enabled', true),
+            'officer' => (bool) SystemSetting::get('service_login_officer_enabled', true),
+        ];
+
         return response()->json(['data' => $result]);
     }
 
@@ -190,7 +203,7 @@ class SettingsController extends Controller
             'notify_affected' => 'boolean',
         ]);
 
-        $allowedServices = ['deposit', 'withdrawal', 'loan_application', 'loan_payment'];
+        $allowedServices = ['deposit', 'withdrawal', 'loan_application', 'loan_payment', 'registration', 'login'];
         $unknownServices = array_diff(array_keys($validated['services']), $allowedServices);
 
         if ($unknownServices !== []) {
@@ -200,17 +213,30 @@ class SettingsController extends Controller
         $newlyUnavailable = [];
 
         foreach ($validated['services'] as $service => $flags) {
-            $settings = [
-                'global' => "service_{$service}_enabled",
-                'member' => "service_{$service}_member_enabled",
-                'officer' => "service_{$service}_officer_enabled",
-            ];
+            if ($service === 'registration') {
+                $settings = [
+                    'global' => 'service_registration_enabled',
+                    'member' => 'service_registration_member_enabled',
+                ];
+            } elseif ($service === 'login') {
+                $settings = [
+                    'global' => 'service_login_enabled',
+                    'member' => 'service_login_member_enabled',
+                    'officer' => 'service_login_officer_enabled',
+                ];
+            } else {
+                $settings = [
+                    'global' => "service_{$service}_enabled",
+                    'member' => "service_{$service}_member_enabled",
+                    'officer' => "service_{$service}_officer_enabled",
+                ];
 
-            if (in_array($service, ['deposit', 'withdrawal', 'loan_payment'], true)) {
-                $settings['counter'] = "service_{$service}_counter_enabled";
-                $settings['online'] = "service_{$service}_online_enabled";
-                if ($service === 'withdrawal') {
-                    $settings['bank_transfer'] = 'service_withdrawal_bank_transfer_enabled';
+                if (in_array($service, ['deposit', 'withdrawal', 'loan_payment'], true)) {
+                    $settings['counter'] = "service_{$service}_counter_enabled";
+                    $settings['online'] = "service_{$service}_online_enabled";
+                    if ($service === 'withdrawal') {
+                        $settings['bank_transfer'] = 'service_withdrawal_bank_transfer_enabled';
+                    }
                 }
             }
 
@@ -238,6 +264,63 @@ class SettingsController extends Controller
         $notificationService = app(NotificationService::class);
 
         foreach ($services as $service => $flags) {
+            if ($service === 'registration') {
+                if (isset($flags['global']) && $flags['global'] === false) {
+                    $users = User::role('admin')->where('account_status', 'active')->get();
+                    foreach ($users as $user) {
+                        $notificationService->notifyAccountActivity(
+                            $user,
+                            'Service Unavailable',
+                            'Public member registration has been disabled.'
+                        );
+                    }
+                }
+
+                continue;
+            }
+
+            if ($service === 'login') {
+                if (isset($flags['global']) && $flags['global'] === false) {
+                    $users = User::where('account_status', 'active')->get();
+                    foreach ($users as $user) {
+                        $notificationService->notifyAccountActivity(
+                            $user,
+                            'Service Unavailable',
+                            'Public login access has been disabled.'
+                        );
+                    }
+
+                    continue;
+                }
+
+                if (isset($flags['member']) && $flags['member'] === false) {
+                    $users = User::role('member')->where('account_status', 'active')->get();
+                    foreach ($users as $user) {
+                        $notificationService->notifyAccountActivity(
+                            $user,
+                            'Service Unavailable',
+                            'Member login is temporarily unavailable due to maintenance.'
+                        );
+                    }
+                }
+
+                if (isset($flags['officer']) && $flags['officer'] === false) {
+                    $officerRoles = ['admin', 'manager', 'accountant', 'loan', 'secretary'];
+                    $users = User::whereHas('roles', fn ($q) => $q->whereIn('name', $officerRoles))
+                        ->where('account_status', 'active')
+                        ->get();
+                    foreach ($users as $user) {
+                        $notificationService->notifyAccountActivity(
+                            $user,
+                            'Service Unavailable',
+                            'Officer login is temporarily unavailable due to maintenance.'
+                        );
+                    }
+                }
+
+                continue;
+            }
+
             $serviceLabel = ucfirst(str_replace('_', ' ', $service));
 
             // Global OFF - notify all active users

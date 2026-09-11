@@ -39,6 +39,8 @@ export interface ServiceAvailabilityData {
     withdrawal: ServiceAvailabilityFlags;
     loan_application: ServiceAvailabilityFlags;
     loan_payment: ServiceAvailabilityFlags;
+    registration: Pick<ServiceAvailabilityFlags, 'global' | 'member'>;
+    login: Pick<ServiceAvailabilityFlags, 'global' | 'member' | 'officer'>;
 }
 
 export async function getServiceAvailability() {

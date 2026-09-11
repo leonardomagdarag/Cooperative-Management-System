@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\SiteContent;
+use App\Models\SystemSetting;
 use App\Support\HtmlSanitizer;
 use App\Support\SiteContentCatalog;
 use Illuminate\Http\JsonResponse;
@@ -22,6 +23,17 @@ class PublicContentController extends Controller
         return response()->json([
             'sections' => $sections,
             'form' => $form,
+            'availability' => [
+                'registration' => [
+                    'global' => (bool) SystemSetting::get('service_registration_enabled', true),
+                    'member' => (bool) SystemSetting::get('service_registration_member_enabled', true),
+                ],
+                'login' => [
+                    'global' => (bool) SystemSetting::get('service_login_enabled', true),
+                    'member' => (bool) SystemSetting::get('service_login_member_enabled', true),
+                    'officer' => (bool) SystemSetting::get('service_login_officer_enabled', true),
+                ],
+            ],
             'can_manage' => (bool) Auth::user()?->can('settings.update'),
             'turnstile_site_key' => config('services.turnstile.site_key'),
         ]);

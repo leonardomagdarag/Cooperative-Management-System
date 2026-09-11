@@ -234,25 +234,6 @@ class SiteContentCatalog
                     ],
                 ],
             ],
-            'registration' => [
-                'label' => 'Member Registration',
-                'description' => 'Control whether visitors can create member accounts from the public website.',
-                'groups' => [
-                    [
-                        'title' => 'Availability',
-                        'fields' => [
-                            [
-                                'path' => 'online_member_registration_enabled',
-                                'label' => 'Enable online member registration',
-                                'description' => 'When disabled, public registration links are hidden and direct access to the registration route redirects to the landing page.',
-                                'control' => 'toggle',
-                                'storage' => 'boolean',
-                                'default' => true,
-                            ],
-                        ],
-                    ],
-                ],
-            ],
             'policies' => [
                 'label' => 'Policies & Agreements',
                 'description' => 'Maintain the public Terms and Conditions and Data Privacy Policy used in the footer and member registration flows.',
@@ -288,11 +269,6 @@ class SiteContentCatalog
                 ],
             ],
         ];
-    }
-
-    public static function memberRegistrationEnabled(): bool
-    {
-        return (bool) data_get(self::publicContent(), 'registration.online_member_registration_enabled', true);
     }
 
     public static function editorSectionsWithCounts(): array
@@ -580,9 +556,6 @@ class SiteContentCatalog
                 'email' => 'settlerscoop@email.com',
                 'office_hours' => 'Mon - Fri: 8:00 AM - 5:00 PM <br> Sat: 8:00 AM - 12:00 PM',
                 'map_embed' => 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d15473.5517532458!2d121.34772396353148!3d14.172041997611268!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x33bd5ecbd56244b1%3A0xd9004ec1d8317075!2sSite%203%20Southville%207%2C%20Calauan%2C%20Laguna!5e0!3m2!1sen!2sph!4v1768522137639!5m2!1sen!2sph',
-            ],
-            'registration' => [
-                'online_member_registration_enabled' => true,
             ],
             'policies' => [
                 'terms_and_conditions' => <<<'HTML'

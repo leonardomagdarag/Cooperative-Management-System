@@ -1,9 +1,11 @@
 <?php
 
 use App\Models\SiteContent;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Support\SiteContentCatalog;
 use Database\Seeders\SpatieRolePermissionSeeder;
+use Database\Seeders\SystemSettingSeeder;
 use Database\Seeders\UserSeeder;
 use Spatie\Permission\Models\Role;
 
@@ -37,6 +39,7 @@ test('public content api returns sections, form, can_manage and turnstile key', 
         ->assertJsonStructure([
             'sections',
             'form',
+            'availability',
             'can_manage',
             'turnstile_site_key',
         ]);
@@ -45,9 +48,11 @@ test('public content api returns sections, form, can_manage and turnstile key', 
     expect($data['sections'])->toBeArray()
         ->and($data['sections'])->toHaveKeys([
             'home', 'about', 'board', 'officers', 'member_statements',
-            'news', 'events', 'contact', 'registration', 'policies',
+            'news', 'events', 'contact', 'policies',
         ])
         ->and($data['form'])->toBeArray()
+        ->and($data['availability']['registration'])->toEqual(['global' => true, 'member' => true])
+        ->and($data['availability']['login'])->toEqual(['global' => true, 'member' => true, 'officer' => true])
         ->and($data['can_manage'])->toBeFalse();
 });
 
@@ -104,22 +109,35 @@ test('admin can save public content through the api', function () {
     )->toBe('Updated through React API');
 });
 
-test('admin can save the online member registration public setting', function () {
+test('admin can save the online member registration service availability setting', function () {
     $admin = makePublicContentEditor();
-
-    $form = fullForm();
-    $form['registration']['online_member_registration_enabled'] = false;
+    $this->seed(SystemSettingSeeder::class);
 
     actingAs($admin)
-        ->putJson('/api/public-content', ['form' => $form])
+        ->getJson('/api/settings/service-availability')
+        ->assertOk()
+        ->assertJsonPath('data.registration.global', true)
+        ->assertJsonPath('data.registration.member', true)
+        ->assertJsonPath('data.login.member', true)
+        ->assertJsonPath('data.login.officer', true);
+
+    actingAs($admin)
+        ->putJson('/api/settings/service-availability', [
+            'services' => [
+                'registration' => ['global' => true, 'member' => false],
+                'login' => ['global' => true, 'member' => true, 'officer' => true],
+                'deposit' => ['global' => true, 'member' => true, 'officer' => true, 'counter' => true, 'online' => true],
+                'withdrawal' => ['global' => true, 'member' => true, 'officer' => true, 'counter' => true, 'online' => true, 'bank_transfer' => true],
+                'loan_application' => ['global' => true, 'member' => true, 'officer' => true],
+                'loan_payment' => ['global' => true, 'member' => true, 'officer' => true, 'counter' => true, 'online' => true],
+            ],
+            'notify_affected' => false,
+        ])
         ->assertOk();
 
     expect(
-        SiteContent::query()
-            ->where('section', 'registration')
-            ->where('key', 'online_member_registration_enabled')
-            ->value('value')
-    )->toBe('0');
+        (bool) SystemSetting::get('service_registration_member_enabled', true)
+    )->toBeFalse();
 });
 
 test('admin can save dynamic board cards through the api', function () {

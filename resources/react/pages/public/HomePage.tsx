@@ -20,7 +20,7 @@ export default function HomePage() {
 function HeroSection() {
     const { data: pc } = useQuery({ queryKey: ['public-content'], queryFn: () => api.get('/api/public-content') });
     const home = pc?.data?.form?.home || {};
-    const registrationEnabled = pc?.data?.form?.registration?.online_member_registration_enabled !== false;
+    const registrationEnabled = pc?.data?.availability?.registration?.global !== false && pc?.data?.availability?.registration?.member !== false;
 
     return (
         <section className="relative flex min-h-[100vh] items-center overflow-hidden pt-24">
@@ -142,7 +142,7 @@ function MissionVision() {
 
 function MembershipSection() {
     const { data: pc } = useQuery({ queryKey: ['public-content'], queryFn: () => api.get('/api/public-content') });
-    const registrationEnabled = pc?.data?.form?.registration?.online_member_registration_enabled !== false;
+    const registrationEnabled = pc?.data?.availability?.registration?.global !== false && pc?.data?.availability?.registration?.member !== false;
 
     const requirements = [
         'Must be at least 18 years old',

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\NotificationService;
@@ -47,6 +48,26 @@ class AuthController extends Controller
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials are incorrect.'],
             ]);
+        }
+
+        $isOfficer = $user->hasAnyRole(['admin', 'manager', 'accountant', 'loan', 'secretary']);
+        $loginAllowed = $isOfficer
+            ? (bool) SystemSetting::get('service_login_officer_enabled', true)
+            : (bool) SystemSetting::get('service_login_member_enabled', true);
+
+        if (! $loginAllowed) {
+            $this->auditLogService->log(
+                'auth.login_blocked',
+                'Login blocked because login is disabled for this role.',
+                'auth',
+                $user,
+                $user,
+                ['user_type' => $isOfficer ? 'officer' : 'member']
+            );
+
+            return response()->json([
+                'message' => 'Login is currently unavailable for your account. Please try again later.',
+            ], 403);
         }
 
         if (($user->account_status ?? 'active') !== 'active') {
