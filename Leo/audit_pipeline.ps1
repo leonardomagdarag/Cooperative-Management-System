@@ -3,13 +3,16 @@
 $ErrorActionPreference = "Stop"
 
 # Keep native command exit codes observable through $LASTEXITCODE. In PowerShell 7.2+,
-# setting this to $false prevents a native non-zero exit from becoming a terminating
-# PowerShell error before the explicit $LASTEXITCODE checks below can run.
+# setting the global preference prevents native non-zero exits from becoming terminating
+# PowerShell errors before the explicit $LASTEXITCODE checks below can run.
 if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -Scope Global -ErrorAction SilentlyContinue) {
-    $PSNativeCommandUseErrorActionPreference = $false
+    $global:PSNativeCommandUseErrorActionPreference = $false
 }
 
-$repositoryRoot = $PSScriptRoot
+$repositoryRoot = (git -C $PSScriptRoot rev-parse --show-toplevel).Trim()
+if ($LASTEXITCODE -ne 0 -or -not $repositoryRoot) {
+    throw "Unable to locate the repository root from '$PSScriptRoot'."
+}
 Set-Location -LiteralPath $repositoryRoot
 
 if ((git rev-parse --is-inside-work-tree).Trim() -ne "true") {
@@ -91,11 +94,15 @@ function Invoke-OpenCodeStage {
 
         Write-Host "    [RUN] OpenCode stage '$StageName' with model '$Model' (attempt $attempt/$MaxAttempts)..." -ForegroundColor DarkGray
 
-        # Capture output without relying on Tee-Object's handling of a native .cmd pipeline.
-        # All output is retained in memory first, then written to the persistent log.
+        # Stream output to the visible terminal and retain a text copy for artifact markers.
+        # Writing the preference globally above keeps a non-zero native exit observable here.
         $capturedOutput = @()
         try {
-            $capturedOutput = @(& $openCodeCommand run -m $Model $Prompt 2>&1)
+            $capturedOutput = @(& $openCodeCommand run -m $Model $Prompt 2>&1 | ForEach-Object {
+                $line = "$_"
+                Write-Host $line
+                $line
+            })
             $stageExitCode = $LASTEXITCODE
         }
         catch {
