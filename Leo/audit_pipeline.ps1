@@ -2,6 +2,13 @@
 # the page, its API boundary, authorization code, and the closest tests.
 $ErrorActionPreference = "Stop"
 
+# Keep native command exit codes observable through $LASTEXITCODE. In PowerShell 7.2+,
+# setting this to $false prevents a native non-zero exit from becoming a terminating
+# PowerShell error before the explicit $LASTEXITCODE checks below can run.
+if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -Scope Global -ErrorAction SilentlyContinue) {
+    $PSNativeCommandUseErrorActionPreference = $false
+}
+
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $repositoryRoot
 
@@ -22,8 +29,29 @@ function Assert-GitHead {
     param([string]$ExpectedHead)
 
     $actualHead = (git rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unable to read the current Git HEAD."
+    }
     if ($actualHead -ne $ExpectedHead) {
         throw "An OpenCode stage changed HEAD. Stages must not create, amend, reset, or switch commits."
+    }
+}
+
+function Get-NonPipelineGitChanges {
+    [string[]]$changes = @(git status --porcelain=v1 --untracked-files=all -- . ':(exclude).pipeline/**')
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unable to inspect Git status."
+    }
+    return $changes
+}
+
+function Assert-NoCodeChanges {
+    param([string]$StageName)
+
+    [string[]]$changes = @(Get-NonPipelineGitChanges)
+    if ($changes.Count -gt 0) {
+        $details = ($changes -join "`n- ")
+        throw "OpenCode stage '$StageName' modified repository files even though it was instructed not to modify application code.`n- $details"
     }
 }
 
@@ -32,7 +60,10 @@ function Invoke-OpenCodeStage {
         [string]$Model,
         [string]$Prompt,
         [string]$RequiredArtifact,
-        [int]$MaxAttempts = 3
+        [string]$StageName,
+        [string]$LogDirectory,
+        [int]$MaxAttempts = 3,
+        [bool]$AcceptNonZeroExitWithValidArtifact = $true
     )
 
     for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
@@ -40,44 +71,69 @@ function Invoke-OpenCodeStage {
             Remove-Item -LiteralPath $RequiredArtifact -Force -ErrorAction SilentlyContinue
         }
 
-        & $openCodeCommand run -m $Model $Prompt
+        $attemptLog = $null
+        if ($LogDirectory) {
+            if (-not (Test-Path -LiteralPath $LogDirectory -PathType Container)) {
+                New-Item -ItemType Directory -Path $LogDirectory -Force | Out-Null
+            }
+            $attemptLog = Join-Path $LogDirectory ("{0}-attempt{1}.log" -f $StageName, $attempt)
+        }
+
+        Write-Host "    [RUN] OpenCode stage '$StageName' with model '$Model' (attempt $attempt/$MaxAttempts)..." -ForegroundColor DarkGray
+
+        if ($attemptLog) {
+            & $openCodeCommand run -m $Model $Prompt 2>&1 | Tee-Object -FilePath $attemptLog
+        } else {
+            & $openCodeCommand run -m $Model $Prompt
+        }
         $stageExitCode = $LASTEXITCODE
+
         $artifactIsValid = -not $RequiredArtifact -or (
             (Test-Path -LiteralPath $RequiredArtifact -PathType Leaf) -and
             (Get-Item -LiteralPath $RequiredArtifact).Length -gt 0
         )
 
-        if ($stageExitCode -eq 0 -and $artifactIsValid) {
+        # A written, non-empty deliverable is accepted even when OpenCode reports a
+        # non-zero exit. The code remains visible as a warning and the output is logged.
+        if ($artifactIsValid -and $stageExitCode -eq 0) {
+            return
+        }
+
+        if ($artifactIsValid -and $stageExitCode -ne 0 -and $AcceptNonZeroExitWithValidArtifact) {
+            $logNote = if ($attemptLog) { " Output log: $attemptLog" } else { "" }
+            Write-Host "    [WARN] Stage '$StageName' produced the required artifact but exited with code $stageExitCode. Keeping the artifact and continuing.$logNote" -ForegroundColor Yellow
             return
         }
 
         if ($attempt -lt $MaxAttempts) {
             $delaySeconds = 5 * $attempt
             $reason = if ($stageExitCode -ne 0) { "exit code $stageExitCode" } else { "missing or empty required artifact" }
-            Write-Host "    [RETRY] OpenCode stage for '$Model' failed ($reason). Retrying in $delaySeconds seconds ($attempt/$MaxAttempts)..." -ForegroundColor Yellow
+            $logNote = if ($attemptLog) { " See $attemptLog" } else { "" }
+            Write-Host "    [RETRY] OpenCode stage '$StageName' failed ($reason). Retrying in $delaySeconds seconds ($attempt/$MaxAttempts)...$logNote" -ForegroundColor Yellow
             Start-Sleep -Seconds $delaySeconds
         }
     }
 
     if ($stageExitCode -ne 0) {
-        throw "OpenCode stage failed for model '$Model' after $MaxAttempts attempts with exit code $stageExitCode."
+        $logNote = if ($attemptLog) { " Last output log: $attemptLog" } else { "" }
+        throw "OpenCode stage '$StageName' failed for model '$Model' after $MaxAttempts attempts with exit code $stageExitCode.$logNote"
     }
 
-    throw "OpenCode stage completed after $MaxAttempts attempts without creating a non-empty '$RequiredArtifact'."
+    throw "OpenCode stage '$StageName' completed after $MaxAttempts attempts without creating a non-empty '$RequiredArtifact'."
 }
 
 function Read-VerificationStatus {
     param([string]$ReportPath)
 
-    $statusPattern = '^\s*(?:[-*+]\s*)?(?:\*\*)?STATUS:\s*(PASS|RETRY)\s*(?:\*\*)?\s*$'
-    $statusLine = Get-Content -LiteralPath $ReportPath |
-        Where-Object { $_ -match $statusPattern } |
-        Select-Object -First 1
+    $statusPattern = '^\s*STATUS:\s*(PASS|RETRY)\s*$'
+    [string[]]$statusLines = @(Get-Content -LiteralPath $ReportPath |
+        Where-Object { $_ -match $statusPattern })
 
-    if (-not $statusLine -or $statusLine -notmatch $statusPattern) {
-        throw "Verification report '$ReportPath' must contain a line with STATUS: PASS or STATUS: RETRY."
+    if ($statusLines.Count -ne 1) {
+        throw "Verification report '$ReportPath' must contain exactly one unformatted STATUS: PASS or STATUS: RETRY line; found $($statusLines.Count)."
     }
 
+    $null = $statusLines[0] -match $statusPattern
     return $Matches[1].ToUpperInvariant()
 }
 
@@ -322,8 +378,11 @@ $auditorModel    = "opencode/nemotron-3-ultra-free"
 $coderModel      = "opencode/big-pickle"
 $maxRepairAttempts = 3
 
-# Keep agent artifacts outside the worktree so they cannot be accidentally committed.
-$pipeDir = Join-Path ([System.IO.Path]::GetTempPath()) "opencode-audit-$PID"
+# Use a per-run identifier so concurrent/stale runs cannot collide on branches, worktrees,
+# or preserved failure artifacts.
+$runId = "{0}-{1}" -f (Get-Date -Format "yyyyMMdd-HHmmssfff"), ([guid]::NewGuid().ToString("N").Substring(0, 8))
+# Failed-workflow artifacts are copied here before their worktree is discarded.
+$failureArtifactDir = Join-Path ([System.IO.Path]::GetTempPath()) "opencode-audit-$runId"
 
 Assert-CleanWorktree
 $totalWorkflows = $workflows.Count
@@ -344,7 +403,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "Unable to prune stale Git worktree metadata: $worktreePruneOutput"
 }
 
-New-Item -ItemType Directory -Path $pipeDir | Out-Null
+New-Item -ItemType Directory -Path $failureArtifactDir -Force | Out-Null
 
 foreach ($workflow in $workflows) {
     $workflowNumber++
@@ -352,8 +411,9 @@ foreach ($workflow in $workflows) {
     $paths = $workflow.Paths
     $workflowHead = (git rev-parse HEAD).Trim()
     $workflowStarted = Get-Date
-    $branchName = "audit/$name-$PID"
-    $worktreePath = Join-Path $worktreeParent "$($name)-audit-$PID"
+    $branchName = "audit/$name-$runId"
+    $worktreePath = Join-Path $worktreeParent "$($name)-audit-$runId"
+    $workflowPipeDir = Join-Path $worktreePath ".pipeline"
     $workflowSucceeded = $false
     $unmergedCommitExists = $false
     $cleanupFailure = $null
@@ -373,15 +433,17 @@ foreach ($workflow in $workflows) {
             throw "Unable to create isolated worktree for '$name'."
         }
         Set-Location -LiteralPath $worktreePath
+        New-Item -ItemType Directory -Path $workflowPipeDir | Out-Null
 
-    $draftPlan   = "$pipeDir/${name}_draft_plan.md"
-    $refinedPlan = "$pipeDir/${name}_approved_plan.md"
-    $verificationReport = "$pipeDir/${name}_verification.md"
+    # OpenCode can write inside its active worktree; .pipeline is excluded from commits below.
+    $draftPlan   = "$workflowPipeDir/${name}_draft_plan.md"
+    $refinedPlan = "$workflowPipeDir/${name}_approved_plan.md"
+    $verificationReport = "$workflowPipeDir/${name}_verification.md"
     $pathList = $paths -join "`n- "
 
     # --- STEP 1: ARCHITECTURAL PLANNING (Muse Spark 1.2) ---
     $stageStarted = Get-Date
-    Write-Host "[1/4] Planning with Muse Spark (1M Context)..." -ForegroundColor Magenta
+    Write-Host "[1/4] Planning with Muse Spark..." -ForegroundColor Magenta
     $planPrompt = @"
 Audit the '$name' user-facing workflow.
 Inspect these page, route, controller, policy, permission, and test paths:
@@ -414,11 +476,12 @@ Do NOT modify any code.
 Do NOT run Git add, commit, reset, restore, checkout, or switch commands.
 Write an actionable, numbered implementation plan and save it directly to '$draftPlan'.
 "@
-    Invoke-OpenCodeStage -Model $plannerModel -Prompt $planPrompt -RequiredArtifact $draftPlan
+    Invoke-OpenCodeStage -Model $plannerModel -Prompt $planPrompt -RequiredArtifact $draftPlan -StageName "planner" -LogDirectory $workflowPipeDir
     Assert-GitHead -ExpectedHead $workflowHead
+    Assert-NoCodeChanges -StageName "planner"
     Write-Host ("    [DONE] Plan created ({0})" -f ((Get-Date) - $stageStarted).ToString("hh\:mm\:ss")) -ForegroundColor DarkCyan
 
-    # --- STEP 2: ADVERSARIAL PLAN AUDIT (Nemotron 3.5 Lightning) ---
+    # --- STEP 2: ADVERSARIAL PLAN AUDIT ---
     $stageStarted = Get-Date
     Write-Host "[2/4] Auditing plan with Nemotron (Adversarial Gatekeeper)..." -ForegroundColor Magenta
     $auditPrompt = @"
@@ -450,8 +513,9 @@ states this explicitly and instructs the next stage to make no changes.
 Do NOT modify application code.
 Do NOT run Git add, commit, reset, restore, checkout, or switch commands.
 "@
-    Invoke-OpenCodeStage -Model $auditorModel -Prompt $auditPrompt -RequiredArtifact $refinedPlan
+    Invoke-OpenCodeStage -Model $auditorModel -Prompt $auditPrompt -RequiredArtifact $refinedPlan -StageName "plan-auditor" -LogDirectory $workflowPipeDir
     Assert-GitHead -ExpectedHead $workflowHead
+    Assert-NoCodeChanges -StageName "plan-auditor"
     Write-Host ("    [DONE] Plan approved ({0})" -f ((Get-Date) - $stageStarted).ToString("hh\:mm\:ss")) -ForegroundColor DarkCyan
 
     $verificationStatus = "RETRY"
@@ -504,15 +568,16 @@ accessibility rather than introducing a new visual language.
 Do NOT run Git add, commit, reset, restore, checkout, or switch commands.
 "@
         }
-        Invoke-OpenCodeStage -Model $coderModel -Prompt $execPrompt
+        Invoke-OpenCodeStage -Model $coderModel -Prompt $execPrompt -StageName "implementation-$repairAttempt" -LogDirectory $workflowPipeDir -AcceptNonZeroExitWithValidArtifact:$false
         Assert-GitHead -ExpectedHead $workflowHead
         Write-Host ("    [DONE] Implementation stage finished ({0})" -f ((Get-Date) - $stageStarted).ToString("hh\:mm\:ss")) -ForegroundColor DarkCyan
 
-        # --- STEP 4: VERIFICATION AUDIT (Nemotron 3.5 Lightning) ---
+        # --- STEP 4: VERIFICATION AUDIT ---
         $stageStarted = Get-Date
         Write-Host "[4/4] Verifying applied diff with Nemotron..." -ForegroundColor Green
         $verifyPrompt = @"
-Inspect the latest git diff for the '$name' workflow and all changed files.
+Read the finalized specification in '$refinedPlan' first, then inspect the latest git diff for the '$name' workflow and all changed files.
+Treat every actionable item in that specification as a requirement: verify that each required fix and regression test was actually implemented, or explicitly justify why a specified item is no longer necessary based on the current code. Do not mark PASS merely because the code happens to be test-green while silently skipping specification items.
 Run the narrowest relevant Laravel/Pest tests for this workflow, plus route and PHP/TypeScript
 syntax checks where available. Verify member and officer authorization both positively and
 negatively, including direct API requests that bypass the UI. Ensure no unintended regressions,
@@ -538,7 +603,7 @@ test, unverified authorization path, or blocker remains. Put the status line nea
 then list the evidence, tests run, and any remaining issues.
 Do NOT run Git add, commit, reset, restore, checkout, or switch commands.
 "@
-        Invoke-OpenCodeStage -Model $auditorModel -Prompt $verifyPrompt -RequiredArtifact $verificationReport
+        Invoke-OpenCodeStage -Model $auditorModel -Prompt $verifyPrompt -RequiredArtifact $verificationReport -StageName "verification-$repairAttempt" -LogDirectory $workflowPipeDir
         Assert-GitHead -ExpectedHead $workflowHead
         $verificationStatus = Read-VerificationStatus -ReportPath $verificationReport
         Write-Host ("    [DONE] Verification attempt $repairAttempt returned $verificationStatus ({0})" -f ((Get-Date) - $stageStarted).ToString("hh\:mm\:ss")) -ForegroundColor DarkCyan
@@ -549,7 +614,7 @@ Do NOT run Git add, commit, reset, restore, checkout, or switch commands.
     }
 
     # --- GIT AUTO-COMMIT ---
-    [string[]]$workflowChanges = @(git status --porcelain)
+    [string[]]$workflowChanges = @(Get-NonPipelineGitChanges)
     if ($workflowChanges.Count -eq 0) {
         Set-Location -LiteralPath $repositoryRoot
         git merge --ff-only $branchName | Out-Null
@@ -559,7 +624,7 @@ Do NOT run Git add, commit, reset, restore, checkout, or switch commands.
         Write-Host (">>> FINISHED [$workflowNumber/$totalWorkflows] $name; no fixes were required. Total: {0}" -f ((Get-Date) - $workflowStarted).ToString("hh\:mm\:ss")) -ForegroundColor Green
     } else {
         Write-Host "Committing verified changes for $name in isolated worktree..." -ForegroundColor DarkGray
-        git add -A
+        git add -A -- . ':(exclude).pipeline'
         $changedFiles = ($workflowChanges | ForEach-Object { $_.Substring(3) }) -join "`n- "
         $commitMessage = "fix(workflow): audited and patched $name via pipeline`n`nFiles changed:`n- $changedFiles"
         git commit -m $commitMessage
@@ -578,6 +643,9 @@ Do NOT run Git add, commit, reset, restore, checkout, or switch commands.
         Write-Host (">>> FINISHED [$workflowNumber/$totalWorkflows] $name; merged $commitHash into main. Total: {0}" -f ((Get-Date) - $workflowStarted).ToString("hh\:mm\:ss")) -ForegroundColor Green
     }
     } catch {
+        if (Test-Path -LiteralPath $workflowPipeDir) {
+            Copy-Item -LiteralPath $workflowPipeDir -Destination (Join-Path $failureArtifactDir "$name-$runId") -Recurse -Force
+        }
         Set-Location -LiteralPath $repositoryRoot
         $issue = "$name attempt failed: $($_.Exception.Message)"
         $workflowIssues.Add($issue)
@@ -622,9 +690,9 @@ Do NOT run Git add, commit, reset, restore, checkout, or switch commands.
 # failed, its draft plan, refined plan, and verification report are the primary evidence for
 # what went wrong, so keep them on disk rather than deleting them with everything else.
 if ($failedWorkflows.Count -eq 0) {
-    Remove-Item -LiteralPath $pipeDir -Recurse -Force
+    Remove-Item -LiteralPath $failureArtifactDir -Recurse -Force
 } else {
-    Write-Host "`nArtifacts for failed/skipped workflows preserved at: $pipeDir" -ForegroundColor Yellow
+    Write-Host "`nArtifacts for failed/skipped workflows preserved at: $failureArtifactDir" -ForegroundColor Yellow
 }
 Write-Host "`nPIPELINE SUMMARY" -ForegroundColor Cyan
 Write-Host ("Successful: {0}/{1}" -f $successfulWorkflows.Count, $totalWorkflows) -ForegroundColor Green
