@@ -13,6 +13,8 @@ use App\Mail\WithdrawalStatusNotification;
 use App\Models\Announcement;
 use App\Models\Loan;
 use App\Models\Notification;
+use App\Models\Ticket;
+use App\Models\TicketMessage;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Support\Collection;
@@ -632,5 +634,105 @@ class NotificationService
     {
         return Notification::where('expires_at', '<', now())
             ->delete();
+    }
+
+    /**
+     * Notify support staff that a new ticket has been submitted.
+     */
+    public function notifyNewTicket(Ticket $ticket): void
+    {
+        $creatorName = $ticket->user?->name ?: 'A member';
+        try {
+            $supportOfficers = User::role(['admin', 'manager', 'accountant'])->get();
+        } catch (RoleDoesNotExist) {
+            $supportOfficers = User::whereIn('role', ['admin', 'manager', 'accountant'])->get();
+        }
+
+        foreach ($supportOfficers as $officer) {
+            if ($officer->id === $ticket->user_id) {
+                continue;
+            }
+
+            $this->create(
+                $officer,
+                'ticket_created',
+                'New Support Ticket: '.$ticket->ticket_number,
+                "{$creatorName} submitted ticket: \"{$ticket->subject}\"",
+                'normal',
+                '/dashboard/tickets',
+                $ticket
+            );
+        }
+    }
+
+    /**
+     * Notify participant about a new reply on a ticket.
+     */
+    public function notifyTicketReply(Ticket $ticket, TicketMessage $message): void
+    {
+        $author = $message->user;
+        $isAuthorStaff = $author ? $author->isSupportStaff() : false;
+
+        if ($isAuthorStaff) {
+            if ($ticket->user && $ticket->user->id !== $author->id) {
+                $this->create(
+                    $ticket->user,
+                    'ticket_reply',
+                    'Support Replied: '.$ticket->ticket_number,
+                    'Support replied to your ticket: "'.substr($message->message, 0, 80).'"',
+                    'normal',
+                    '/dashboard/settings',
+                    $ticket
+                );
+            }
+        } else {
+            if ($ticket->assignee && $ticket->assignee->id !== $author->id) {
+                $recipients = collect([$ticket->assignee]);
+            } else {
+                try {
+                    $recipients = User::role(['admin', 'manager', 'accountant'])->get();
+                } catch (RoleDoesNotExist) {
+                    $recipients = User::whereIn('role', ['admin', 'manager', 'accountant'])->get();
+                }
+            }
+
+            foreach ($recipients as $recipient) {
+                if ($recipient->id === $author->id) {
+                    continue;
+                }
+
+                $this->create(
+                    $recipient,
+                    'ticket_reply',
+                    'New Reply on '.$ticket->ticket_number,
+                    ($author ? $author->name : 'User').' replied: "'.substr($message->message, 0, 80).'"',
+                    'normal',
+                    '/dashboard/tickets',
+                    $ticket
+                );
+            }
+        }
+    }
+
+    /**
+     * Notify ticket owner when status changes.
+     */
+    public function notifyTicketStatusChanged(Ticket $ticket, string $oldStatus, string $newStatus): void
+    {
+        if (! $ticket->user) {
+            return;
+        }
+
+        $statusLabel = ucwords(str_replace('_', ' ', $newStatus));
+
+        $this->create(
+            $ticket->user,
+            'ticket_status',
+            'Ticket '.$ticket->ticket_number.' Updated',
+            "Your ticket status has been changed to {$statusLabel}.",
+            $newStatus === 'resolved' ? 'normal' : 'low',
+            '/dashboard/settings',
+            $ticket
+        );
     }
 }

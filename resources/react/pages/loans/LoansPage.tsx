@@ -6,6 +6,8 @@ import BranchSelect from '../../components/BranchSelect';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { validate, loanEncodeSchema, loanEditSchema, type FieldErrors } from '../../lib/validation';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import Pagination from '../../components/ui/Pagination';
 
 export default function LoansPage() {
     const { user } = useAuth();
@@ -25,6 +27,14 @@ export default function LoansPage() {
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [encodeErrors, setEncodeErrors] = useState<FieldErrors>({});
     const [editErrors, setEditErrors] = useState<FieldErrors>({});
+    const [confirmState, setConfirmState] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        confirmText?: string;
+        variant?: 'danger' | 'warning' | 'primary';
+        onConfirm: () => void;
+    }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
     const queryClient = useQueryClient();
     const { addToast } = useToast();
     const canAssignBranch = !!user?.permissions?.includes('branches.view');
@@ -183,8 +193,8 @@ export default function LoansPage() {
                     <p className="text-sm text-gray-500">Manage loan applications and records</p>
                 </div>
                 {canEncode && (
-                    <button onClick={() => setShowEncodeModal(true)} className="mt-3 sm:mt-0 bg-blue-700 hover:bg-blue-800 rounded-lg focus:ring-4 focus:ring-blue-300 text-white px-4 py-2 text-sm font-medium">
-                        <i className="fas fa-plus mr-1"></i> Encode Loan
+                    <button onClick={() => setShowEncodeModal(true)} className="mt-3 sm:mt-0 bg-emerald-600 hover:bg-emerald-700 rounded-lg focus:ring-2 focus:ring-emerald-500/20 text-white px-4 py-2 text-sm font-medium shadow-xs transition-colors cursor-pointer">
+                        <i className="fas fa-plus mr-1.5"></i> Encode Loan
                     </button>
                 )}
             </div>
@@ -192,10 +202,10 @@ export default function LoansPage() {
             <div className="p-4">
                 <input
                     type="text"
-                    placeholder="Search loans..."
+                    placeholder="Search loans by loan number, borrower name, ID..."
                     value={search}
                     onChange={e => { setSearch(e.target.value); setPage(1); }}
-                    className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 mb-4"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 block w-full p-2.5 mb-4 transition-all"
                 />
 
                 {canAssignBranch && (
@@ -212,7 +222,7 @@ export default function LoansPage() {
                         <p className="mt-4 text-sm text-gray-500">No loans found</p>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-xs">
                         <table className="min-w-full divide-y divide-gray-200 table-fixed">
                             <thead className="bg-gray-100">
                                 <tr>
@@ -232,7 +242,7 @@ export default function LoansPage() {
                                         <td className="p-4 text-sm font-medium text-gray-900">{l.loan_number}</td>
                                         <td className="p-4 text-sm font-medium text-gray-900">{l.borrower?.name || 'Unknown'}{l.borrower?.user_number && <div className="text-xs text-gray-500">{l.borrower.user_number}</div>}</td>
                                         <td className="p-4 text-base font-semibold text-gray-900">₱{Number(l.loan_amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                        <td className="p-4"><span className="px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded capitalize">{l.loan_type}</span></td>
+                                        <td className="p-4"><span className="px-2.5 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800 rounded capitalize">{l.loan_product_name || l.loan_product || l.loan_type}</span></td>
                                         <td className="p-4">
                                             <span className={`px-2.5 py-0.5 text-xs font-medium rounded ${getStatusColor(l.loan_status)}`}>{getStatusLabel(l.loan_status)}</span>
                                         </td>
@@ -240,26 +250,47 @@ export default function LoansPage() {
                                         <td className="p-4 text-sm text-gray-900">{l.created_at}</td>
                                         <td className="p-4">
                                             <div className="flex items-center gap-1">
-                                                <button onClick={() => { setSelectedLoanId(l.id); setActiveTab('overview'); }} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="View">
+                                                <button onClick={() => { setSelectedLoanId(l.id); setActiveTab('overview'); }} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="View">
                                                     <i className="fas fa-eye"></i>
                                                 </button>
                                                 {canDisburse && l.loan_status === 'approved' && (
-                                                    <button onClick={() => { if (confirm('Disburse loan funds to borrower savings?')) disburseMutation.mutate(l.id); }} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg" title="Disburse">
+                                                    <button onClick={() => setConfirmState({
+                                                        isOpen: true,
+                                                        title: 'Disburse Loan',
+                                                        message: `Disburse loan funds of ₱${Number(l.loan_amount).toLocaleString()} to borrower savings?`,
+                                                        confirmText: 'Disburse Funds',
+                                                        variant: 'primary',
+                                                        onConfirm: () => disburseMutation.mutate(l.id),
+                                                    })} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="Disburse">
                                                         <i className="fas fa-money-bill-wave"></i>
                                                     </button>
                                                 )}
                                                 {canManage && l.loan_status === 'active' && (
-                                                    <button onClick={() => { if (confirm('Mark this loan as paid off?')) closeMutation.mutate(l.id); }} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg" title="Close">
+                                                    <button onClick={() => setConfirmState({
+                                                        isOpen: true,
+                                                        title: 'Mark Paid Off',
+                                                        message: `Mark loan ${l.loan_number} as paid off?`,
+                                                        confirmText: 'Mark Paid Off',
+                                                        variant: 'primary',
+                                                        onConfirm: () => closeMutation.mutate(l.id),
+                                                    })} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer" title="Close">
                                                         <i className="fas fa-check-double"></i>
                                                     </button>
                                                 )}
                                                 {canManage && (
-                                                    <button onClick={() => openEdit(l)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Edit">
+                                                    <button onClick={() => openEdit(l)} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="Edit">
                                                         <i className="fas fa-edit"></i>
                                                     </button>
                                                 )}
                                                 {canManage && (
-                                                    <button onClick={() => { if (confirm('Delete this loan record?')) deleteMutation.mutate(l.id); }} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Delete">
+                                                    <button onClick={() => setConfirmState({
+                                                        isOpen: true,
+                                                        title: 'Delete Loan',
+                                                        message: `Are you sure you want to delete loan ${l.loan_number}? This cannot be undone.`,
+                                                        confirmText: 'Delete',
+                                                        variant: 'danger',
+                                                        onConfirm: () => deleteMutation.mutate(l.id),
+                                                    })} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer" title="Delete">
                                                         <i className="fas fa-trash"></i>
                                                     </button>
                                                 )}
@@ -273,10 +304,14 @@ export default function LoansPage() {
                 )}
 
                 {pagination && pagination.last_page > 1 && (
-                    <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 flex items-center justify-center gap-2">
-                        <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm disabled:opacity-50">Previous</button>
-                        <span className="text-sm font-normal text-gray-500">Showing <span className="font-semibold text-gray-900">{((page - 1) * pagination.per_page + 1)}-{Math.min(page * pagination.per_page, pagination.total)}</span> of <span className="font-semibold text-gray-900">{pagination.total}</span></span>
-                        <button onClick={() => setPage(p => Math.min(pagination.last_page, p + 1))} disabled={page === pagination.last_page} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm disabled:opacity-50">Next</button>
+                    <div className="mt-4">
+                        <Pagination
+                            page={page}
+                            totalPages={pagination.last_page || 1}
+                            onPageChange={setPage}
+                            total={pagination.total}
+                            perPage={pagination.per_page}
+                        />
                     </div>
                 )}
             </div>
@@ -285,10 +320,10 @@ export default function LoansPage() {
             {selectedLoanId && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => setSelectedLoanId(null)}>
                     <div className="w-full max-w-3xl h-[90vh] rounded-2xl bg-white shadow-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-                        <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white shrink-0">
+                        <div className="bg-linear-to-r from-emerald-600 to-cyan-600 px-6 py-5 text-white shrink-0">
                             <div className="mb-1 flex items-center justify-between">
                                 <h2 className="text-lg font-bold">{detail?.loan_number || 'Loan Details'}</h2>
-                                <button onClick={() => setSelectedLoanId(null)} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white"><i className="fas fa-times"></i></button>
+                                <button onClick={() => setSelectedLoanId(null)} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white cursor-pointer"><i className="fas fa-times"></i></button>
                             </div>
                             {detail?.borrower?.name && <p className="text-sm text-white/80">{detail.borrower.name} &middot; {detail.borrower.user_number}</p>}
                         </div>
@@ -296,7 +331,7 @@ export default function LoansPage() {
                         {/* Tabs */}
                         <div className="flex gap-0 border-b border-gray-200 shrink-0 px-6">
                             {tabs.map(t => (
-                                <button key={t.key} onClick={() => setActiveTab(t.key)} className={`flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-xs font-medium border-b-2 -mb-px transition-colors ${activeTab === t.key ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700 border-transparent'}`}>
+                                <button key={t.key} onClick={() => setActiveTab(t.key)} className={`flex items-center gap-1.5 whitespace-nowrap px-3 py-2.5 text-xs font-medium border-b-2 -mb-px transition-colors cursor-pointer ${activeTab === t.key ? 'border-b-2 border-emerald-600 text-emerald-600 font-semibold' : 'text-gray-500 hover:text-gray-700 border-transparent'}`}>
                                     <i className={t.icon}></i> {t.label}
                                 </button>
                             ))}
@@ -456,31 +491,54 @@ export default function LoansPage() {
             {showEncodeModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => setShowEncodeModal(false)}>
                     <div className="w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-                        <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white shrink-0">
+                        <div className="bg-linear-to-r from-emerald-600 to-cyan-600 px-6 py-5 text-white shrink-0">
                             <div className="flex items-center justify-between">
                                 <h2 className="text-lg font-bold">Encode Loan</h2>
-                                <button onClick={() => setShowEncodeModal(false)} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white"><i className="fas fa-times"></i></button>
+                                <button onClick={() => setShowEncodeModal(false)} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white cursor-pointer"><i className="fas fa-times"></i></button>
                             </div>
                         </div>
                         <div className="flex-1 overflow-y-auto p-6">
                             <form id="encode-loan-form" onSubmit={handleEncodeSubmit} className="space-y-4">
                                 <div>
                                     <label className="mb-1 block text-sm font-medium text-gray-700">Search Member *</label>
-                                    <input type="text" value={memberSearch} onChange={e => { setMemberSearch(e.target.value); if (e.target.value.length >= 2) memberSearchMutation.mutate(e.target.value); }} className={`w-full rounded-lg border px-3 py-2 text-sm ${encodeErrors.user_id ? 'border-red-400' : 'border-gray-200'}`} placeholder="Search by name or number..." />
+                                    <input type="text" value={memberSearch} onChange={e => { setMemberSearch(e.target.value); if (e.target.value.length >= 2) memberSearchMutation.mutate(e.target.value); }} className={`w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 ${encodeErrors.user_id ? 'border-red-400' : 'border-gray-200'}`} placeholder="Search by name or number..." />
                                     {encodeErrors.user_id && <p className="mt-1 text-xs text-red-600">{encodeErrors.user_id}</p>}
                                     {searchResults.length > 0 && (
                                         <div className="mt-1 rounded-lg border border-gray-200 bg-white shadow-lg">
                                             {searchResults.map((m: any) => (
-                                                <button key={m.id} type="button" onClick={() => { setEncodeForm(f => ({ ...f, user_id: m.id })); setMemberSearch(`${m.name} (${m.user_number})`); setSearchResults([]); setEncodeErrors(prev => { const n = { ...prev }; delete n.user_id; return n; }); }} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50">{m.name} ({m.user_number})</button>
+                                                <button key={m.id} type="button" onClick={() => { setEncodeForm(f => ({ ...f, user_id: m.id })); setMemberSearch(`${m.name} (${m.user_number})`); setSearchResults([]); setEncodeErrors(prev => { const n = { ...prev }; delete n.user_id; return n; }); }} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 cursor-pointer">{m.name} ({m.user_number})</button>
                                             ))}
                                         </div>
                                     )}
                                 </div>
+                                <div>
+                                    <label className="mb-1 block text-sm font-medium text-gray-700">Loan Product *</label>
+                                    <select
+                                        value={encodeForm.loan_product}
+                                        onChange={e => {
+                                            const code = e.target.value;
+                                            const pList = Object.values(productsData?.data?.data || {}) as any[];
+                                            const selected = pList.find((p: any) => p.code === code);
+                                            setEncodeForm(f => ({
+                                                ...f,
+                                                loan_product: code,
+                                                loan_type: selected?.base_type || 'business',
+                                                interest_rate: selected ? String(selected.interest_rate) : f.interest_rate,
+                                                term_months: selected ? String(selected.max_term) : f.term_months,
+                                            }));
+                                        }}
+                                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                                    >
+                                        {Object.values(productsData?.data?.data || {}).map((p: any) => (
+                                            <option key={p.code} value={p.code}>{p.name} ({p.base_type})</option>
+                                        ))}
+                                    </select>
+                                </div>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Amount *</label><input type="number" value={encodeForm.loan_amount} onChange={e => setEncodeForm(f => ({ ...f, loan_amount: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm ${encodeErrors.loan_amount ? 'border-red-400' : 'border-gray-200'}`} />{encodeErrors.loan_amount && <p className="mt-1 text-xs text-red-600">{encodeErrors.loan_amount}</p>}</div>
-                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Interest Rate (%)</label><input type="number" step="0.1" value={encodeForm.interest_rate} onChange={e => setEncodeForm(f => ({ ...f, interest_rate: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm ${encodeErrors.interest_rate ? 'border-red-400' : 'border-gray-200'}`} />{encodeErrors.interest_rate && <p className="mt-1 text-xs text-red-600">{encodeErrors.interest_rate}</p>}</div>
-                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Term (months)</label><input type="number" value={encodeForm.term_months} onChange={e => setEncodeForm(f => ({ ...f, term_months: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm ${encodeErrors.term_months ? 'border-red-400' : 'border-gray-200'}`} />{encodeErrors.term_months && <p className="mt-1 text-xs text-red-600">{encodeErrors.term_months}</p>}</div>
-                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Frequency</label><select value={encodeForm.payment_frequency} onChange={e => setEncodeForm(f => ({ ...f, payment_frequency: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"><option value="weekly">Weekly</option><option value="bi-weekly">Bi-weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annually">Annually</option></select></div>
+                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Amount *</label><input type="number" value={encodeForm.loan_amount} onChange={e => setEncodeForm(f => ({ ...f, loan_amount: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 ${encodeErrors.loan_amount ? 'border-red-400' : 'border-gray-200'}`} />{encodeErrors.loan_amount && <p className="mt-1 text-xs text-red-600">{encodeErrors.loan_amount}</p>}</div>
+                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Interest Rate (%)</label><input type="number" step="0.1" value={encodeForm.interest_rate} onChange={e => setEncodeForm(f => ({ ...f, interest_rate: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 ${encodeErrors.interest_rate ? 'border-red-400' : 'border-gray-200'}`} />{encodeErrors.interest_rate && <p className="mt-1 text-xs text-red-600">{encodeErrors.interest_rate}</p>}</div>
+                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Term (months)</label><input type="number" value={encodeForm.term_months} onChange={e => setEncodeForm(f => ({ ...f, term_months: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 ${encodeErrors.term_months ? 'border-red-400' : 'border-gray-200'}`} />{encodeErrors.term_months && <p className="mt-1 text-xs text-red-600">{encodeErrors.term_months}</p>}</div>
+                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Frequency</label><select value={encodeForm.payment_frequency} onChange={e => setEncodeForm(f => ({ ...f, payment_frequency: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"><option value="weekly">Weekly</option><option value="bi-weekly">Bi-weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annually">Annually</option></select></div>
                                 </div>
                                 {canAssignBranch && (
                                     <div className="max-w-xs">
@@ -490,8 +548,8 @@ export default function LoansPage() {
                             </form>
                         </div>
                         <div className="flex shrink-0 items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 rounded-b-2xl">
-                            <button type="button" onClick={() => setShowEncodeModal(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
-                            <button type="submit" form="encode-loan-form" disabled={encodeMutation.isPending} className="bg-blue-700 hover:bg-blue-800 rounded-lg focus:ring-4 focus:ring-blue-300 text-white px-4 py-2 text-sm font-medium disabled:opacity-50">{encodeMutation.isPending ? 'Saving...' : 'Encode'}</button>
+                            <button type="button" onClick={() => setShowEncodeModal(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm hover:bg-gray-100 cursor-pointer">Cancel</button>
+                            <button type="submit" form="encode-loan-form" disabled={encodeMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700 rounded-lg focus:ring-2 focus:ring-emerald-500/20 text-white px-4 py-2 text-sm font-medium shadow-xs disabled:opacity-50 transition-colors cursor-pointer">{encodeMutation.isPending ? 'Saving...' : 'Encode'}</button>
                         </div>
                     </div>
                 </div>
@@ -501,32 +559,41 @@ export default function LoansPage() {
             {showEditModal && editingLoan && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => setShowEditModal(false)}>
                     <div className="w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-                        <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white shrink-0">
+                        <div className="bg-linear-to-r from-emerald-600 to-cyan-600 px-6 py-5 text-white shrink-0">
                             <div className="flex items-center justify-between">
                                 <h2 className="text-lg font-bold">Edit Loan {editingLoan.loan_number}</h2>
-                                <button onClick={() => setShowEditModal(false)} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white"><i className="fas fa-times"></i></button>
+                                <button onClick={() => setShowEditModal(false)} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white cursor-pointer"><i className="fas fa-times"></i></button>
                             </div>
                         </div>
                         <div className="flex-1 overflow-y-auto p-6">
                             <form id="edit-loan-form" onSubmit={handleEditSubmit} className="space-y-4">
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Type</label><select value={editForm.loan_type} onChange={e => setEditForm(f => ({ ...f, loan_type: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"><option value="business">Business</option><option value="group">Group</option><option value="special">Special</option></select></div>
-                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Status</label><select value={editForm.loan_status} onChange={e => setEditForm(f => ({ ...f, loan_status: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"><option value="pending">Pending</option><option value="approved">Approved</option><option value="active">Active</option><option value="paid_off">Paid Off</option></select></div>
-                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Amount</label><input type="number" step="0.01" value={editForm.loan_amount} onChange={e => setEditForm(f => ({ ...f, loan_amount: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm ${editErrors.loan_amount ? 'border-red-400' : 'border-gray-200'}`} />{editErrors.loan_amount && <p className="mt-1 text-xs text-red-600">{editErrors.loan_amount}</p>}</div>
-                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Interest Rate (%)</label><input type="number" step="0.1" value={editForm.interest_rate} onChange={e => setEditForm(f => ({ ...f, interest_rate: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm ${editErrors.interest_rate ? 'border-red-400' : 'border-gray-200'}`} />{editErrors.interest_rate && <p className="mt-1 text-xs text-red-600">{editErrors.interest_rate}</p>}</div>
-                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Term (months)</label><input type="number" value={editForm.term_months} onChange={e => setEditForm(f => ({ ...f, term_months: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm ${editErrors.term_months ? 'border-red-400' : 'border-gray-200'}`} />{editErrors.term_months && <p className="mt-1 text-xs text-red-600">{editErrors.term_months}</p>}</div>
-                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Frequency</label><select value={editForm.payment_frequency} onChange={e => setEditForm(f => ({ ...f, payment_frequency: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"><option value="weekly">Weekly</option><option value="bi-weekly">Bi-weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annually">Annually</option></select></div>
-                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Due Date</label><input type="date" value={editForm.due_date} onChange={e => setEditForm(f => ({ ...f, due_date: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" /></div>
+                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Type</label><select value={editForm.loan_type} onChange={e => setEditForm(f => ({ ...f, loan_type: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"><option value="business">Business</option><option value="group">Group</option><option value="special">Special</option></select></div>
+                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Status</label><select value={editForm.loan_status} onChange={e => setEditForm(f => ({ ...f, loan_status: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"><option value="pending">Pending</option><option value="approved">Approved</option><option value="active">Active</option><option value="paid_off">Paid Off</option></select></div>
+                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Amount</label><input type="number" step="0.01" value={editForm.loan_amount} onChange={e => setEditForm(f => ({ ...f, loan_amount: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 ${editErrors.loan_amount ? 'border-red-400' : 'border-gray-200'}`} />{editErrors.loan_amount && <p className="mt-1 text-xs text-red-600">{editErrors.loan_amount}</p>}</div>
+                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Interest Rate (%)</label><input type="number" step="0.1" value={editForm.interest_rate} onChange={e => setEditForm(f => ({ ...f, interest_rate: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 ${editErrors.interest_rate ? 'border-red-400' : 'border-gray-200'}`} />{editErrors.interest_rate && <p className="mt-1 text-xs text-red-600">{editErrors.interest_rate}</p>}</div>
+                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Term (months)</label><input type="number" value={editForm.term_months} onChange={e => setEditForm(f => ({ ...f, term_months: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 ${editErrors.term_months ? 'border-red-400' : 'border-gray-200'}`} />{editErrors.term_months && <p className="mt-1 text-xs text-red-600">{editErrors.term_months}</p>}</div>
+                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Frequency</label><select value={editForm.payment_frequency} onChange={e => setEditForm(f => ({ ...f, payment_frequency: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"><option value="weekly">Weekly</option><option value="bi-weekly">Bi-weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annually">Annually</option></select></div>
+                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Due Date</label><input type="date" value={editForm.due_date} onChange={e => setEditForm(f => ({ ...f, due_date: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500" /></div>
                                 </div>
                             </form>
                         </div>
                         <div className="flex shrink-0 items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 rounded-b-2xl">
-                            <button type="button" onClick={() => setShowEditModal(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
-                            <button type="submit" form="edit-loan-form" disabled={editMutation.isPending} className="bg-blue-700 hover:bg-blue-800 rounded-lg focus:ring-4 focus:ring-blue-300 text-white px-4 py-2 text-sm font-medium disabled:opacity-50">{editMutation.isPending ? 'Saving...' : 'Save'}</button>
+                            <button type="button" onClick={() => setShowEditModal(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm hover:bg-gray-100 cursor-pointer">Cancel</button>
+                            <button type="submit" form="edit-loan-form" disabled={editMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700 rounded-lg focus:ring-2 focus:ring-emerald-500/20 text-white px-4 py-2 text-sm font-medium shadow-xs disabled:opacity-50 transition-colors cursor-pointer">{editMutation.isPending ? 'Saving...' : 'Save'}</button>
                         </div>
                     </div>
                 </div>
             )}
+            <ConfirmDialog
+                isOpen={confirmState.isOpen}
+                onClose={() => setConfirmState(s => ({ ...s, isOpen: false }))}
+                title={confirmState.title}
+                message={confirmState.message}
+                confirmText={confirmState.confirmText}
+                variant={confirmState.variant}
+                onConfirm={confirmState.onConfirm}
+            />
         </>
     );
 }

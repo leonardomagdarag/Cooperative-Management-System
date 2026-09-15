@@ -249,6 +249,21 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(TrustedDevice::class);
     }
 
+    public function tickets()
+    {
+        return $this->hasMany(Ticket::class);
+    }
+
+    public function assignedTickets()
+    {
+        return $this->hasMany(Ticket::class, 'assigned_to');
+    }
+
+    public function isSupportStaff(): bool
+    {
+        return in_array($this->primary_role, ['admin', 'manager', 'accountant'], true);
+    }
+
     public function invalidateOtherSessions(?string $currentSessionId = null): void
     {
         if (config('session.driver') !== 'database') {

@@ -85,7 +85,7 @@ test('unverified member after OTP lands on the SPA verify page, not a plain-text
     $this->get('/verify-email')->assertOk()->assertViewIs('react');
 });
 
-test('OTP code is always written to the application log regardless of mailer', function () {
+test('OTP code is only written to the application log in local or log mailer environments', function () {
     Log::spy();
     Mail::fake();
 
@@ -98,7 +98,21 @@ test('OTP code is always written to the application log regardless of mailer', f
     ]);
     $user->assignRole('member');
 
+    // 1. Non-local environment with non-log mailer (array mailer in testing) must NOT log the OTP
+    config(['mail.default' => 'array']);
+
     $this->get('/sanctum/csrf-cookie')->assertNoContent();
+    $this->postJson('/api/login', [
+        'email' => $user->email,
+        'password' => 'password',
+    ])->assertOk()
+        ->assertJsonPath('requires_otp', true);
+
+    Log::shouldNotHaveReceived('info', fn (string $message) => str_contains($message, 'OTP email') && str_contains($message, 'otp-log@example.com'));
+
+    // 2. Explicit log mailer configuration DOES log the OTP as fallback
+    config(['mail.default' => 'log']);
+
     $this->postJson('/api/login', [
         'email' => $user->email,
         'password' => 'password',

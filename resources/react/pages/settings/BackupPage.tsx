@@ -231,6 +231,7 @@ export default function BackupPage() {
     return (
         <div className="space-y-6">
             <SettingsTabHeader
+                eyebrow="Data integrity"
                 title="Backup & Restore"
                 description="Schedule encrypted backups, download archives, and restore the cooperative database or files."
                 icon="fas fa-hard-drive"

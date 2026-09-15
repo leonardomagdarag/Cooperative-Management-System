@@ -16,6 +16,8 @@
 /public/build
 /public/hot
 /public/storage
+/.playwright-mcp/
+/storage/test_screenshot.png
 /storage/*.key
 /storage/framework/views/*
 /storage/pail

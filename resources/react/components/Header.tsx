@@ -28,6 +28,7 @@ export default function Header() {
 
     const displayName = user?.name || 'User';
     const displayRole = user?.primary_role || 'Member';
+    const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.userAgent);
 
     const flatItems: FlatItem[] = groups.flatMap(g => g.items.map(item => ({ group: g.label, item })));
 
@@ -143,10 +144,10 @@ export default function Header() {
                     </svg>
                 </button>
 
-                <div className="hidden xl:block">
+                <div className="hidden md:block">
                     <div className="relative" ref={containerRef}>
                         <span className="absolute -translate-y-1/2 pointer-events-none left-4 top-1/2">
-                            <svg className="fill-gray-500" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <svg className="fill-gray-400" width="18" height="18" viewBox="0 0 20 20" fill="none">
                                 <path fillRule="evenodd" clipRule="evenodd" d="M3.04175 9.37363C3.04175 5.87693 5.87711 3.04199 9.37508 3.04199C12.8731 3.04199 15.7084 5.87693 15.7084 9.37363C15.7084 12.8703 12.8731 15.7053 9.37508 15.7053C5.87711 15.7053 3.04175 12.8703 3.04175 9.37363ZM9.37508 1.54199C5.04902 1.54199 1.54175 5.04817 1.54175 9.37363C1.54175 13.6991 5.04902 17.2053 9.37508 17.2053C11.2674 17.2053 13.003 16.5344 14.357 15.4176L17.177 18.238C17.4699 18.5309 17.9448 18.5309 18.2377 18.238C18.5306 17.9451 18.5306 17.4703 18.2377 17.1774L15.418 14.3573C16.5365 13.0033 17.2084 11.2669 17.2084 9.37363C17.2084 5.04817 13.7011 1.54199 9.37508 1.54199Z" fill=""/>
                             </svg>
                         </span>
@@ -158,18 +159,18 @@ export default function Header() {
                             onKeyDown={onKeyDown}
                             onFocus={() => query.trim().length >= 2 && setOpen(true)}
                             placeholder="Search or type command..."
-                            className="h-11 w-full rounded-lg border border-gray-200 bg-transparent py-2.5 pl-12 pr-14 text-sm text-gray-800 placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 xl:w-[430px]"
+                            className="h-10 w-full rounded-lg border border-gray-200 bg-gray-50/50 py-2 pl-11 pr-16 text-sm text-gray-800 placeholder:text-gray-400 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 md:w-64 lg:w-80 xl:w-[420px] transition-all"
                         />
-                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 inline-flex items-center gap-0.5 rounded-lg border border-gray-200 bg-gray-50 px-[7px] py-[4.5px] text-xs text-gray-500">
-                            <span>⌘</span><span>K</span>
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[11px] font-medium text-gray-500 shadow-xs">
+                            {isMac ? '⌘K' : 'Ctrl+K'}
                         </span>
 
                         {open && (
-                            <div className="absolute left-0 right-0 top-[calc(100%+8px)] max-h-[480px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
+                            <div className="absolute left-0 right-0 top-[calc(100%+8px)] max-h-[480px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl z-50">
                                 <div className="max-h-[480px] overflow-y-auto p-2">
                                     {loading && (
                                         <div className="flex items-center gap-2 px-3 py-3 text-sm text-gray-500">
-                                            <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-brand-500" />
+                                            <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-emerald-600" />
                                             Searching...
                                         </div>
                                     )}
@@ -186,15 +187,15 @@ export default function Header() {
                                                 const isActive = flatIndex === activeIndex;
                                                 return (
                                                     <button
-                                                        key={item.label + item.subtitle}
+                                                        key={`${group.label}-${(item as any).id ?? item.label}-${flatIndex}`}
                                                         type="button"
                                                         onMouseDown={e => e.preventDefault()}
                                                         onClick={() => goTo(item)}
                                                         onMouseEnter={() => onMouseEnter(flatIndex)}
-                                                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${isActive ? 'bg-brand-50' : 'hover:bg-gray-50'}`}
+                                                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${isActive ? 'bg-emerald-50 text-emerald-950' : 'hover:bg-gray-50'}`}
                                                     >
                                                         {item.icon && (
-                                                            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm ${isActive ? 'bg-brand-100 text-brand-600' : 'bg-gray-100 text-gray-500'}`}>
+                                                            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm ${isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
                                                                 <i className={`fas fa-${item.icon}`} />
                                                             </span>
                                                         )}

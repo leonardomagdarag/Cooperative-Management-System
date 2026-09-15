@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
+use App\Models\User;
 use App\Services\AuditLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,7 +35,7 @@ class BranchController extends Controller
             ->orderBy('name')
             ->get();
 
-        $memberCounts = \App\Models\User::query()
+        $memberCounts = User::query()
             ->memberUsers()
             ->whereIn('branch_id', $branches->pluck('id'))
             ->get()
@@ -125,6 +126,26 @@ class BranchController extends Controller
     public function destroy(Branch $branch): JsonResponse
     {
         abort_unless(Auth::user()?->can('branches.delete'), 403);
+
+        if ($branch->is_head_office) {
+            return response()->json(['message' => 'The Head Office branch cannot be deleted.'], 422);
+        }
+
+        if ($branch->users()->exists()) {
+            return response()->json(['message' => 'Cannot delete branch because it has assigned users or members.'], 422);
+        }
+
+        if ($branch->loans()->whereIn('loan_status', ['pending', 'approved', 'active'])->exists()) {
+            return response()->json(['message' => 'Cannot delete branch because it has active or pending loans.'], 422);
+        }
+
+        if ($branch->transactions()->where('status', 'pending')->exists()) {
+            return response()->json(['message' => 'Cannot delete branch because it has pending transactions.'], 422);
+        }
+
+        if ($branch->memberApplications()->where('status', 'pending')->exists()) {
+            return response()->json(['message' => 'Cannot delete branch because it has pending member applications.'], 422);
+        }
 
         // Soft-delete the branch; linked records keep a nullable branch_id.
         $branch->delete();

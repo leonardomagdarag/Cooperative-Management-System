@@ -10,7 +10,7 @@ export default function ContactPage() {
     const [error, setError] = useState<string | null>(null);
 
     const submitMutation = useMutation({
-        mutationFn: () => api.post('/contact', form),
+        mutationFn: () => api.post('/api/contact', form),
         onSuccess: () => setSubmitted(true),
         onError: (err: any) => setError(err?.response?.data?.message || 'Failed to send message. Please try again.'),
     });

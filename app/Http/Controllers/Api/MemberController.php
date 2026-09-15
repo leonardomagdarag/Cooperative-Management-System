@@ -16,8 +16,8 @@ use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
-use App\Support\PersonPasswordPolicy;
 use App\Support\BranchScope;
+use App\Support\PersonPasswordPolicy;
 use App\Support\SearchFilter;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -67,13 +67,27 @@ class MemberController extends Controller
         // Search
         if ($search = $request->string('search')->toString()) {
             $search = SearchFilter::escapeLike($search);
-            $query->where(function ($q) use ($search) {
+            $tokens = array_filter(preg_split('/\s+/', $search));
+            $query->where(function ($q) use ($search, $tokens) {
                 $q->where('user_number', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhereHas('personalData', function ($pd) use ($search) {
-                        $pd->where('first_name', 'like', "%{$search}%")
-                            ->orWhere('last_name', 'like', "%{$search}%")
-                            ->orWhere('mid_name', 'like', "%{$search}%");
+                    ->orWhereHas('personalData', function ($pd) use ($search, $tokens) {
+                        $pd->where(function ($sub) use ($search) {
+                            $sub->where('first_name', 'like', "%{$search}%")
+                                ->orWhere('last_name', 'like', "%{$search}%")
+                                ->orWhere('mid_name', 'like', "%{$search}%");
+                        });
+                        if (count($tokens) > 1) {
+                            $pd->orWhere(function ($tq) use ($tokens) {
+                                foreach ($tokens as $token) {
+                                    $tq->where(function ($sub) use ($token) {
+                                        $sub->where('first_name', 'like', "%{$token}%")
+                                            ->orWhere('last_name', 'like', "%{$token}%")
+                                            ->orWhere('mid_name', 'like', "%{$token}%");
+                                    });
+                                }
+                            });
+                        }
                     })
                     ->orWhereHas('personalData.contact', function ($c) use ($search) {
                         $c->where('phone_no', 'like', "%{$search}%");
@@ -421,7 +435,7 @@ class MemberController extends Controller
             $name = trim(($validated['first_name'] ?? '').' '.($validated['last_name'] ?? ''));
             SendEmailJob::dispatch(
                 $validated['email'],
-                new MemberWelcomeMail($name, $validated['email'], $validated['password']),
+                new MemberWelcomeMail($name, $validated['email'], url('/login')),
                 'member.welcome'
             );
         }
@@ -940,10 +954,29 @@ class MemberController extends Controller
             return response()->json(['data' => []]);
         }
 
+        $tokens = array_filter(preg_split('/\s+/', $search));
+
         $members = User::query()->memberUsers()->with('personalData')
-            ->where(function ($q) use ($search) {
+            ->where(function ($q) use ($search, $tokens) {
                 $q->where('user_number', 'like', "%{$search}%")
-                    ->orWhereHas('personalData', fn ($pd) => $pd->where('first_name', 'like', "%{$search}%")->orWhere('last_name', 'like', "%{$search}%"));
+                    ->orWhereHas('personalData', function ($pd) use ($search, $tokens) {
+                        $pd->where(function ($sub) use ($search) {
+                            $sub->where('first_name', 'like', "%{$search}%")
+                                ->orWhere('last_name', 'like', "%{$search}%")
+                                ->orWhere('mid_name', 'like', "%{$search}%");
+                        });
+                        if (count($tokens) > 1) {
+                            $pd->orWhere(function ($tq) use ($tokens) {
+                                foreach ($tokens as $token) {
+                                    $tq->where(function ($sub) use ($token) {
+                                        $sub->where('first_name', 'like', "%{$token}%")
+                                            ->orWhere('last_name', 'like', "%{$token}%")
+                                            ->orWhere('mid_name', 'like', "%{$token}%");
+                                    });
+                                }
+                            });
+                        }
+                    });
             })
             ->limit(10)->get()
             ->map(fn ($m) => ['id' => $m->id, 'name' => trim(($m->personalData->first_name ?? '').' '.($m->personalData->last_name ?? '')), 'user_number' => $m->user_number, 'branch_id' => $m->branch_id, 'branch_name' => $m->branch?->name]);

@@ -20,8 +20,6 @@ import ProfilePage from './pages/profile/ProfilePage';
 import ProfileCompletionPage from './pages/profile/ProfileCompletionPage';
 import SettingsPage from './pages/settings/SettingsPage';
 import AnnouncementsPage from './pages/announcements/AnnouncementsPage';
-import MessagesPage from './pages/messages/MessagesPage';
-import TicketsPage from './pages/tickets/TicketsPage';
 import LedgerPage from './pages/ledger/LedgerPage';
 import ExpensesPage from './pages/expenses/ExpensesPage';
 import OfficersPage from './pages/officers/OfficersPage';
@@ -38,8 +36,10 @@ import LoanOverview from './pages/overviews/LoanOverview';
 import OfficerOverview from './pages/overviews/OfficerOverview';
 import MemberLoansPage from './pages/member-loans/MemberLoansPage';
 import MembersPage from './pages/members/MembersPage';
+import TicketsPage from './pages/tickets/TicketsPage';
 import LoadingScreen from './components/LoadingScreen';
 import EmptyState from './components/ui/EmptyState';
+import ToastContainer from './components/ui/ToastContainer';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const { user, isLoading } = useAuth();
@@ -65,9 +65,9 @@ function PermissionGate({ permission, role, children }: { permission?: string; r
     return <UnauthorizedPlaceholder permission={permission || role} />;
 }
 
-function RedirectToSettingsTab({ tab }: { tab: string }) {
+function RedirectToSettingsTab({ tab, subTab }: { tab: string; subTab?: string }) {
     const navigate = useNavigate();
-    useEffect(() => { navigate('/dashboard/settings', { replace: true, state: { tab } }); }, [navigate, tab]);
+    useEffect(() => { navigate('/dashboard/settings', { replace: true, state: { tab, subTab } }); }, [navigate, tab, subTab]);
     return null;
 }
 
@@ -91,8 +91,6 @@ function DashboardRouter() {
         'history': <HistoryPage />,
         'profile': <ProfilePage />,
         'settings': <SettingsPage />,
-        'messages': <MessagesPage />,
-        'tickets': <TicketsPage />,
         'member-loans': <MemberLoansPage />,
     };
 
@@ -119,6 +117,22 @@ function DashboardRouter() {
     };
 
     if (sectionMap[section]) return sectionMap[section];
+
+    const isSupportStaff = ['admin', 'manager', 'accountant'].includes(user?.primary_role || '');
+
+    if (section === 'tickets') {
+        if (isSupportStaff) {
+            return <TicketsPage />;
+        }
+        return <RedirectToSettingsTab tab="help-support" subTab="tickets" />;
+    }
+
+    if (section === 'messages') {
+        if (isSupportStaff) {
+            return <Navigate to="/dashboard/tickets" replace />;
+        }
+        return <RedirectToSettingsTab tab="help-support" subTab="tickets" />;
+    }
 
     const gate = permissionMap[section];
     if (gate) {
@@ -160,27 +174,30 @@ function DefaultOverview({ role, isOfficer }: { role: string; isOfficer?: boolea
 
 export default function App() {
     return (
-        <Routes>
-            <Route element={<PublicLayout />}>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/about" element={<AboutPage />} />
-                <Route path="/news" element={<NewsPage />} />
-                <Route path="/stories" element={<StoriesPage />} />
-                <Route path="/register" element={<RegisterPage />} />
-                <Route path="/contact" element={<ContactPage />} />
-            </Route>
+        <>
+            <ToastContainer />
+            <Routes>
+                <Route element={<PublicLayout />}>
+                    <Route path="/" element={<HomePage />} />
+                    <Route path="/about" element={<AboutPage />} />
+                    <Route path="/news" element={<NewsPage />} />
+                    <Route path="/stories" element={<StoriesPage />} />
+                    <Route path="/register" element={<RegisterPage />} />
+                    <Route path="/contact" element={<ContactPage />} />
+                </Route>
 
-            <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
-            <Route path="/forgot-password" element={<GuestRoute><ForgotPasswordPage /></GuestRoute>} />
-            <Route path="/reset-password" element={<GuestRoute><ResetPasswordPage /></GuestRoute>} />
-            <Route path="/verify-email" element={<ProtectedRoute><VerifyEmailPage /></ProtectedRoute>} />
+                <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
+                <Route path="/forgot-password" element={<GuestRoute><ForgotPasswordPage /></GuestRoute>} />
+                <Route path="/reset-password" element={<GuestRoute><ResetPasswordPage /></GuestRoute>} />
+                <Route path="/verify-email" element={<ProtectedRoute><VerifyEmailPage /></ProtectedRoute>} />
 
-            <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
-                <Route index element={<DashboardRouter />} />
-                <Route path=":section" element={<DashboardRouter />} />
-            </Route>
+                <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
+                    <Route index element={<DashboardRouter />} />
+                    <Route path=":section" element={<DashboardRouter />} />
+                </Route>
 
-            <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+                <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+        </>
     );
 }

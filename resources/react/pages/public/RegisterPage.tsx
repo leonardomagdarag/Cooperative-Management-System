@@ -41,7 +41,7 @@ export default function RegisterPage() {
         },
     });
 
-    const set = (key: string, value: string) => {
+    const set = (key: string, value: any) => {
         setErrors(prev => { const next = { ...prev }; delete next[key]; return next; });
         setForm(f => ({ ...f, [key]: value }));
     };
@@ -190,7 +190,7 @@ export default function RegisterPage() {
                                             </div>
                                             <div>
                                                 <label className="block text-sm font-medium text-slate-700 mb-2">Email Address <span className="text-red-500">*</span></label>
-                                                <input type="email" value={form.email} onChange={e => set('email', e.target.value)} required className={`public-input py-2.5 text-sm ${errors.email ? 'border-red-400' : ''}`} placeholder="juan.delacruz@email.com" />
+                                                <input type="email" value={form.email} autoComplete="email" onChange={e => set('email', e.target.value)} required className={`public-input py-2.5 text-sm ${errors.email ? 'border-red-400' : ''}`} placeholder="juan.delacruz@email.com" />
                                                 {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email}</p>}
                                             </div>
                                         </div>
@@ -254,7 +254,7 @@ export default function RegisterPage() {
                                         <div>
                                             <label className="block text-sm font-medium text-slate-700 mb-2">Password <span className="text-red-500">*</span></label>
                                             <div className="relative">
-                                                <input type={showPassword ? 'text' : 'password'} value={form.password} onChange={e => set('password', e.target.value)} required minLength={8} className={`public-input py-2.5 pr-12 text-sm ${errors.password ? 'border-red-400' : ''}`} placeholder="Minimum 8 characters" />
+                                                <input type={showPassword ? 'text' : 'password'} value={form.password} autoComplete="new-password" onChange={e => set('password', e.target.value)} required minLength={8} className={`public-input py-2.5 pr-12 text-sm ${errors.password ? 'border-red-400' : ''}`} placeholder="Minimum 8 characters" />
                                                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors">
                                                     <i className={`fas fa-eye${showPassword ? '-slash' : ''}`}></i>
                                                 </button>
@@ -273,7 +273,7 @@ export default function RegisterPage() {
                                         <div>
                                             <label className="block text-sm font-medium text-slate-700 mb-2">Confirm Password <span className="text-red-500">*</span></label>
                                             <div className="relative">
-                                                <input type={showConfirm ? 'text' : 'password'} value={form.password_confirmation} onChange={e => set('password_confirmation', e.target.value)} required className={`public-input py-2.5 pr-12 text-sm ${errors.password_confirmation ? 'border-red-400' : ''}`} placeholder="Re-enter password" />
+                                                <input type={showConfirm ? 'text' : 'password'} value={form.password_confirmation} autoComplete="new-password" onChange={e => set('password_confirmation', e.target.value)} required className={`public-input py-2.5 pr-12 text-sm ${errors.password_confirmation ? 'border-red-400' : ''}`} placeholder="Re-enter password" />
                                                 <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors">
                                                     <i className={`fas fa-eye${showConfirm ? '-slash' : ''}`}></i>
                                                 </button>
@@ -283,7 +283,7 @@ export default function RegisterPage() {
                                          </div>
                                          <div className="md:col-span-2">
                                              <label className="flex items-start gap-2 cursor-pointer">
-                                                 <input type="checkbox" value={form.terms} onChange={e => set('terms', e.target.checked)} required className="mt-1 w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-2 focus:ring-emerald-500" />
+                                                 <input type="checkbox" checked={Boolean(form.terms)} onChange={e => set('terms', e.target.checked)} required className="mt-1 w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-2 focus:ring-emerald-500 cursor-pointer" />
                                                  <span className="text-sm text-slate-700">I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-emerald-700 hover:underline">Terms and Conditions</a> and <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-emerald-700 hover:underline">Privacy Policy</a> <span className="text-red-500">*</span></span>
                                              </label>
                                              {errors.terms && <p className="mt-1 text-xs text-red-500">{errors.terms}</p>}

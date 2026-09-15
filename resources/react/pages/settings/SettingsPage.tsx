@@ -8,13 +8,16 @@ import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { validate, passwordChangeSchema, profileSchema, passwordStrength, type FieldErrors } from '../../lib/validation';
 import DatePicker from '../../components/DatePicker';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import ModalHeader from '../../components/ui/ModalHeader';
+import EmailChangeVerification from '../../components/EmailChangeVerification';
 import PublicContentPage from '../public-content/PublicContentPage';
 import LoanProductsPage from '../loan-products/LoanProductsPage';
 import RolePermissionsPage from '../role-permissions/RolePermissionsPage';
 import ServiceAvailabilityPage from './ServiceAvailabilityPage';
 import BackupPage from './BackupPage';
+import HelpSupportTab from './HelpSupportTab';
 import SettingsTabHeader from './SettingsTabHeader';
-// import EmailChangeVerification from '../../components/EmailChangeVerification';
 
 interface SettingsTab {
     key: string;
@@ -27,16 +30,20 @@ export default function SettingsPage() {
     const { user } = useAuth();
     const location = useLocation();
     const isMember = user?.primary_role === 'member';
-    const canManageSettings = user?.permissions?.includes('settings.update');
     const isAdmin = user?.primary_role === 'admin';
-    const canManageBackups = user?.permissions?.includes('backups.manage') || user?.permissions?.includes('backups.view');
+    const canManageSettings = user?.permissions?.includes('settings.update') || isAdmin;
+    const canViewSettings = canManageSettings || user?.permissions?.includes('settings.view');
+    const canManagePermissions = isAdmin || user?.permissions?.includes('officers.manage-permissions');
+    const canManageBackups = isAdmin || user?.permissions?.includes('backups.manage') || user?.permissions?.includes('backups.view');
+    const canViewLoans = canViewSettings || user?.permissions?.includes('loans.view');
 
     const tabs: SettingsTab[] = [
         { key: 'account', label: 'My Account', icon: 'fas fa-user-cog', visible: true },
-        { key: 'public-content', label: 'Public Page', icon: 'fas fa-globe', visible: !isMember && canManageSettings },
-        { key: 'loan-products', label: 'Loan Products', icon: 'fas fa-hand-holding-usd', visible: !isMember && canManageSettings },
-        { key: 'role-permissions', label: 'Roles & Permissions', icon: 'fas fa-user-shield', visible: !isMember && isAdmin },
-        { key: 'service-availability', label: 'Service Availability', icon: 'fas fa-toggle-on', visible: !isMember && canManageSettings },
+        { key: 'help-support', label: 'Help & Support', icon: 'fas fa-life-ring', visible: true },
+        { key: 'public-content', label: 'Public Page', icon: 'fas fa-globe', visible: !isMember && canViewSettings },
+        { key: 'loan-products', label: 'Loan Products', icon: 'fa-solid fa-hand-holding-dollar', visible: !isMember && canViewLoans },
+        { key: 'role-permissions', label: 'Roles & Permissions', icon: 'fas fa-user-shield', visible: !isMember && canManagePermissions },
+        { key: 'service-availability', label: 'Service Availability', icon: 'fas fa-toggle-on', visible: !isMember && canViewSettings },
         { key: 'backups', label: 'Backup & Restore', icon: 'fas fa-hard-drive', visible: !isMember && canManageBackups },
     ];
 
@@ -60,11 +67,12 @@ export default function SettingsPage() {
                 ))}
             </div>
 
-{activeTab === 'public-content' ? <PublicContentPage /> :
+            {activeTab === 'public-content' ? <PublicContentPage /> :
               activeTab === 'loan-products' ? <LoanProductsPage /> :
               activeTab === 'role-permissions' ? <RolePermissionsPage /> :
               activeTab === 'service-availability' ? <ServiceAvailabilityPage /> :
               activeTab === 'backups' ? <BackupPage /> :
+              activeTab === 'help-support' ? <HelpSupportTab /> :
               <MemberSettings />}
         </div>
     );
@@ -75,6 +83,7 @@ function MemberSettings() {
     const [showPasswordForm, setShowPasswordForm] = useState(false);
     const [showProfileEdit, setShowProfileEdit] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [confirmRevoke, setConfirmRevoke] = useState(false);
     const [deactivatePassword, setDeactivatePassword] = useState('');
     const [pwd, setPwd] = useState({ current_password: '', password: '', password_confirmation: '', otp_code: '' });
     const [pwdErrors, setPwdErrors] = useState<FieldErrors>({});
@@ -147,6 +156,7 @@ function MemberSettings() {
     return (
         <div className="space-y-6">
             <SettingsTabHeader
+                eyebrow="Account management"
                 title="My Account"
                 description="Manage your profile, password, trusted devices, and account security."
                 icon="fas fa-user-cog"
@@ -158,7 +168,7 @@ function MemberSettings() {
                         <h3 className="font-semibold text-gray-900">Edit Profile</h3>
                         <p className="mt-1 text-sm text-gray-500">Your personal information.</p>
                     </div>
-                    <button onClick={() => setShowProfileEdit(true)} className="shrink-0 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+                    <button onClick={() => setShowProfileEdit(true)} className="shrink-0 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors">
                         <i className="fas fa-pen mr-1"></i> Edit Profile
                     </button>
                 </div>
@@ -169,14 +179,14 @@ function MemberSettings() {
                 <h3 className="font-semibold text-gray-900">Change Password</h3>
                 <p className="mt-1 text-sm text-gray-500">Update your password to keep your account secure.</p>
                 {!showPasswordForm ? (
-                    <button onClick={() => setShowPasswordForm(true)} className="mt-4 rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200">
+                    <button onClick={() => setShowPasswordForm(true)} className="mt-4 rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 transition-colors">
                         Change Password
                     </button>
                 ) : (
                     <form onSubmit={handlePasswordSubmit} className="mt-4 space-y-3">
-                        <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
-                            <p className="text-xs font-semibold text-indigo-800">Security verification</p>
-                            <p className="mt-1 text-xs text-indigo-700">A 6-digit code is required to change your password. Enter the code sent to your email.</p>
+                        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3.5">
+                            <p className="text-xs font-semibold text-emerald-800">Security verification</p>
+                            <p className="mt-1 text-xs text-emerald-700">A 6-digit code is required to change your password. Enter the code sent to your email.</p>
                             <div className="mt-2 flex gap-2">
                                 <input
                                     type="text"
@@ -191,7 +201,7 @@ function MemberSettings() {
                                     type="button"
                                     onClick={() => sendOtpMutation.mutate()}
                                     disabled={sendOtpMutation.isPending}
-                                    className="shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                                    className="shrink-0 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
                                 >
                                     {sendOtpMutation.isPending ? 'Sending...' : otpSent ? 'Resend' : 'Send code'}
                                 </button>
@@ -200,11 +210,11 @@ function MemberSettings() {
                             {pwdErrors.otp_code && <p className="mt-1 text-xs text-red-600">{pwdErrors.otp_code}</p>}
                         </div>
                         <div>
-                            <input type="password" name="current_password" placeholder="Current password" required value={pwd.current_password} onChange={e => setPwd(f => ({ ...f, current_password: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm ${pwdErrors.current_password ? 'border-red-400' : 'border-gray-200'}`} />
+                            <input type="password" name="current_password" autoComplete="current-password" placeholder="Current password" required value={pwd.current_password} onChange={e => setPwd(f => ({ ...f, current_password: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm ${pwdErrors.current_password ? 'border-red-400' : 'border-gray-200'}`} />
                             {pwdErrors.current_password && <p className="mt-1 text-xs text-red-600">{pwdErrors.current_password}</p>}
                         </div>
                         <div>
-                            <input type="password" name="password" placeholder="New password (min 8 chars)" required value={pwd.password} onChange={e => setPwd(f => ({ ...f, password: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm ${pwdErrors.password ? 'border-red-400' : 'border-gray-200'}`} />
+                            <input type="password" name="password" autoComplete="new-password" placeholder="New password (min 8 chars)" required value={pwd.password} onChange={e => setPwd(f => ({ ...f, password: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm ${pwdErrors.password ? 'border-red-400' : 'border-gray-200'}`} />
                             {pwdErrors.password && <p className="mt-1 text-xs text-red-600">{pwdErrors.password}</p>}
                         </div>
                         {pwd.password && (
@@ -218,12 +228,12 @@ function MemberSettings() {
                             </div>
                         )}
                         <div>
-                            <input type="password" name="password_confirmation" placeholder="Confirm new password" required value={pwd.password_confirmation} onChange={e => setPwd(f => ({ ...f, password_confirmation: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm ${pwdErrors.password_confirmation ? 'border-red-400' : 'border-gray-200'}`} />
+                            <input type="password" name="password_confirmation" autoComplete="new-password" placeholder="Confirm new password" required value={pwd.password_confirmation} onChange={e => setPwd(f => ({ ...f, password_confirmation: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm ${pwdErrors.password_confirmation ? 'border-red-400' : 'border-gray-200'}`} />
                             {pwdErrors.password_confirmation && <p className="mt-1 text-xs text-red-600">{pwdErrors.password_confirmation}</p>}
                         </div>
                         <div className="flex gap-2">
-                            <button type="button" onClick={() => setShowPasswordForm(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
-                            <button type="submit" disabled={passwordMutation.isPending} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+                            <button type="button" onClick={() => setShowPasswordForm(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm hover:bg-gray-50 transition-colors">Cancel</button>
+                            <button type="submit" disabled={passwordMutation.isPending} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors">
                                 {passwordMutation.isPending ? 'Updating...' : 'Update Password'}
                             </button>
                         </div>
@@ -235,19 +245,32 @@ function MemberSettings() {
                 <h3 className="font-semibold text-gray-900">Trusted Devices</h3>
                 <p className="mt-1 text-sm text-gray-500">Revoke all trusted devices to force re-authentication.</p>
                 <button
-                    onClick={() => revokeMutation.mutate()}
+                    onClick={() => setConfirmRevoke(true)}
                     disabled={revokeMutation.isPending}
-                    className="mt-4 rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                    className="mt-4 rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
                 >
                     <i className="fas fa-shield-alt mr-1"></i>
                     {revokeMutation.isPending ? 'Revoking...' : 'Revoke All Devices'}
                 </button>
             </div>
 
+            <ConfirmDialog
+                isOpen={confirmRevoke}
+                title="Revoke All Trusted Devices?"
+                message="This will immediately invalidate active sessions across all your devices and browsers, requiring you to log in again."
+                confirmText="Revoke Devices"
+                variant="danger"
+                onConfirm={() => {
+                    setConfirmRevoke(false);
+                    revokeMutation.mutate();
+                }}
+                onCancel={() => setConfirmRevoke(false)}
+            />
+
             <div className="rounded-xl border border-red-200 bg-white p-6 shadow-sm">
                 <h3 className="font-semibold text-red-600">Deactivate Account</h3>
                 <p className="mt-1 text-sm text-gray-500">Deactivate your account. You can contact support to reactivate.</p>
-                <button onClick={() => setShowDeleteConfirm(true)} className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700">
+                <button onClick={() => setShowDeleteConfirm(true)} className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors">
                     Deactivate Account
                 </button>
 
@@ -256,17 +279,19 @@ function MemberSettings() {
                         <p className="text-sm text-red-700 mb-3">Are you sure? Enter your password to confirm.</p>
                         <input
                             type="password"
+                            name="deactivate_password"
+                            autoComplete="current-password"
                             value={deactivatePassword}
                             onChange={e => setDeactivatePassword(e.target.value)}
                             placeholder="Enter your password"
                             className="w-full rounded-lg border border-red-200 px-3 py-2 text-sm mb-3"
                         />
                         <div className="flex gap-2">
-                            <button onClick={() => { setShowDeleteConfirm(false); setDeactivatePassword(''); }} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm">Cancel</button>
+                            <button onClick={() => { setShowDeleteConfirm(false); setDeactivatePassword(''); }} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm hover:bg-gray-50 transition-colors">Cancel</button>
                             <button
                                 onClick={() => deactivateMutation.mutate({ current_password: deactivatePassword })}
                                 disabled={!deactivatePassword || deactivateMutation.isPending}
-                                className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                                className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
                             >
                                 {deactivateMutation.isPending ? 'Deactivating...' : 'Confirm Deactivate'}
                             </button>
@@ -285,13 +310,13 @@ function MemberSettings() {
 
             {showProfileEdit && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => setShowProfileEdit(false)}>
-                    <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-xl bg-white shadow-xl" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-between rounded-t-xl bg-gradient-to-r from-emerald-600 to-cyan-600 p-4 text-white">
-                            <h3 className="font-bold">Edit Profile</h3>
-                            <button onClick={() => setShowProfileEdit(false)} className="rounded-full p-1 hover:bg-white/20" aria-label="Close">
-                                <i className="fas fa-times"></i>
-                            </button>
-                        </div>
+                    <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-xl overflow-hidden" onClick={e => e.stopPropagation()}>
+                        <ModalHeader
+                            title="Edit Profile"
+                            subtitle="Update your personal details and contact information"
+                            icon="fas fa-user-pen"
+                            onClose={() => setShowProfileEdit(false)}
+                        />
                         <div className="overflow-y-auto p-6">
                             <ProfileEditForm
                                 profileData={profileData}
@@ -308,6 +333,10 @@ function MemberSettings() {
 }
 
 function ProfileSummary({ profileData }: { profileData: any }) {
+    if (!profileData) {
+        return <div className="mt-4 h-20 animate-pulse rounded-lg bg-gray-100" />;
+    }
+
     const d = profileData?.data;
     const pd = d?.personal_data;
     const addr = d?.address;
@@ -315,7 +344,21 @@ function ProfileSummary({ profileData }: { profileData: any }) {
     const user = d?.user;
 
     if (!pd) {
-        return <div className="mt-4 h-20 animate-pulse rounded-lg bg-gray-100" />;
+        return (
+            <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
+                <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                        <i className="fas fa-id-card text-sm"></i>
+                    </div>
+                    <div>
+                        <p className="text-sm font-semibold text-emerald-900">Personal Details Pending</p>
+                        <p className="text-xs text-emerald-700">
+                            Signed in as <span className="font-semibold">{user?.email || 'N/A'}</span> ({user?.primary_role || 'user'}). Click "Edit Profile" above to complete your profile details.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     const name = [pd.title, pd.first_name, pd.mid_name, pd.last_name, pd.suffix].filter(Boolean).join(' ') || '—';

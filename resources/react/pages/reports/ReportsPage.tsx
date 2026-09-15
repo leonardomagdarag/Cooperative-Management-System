@@ -258,7 +258,7 @@ export default function ReportsPage() {
         { label: 'Total Withdrawals', value: financial.total_withdrawals, key: 'withdrawals' },
         { label: 'Total Loan Releases', value: financial.total_loan_releases, key: 'releases' },
         { label: 'Total Loan Repayments', value: financial.total_loan_repayments, key: 'repayments' },
-        { label: 'Total Interest Earned (Expected)', value: financial.total_interest_earned, key: 'interest' },
+        { label: 'Total Interest Earned (Collected)', value: financial.total_interest_earned, key: 'interest' },
         { label: 'Total Fees', value: financial.total_fees, key: 'fees' },
         { label: 'Total Expenses', value: financial.total_expenses, key: 'expenses' },
         { label: 'Net Balance', value: financial.net, key: 'net' },

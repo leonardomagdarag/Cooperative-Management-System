@@ -20,6 +20,25 @@ export default function PublicLayout() {
     const termsContent = pc?.data?.form?.policies?.terms_and_conditions;
     const privacyContent = pc?.data?.form?.policies?.privacy_policy;
     const loginEnabled = pc?.data?.availability?.login?.global !== false;
+    const modalRef = useRef<HTMLDivElement>(null);
+    const triggerRef = useRef<HTMLElement | null>(null);
+
+    useEffect(() => {
+        if (!policyModal) return;
+        triggerRef.current = document.activeElement as HTMLElement | null;
+        modalRef.current?.focus();
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setPolicyModal(null);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            triggerRef.current?.focus();
+        };
+    }, [policyModal]);
 
     useEffect(() => { setMobileOpen(false); }, [location]);
 
@@ -123,7 +142,10 @@ export default function PublicLayout() {
                         </div>
 
                         <button
+                            type="button"
                             onClick={() => setMobileOpen(!mobileOpen)}
+                            aria-label="Toggle navigation menu"
+                            aria-expanded={mobileOpen}
                             className="lg:hidden p-2 text-gray-700 hover:text-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 rounded-lg"
                         >
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -219,8 +241,21 @@ export default function PublicLayout() {
 
             {policyModal && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => setPolicyModal(null)}>
-                    <div className="relative max-h-[80vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-8 shadow-2xl" onClick={e => e.stopPropagation()}>
-                        <button onClick={() => setPolicyModal(null)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
+                    <div
+                        ref={modalRef}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label={policyModal === 'terms' ? 'Terms and Agreement' : 'Privacy Policy'}
+                        tabIndex={-1}
+                        className="relative max-h-[80vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-8 shadow-2xl focus:outline-none"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <button
+                            type="button"
+                            onClick={() => setPolicyModal(null)}
+                            aria-label="Close dialog"
+                            className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 cursor-pointer"
+                        >
                             <i className="fas fa-times text-xl"></i>
                         </button>
                         <h2 className="text-2xl font-bold text-slate-900 mb-4">

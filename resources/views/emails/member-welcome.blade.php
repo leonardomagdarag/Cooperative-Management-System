@@ -15,17 +15,16 @@
     </p>
 
     <div class="alert-box alert-info">
-        <p><strong>Your Login Credentials:</strong></p>
+        <p><strong>Account Details:</strong></p>
         <p><strong>Email:</strong> {{ $email }}</p>
-        <p><strong>Password:</strong> {{ $plainPassword }}</p>
-        <p style="color: #dc2626; font-size: 14px;">
-            <em>Please change your password after your first login for security.</em>
+        <p style="color: #475569; font-size: 14px;">
+            <em>For your security, your account password is not included in this email. If you need to set or reset your password, you may do so at any time using the password reset page.</em>
         </p>
     </div>
 
     <p>You can now log in to access your account and explore our services.</p>
 
-    <a href="{{ config('app.url') }}/login" class="button">Login to Your Account</a>
+    <a href="{{ $setupUrl ?? url('/login') }}" class="button">Access Your Account</a>
 
     <p>
         Best regards,<br>

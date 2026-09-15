@@ -12,6 +12,8 @@ class PSGCSeeder extends Seeder
 {
     public function run(): void
     {
+        @ini_set('memory_limit', '512M');
+
         if ((bool) config('psgc.truncate_before_seed', true)) {
             $this->truncateConfiguredTables();
         }

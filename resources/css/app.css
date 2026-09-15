@@ -4,6 +4,20 @@
 
 @import '@fontsource-variable/outfit';
 
+@theme {
+    --color-brand-50: #ecfdf5;
+    --color-brand-100: #d1fae5;
+    --color-brand-200: #a7f3d0;
+    --color-brand-300: #6ee7b7;
+    --color-brand-400: #34d399;
+    --color-brand-500: #10b981;
+    --color-brand-600: #059669;
+    --color-brand-700: #047857;
+    --color-brand-800: #065f46;
+    --color-brand-900: #064e3b;
+    --color-brand-950: #022c22;
+}
+
 @layer base {
     body {
         font-family: 'Outfit Variable', ui-sans-serif, system-ui, sans-serif;
@@ -51,7 +65,7 @@
     .ui-modal-title { color: rgb(15 23 42); font-size: 1.0625rem; font-weight: 700; }
     .ui-modal-body { padding: 1.25rem; }
     .ui-modal-close { flex: 0 0 auto; padding: .5rem; }
-    .ui-modal-gradient-header { background: linear-gradient(90deg, rgb(79 70 229), rgb(8 145 178)); color: white; border-bottom: 0; }
+    .ui-modal-gradient-header { background: linear-gradient(90deg, rgb(5 150 105), rgb(8 145 178)); color: white; border-bottom: 0; }
     .ui-empty-state { display: flex; min-height: 12rem; flex-direction: column; align-items: center; justify-content: center; gap: .5rem; border: 1px dashed rgb(203 213 225); border-radius: .75rem; background: white; padding: 2rem; text-align: center; }
     .ui-empty-state h3 { color: rgb(51 65 85); font-size: .9375rem; font-weight: 600; } .ui-empty-state p { color: rgb(100 116 139); font-size: .8125rem; }
     .ui-empty-icon { margin-bottom: .25rem; color: rgb(148 163 184); font-size: 2rem; }

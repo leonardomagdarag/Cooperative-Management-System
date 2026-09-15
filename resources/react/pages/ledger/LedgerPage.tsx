@@ -8,6 +8,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
 import { validate, ledgerSchema, type FieldErrors } from '../../lib/validation';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import Pagination from '../../components/ui/Pagination';
 
 export default function LedgerPage() {
     const [category, setCategory] = useState('all');
@@ -18,6 +20,14 @@ export default function LedgerPage() {
     const [editingId, setEditingId] = useState<number | null>(null);
     const [form, setForm] = useState({ transaction_type: 'deposit', amount: '', note: '', account_id: '', loan_id: '', branch_id: '' as number | '', transaction_date: new Date().toISOString().slice(0, 10) });
     const [formErrors, setFormErrors] = useState<FieldErrors>({});
+    const [confirmState, setConfirmState] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        confirmText?: string;
+        variant?: 'danger' | 'warning' | 'primary';
+        onConfirm: () => void;
+    }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
     const { markDirty, reset, requestClose, renderDialog } = useDiscardGuard();
     const queryClient = useQueryClient();
     const { addToast } = useToast();
@@ -108,11 +118,11 @@ export default function LedgerPage() {
                     <p className="text-sm text-gray-500">Track all financial transactions</p>
                 </div>
                 <div className="mt-3 sm:mt-0 flex gap-2">
-                    <button onClick={exportCsv} className="bg-blue-700 hover:bg-blue-800 rounded-lg focus:ring-4 focus:ring-blue-300 text-white px-4 py-2 text-sm font-medium">
+                    <button onClick={exportCsv} className="bg-emerald-600 hover:bg-emerald-700 rounded-lg focus:ring-4 focus:ring-emerald-200 text-white px-4 py-2 text-sm font-medium transition-colors">
                         <i className="fas fa-download mr-1"></i> Export
                     </button>
                     {canEdit && (
-                        <button onClick={openAdd} className="bg-blue-700 hover:bg-blue-800 rounded-lg focus:ring-4 focus:ring-blue-300 text-white px-4 py-2 text-sm font-medium">
+                        <button onClick={openAdd} className="bg-emerald-600 hover:bg-emerald-700 rounded-lg focus:ring-4 focus:ring-emerald-200 text-white px-4 py-2 text-sm font-medium transition-colors">
                             <i className="fas fa-plus mr-1"></i> Add Entry
                         </button>
                     )}
@@ -133,7 +143,7 @@ export default function LedgerPage() {
                 {/* Tab filters */}
                 <div className="flex gap-2 mb-3 border-b border-gray-200">
                     {['all', 'deposit', 'withdrawal', 'loan_payment', 'loan_disbursement', 'fee'].map(c => (
-                        <button key={c} onClick={() => { setCategory(c); setPage(1); }} className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${category === c ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700 border-transparent'}`}>
+                        <button key={c} onClick={() => { setCategory(c); setPage(1); }} className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${category === c ? 'border-b-2 border-emerald-600 text-emerald-600 font-semibold' : 'text-gray-500 hover:text-gray-700 border-transparent'}`}>
                             {c === 'all' ? 'All' : c.replace(/_/g, ' ')}
                         </button>
                     ))}
@@ -144,7 +154,7 @@ export default function LedgerPage() {
                     placeholder="Search transactions..."
                     value={search}
                     onChange={e => { setSearch(e.target.value); setPage(1); }}
-                    className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 mb-4"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-emerald-500 focus:border-emerald-500 block w-full p-2.5 mb-4"
                 />
 
                 {canAssignBranch && (
@@ -191,8 +201,15 @@ export default function LedgerPage() {
                                         {canEdit && (
                                             <td className="p-4">
                                                 <div className="flex gap-1">
-                                                    <button onClick={() => openEdit(t)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><i className="fas fa-edit text-xs"></i></button>
-                                                    <button onClick={() => { if (confirm('Delete?')) deleteMutation.mutate(t.id); }} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><i className="fas fa-trash text-xs"></i></button>
+                                                    <button onClick={() => openEdit(t)} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"><i className="fas fa-edit text-xs"></i></button>
+                                                    <button onClick={() => setConfirmState({
+                                                        isOpen: true,
+                                                        title: 'Delete Transaction',
+                                                        message: `Are you sure you want to delete transaction "${t.transaction_number}"? This action cannot be undone.`,
+                                                        confirmText: 'Delete',
+                                                        variant: 'danger',
+                                                        onConfirm: () => deleteMutation.mutate(t.id)
+                                                    })} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><i className="fas fa-trash text-xs"></i></button>
                                                 </div>
                                             </td>
                                         )}
@@ -204,10 +221,14 @@ export default function LedgerPage() {
                 )}
 
                 {pagination && pagination.last_page > 1 && (
-                    <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 flex items-center justify-center gap-2">
-                        <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm disabled:opacity-50">Previous</button>
-                        <span className="text-sm font-normal text-gray-500">Showing <span className="font-semibold text-gray-900">{((page - 1) * pagination.per_page + 1)}-{Math.min(page * pagination.per_page, pagination.total)}</span> of <span className="font-semibold text-gray-900">{pagination.total}</span></span>
-                        <button onClick={() => setPage(p => Math.min(pagination.last_page, p + 1))} disabled={page === pagination.last_page} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm disabled:opacity-50">Next</button>
+                    <div className="mt-4">
+                        <Pagination
+                            page={page}
+                            totalPages={pagination.last_page || 1}
+                            onPageChange={setPage}
+                            total={pagination.total}
+                            perPage={pagination.per_page}
+                        />
                     </div>
                 )}
             </div>
@@ -215,7 +236,7 @@ export default function LedgerPage() {
             {showAddModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={requestCloseGuard}>
                     <div className="w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-                        <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white shrink-0">
+                        <div className="bg-gradient-to-r from-emerald-600 to-cyan-600 px-6 py-5 text-white shrink-0">
                             <div className="flex items-center justify-between">
                                 <h2 className="text-lg font-bold">{editingId ? 'Edit' : 'Add'} Transaction</h2>
                                 <button onClick={requestCloseGuard} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white"><i className="fas fa-times"></i></button>
@@ -225,34 +246,34 @@ export default function LedgerPage() {
                             <form id="ledger-form" onSubmit={handleSave} className="space-y-4">
                                 <div>
                                     <label className="mb-1 block text-sm font-medium text-gray-700">Type</label>
-                                    <select value={form.transaction_type} onChange={e => setFormD(f => ({ ...f, transaction_type: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm">
+                                    <select value={form.transaction_type} onChange={e => setFormD(f => ({ ...f, transaction_type: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500">
                                         <option value="deposit">Deposit</option><option value="withdrawal">Withdrawal</option><option value="loan_payment">Loan Payment</option><option value="loan_disbursement">Loan Disbursement</option><option value="fee">Fee</option>
                                     </select>
                                 </div>
                                 <div>
                                     <label className="mb-1 block text-sm font-medium text-gray-700">Amount</label>
-                                    <input type="number" step="0.01" value={form.amount} onChange={e => setFormD(f => ({ ...f, amount: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm ${formErrors.amount ? 'border-red-400' : 'border-gray-200'}`} />
+                                    <input type="number" step="0.01" value={form.amount} onChange={e => setFormD(f => ({ ...f, amount: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500 ${formErrors.amount ? 'border-red-400' : 'border-gray-200'}`} />
                                     {formErrors.amount && <p className="mt-1 text-xs text-red-600">{formErrors.amount}</p>}
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="mb-1 block text-sm font-medium text-gray-700">Account ID</label>
-                                        <input type="text" value={form.account_id} onChange={e => setFormD(f => ({ ...f, account_id: e.target.value }))} placeholder="Required for deposits/withdrawals" className={`w-full rounded-lg border px-3 py-2 text-sm ${formErrors.account_id ? 'border-red-400' : 'border-gray-200'}`} />
+                                        <input type="text" value={form.account_id} onChange={e => setFormD(f => ({ ...f, account_id: e.target.value }))} placeholder="Required for deposits/withdrawals" className={`w-full rounded-lg border px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500 ${formErrors.account_id ? 'border-red-400' : 'border-gray-200'}`} />
                                         {formErrors.account_id && <p className="mt-1 text-xs text-red-600">{formErrors.account_id}</p>}
                                     </div>
                                     <div>
                                         <label className="mb-1 block text-sm font-medium text-gray-700">Loan ID</label>
-                                        <input type="text" value={form.loan_id} onChange={e => setFormD(f => ({ ...f, loan_id: e.target.value }))} placeholder="Required for loan types" className={`w-full rounded-lg border px-3 py-2 text-sm ${formErrors.loan_id ? 'border-red-400' : 'border-gray-200'}`} />
+                                        <input type="text" value={form.loan_id} onChange={e => setFormD(f => ({ ...f, loan_id: e.target.value }))} placeholder="Required for loan types" className={`w-full rounded-lg border px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500 ${formErrors.loan_id ? 'border-red-400' : 'border-gray-200'}`} />
                                         {formErrors.loan_id && <p className="mt-1 text-xs text-red-600">{formErrors.loan_id}</p>}
                                     </div>
                                 </div>
                                 <div>
                                     <label className="mb-1 block text-sm font-medium text-gray-700">Date</label>
-                                    <DatePicker value={form.transaction_date} onChange={v => setFormD(f => ({ ...f, transaction_date: v }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+                                    <DatePicker value={form.transaction_date} onChange={v => setFormD(f => ({ ...f, transaction_date: v }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500" />
                                 </div>
                                 <div>
                                     <label className="mb-1 block text-sm font-medium text-gray-700">Note</label>
-                                    <input type="text" value={form.note} onChange={e => setFormD(f => ({ ...f, note: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+                                    <input type="text" value={form.note} onChange={e => setFormD(f => ({ ...f, note: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500" />
                                 </div>
                                 {canAssignBranch && (
                                     <BranchSelect value={form.branch_id} onChange={v => setFormD(f => ({ ...f, branch_id: v }))} error={formErrors.branch_id} />
@@ -260,13 +281,26 @@ export default function LedgerPage() {
                             </form>
                         </div>
                         <div className="flex shrink-0 items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 rounded-b-2xl">
-                            <button type="button" onClick={requestCloseGuard} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
-                            <button type="submit" form="ledger-form" disabled={saveMutation.isPending} className="bg-blue-700 hover:bg-blue-800 rounded-lg focus:ring-4 focus:ring-blue-300 text-white px-4 py-2 text-sm font-medium disabled:opacity-50">{saveMutation.isPending ? 'Saving...' : 'Save'}</button>
+                            <button type="button" onClick={requestCloseGuard} className="rounded-lg border border-gray-200 px-4 py-2 text-sm hover:bg-gray-100 transition-colors">Cancel</button>
+                            <button type="submit" form="ledger-form" disabled={saveMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700 rounded-lg focus:ring-4 focus:ring-emerald-200 text-white px-4 py-2 text-sm font-medium disabled:opacity-50 transition-colors">{saveMutation.isPending ? 'Saving...' : 'Save'}</button>
                         </div>
                     </div>
                     {renderDialog()}
                 </div>
             )}
+
+            <ConfirmDialog
+                isOpen={confirmState.isOpen}
+                title={confirmState.title}
+                message={confirmState.message}
+                confirmText={confirmState.confirmText}
+                variant={confirmState.variant}
+                onConfirm={() => {
+                    confirmState.onConfirm();
+                    setConfirmState(prev => ({ ...prev, isOpen: false }));
+                }}
+                onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
+            />
         </>
     );
 }

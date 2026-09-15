@@ -16,6 +16,7 @@ export default function ForgotPasswordPage() {
     const turnstileRef = useRef<any>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [sent, setSent] = useState(false);
+    const [submittedEmail, setSubmittedEmail] = useState('');
     const [error, setError] = useState('');
 
     const { register, handleSubmit, formState: { errors } } = useForm<Form>({
@@ -27,6 +28,7 @@ export default function ForgotPasswordPage() {
         setError('');
         try {
             await forgotPassword(data.email, turnstileRef.current?.getToken?.());
+            setSubmittedEmail(data.email);
             setSent(true);
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to send reset code. Please try again.');
@@ -41,7 +43,7 @@ export default function ForgotPasswordPage() {
                 <div className="public-card overflow-hidden max-w-2xl w-full p-6 md:p-8">
                     <div className="text-center mb-5">
                         <div className="inline-flex items-center justify-center w-14 h-14 bg-emerald-50 rounded-2xl mb-3">
-                            <i className="fas fa-envelope text-2xl text-slate-700"></i>
+                            <i className="fas fa-envelope text-2xl text-emerald-700"></i>
                         </div>
                         <h1 className="text-2xl md:text-3xl font-bold text-slate-800 mb-2">Forgot Password?</h1>
                         <p className="text-sm text-slate-600">
@@ -52,15 +54,15 @@ export default function ForgotPasswordPage() {
                     <div className="mb-5">
                         <div className="flex items-center justify-center gap-3">
                             <div className="flex flex-col items-center">
-                                <div className="w-10 h-10 bg-emerald-700 text-white rounded-full flex items-center justify-center text-sm font-bold mb-2">1</div>
-                                <span className="text-xs font-medium text-emerald-700">Email</span>
+                                <div className="w-10 h-10 bg-emerald-700 text-white rounded-full flex items-center justify-center text-sm font-bold mb-2 shadow-xs">1</div>
+                                <span className="text-xs font-semibold text-emerald-700">Email</span>
                             </div>
-                            <div className="w-16 h-1 bg-gray-200"></div>
+                            <div className={`w-16 h-1 rounded ${sent ? 'bg-emerald-500' : 'bg-gray-200'}`}></div>
                             <div className="flex flex-col items-center">
-                                <div className="w-10 h-10 bg-gray-200 text-gray-500 rounded-full flex items-center justify-center text-sm font-bold mb-2">2</div>
-                                <span className="text-xs text-gray-500">Verify PIN</span>
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold mb-2 ${sent ? 'bg-emerald-700 text-white shadow-xs' : 'bg-gray-200 text-gray-500'}`}>2</div>
+                                <span className={`text-xs font-medium ${sent ? 'text-emerald-700' : 'text-gray-500'}`}>Verify PIN</span>
                             </div>
-                            <div className="w-16 h-1 bg-gray-200"></div>
+                            <div className="w-16 h-1 bg-gray-200 rounded"></div>
                             <div className="flex flex-col items-center">
                                 <div className="w-10 h-10 bg-gray-200 text-gray-500 rounded-full flex items-center justify-center text-sm font-bold mb-2">3</div>
                                 <span className="text-xs text-gray-500">New Password</span>
@@ -69,14 +71,44 @@ export default function ForgotPasswordPage() {
                     </div>
 
                     {sent ? (
-                        <div className="mb-4 p-4 bg-emerald-50 border-l-4 border-emerald-500 rounded-r-lg">
-                            <div className="flex items-center gap-3">
-                                <i className="fas fa-check-circle text-emerald-500 text-xl shrink-0"></i>
-                                <div className="flex-1">
-                                    <p className="text-sm font-medium text-emerald-800">
-                                        A verification code has been sent to your email address.
-                                    </p>
+                        <div className="space-y-4">
+                            <div className="p-4 bg-emerald-50 border-l-4 border-emerald-500 rounded-r-xl">
+                                <div className="flex items-start gap-3">
+                                    <i className="fas fa-check-circle text-emerald-600 text-xl shrink-0 mt-0.5"></i>
+                                    <div className="flex-1">
+                                        <p className="text-sm font-semibold text-emerald-900">
+                                            Verification Code Sent!
+                                        </p>
+                                        <p className="text-xs text-emerald-700 mt-1">
+                                            We sent a 6-digit PIN to <span className="font-semibold">{submittedEmail}</span>. Please check your inbox and spam folder.
+                                        </p>
+                                    </div>
                                 </div>
+                            </div>
+
+                            <Link
+                                to={`/reset-password?email=${encodeURIComponent(submittedEmail)}`}
+                                className="public-btn public-btn-primary w-full flex items-center justify-center gap-2"
+                            >
+                                <span>Proceed to Enter PIN</span>
+                                <i className="fas fa-arrow-right text-sm"></i>
+                            </Link>
+
+                            <div className="text-center pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setSent(false)}
+                                    className="text-xs text-emerald-600 hover:text-emerald-700 font-medium cursor-pointer"
+                                >
+                                    Didn't receive a code? Try another email
+                                </button>
+                            </div>
+
+                            <div className="text-center pt-1">
+                                <Link to="/login" className="inline-flex items-center gap-2 text-slate-600 hover:text-emerald-600 transition-colors text-sm font-medium">
+                                    <i className="fas fa-arrow-left text-sm"></i>
+                                    Back to Sign In
+                                </Link>
                             </div>
                         </div>
                     ) : (
@@ -96,7 +128,8 @@ export default function ForgotPasswordPage() {
                                 <div>
                                     <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-2">Email Address</label>
                                     <div className="relative">
-                                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+                                            <i className="fas fa-envelope"></i>
                                         </div>
                                         <input
                                             type="email"
@@ -109,10 +142,10 @@ export default function ForgotPasswordPage() {
                                     {errors.email && <p className="mt-2 text-sm text-red-600">{errors.email.message}</p>}
                                 </div>
 
-                                <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+                                <div className="p-4 bg-emerald-50/50 rounded-xl border border-emerald-100">
                                     <div className="flex gap-3">
-                                        <i className="fas fa-info-circle text-blue-500 text-lg shrink-0"></i>
-                                        <p className="text-sm text-blue-800 leading-relaxed">
+                                        <i className="fas fa-info-circle text-emerald-600 text-lg shrink-0"></i>
+                                        <p className="text-sm text-emerald-800 leading-relaxed">
                                             A 6-digit verification code will be sent to your email. The code expires in 30 minutes.
                                         </p>
                                     </div>

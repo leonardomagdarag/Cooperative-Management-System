@@ -117,3 +117,22 @@ test('registration rejects a duplicate email while respecting archived applicati
 
     $response->assertSessionHasErrors('email');
 });
+
+test('member registering with NCR region and empty province persists successfully', function () {
+    $response = $this->post('/register', applicantPayload([
+        'email' => 'ncr.applicant@example.com',
+        'region' => 'National Capital Region (NCR)',
+        'province' => '',
+        'city' => 'Quezon City',
+        'barangay' => 'Batasan Hills',
+    ]));
+
+    $response->assertRedirect(route('login_page', absolute: false));
+
+    $user = User::where('email', 'ncr.applicant@example.com')->firstOrFail();
+    $address = $user->personalData->address;
+
+    expect($address->region)->toBe('National Capital Region (NCR)')
+        ->and($address->city_municipality)->toBe('Quezon City')
+        ->and($address->barangay)->toBe('Batasan Hills');
+});

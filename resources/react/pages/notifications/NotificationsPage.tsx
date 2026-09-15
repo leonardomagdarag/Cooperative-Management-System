@@ -2,12 +2,22 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getNotifications, markAsRead, markAllAsRead, deleteNotification, deleteAllReadNotifications, Notification } from '../../api/notifications';
 import { useToast } from '../../contexts/ToastContext';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import Pagination from '../../components/ui/Pagination';
 
 export default function NotificationsPage() {
     const [statusFilter, setStatusFilter] = useState('all');
     const [categoryFilter, setCategoryFilter] = useState('all');
     const [page, setPage] = useState(1);
     const [selected, setSelected] = useState<Notification | null>(null);
+    const [confirmState, setConfirmState] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        confirmText?: string;
+        variant?: 'danger' | 'warning' | 'primary';
+        onConfirm: () => void;
+    }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
     const queryClient = useQueryClient();
     const { addToast } = useToast();
 
@@ -70,23 +80,32 @@ export default function NotificationsPage() {
 
     return (
         <div className="max-w-7xl mx-auto p-6">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">Notifications</h1>
                     <p className="text-sm text-gray-500">Stay on top of your alerts and updates</p>
                 </div>
-                <button
-                    onClick={() => markAllMutation.mutate()}
-                    className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg px-4 py-2 text-sm font-medium"
-                >
-                    Mark All Read
-                </button>
-                <button
-                    onClick={() => { if (confirm('Delete all read notifications?')) deleteAllReadMutation.mutate(); }}
-                    className="text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg px-4 py-2 text-sm font-medium"
-                >
-                    Clear Read
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => markAllMutation.mutate()}
+                        className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+                    >
+                        Mark All Read
+                    </button>
+                    <button
+                        onClick={() => setConfirmState({
+                            isOpen: true,
+                            title: 'Clear Read Notifications',
+                            message: 'Are you sure you want to delete all read notifications? This action cannot be undone.',
+                            confirmText: 'Clear All Read',
+                            variant: 'danger',
+                            onConfirm: () => deleteAllReadMutation.mutate(),
+                        })}
+                        className="text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+                    >
+                        Clear Read
+                    </button>
+                </div>
             </div>
 
             {/* Filters */}
@@ -94,7 +113,7 @@ export default function NotificationsPage() {
                 <select
                     value={statusFilter}
                     onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-                    className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-emerald-500 focus:border-emerald-500 p-2.5"
                 >
                     <option value="all">All Status</option>
                     <option value="unread">Unread</option>
@@ -103,7 +122,7 @@ export default function NotificationsPage() {
                 <select
                     value={categoryFilter}
                     onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}
-                    className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-emerald-500 focus:border-emerald-500 p-2.5"
                 >
                     <option value="all">All Categories</option>
                     <option value="security">Security</option>
@@ -135,12 +154,12 @@ export default function NotificationsPage() {
                                 if (!n.is_read) markReadMutation.mutate(n.id);
                             }}
                             className={`w-full rounded-2xl bg-white border border-gray-200 shadow-sm p-4 md:p-6 text-left transition-all hover:shadow-md ${
-                                n.is_read ? '' : 'border-l-4 border-l-blue-600'
+                                n.is_read ? '' : 'border-l-4 border-l-emerald-600'
                             }`}
                         >
                             <div className="flex items-start gap-3">
-                                <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${n.is_read ? 'bg-gray-100' : 'bg-blue-50'}`}>
-                                    <i className={`fas ${n.icon || 'fa-bell'} text-sm ${n.is_read ? 'text-gray-400' : 'text-blue-600'}`}></i>
+                                <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${n.is_read ? 'bg-gray-100' : 'bg-emerald-50'}`}>
+                                    <i className={`fas ${n.icon || 'fa-bell'} text-sm ${n.is_read ? 'text-gray-400' : 'text-emerald-600'}`}></i>
                                 </div>
                                 <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-2">
@@ -161,22 +180,14 @@ export default function NotificationsPage() {
 
             {/* Pagination */}
             {pagination && pagination.last_page > 1 && (
-                <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 flex items-center justify-center gap-2 mt-4">
-                    <button
-                        onClick={() => setPage(p => Math.max(1, p - 1))}
-                        disabled={page === 1}
-                        className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50"
-                    >
-                        Previous
-                    </button>
-                    <span className="text-sm text-gray-500">Page {page} of {pagination.last_page}</span>
-                    <button
-                        onClick={() => setPage(p => Math.min(pagination.last_page, p + 1))}
-                        disabled={page === pagination.last_page}
-                        className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50"
-                    >
-                        Next
-                    </button>
+                <div className="mt-6">
+                    <Pagination
+                        page={page}
+                        totalPages={pagination.last_page || 1}
+                        onPageChange={setPage}
+                        total={pagination.total}
+                        perPage={pagination.per_page}
+                    />
                 </div>
             )}
 
@@ -184,22 +195,29 @@ export default function NotificationsPage() {
             {selected && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => setSelected(null)}>
                     <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-                        <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white shrink-0">
+                        <div className="bg-gradient-to-r from-emerald-600 to-cyan-600 px-6 py-5 text-white shrink-0">
                             <div className="flex items-center justify-between">
                                 <h2 className="text-lg font-bold">{selected.title}</h2>
-                                <button onClick={() => setSelected(null)} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white">
+                                <button onClick={() => setSelected(null)} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white transition-colors">
                                     <i className="fas fa-times"></i>
                                 </button>
                             </div>
                         </div>
                         <div className="p-6">
-                            <p className="text-sm text-gray-500">{selected.message}</p>
+                            <p className="text-sm text-gray-500 leading-relaxed">{selected.message}</p>
                             <p className="mt-4 text-xs text-gray-400">{selected.time_ago}</p>
                             <div className="mt-6 flex justify-end border-t border-gray-100 pt-4">
                                 <button
-                                    onClick={() => deleteMutation.mutate(selected.id)}
+                                    onClick={() => setConfirmState({
+                                        isOpen: true,
+                                        title: 'Delete Notification',
+                                        message: 'Are you sure you want to delete this notification?',
+                                        confirmText: 'Delete',
+                                        variant: 'danger',
+                                        onConfirm: () => deleteMutation.mutate(selected.id),
+                                    })}
                                     disabled={deleteMutation.isPending}
-                                    className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-100 disabled:opacity-50"
+                                    className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-100 disabled:opacity-50 transition-colors"
                                 >
                                     <i className="fas fa-trash text-xs"></i> Delete
                                 </button>
@@ -208,6 +226,19 @@ export default function NotificationsPage() {
                     </div>
                 </div>
             )}
+
+            <ConfirmDialog
+                isOpen={confirmState.isOpen}
+                title={confirmState.title}
+                message={confirmState.message}
+                confirmText={confirmState.confirmText}
+                variant={confirmState.variant}
+                onConfirm={() => {
+                    confirmState.onConfirm();
+                    setConfirmState(prev => ({ ...prev, isOpen: false }));
+                }}
+                onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
+            />
         </div>
     );
 }

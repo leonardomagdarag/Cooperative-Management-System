@@ -184,3 +184,25 @@ test('manager role preset does not grant branch management', function () {
     expect($this->manager->can('branches.view'))->toBeFalse()
         ->and($this->manager->can('branches.create'))->toBeFalse();
 });
+
+test('admin cannot delete head office branch', function () {
+    $this->actingAs($this->admin);
+
+    $response = $this->deleteJson("/api/branches/{$this->main->id}");
+
+    $response->assertStatus(422)
+        ->assertJson(['message' => 'The Head Office branch cannot be deleted.']);
+
+    $this->assertNotSoftDeleted('branches', ['id' => $this->main->id]);
+});
+
+test('admin cannot delete branch with assigned users', function () {
+    $this->actingAs($this->admin);
+
+    $response = $this->deleteJson("/api/branches/{$this->office->id}");
+
+    $response->assertStatus(422)
+        ->assertJson(['message' => 'Cannot delete branch because it has assigned users or members.']);
+
+    $this->assertNotSoftDeleted('branches', ['id' => $this->office->id]);
+});
