@@ -93,6 +93,22 @@ class PermissionCatalog
                 'backups.manage',
                 'backups.restore',
             ],
+            'Dashboard' => [
+                'dashboard.view',
+            ],
+            'Tickets' => [
+                'tickets.view',
+                'tickets.reply',
+                'tickets.manage',
+            ],
+            'Notifications' => [
+                'notifications.view',
+                'notifications.manage',
+            ],
+            'Profile' => [
+                'profile.view',
+                'profile.update',
+            ],
         ];
     }
 
@@ -167,6 +183,9 @@ class PermissionCatalog
                 'notifications.view',
                 'profile.view',
                 'profile.update',
+                'tickets.view',
+                'tickets.reply',
+                'tickets.manage',
             ],
             'accountant' => [
                 'dashboard.view',
@@ -195,6 +214,9 @@ class PermissionCatalog
                 'notifications.view',
                 'profile.view',
                 'profile.update',
+                'tickets.view',
+                'tickets.reply',
+                'tickets.manage',
             ],
             'loan' => [
                 'dashboard.view',
@@ -214,6 +236,8 @@ class PermissionCatalog
                 'notifications.view',
                 'profile.view',
                 'profile.update',
+                'tickets.view',
+                'tickets.reply',
             ],
             'secretary' => [
                 'dashboard.view',
@@ -233,6 +257,9 @@ class PermissionCatalog
                 'notifications.view',
                 'profile.view',
                 'profile.update',
+                'tickets.view',
+                'tickets.reply',
+                'tickets.manage',
             ],
         ];
     }

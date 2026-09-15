@@ -24,7 +24,10 @@ class TicketPolicy
             return false;
         }
 
-        return $ticket->user_id === $user->id || $user->isSupportStaff();
+        return $ticket->user_id === $user->id
+            || $user->isSupportStaff()
+            || $user->can('tickets.manage')
+            || $user->can('tickets.view');
     }
 
     /**
@@ -44,7 +47,7 @@ class TicketPolicy
             return false;
         }
 
-        if ($user->isSupportStaff()) {
+        if ($user->isSupportStaff() || $user->can('tickets.manage') || $user->can('tickets.reply')) {
             return true;
         }
 
@@ -56,7 +59,7 @@ class TicketPolicy
      */
     public function updateStatus(User $user, Ticket $ticket): bool
     {
-        return $user->isActive() && $user->isSupportStaff();
+        return $user->isActive() && ($user->isSupportStaff() || $user->can('tickets.manage'));
     }
 
     /**
@@ -64,7 +67,7 @@ class TicketPolicy
      */
     public function assign(User $user, Ticket $ticket): bool
     {
-        return $user->isActive() && $user->isSupportStaff();
+        return $user->isActive() && ($user->isSupportStaff() || $user->can('tickets.manage'));
     }
 
     /**
@@ -72,6 +75,6 @@ class TicketPolicy
      */
     public function delete(User $user, Ticket $ticket): bool
     {
-        return $user->isActive() && $user->primary_role === 'admin';
+        return $user->isActive() && ($user->primary_role === 'admin' || $user->can('tickets.manage'));
     }
 }

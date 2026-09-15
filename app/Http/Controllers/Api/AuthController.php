@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\OfficerPermissionOverride;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\AuditLogService;
@@ -167,6 +168,17 @@ class AuthController extends Controller
                 $permissions,
                 PermissionCatalog::allPermissions(),
             )));
+        } elseif ($user->is_officer) {
+            $overrides = OfficerPermissionOverride::query()
+                ->where('user_id', $user->id)
+                ->pluck('effect', 'permission');
+
+            if ($overrides->isNotEmpty()) {
+                $allowed = $overrides->filter(fn ($effect) => $effect === OfficerPermissionOverride::EFFECT_ALLOW)->keys()->all();
+                $disallowed = $overrides->filter(fn ($effect) => $effect === OfficerPermissionOverride::EFFECT_DISALLOW)->keys()->all();
+
+                $permissions = array_values(array_diff(array_unique(array_merge($permissions, $allowed)), $disallowed));
+            }
         }
 
         return [

@@ -261,7 +261,8 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function isSupportStaff(): bool
     {
-        return in_array($this->primary_role, ['admin', 'manager', 'accountant'], true);
+        return in_array($this->primary_role, ['admin', 'manager', 'accountant', 'secretary'], true)
+            || $this->can('tickets.manage');
     }
 
     public function invalidateOtherSessions(?string $currentSessionId = null): void

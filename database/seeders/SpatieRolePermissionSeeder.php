@@ -109,6 +109,11 @@ class SpatieRolePermissionSeeder extends Seeder
             // Profile
             'profile.view',
             'profile.update',
+
+            // Tickets
+            'tickets.view',
+            'tickets.reply',
+            'tickets.manage',
         ];
 
         // Create all permissions
@@ -150,6 +155,8 @@ class SpatieRolePermissionSeeder extends Seeder
                 'profile.view',
                 'profile.update',
                 'notifications.view',
+                'tickets.view',
+                'tickets.reply',
             ],
 
             // Inactive and terminated have no permissions
