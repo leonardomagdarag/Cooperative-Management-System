@@ -19,7 +19,10 @@ class CheckServiceAvailability
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
-        $isOfficer = $user->hasAnyRole(['admin', 'manager', 'accountant', 'loan', 'secretary']);
+        $isOfficer = $user->is_officer
+            || $user->primary_role === 'admin'
+            || in_array($user->primary_role, ['manager', 'accountant', 'loan', 'secretary'], true)
+            || $user->hasAnyRole(['admin', 'manager', 'accountant', 'loan', 'secretary']);
         $userType = $isOfficer ? 'officer' : 'member';
         $transactionMode = $request->input('transaction_mode');
 

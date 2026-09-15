@@ -750,6 +750,28 @@ class MemberController extends Controller
 
             $pd = $member->personalData;
             if ($pd) {
+                if ($pd->profile_picture) {
+                    Storage::disk('public')->delete($pd->profile_picture);
+                }
+
+                if ($pd->memberId) {
+                    foreach ([
+                        $pd->memberId->national_id_photo,
+                        $pd->memberId->tin_photo,
+                        $pd->memberId->sss_photo,
+                        $pd->memberId->philhealth_photo,
+                        $pd->memberId->barangay_id_photo,
+                        $pd->memberId->proof_of_registration_path,
+                        $pd->memberId->other_document_path,
+                    ] as $photoPath) {
+                        if ($photoPath) {
+                            Storage::disk('public')->delete($photoPath);
+                        }
+                    }
+                }
+
+                Storage::disk('public')->deleteDirectory('member-agreements/'.$member->id);
+
                 // Detach the snapshot rows first so their deletions are FK-safe.
                 $pd->update([
                     'address_id' => null,

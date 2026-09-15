@@ -14,6 +14,9 @@ use App\Http\Controllers\Api\LoanProductController;
 use App\Http\Controllers\Api\LogController;
 use App\Http\Controllers\Api\MemberController;
 use App\Http\Controllers\Api\OfficerPermissionController;
+use App\Http\Controllers\Api\PayMongoPaymentController;
+use App\Http\Controllers\Api\PayMongoSettingsController;
+use App\Http\Controllers\Api\PayMongoWebhookController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\PublicContentController;
 use App\Http\Controllers\Api\ReportController;
@@ -88,6 +91,9 @@ Route::get('/announcements/public', function (Request $request) {
         ],
     ]);
 })->middleware('throttle:30,1');
+
+// PayMongo Webhook (Public, signature-verified, rate-limited)
+Route::post('/webhooks/paymongo', [PayMongoWebhookController::class, 'handle'])->middleware('throttle:60,1');
 
 // Current user (auth + OTP only — must remain reachable so the SPA can
 // surface the "verify your email" gate instead of a blank session failure)
@@ -263,4 +269,16 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     Route::get('/backups/{tier}/download', [BackupController::class, 'download']);
     Route::delete('/backups/{tier}/backup', [BackupController::class, 'destroy']);
     Route::post('/backups/restore', [BackupController::class, 'restore']);
+
+    // PayMongo Settings (admin or settings permissions)
+    Route::get('/settings/paymongo', [PayMongoSettingsController::class, 'index']);
+    Route::put('/settings/paymongo', [PayMongoSettingsController::class, 'updateSettings']);
+    Route::put('/settings/paymongo/credentials', [PayMongoSettingsController::class, 'updateCredentials']);
+    Route::delete('/settings/paymongo/credentials', [PayMongoSettingsController::class, 'clearCredentials']);
+    Route::post('/settings/paymongo/test', [PayMongoSettingsController::class, 'testConnection']);
+
+    // PayMongo Payment Flow (member or authorized officer)
+    Route::get('/services/paymongo/methods', [PayMongoPaymentController::class, 'methods']);
+    Route::post('/services/paymongo/checkout', [PayMongoPaymentController::class, 'createCheckout'])->middleware('profile.completed');
+    Route::get('/services/paymongo/verify/{transactionNumber}', [PayMongoPaymentController::class, 'verify']);
 });

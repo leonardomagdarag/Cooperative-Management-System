@@ -3,6 +3,7 @@
 use App\Mail\EmailVerificationMail;
 use App\Mail\OtpCodeMail;
 use App\Models\User;
+use App\Services\SecurityOtpService;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -175,4 +176,25 @@ test('admin approval of a public registration sends the email verification link'
     Mail::assertSent(EmailVerificationMail::class, function (EmailVerificationMail $mail) {
         return ($mail->to[0]['address'] ?? null) === 'pending-approve@example.com';
     });
+});
+
+test('active database OTP challenge gates user even if session pending flag was cleared', function () {
+    Mail::fake();
+
+    $this->seed(SpatieRolePermissionSeeder::class);
+
+    $user = User::factory()->create([
+        'email' => 'tamper-session@example.com',
+        'password' => 'password',
+        'role' => 'member',
+    ]);
+    $user->assignRole('member');
+
+    $securityOtp = app(SecurityOtpService::class);
+    $securityOtp->issueChallenge($user, $securityOtp->newDevicePurpose());
+
+    $this->actingAs($user)
+        ->withSession(['security.pending_otp' => false])
+        ->get('/dashboard')
+        ->assertRedirect(route('otp.challenge.show'));
 });

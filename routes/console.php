@@ -18,6 +18,11 @@ Schedule::command('notifications:cleanup')
     ->daily()
     ->description('Cleanup old read notifications and expired notifications');
 
+// Schedule cleanup of old activity logs daily at midnight
+Schedule::command('activitylog:clean')
+    ->daily()
+    ->description('Cleanup old activity log records based on retention policy');
+
 // Backups: the ping command acts as the deciding agent. It reads the per-tier
 // cron expressions from the database (SystemSetting) and only runs what is due.
 // If the host has no cron (e.g. shared hosting), point a cron at /backup/ping

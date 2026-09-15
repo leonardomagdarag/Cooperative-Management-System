@@ -51,6 +51,19 @@ class PublicContentController extends Controller
 
                 if (($record['type'] ?? 'text') === 'html') {
                     $data['value'] = HtmlSanitizer::sanitize($data['value']);
+                } elseif (is_string($data['value'] ?? null)) {
+                    $data['value'] = trim(strip_tags($data['value']));
+                } elseif (is_array($data['value'] ?? null)) {
+                    $data['value'] = array_map(function ($item) {
+                        if (is_string($item)) {
+                            return trim(strip_tags($item));
+                        }
+                        if (is_array($item)) {
+                            return array_map(fn ($val) => is_string($val) ? trim(strip_tags($val)) : $val, $item);
+                        }
+
+                        return $item;
+                    }, $data['value']);
                 }
 
                 SiteContent::query()->updateOrCreate(

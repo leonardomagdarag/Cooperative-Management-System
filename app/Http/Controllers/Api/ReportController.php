@@ -455,11 +455,41 @@ class ReportController extends Controller
         $totalEquity = $totalAssets - $totalLiabilities;
         $retainedEarnings = $totalEquity - $shareCapital;
 
+        $priorTotalsByType = $this->completedTransactions($branchId)
+            ->where(function ($q) use ($start) {
+                $q->whereDate('transaction_date', '<', $start->toDateString())
+                    ->orWhere(function ($q2) use ($start) {
+                        $q2->whereNull('transaction_date')
+                            ->whereDate('created_at', '<', $start->toDateString());
+                    });
+            })
+            ->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'fee'])
+            ->selectRaw('transaction_type, SUM(amount) as total')
+            ->groupBy('transaction_type')
+            ->pluck('total', 'transaction_type');
+
+        $priorInflows = (float) ($priorTotalsByType['deposit'] ?? 0) + (float) ($priorTotalsByType['loan_payment'] ?? 0) + (float) ($priorTotalsByType['fee'] ?? 0);
+        $priorOutflows = (float) ($priorTotalsByType['withdrawal'] ?? 0) + (float) ($priorTotalsByType['loan_disbursement'] ?? 0);
+        $priorExpenses = (float) Expense::query()
+            ->when($branchId !== null, fn ($q) => $q->where('expenses.branch_id', $branchId))
+            ->whereDate('expense_date', '<', $start->toDateString())
+            ->sum('amount');
+        $openingCashBalance = $priorInflows - $priorOutflows - $priorExpenses;
+
         return [
             'start' => $start,
             'end' => $end,
             'as_of' => $end,
             'branch_name' => $branchName,
+            'opening_balance' => [
+                'cash' => $openingCashBalance,
+            ],
+            'period_movement' => [
+                'inflows' => $cashInflows - $priorInflows,
+                'outflows' => $cashOutflows - $priorOutflows,
+                'expenses' => $totalExpenses - $priorExpenses,
+                'net_cash_flow' => $cashAndCashEquivalents - $openingCashBalance,
+            ],
             'assets' => [
                 ['label' => 'Cash and Cash Equivalents', 'amount' => $cashAndCashEquivalents],
                 ['label' => 'Loans Receivable (Net)', 'amount' => $netLoansReceivable],

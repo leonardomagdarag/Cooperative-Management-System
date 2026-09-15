@@ -55,11 +55,33 @@ class SystemSetting extends Model
     /**
      * Set setting value
      */
-    public static function set(string $key, $value): bool
+    public static function set(string $key, $value, ?string $type = null, ?string $group = null): bool
     {
         $setting = static::where('key', $key)->first();
 
-        if (! $setting || ! $setting->is_editable) {
+        if (! $setting) {
+            $type = $type ?? (is_bool($value) ? 'boolean' : (is_array($value) ? 'array' : (is_numeric($value) ? 'number' : 'string')));
+            $stringValue = match ($type) {
+                'boolean' => $value ? '1' : '0',
+                'json', 'array' => json_encode($value),
+                default => (string) $value,
+            };
+
+            static::create([
+                'key' => $key,
+                'value' => $stringValue,
+                'type' => $type,
+                'group' => $group ?? 'general',
+                'label' => ucwords(str_replace('_', ' ', $key)),
+                'is_editable' => true,
+            ]);
+
+            Cache::forget("system_setting.{$key}");
+
+            return true;
+        }
+
+        if (! $setting->is_editable) {
             return false;
         }
 

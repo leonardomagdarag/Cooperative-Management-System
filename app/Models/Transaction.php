@@ -27,10 +27,17 @@ class Transaction extends Model
         'note',
         'recorded_by',
         'branch_id',
+        'payment_gateway',
+        'payment_method_used',
+        'paymongo_checkout_session_id',
+        'paymongo_payment_intent_id',
+        'paymongo_payment_id',
+        'paymongo_fee',
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
+        'paymongo_fee' => 'decimal:2',
         'transaction_date' => 'datetime',
         'approved_at' => 'datetime',
         'proof_of_payment_uploaded_at' => 'datetime',

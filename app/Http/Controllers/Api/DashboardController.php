@@ -19,6 +19,10 @@ use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
+    private array $financialSummaryCache = [];
+
+    private array $accountTotalsCache = [];
+
     public function index(Request $request): JsonResponse
     {
         $user = Auth::user();
@@ -181,7 +185,7 @@ class DashboardController extends Controller
 
         $pendingTransactions = BranchScope::applyToTransactions(
             Transaction::query()
-                ->with(['account.user.personalData'])
+                ->with(['account.user.personalData', 'loan.user.personalData'])
                 ->where('status', 'pending'),
             Auth::user(),
             $branchId
@@ -196,8 +200,8 @@ class DashboardController extends Controller
                 'amount' => $t->amount,
                 'status' => $t->status,
                 'member_name' => trim(
-                    ($t->account->user->personalData->first_name ?? '').' '.
-                    ($t->account->user->personalData->last_name ?? '')
+                    ($t->account?->user?->personalData?->first_name ?? $t->loan?->user?->personalData?->first_name ?? '').' '.
+                    ($t->account?->user?->personalData?->last_name ?? $t->loan?->user?->personalData?->last_name ?? '')
                 ) ?: 'Unknown',
                 'created_at' => $t->created_at->format('M d, Y'),
                 'created_at_raw' => $t->created_at->toISOString(),
@@ -300,7 +304,7 @@ class DashboardController extends Controller
 
         $pendingTransactions = BranchScope::applyToTransactions(
             Transaction::query()
-                ->with(['account.user.personalData'])
+                ->with(['account.user.personalData', 'loan.user.personalData'])
                 ->where('status', 'pending'),
             Auth::user(),
             $branchId
@@ -314,8 +318,8 @@ class DashboardController extends Controller
                 'transaction_type' => $t->transaction_type,
                 'amount' => $t->amount,
                 'member_name' => trim(
-                    ($t->account->user->personalData->first_name ?? '').' '.
-                    ($t->account->user->personalData->last_name ?? '')
+                    ($t->account?->user?->personalData?->first_name ?? $t->loan?->user?->personalData?->first_name ?? '').' '.
+                    ($t->account?->user?->personalData?->last_name ?? $t->loan?->user?->personalData?->last_name ?? '')
                 ) ?: 'Unknown',
                 'created_at' => $t->created_at->format('M d, Y'),
             ]);
@@ -392,7 +396,7 @@ class DashboardController extends Controller
 
         $recentTransactions = BranchScope::applyToTransactions(
             Transaction::query()
-                ->with(['account.user.personalData'])
+                ->with(['account.user.personalData', 'loan.user.personalData'])
                 ->where('status', 'completed'),
             Auth::user(),
             $branchId
@@ -406,8 +410,8 @@ class DashboardController extends Controller
                 'amount' => $t->amount,
                 'status' => $t->status,
                 'member_name' => trim(
-                    ($t->account->user->personalData->first_name ?? '').' '.
-                    ($t->account->user->personalData->last_name ?? '')
+                    ($t->account?->user?->personalData?->first_name ?? $t->loan?->user?->personalData?->first_name ?? '').' '.
+                    ($t->account?->user?->personalData?->last_name ?? $t->loan?->user?->personalData?->last_name ?? '')
                 ) ?: 'Unknown',
                 'transaction_date' => ($t->transaction_date ?? $t->created_at)->format('M d'),
                 'created_at' => $t->created_at->toISOString(),
@@ -465,7 +469,7 @@ class DashboardController extends Controller
         $start = $now->startOfMonth();
         $end = $now->endOfMonth();
 
-        $memberQuery = BranchScope::applyToUsers(User::query()->where('role', 'member'), Auth::user(), $branchId);
+        $memberQuery = BranchScope::applyToUsers(User::query()->memberUsers(), Auth::user(), $branchId);
 
         $recentMembers = (clone $memberQuery)
             ->with('personalData')
@@ -714,8 +718,14 @@ class DashboardController extends Controller
         $targetUser = $actor;
 
         if ($request->filled('user_id') && (int) $request->query('user_id') !== (int) $actor->id) {
+            $isAuthorizedOfficer = $actor->primary_role === 'admin'
+                || $actor->hasRole('admin')
+                || $actor->is_officer
+                || in_array($actor->primary_role, PermissionCatalog::officerRoles(), true)
+                || $actor->hasAnyRole(PermissionCatalog::officerRoles());
+
             abort_unless(
-                $actor->hasRole('admin') || $actor->hasAnyRole(PermissionCatalog::officerRoles()),
+                $isAuthorizedOfficer,
                 403,
                 'You are not authorized to view another member\'s loans.'
             );
@@ -801,6 +811,11 @@ class DashboardController extends Controller
 
     private function accountTotals(?int $branchId): array
     {
+        $cacheKey = $branchId ?? 'all';
+        if (isset($this->accountTotalsCache[$cacheKey])) {
+            return $this->accountTotalsCache[$cacheKey];
+        }
+
         $query = Account::query()->whereIn('account_type', ['savings', 'share-capital']);
 
         if ($branchId !== null) {
@@ -812,7 +827,7 @@ class DashboardController extends Controller
             ->groupBy('account_type')
             ->pluck('total', 'account_type');
 
-        return [
+        return $this->accountTotalsCache[$cacheKey] = [
             'savings' => (float) ($totals['savings'] ?? 0),
             'share_capital' => (float) ($totals['share_capital'] ?? 0),
         ];
@@ -835,6 +850,11 @@ class DashboardController extends Controller
 
     private function financialSummary(Carbon $start, Carbon $end, ?int $branchId = null): array
     {
+        $cacheKey = $start->toDateString().'_'.$end->toDateString().'_'.($branchId ?? 'all');
+        if (isset($this->financialSummaryCache[$cacheKey])) {
+            return $this->financialSummaryCache[$cacheKey];
+        }
+
         $totals = Transaction::query()
             ->where('status', 'completed')
             ->where(function ($q) use ($start, $end) {
@@ -869,7 +889,7 @@ class DashboardController extends Controller
         $inflows = $totalDeposits + $totalLoanRepayments + $totalFees;
         $outflows = $totalWithdrawals + $totalLoanReleases + $totalExpenses;
 
-        return [
+        return $this->financialSummaryCache[$cacheKey] = [
             'total_deposits' => $totalDeposits,
             'total_withdrawals' => $totalWithdrawals,
             'total_expenses' => $totalExpenses,

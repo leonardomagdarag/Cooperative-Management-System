@@ -570,6 +570,64 @@ test('members cannot close loans', function () {
     expect($loan->fresh()->loan_status)->toBe('active');
 });
 
+test('loan update rejects setting paid_off status when loan has an outstanding balance', function () {
+    $member = User::factory()->create();
+    $member->assignRole('member');
+
+    $loan = Loan::factory()->create([
+        'user_id' => $member->id,
+        'loan_amount' => 1000,
+        'interest_rate' => 12,
+        'term_months' => 1,
+        'payment_frequency' => 'monthly',
+        'loan_status' => 'active',
+    ]);
+
+    actingAs($this->admin);
+
+    $this->putJson('/api/loans/'.$loan->id, [
+        'loan_amount' => 1000,
+        'interest_rate' => 12,
+        'term_months' => 1,
+        'payment_frequency' => 'monthly',
+        'loan_status' => 'paid_off',
+    ])->assertStatus(422);
+
+    expect($loan->fresh()->loan_status)->toBe('active');
+});
+
+test('loan payment rejects paying a loan that belongs to a different member', function () {
+    $member1 = User::factory()->create();
+    $member1->assignRole('member');
+
+    $member2 = User::factory()->create();
+    $member2->assignRole('member');
+
+    Account::factory()->create([
+        'user_id' => $member1->id,
+        'account_type' => 'savings',
+        'balance' => 5000,
+    ]);
+
+    $loan2 = Loan::factory()->create([
+        'user_id' => $member2->id,
+        'loan_amount' => 1000,
+        'interest_rate' => 12,
+        'term_months' => 1,
+        'loan_status' => 'active',
+    ]);
+
+    actingAs($this->admin);
+
+    $this->postJson('/api/services/loan-payment', [
+        'member_id' => $member1->id,
+        'loan_id' => $loan2->id,
+        'amount' => 500,
+        'transaction_mode' => 'counter',
+    ])->assertStatus(422)
+        ->assertJsonPath('message', 'The selected loan does not belong to this member.');
+});
+
 test('deposit with a duplicate client_request_id is not created twice', function () {
     $member = User::factory()->create();
     $member->assignRole('member');

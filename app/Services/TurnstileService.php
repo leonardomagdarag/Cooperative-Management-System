@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class TurnstileService
 {
@@ -15,6 +16,8 @@ class TurnstileService
         $secret = config('services.turnstile.secret_key');
 
         if (! $secret) {
+            Log::warning('Turnstile secret key is not configured in services.turnstile.secret_key.');
+
             return false;
         }
 

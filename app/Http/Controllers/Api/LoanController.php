@@ -331,6 +331,15 @@ class LoanController extends Controller
             'due_date' => 'nullable|date',
         ]);
 
+        if ($validated['loan_status'] === 'paid_off' && $loan->loan_status !== 'paid_off') {
+            $outstanding = (float) $loan->remainingBalance();
+            if ($outstanding > 0) {
+                return response()->json([
+                    'message' => 'Loan cannot be marked as paid off because it still has an outstanding balance of ₱'.number_format($outstanding, 2).'.',
+                ], 422);
+            }
+        }
+
         $updateData = [
             'loan_amount' => $validated['loan_amount'],
             'interest_rate' => $validated['interest_rate'],

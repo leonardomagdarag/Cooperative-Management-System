@@ -275,3 +275,21 @@ test('admin saving public content strips event handler attributes', function () 
         ->and($stored)->toContain('href="https://example.com"')
         ->and($stored)->toContain('Link');
 });
+
+test('admin saving public content strips HTML tags from plain text fields', function () {
+    $admin = makePublicContentEditor();
+
+    $form = fullForm();
+    $form['about']['about1'] = 'Welcome <script>alert(1)</script><b>Settlers</b>';
+
+    actingAs($admin)
+        ->putJson('/api/public-content', ['form' => $form])
+        ->assertOk();
+
+    $stored = SiteContent::query()
+        ->where('section', 'about')
+        ->where('key', 'about1')
+        ->value('value');
+
+    expect($stored)->toBe('Welcome alert(1)Settlers');
+});

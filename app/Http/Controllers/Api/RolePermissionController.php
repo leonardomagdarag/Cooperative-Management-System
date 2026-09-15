@@ -19,7 +19,7 @@ class RolePermissionController extends Controller
 
     public function index(): JsonResponse
     {
-        abort_unless(Auth::user()?->hasRole('admin'), 403);
+        abort_unless($this->isAdmin(Auth::user()), 403);
 
         $this->bootstrapPermissions();
 
@@ -69,7 +69,7 @@ class RolePermissionController extends Controller
 
     public function updatePermissions(Request $request, string $role): JsonResponse
     {
-        abort_unless(Auth::user()?->hasRole('admin'), 403);
+        abort_unless($this->isAdmin(Auth::user()), 403);
 
         $validated = $request->validate([
             'permissions' => 'required|array',
@@ -80,16 +80,24 @@ class RolePermissionController extends Controller
         $this->bootstrapPermissions();
 
         $lockedPermissions = ['dashboard.view', 'notifications.view', 'profile.view', 'profile.update', 'settings.view'];
+        $baseRoleRequiredPermissions = [
+            'manager' => ['members.view', 'loans.view', 'services.view'],
+            'accountant' => ['transactions.view', 'services.view', 'reports.view'],
+            'loan' => ['loans.view', 'services.view'],
+            'secretary' => ['members.view', 'announcements.view'],
+        ];
+        $roleSpecificLocked = $baseRoleRequiredPermissions[$role] ?? [];
+        $allLocked = array_unique(array_merge($lockedPermissions, $roleSpecificLocked));
 
         $allAllowed = array_unique(array_merge(
             PermissionCatalog::allPermissions(),
-            $lockedPermissions,
+            $allLocked,
         ));
 
         $roleModel = Role::findOrCreate($role, 'web');
         $permissions = array_values(array_intersect(
             $allAllowed,
-            array_unique(array_merge($validated['permissions'], $lockedPermissions))
+            array_unique(array_merge($validated['permissions'], $allLocked))
         ));
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
@@ -101,7 +109,7 @@ class RolePermissionController extends Controller
 
     public function storeRole(Request $request): JsonResponse
     {
-        abort_unless(Auth::user()?->hasRole('admin'), 403);
+        abort_unless($this->isAdmin(Auth::user()), 403);
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:60'],
@@ -144,7 +152,7 @@ class RolePermissionController extends Controller
 
     public function destroyRole(string $role): JsonResponse
     {
-        abort_unless(Auth::user()?->hasRole('admin'), 403);
+        abort_unless($this->isAdmin(Auth::user()), 403);
 
         $baseRoles = array_keys(PermissionCatalog::rolePresets());
         if (in_array($role, $baseRoles, true)) {
@@ -164,7 +172,7 @@ class RolePermissionController extends Controller
 
     public function restorePreset(string $role): JsonResponse
     {
-        abort_unless(Auth::user()?->hasRole('admin'), 403);
+        abort_unless($this->isAdmin(Auth::user()), 403);
 
         $preset = PermissionCatalog::rolePresets()[$role] ?? null;
         if ($preset === null) {
@@ -176,7 +184,7 @@ class RolePermissionController extends Controller
 
     public function renameRole(Request $request, string $role): JsonResponse
     {
-        abort_unless(Auth::user()?->hasRole('admin'), 403);
+        abort_unless($this->isAdmin(Auth::user()), 403);
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:60'],
@@ -210,6 +218,11 @@ class RolePermissionController extends Controller
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         return response()->json(['message' => "Role renamed to {$newName}.", 'role' => $newName]);
+    }
+
+    private function isAdmin(?User $user): bool
+    {
+        return (bool) ($user && ($user->primary_role === 'admin' || $user->hasRole('admin')));
     }
 
     private function bootstrapPermissions(): void

@@ -165,10 +165,14 @@ class ServiceController extends Controller
 
         $transaction = DB::transaction(function () use ($account, $validated, $user, $targetBranchId) {
             // Lock the account row so concurrent withdrawals cannot overdraw.
-            $lockedAccount = Account::whereKey($account->id)->lockForUpdate()->first();
+            $lockedAccount = Account::whereKey($account->id)->lockForUpdate()->firstOrFail();
 
-            $pendingWithdrawals = Transaction::where('account_id', $lockedAccount->id)->where('transaction_type', 'withdrawal')->where('status', 'pending')->sum('amount');
-            $available = (float) $lockedAccount->balance - (float) $pendingWithdrawals;
+            $pendingWithdrawals = (float) Transaction::where('account_id', $lockedAccount->id)
+                ->where('transaction_type', 'withdrawal')
+                ->where('status', 'pending')
+                ->lockForUpdate()
+                ->sum('amount');
+            $available = (float) $lockedAccount->balance - $pendingWithdrawals;
 
             if ($validated['amount'] > $available) {
                 abort(422, 'Insufficient available balance. Available: ₱'.number_format($available, 2));
@@ -309,8 +313,15 @@ class ServiceController extends Controller
         $loan = Loan::findOrFail($validated['loan_id']);
         $targetUserId = $validated['member_id'] ?? $validated['user_id'] ?? $user->id;
 
-        if ($loan->user_id && (int) $targetUserId !== (int) $loan->user_id && ! $this->canManageServicesForMembers($user)) {
-            return response()->json(['message' => 'You can only pay your own loan.'], 403);
+        if (! $this->canManageServicesForMembers($user)) {
+            if ($loan->user_id && (int) $loan->user_id !== (int) $user->id) {
+                return response()->json(['message' => 'You can only pay your own loan.'], 403);
+            }
+            if ((int) $targetUserId !== (int) $user->id) {
+                return response()->json(['message' => 'You can only pay your own loan.'], 403);
+            }
+        } elseif ($loan->user_id && (int) $targetUserId !== (int) $loan->user_id) {
+            return response()->json(['message' => 'The selected loan does not belong to this member.'], 422);
         }
 
         $targetBranchId = $loan->branch_id ?? $loan->user?->branch_id;
@@ -339,7 +350,7 @@ class ServiceController extends Controller
         $status = $validated['transaction_mode'] === 'counter' ? 'completed' : 'pending';
 
         $transaction = DB::transaction(function () use ($account, $loan, $validated, $status, $user, $targetBranchId) {
-            $lockedAccount = Account::whereKey($account->id)->lockForUpdate()->first();
+            $lockedAccount = Account::whereKey($account->id)->lockForUpdate()->firstOrFail();
 
             if ((float) $lockedAccount->balance < (float) $validated['amount']) {
                 abort(422, 'Insufficient balance.');
@@ -419,10 +430,10 @@ class ServiceController extends Controller
             }
 
             if ($validated['action'] === 'approve') {
-                $lockedAccount = Account::whereKey($lockedTransaction->account_id)->lockForUpdate()->first();
+                $lockedAccount = Account::whereKey($lockedTransaction->account_id)->lockForUpdate()->firstOrFail();
 
                 if (in_array($lockedTransaction->transaction_type, ['withdrawal', 'loan_payment'], true)) {
-                    if (! $lockedAccount || (float) $lockedAccount->balance < (float) $lockedTransaction->amount) {
+                    if ((float) $lockedAccount->balance < (float) $lockedTransaction->amount) {
                         abort(422, 'Insufficient available balance to approve this transaction.');
                     }
                 }

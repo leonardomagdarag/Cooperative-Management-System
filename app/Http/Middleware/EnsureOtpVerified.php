@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\OtpChallenge;
+use App\Services\SecurityOtpService;
 use Closure;
 use Illuminate\Http\Request;
 
@@ -12,11 +14,27 @@ class EnsureOtpVerified
      */
     public function handle(Request $request, Closure $next)
     {
-        if (! $request->user()) {
+        $user = $request->user();
+        if (! $user) {
             return $next($request);
         }
 
-        if (! $request->session()->get('security.pending_otp', false)) {
+        $pendingOtp = (bool) $request->session()->get('security.pending_otp', false);
+
+        if (! $pendingOtp) {
+            $hasActiveChallenge = OtpChallenge::query()
+                ->active()
+                ->where('user_id', $user->id)
+                ->where('purpose', app(SecurityOtpService::class)->newDevicePurpose())
+                ->exists();
+
+            if ($hasActiveChallenge) {
+                $pendingOtp = true;
+                $request->session()->put('security.pending_otp', true);
+            }
+        }
+
+        if (! $pendingOtp) {
             return $next($request);
         }
 
