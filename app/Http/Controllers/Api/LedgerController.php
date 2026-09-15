@@ -117,7 +117,7 @@ class LedgerController extends Controller
 
     public function export(Request $request)
     {
-        abort_unless(Auth::user()?->can('transactions.view'), 403);
+        abort_unless(Auth::user()?->can('transactions.export') || Auth::user()?->can('transactions.view'), 403);
 
         $query = Transaction::with(['account.user.personalData', 'loan', 'recordedBy']);
 
@@ -171,7 +171,7 @@ class LedgerController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        abort_unless(Auth::user()?->can('transactions.update'), 403);
+        abort_unless(Auth::user()?->can('transactions.create') || Auth::user()?->can('transactions.update'), 403);
 
         $validated = $request->validate([
             'transaction_type' => 'required|in:deposit,withdrawal,loan_payment,loan_disbursement,fee',
@@ -236,7 +236,7 @@ class LedgerController extends Controller
 
     public function destroy(Transaction $transaction): JsonResponse
     {
-        abort_unless(Auth::user()?->can('transactions.update'), 403);
+        abort_unless(Auth::user()?->can('transactions.void') || Auth::user()?->can('transactions.update'), 403);
 
         DB::transaction(function () use ($transaction) {
             $this->applyBalanceEffect($transaction, reverse: true);

@@ -383,7 +383,7 @@ class ReportController extends Controller
 
     public function downloadBalanceSheet(Request $request)
     {
-        abort_unless(Auth::user()?->can('reports.financial'), 403);
+        abort_unless(Auth::user()?->can('reports.financial') || Auth::user()?->can('reports.export'), 403);
 
         [$start, $end] = $this->resolveRange($request);
         $branchId = BranchScope::resolveBranchId(Auth::user(), $request->integer('branch_id'));

@@ -26,12 +26,12 @@ class LoanPolicy
 
     public function encode(User $user): bool
     {
-        return $user->hasRole('admin') && $user->can('loans.encode');
+        return $this->isOfficerUser($user) && ($user->can('loans.encode') || $user->can('loans.create') || $user->hasRole('admin'));
     }
 
     public function update(User $user, Loan $loan): bool
     {
-        return ($this->isOfficerUser($user) && $user->can('loans.update'))
+        return ($this->isOfficerUser($user) && ($user->can('loans.update') || $user->can('loans.encode')))
             || ($user->can('loans.create') && $loan->user_id === $user->id);
     }
 
@@ -40,9 +40,15 @@ class LoanPolicy
         return $this->isOfficerUser($user) && $user->can('loans.approve');
     }
 
+    public function disburse(User $user, Loan $loan): bool
+    {
+        return $this->isOfficerUser($user) && ($user->can('loans.disburse') || $user->hasRole('admin'));
+    }
+
     public function uploadDocument(User $user, Loan $loan): bool
     {
-        return $user->hasAnyRole(['admin', 'manager']);
+        return ($this->isOfficerUser($user) && ($user->can('loans.update') || $user->can('loans.create')))
+            || $loan->user_id === $user->id;
     }
 
     public function reject(User $user): bool
@@ -60,12 +66,11 @@ class LoanPolicy
     }
 
     /**
-     * Final approval is restricted to admin and manager (chairman) only.
-     * This is a hard role gate, independent of permissions, to prevent escalation.
+     * Final approval is allowed for admin, manager, or users with loans.approve permission.
      */
     public function finalApprove(User $user): bool
     {
-        return $user->hasAnyRole(['admin', 'manager']);
+        return $user->hasAnyRole(['admin', 'manager']) || ($this->isOfficerUser($user) && $user->can('loans.approve'));
     }
 
     public function delete(User $user): bool

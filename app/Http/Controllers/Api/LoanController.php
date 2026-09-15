@@ -27,7 +27,7 @@ class LoanController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = Auth::user();
-        $canViewAll = $user && ($user->is_officer || $user->hasRole('admin'));
+        $canViewAll = (bool) ($user && ($user->can('loans.view') || $user->hasRole('admin')));
 
         $query = Loan::with(['branch', 'user.personalData', 'reviewer.personalData', 'groupMembers.personalData', 'product']);
 
@@ -100,7 +100,7 @@ class LoanController extends Controller
                 'per_page' => $paginator->perPage(),
                 'total' => $paginator->total(),
             ],
-            'can_encode' => $user?->hasRole('admin') && $user?->can('loans.encode'),
+            'can_encode' => (bool) ($user && ($user->can('loans.encode') || $user->can('loans.create') || $user->hasRole('admin'))),
         ]);
     }
 
@@ -301,7 +301,7 @@ class LoanController extends Controller
 
     public function update(Request $request, Loan $loan): JsonResponse
     {
-        Gate::authorize('encode', Loan::class);
+        Gate::authorize('update', $loan);
 
         $validated = $request->validate([
             'loan_product' => [
@@ -367,7 +367,7 @@ class LoanController extends Controller
     public function disburse(Loan $loan): JsonResponse
     {
         $user = Auth::user();
-        Gate::authorize('finalApprove');
+        Gate::authorize('disburse', $loan);
 
         if ($loan->loan_status === 'active') {
             return response()->json(['message' => 'Loan is already active.'], 422);
