@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\SendEmailJob;
+use App\Mail\ContactMessageMail;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -59,7 +61,17 @@ class PageController extends Controller
 
     public function submitContactMessage(Request $request): JsonResponse
     {
-        // This is handled by the API route now
-        return response()->json(['message' => 'Please use the API endpoint.'], 404);
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|max:255',
+            'message' => 'required|string|max:2000',
+        ]);
+
+        SendEmailJob::dispatch(
+            config('mail.from.address'),
+            new ContactMessageMail($validated['name'], $validated['email'], $validated['message'])
+        );
+
+        return response()->json(['message' => 'Message sent successfully.']);
     }
 }

@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
 import { validate, roleSchema, type FieldErrors } from '../../lib/validation';
 import { formatPermissionLabel } from '../../lib/permissions';
+import SettingsTabHeader from '../settings/SettingsTabHeader';
 
 interface RoleData {
     roles: string[];
@@ -34,7 +34,6 @@ export default function RolePermissionsPage() {
     const { markDirty, reset, requestClose, renderDialog } = useDiscardGuard();
     const queryClient = useQueryClient();
     const { addToast } = useToast();
-    const navigate = useNavigate();
 
     const { data, isLoading } = useQuery({
         queryKey: ['roles'],
@@ -268,26 +267,22 @@ export default function RolePermissionsPage() {
 
     return (
         <div className="flex min-h-[calc(100vh-8rem)] flex-col gap-5 pb-2">
-            <div className="rounded-xl border border-gray-200 bg-white px-6 py-4 shadow-sm">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <h2 className="text-xl font-bold text-gray-900">Role Permission Management</h2>
-                        <p className="mt-0.5 text-sm text-gray-500">
-                            Configure the editable permissions for assignable database roles. Dashboard, notifications, profile, and
-                            settings stay available to all managed roles and are not part of this editor.
-                        </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <button
-                            type="button"
-                            onClick={openCreateModal}
-                            className="inline-flex items-center rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-cyan-700"
-                        >
-                            Add Custom Role
-                        </button>
-                    </div>
-                </div>
-            </div>
+            <SettingsTabHeader
+                eyebrow="Security & access"
+                title="Roles & Permissions"
+                description="Configure permissions for database roles. Core system features remain accessible to all roles."
+                icon="fas fa-user-shield"
+                action={
+                    <button
+                        type="button"
+                        onClick={openCreateModal}
+                        className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-200"
+                    >
+                        <i className="fas fa-plus text-xs"></i>
+                        Add Custom Role
+                    </button>
+                }
+            />
 
             {roles.length === 0 ? (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 px-6 py-8 text-sm text-amber-800 shadow-sm">
@@ -308,29 +303,29 @@ export default function RolePermissionsPage() {
                                         onClick={() => requestRoleSwitch(role)}
                                         className={`group w-full rounded-xl border px-4 py-3.5 text-left transition-all ${
                                             active
-                                                ? 'border-cyan-300 bg-cyan-50 shadow-sm ring-1 ring-cyan-200'
+                                                ? 'border-emerald-300 bg-emerald-50 shadow-sm ring-1 ring-emerald-200'
                                                 : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
                                         }`}
                                     >
                                         <div className="flex items-center justify-between gap-2">
-                                            <span className={`text-sm font-semibold ${active ? 'text-cyan-900' : 'text-gray-800'}`}>
+                                            <span className={`text-sm font-semibold ${active ? 'text-emerald-900' : 'text-gray-800'}`}>
                                                 {roleLabel(role)}
                                             </span>
                                             <span
                                                 className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
-                                                    active ? 'bg-cyan-100 text-cyan-700' : 'bg-gray-100 text-gray-500'
+                                                    active ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'
                                                 }`}
                                             >
                                                 {count} / {totalEditableCount}
                                             </span>
                                         </div>
-                                        <p className={`mt-1 text-xs leading-relaxed ${active ? 'text-cyan-700' : 'text-gray-500'}`}>
+                                        <p className={`mt-1 text-xs leading-relaxed ${active ? 'text-emerald-700' : 'text-gray-500'}`}>
                                             {roleDescription(role)}
                                         </p>
                                         <div className="mt-2 flex flex-wrap items-center gap-1.5">
                                             <span
                                                 className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                                                    isBaseRole(role) ? 'bg-slate-100 text-slate-600' : 'bg-cyan-50 text-cyan-700'
+                                                    isBaseRole(role) ? 'bg-slate-100 text-slate-600' : 'bg-emerald-50 text-emerald-700'
                                                 }`}
                                             >
                                                 {isBaseRole(role) ? 'Base role' : 'Custom role'}
@@ -358,7 +353,7 @@ export default function RolePermissionsPage() {
                                                         Base role
                                                     </span>
                                                 ) : (
-                                                    <span className="rounded-full bg-cyan-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-cyan-700">
+                                                    <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
                                                         Custom role
                                                     </span>
                                                 )}
@@ -405,7 +400,7 @@ export default function RolePermissionsPage() {
                                                         onKeyDown={e => { if (e.key === 'Enter') handleRename(); }}
                                                         placeholder="Enter a new role name"
                                                         disabled={!canManageRoleIdentity(selectedRole) || renameMutation.isPending}
-                                                        className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-500 focus:ring-cyan-500 disabled:cursor-not-allowed disabled:bg-gray-100"
+                                                        className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:bg-gray-100"
                                                     />
                                                     <p className="text-xs text-gray-500">
                                                         The saved role key will be normalized to lowercase slug format.
@@ -417,7 +412,7 @@ export default function RolePermissionsPage() {
                                                         type="button"
                                                         onClick={handleRename}
                                                         disabled={!canManageRoleIdentity(selectedRole) || renameMutation.isPending || !renameValue.trim()}
-                                                        className="inline-flex items-center rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-2 text-sm font-medium text-cyan-700 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400"
+                                                        className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400"
                                                     >
                                                         {renameMutation.isPending ? 'Renaming...' : 'Rename Role'}
                                                     </button>
@@ -465,7 +460,7 @@ export default function RolePermissionsPage() {
                                                         onClick={() => togglePermission(permission)}
                                                         role="switch"
                                                         aria-checked={on}
-                                                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-1 ${on ? 'bg-cyan-500' : 'bg-gray-200'}`}
+                                                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 ${on ? 'bg-emerald-600' : 'bg-gray-200'}`}
                                                     >
                                                         <span
                                                             className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${on ? 'translate-x-4' : 'translate-x-0'}`}
@@ -482,16 +477,19 @@ export default function RolePermissionsPage() {
 
                     <div className="sticky bottom-0 z-30 mt-2 border-t border-gray-200 bg-white/95 px-6 py-3 shadow-lg backdrop-blur-sm">
                         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
-                            <button
-                                type="button"
-                                onClick={() => navigate('/settings')}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-300"
-                            >
-                                <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
-                                </svg>
-                                Back to Settings
-                            </button>
+                            <div className="flex items-center gap-2">
+                                {hasChanges(selectedRole) ? (
+                                    <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 border border-amber-200">
+                                        <i className="fas fa-circle-exclamation text-amber-600"></i>
+                                        <span>Unsaved permission changes for {roleLabel(selectedRole)}</span>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2 px-1 text-xs text-gray-400">
+                                        <i className="fas fa-check text-emerald-600"></i>
+                                        <span>All permissions saved for {roleLabel(selectedRole)}</span>
+                                    </div>
+                                )}
+                            </div>
 
                             <div className="flex items-center gap-2">
                                 <button
@@ -500,20 +498,16 @@ export default function RolePermissionsPage() {
                                     disabled={!hasPreset(selectedRole)}
                                     className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-300 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400"
                                 >
-                                    <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
-                                    </svg>
+                                    <i className="fas fa-rotate-left text-xs"></i>
                                     Restore Preset
                                 </button>
                                 <button
                                     type="button"
                                     onClick={openSaveModal}
                                     disabled={!hasChanges(selectedRole) || updateMutation.isPending}
-                                    className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-cyan-300 disabled:cursor-not-allowed disabled:bg-cyan-300"
+                                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200 disabled:cursor-not-allowed disabled:bg-emerald-300"
                                 >
-                                    <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
-                                    </svg>
+                                    <i className="fas fa-check text-xs"></i>
                                     <span>{updateMutation.isPending ? 'Saving...' : 'Save Changes'}</span>
                                 </button>
                             </div>
@@ -593,7 +587,7 @@ export default function RolePermissionsPage() {
                                     value={newRoleName}
                                     onChange={e => { markDirty(); setNewRoleName(e.target.value); if (roleErrors.name) setRoleErrors({}); }}
                                     placeholder="e.g. auditor or branch-supervisor"
-                                    className={`w-full rounded-xl border px-3 py-2 text-sm focus:border-cyan-500 focus:ring-cyan-500 ${roleErrors.name ? 'border-rose-400' : 'border-gray-300'}`}
+                                    className={`w-full rounded-xl border px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500 ${roleErrors.name ? 'border-rose-400' : 'border-gray-300'}`}
                                 />
                                 <p className="mt-1 text-xs text-gray-500">
                                     The name is saved as a lowercase slug, such as <span className="font-medium">branch-supervisor</span>.
@@ -607,14 +601,14 @@ export default function RolePermissionsPage() {
                                     id="new-role-template"
                                     value={newRoleTemplate}
                                     onChange={e => { markDirty(); setNewRoleTemplate(e.target.value); }}
-                                    className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-cyan-500 focus:ring-cyan-500"
+                                    className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500"
                                 >
                                     <option value="">Blank role with base dashboard/profile access</option>
                                     {roles.map(r => <option key={r} value={r}>{roleLabel(r)}</option>)}
                                 </select>
                             </div>
 
-                            <div className="rounded-xl border border-cyan-100 bg-cyan-50 px-4 py-3 text-sm text-cyan-800">
+                            <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                                 New roles can be assigned immediately in Officers after creation.
                             </div>
 
@@ -622,7 +616,7 @@ export default function RolePermissionsPage() {
                                 <button
                                     type="button"
                                     onClick={() => requestClose(() => setShowCreateModal(false))}
-                                    className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                    className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                                 >
                                     Cancel
                                 </button>
@@ -630,7 +624,7 @@ export default function RolePermissionsPage() {
                                     type="button"
                                     onClick={handleCreateRole}
                                     disabled={createMutation.isPending}
-                                    className="inline-flex items-center rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:bg-cyan-300"
+                                    className="inline-flex items-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300"
                                 >
                                     {createMutation.isPending ? 'Creating...' : 'Create Role'}
                                 </button>
@@ -645,7 +639,7 @@ export default function RolePermissionsPage() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 px-4 py-6">
                     <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl">
                         <div className="flex items-start gap-4">
-                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-cyan-100 text-cyan-700">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
                                 <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
                                 </svg>
@@ -707,7 +701,7 @@ export default function RolePermissionsPage() {
                             <button
                                 type="button"
                                 onClick={() => setShowSaveModal(false)}
-                                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                             >
                                 Cancel
                             </button>
@@ -715,7 +709,7 @@ export default function RolePermissionsPage() {
                                 type="button"
                                 onClick={confirmSave}
                                 disabled={updateMutation.isPending}
-                                className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:bg-cyan-300"
+                                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300 transition-colors"
                             >
                                 {updateMutation.isPending ? 'Saving...' : 'Confirm and Save'}
                             </button>

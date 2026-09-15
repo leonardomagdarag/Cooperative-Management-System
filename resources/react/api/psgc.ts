@@ -20,8 +20,15 @@ export async function getProvinces(regionCode: string): Promise<PsgcItem[]> {
     return data.data ?? [];
 }
 
-export async function getCities(provinceCode: string): Promise<PsgcItem[]> {
-    const { data } = await api.get<PsgcResponse>('/psgc/cities', { params: { province_code: provinceCode, limit: 100, order_by: 'name' } });
+export async function getCities(provinceCode?: string, regionCode?: string): Promise<PsgcItem[]> {
+    const params: Record<string, any> = { limit: 100, order_by: 'name' };
+    if (provinceCode) {
+        params.province_code = provinceCode;
+    }
+    if (regionCode) {
+        params.region_code = regionCode;
+    }
+    const { data } = await api.get<PsgcResponse>('/psgc/cities', { params });
     return data.data ?? [];
 }
 

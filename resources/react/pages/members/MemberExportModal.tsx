@@ -49,10 +49,10 @@ export default function MemberExportModal({ onClose }: { onClose: () => void }) 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={onClose}>
             <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-                <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white">
+                <div className="bg-gradient-to-r from-emerald-600 to-cyan-600 px-6 py-5 text-white">
                     <div className="flex items-center justify-between">
                         <h2 className="text-lg font-bold">Export Members</h2>
-                        <button onClick={onClose} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white"><i className="fas fa-times"></i></button>
+                        <button onClick={onClose} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white transition-colors"><i className="fas fa-times"></i></button>
                     </div>
                     <p className="mt-1 text-sm text-white/80">Download member records within a date range</p>
                 </div>
@@ -79,11 +79,11 @@ export default function MemberExportModal({ onClose }: { onClose: () => void }) 
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1.5">Start date</label>
-                            <DatePicker value={startDate} onChange={setStartDate} maxDate={endDate || todayISO} clearable={false} placeholder="Pick start" className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200" />
+                            <DatePicker value={startDate} onChange={setStartDate} maxDate={endDate || todayISO} clearable={false} placeholder="Pick start" className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200" />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1.5">End date</label>
-                            <DatePicker value={endDate} onChange={setEndDate} minDate={startDate} maxDate={todayISO} clearable={false} placeholder="Pick end" className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200" />
+                            <DatePicker value={endDate} onChange={setEndDate} minDate={startDate} maxDate={todayISO} clearable={false} placeholder="Pick end" className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200" />
                         </div>
                     </div>
                     {startDate !== '' && endDate !== '' && startDate > endDate && (
@@ -91,11 +91,11 @@ export default function MemberExportModal({ onClose }: { onClose: () => void }) 
                     )}
                 </div>
                 <div className="flex items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4">
-                    <button onClick={onClose} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                    <button onClick={onClose} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
                     <button
                         onClick={() => exportMutation.mutate()}
                         disabled={!valid || exportMutation.isPending}
-                        className="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="inline-flex items-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-200 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                         {exportMutation.isPending ? <><i className="fas fa-spinner fa-spin mr-2"></i>Exporting...</> : <><i className="fas fa-download mr-2"></i>Download Export</>}
                     </button>

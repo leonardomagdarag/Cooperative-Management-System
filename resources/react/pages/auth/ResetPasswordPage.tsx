@@ -233,6 +233,7 @@ export default function ResetPasswordPage() {
                                     <input
                                         type={showPassword ? 'text' : 'password'}
                                         id="password"
+                                        autoComplete="new-password"
                                         {...register('password')}
                                         className="public-input pl-12 pr-12"
                                         placeholder="Enter new password"
@@ -254,6 +255,7 @@ export default function ResetPasswordPage() {
                                     <input
                                         type={showConfirm ? 'text' : 'password'}
                                         id="password_confirmation"
+                                        autoComplete="new-password"
                                         {...register('password_confirmation')}
                                         className="public-input pl-12 pr-12"
                                         placeholder="Re-enter new password"

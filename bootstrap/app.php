@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\CheckServiceAvailability;
 use App\Http\Middleware\EnsureOtpVerified;
+use App\Http\Middleware\EnsureProfileCompleted;
 use App\Http\Middleware\EnsurePublicLoginEnabled;
 use App\Http\Middleware\EnsurePublicMemberRegistrationEnabled;
 use App\Http\Middleware\RoleMiddleware;
@@ -39,6 +40,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'public.login.enabled' => EnsurePublicLoginEnabled::class,
             'otp.verified' => EnsureOtpVerified::class,
             'service.availability' => CheckServiceAvailability::class,
+            'profile.completed' => EnsureProfileCompleted::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

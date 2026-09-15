@@ -5,6 +5,7 @@ import { useToast } from '../../contexts/ToastContext';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import EmptyState from '../../components/ui/EmptyState';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 
 interface BranchForm {
     name: string;
@@ -23,6 +24,14 @@ export default function BranchesPage() {
     const [editing, setEditing] = useState<Branch | null>(null);
     const [form, setForm] = useState<BranchForm>(emptyForm);
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [confirmState, setConfirmState] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        confirmText?: string;
+        variant?: 'danger' | 'warning' | 'primary';
+        onConfirm: () => void;
+    }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
     const queryClient = useQueryClient();
     const { addToast } = useToast();
 
@@ -101,7 +110,7 @@ export default function BranchesPage() {
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                         placeholder="Search branches…"
-                        className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+                        className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 outline-none transition-colors"
                     />
                     <Button onClick={openCreate} icon={<i className="fas fa-plus" />}>New Branch</Button>
                 </div>
@@ -150,11 +159,18 @@ export default function BranchesPage() {
                                     </td>
                                     <td className="px-4 py-3 text-right">
                                         <div className="flex justify-end gap-1">
-                                            <Button variant="ghost" size="sm" onClick={() => openEdit(b)} aria-label={`Edit ${b.name}`}><i className="fas fa-edit"></i></Button>
+                                            <Button variant="ghost" size="sm" onClick={() => openEdit(b)} aria-label={`Edit ${b.name}`} className="hover:bg-emerald-50 hover:text-emerald-600"><i className="fas fa-edit"></i></Button>
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                onClick={() => { if (confirm(`Delete "${b.name}"? Affected records will keep their branch link.`)) deleteMutation.mutate(b.id); }}
+                                                onClick={() => setConfirmState({
+                                                    isOpen: true,
+                                                    title: 'Delete Branch',
+                                                    message: `Delete "${b.name}"? Affected records will keep their branch link.`,
+                                                    confirmText: 'Delete',
+                                                    variant: 'danger',
+                                                    onConfirm: () => deleteMutation.mutate(b.id),
+                                                })}
                                                 aria-label={`Delete ${b.name}`}
                                                 className="hover:bg-red-50 hover:text-red-600"
                                             >
@@ -172,8 +188,13 @@ export default function BranchesPage() {
             {showModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => setShowModal(false)}>
                     <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-                        <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white shrink-0">
-                            <h2 className="text-lg font-bold">{editing ? 'Edit Branch' : 'New Branch'}</h2>
+                        <div className="bg-gradient-to-r from-emerald-600 to-cyan-600 px-6 py-5 text-white shrink-0">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-lg font-bold">{editing ? 'Edit Branch' : 'New Branch'}</h2>
+                                <button onClick={() => setShowModal(false)} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white transition-colors">
+                                    <i className="fas fa-times"></i>
+                                </button>
+                            </div>
                         </div>
                         <form onSubmit={submit} className="p-6 space-y-4">
                             <div>
@@ -181,18 +202,18 @@ export default function BranchesPage() {
                                 <input
                                     value={form.name}
                                     onChange={e => setForm({ ...form, name: e.target.value })}
-                                    className={`w-full rounded-lg border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 ${errors.name ? 'border-red-400 focus:ring-red-200' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-100'}`}
+                                    className={`w-full rounded-lg border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 ${errors.name ? 'border-red-400 focus:ring-red-200' : 'border-gray-300 focus:border-emerald-500 focus:ring-emerald-100'}`}
                                 />
                                 {errors.name && <p className="mt-1 text-xs text-red-500">{errors.name}</p>}
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <label className="flex items-center gap-2 text-sm text-gray-700">
-                                    <input type="checkbox" checked={form.is_head_office} onChange={e => setForm({ ...form, is_head_office: e.target.checked })} className="rounded border-gray-300" />
+                                    <input type="checkbox" checked={form.is_head_office} onChange={e => setForm({ ...form, is_head_office: e.target.checked })} className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" />
                                     Head office
                                 </label>
                                 <label className="flex items-center gap-2 text-sm text-gray-700">
-                                    <input type="checkbox" checked={form.is_active} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="rounded border-gray-300" />
+                                    <input type="checkbox" checked={form.is_active} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" />
                                     Active
                                 </label>
                             </div>
@@ -202,7 +223,7 @@ export default function BranchesPage() {
                                 <input
                                     value={form.address}
                                     onChange={e => setForm({ ...form, address: e.target.value })}
-                                    className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                    className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                                 />
                             </div>
 
@@ -212,7 +233,7 @@ export default function BranchesPage() {
                                     <input
                                         value={form.contact_number}
                                         onChange={e => setForm({ ...form, contact_number: e.target.value })}
-                                        className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                        className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                                     />
                                 </div>
                                 <div>
@@ -221,7 +242,7 @@ export default function BranchesPage() {
                                         type="email"
                                         value={form.email}
                                         onChange={e => setForm({ ...form, email: e.target.value })}
-                                        className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                        className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                                     />
                                 </div>
                             </div>
@@ -238,6 +259,19 @@ export default function BranchesPage() {
                     </div>
                 </div>
             )}
+
+            <ConfirmDialog
+                isOpen={confirmState.isOpen}
+                title={confirmState.title}
+                message={confirmState.message}
+                confirmText={confirmState.confirmText}
+                variant={confirmState.variant}
+                onConfirm={() => {
+                    confirmState.onConfirm();
+                    setConfirmState(prev => ({ ...prev, isOpen: false }));
+                }}
+                onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
+            />
         </div>
     );
 }

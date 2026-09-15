@@ -77,6 +77,7 @@ export default function LoginPage() {
                             <input
                                 type="email"
                                 id="email"
+                                autoComplete="username"
                                 {...register('email')}
                                 className="public-input text-sm"
                                 placeholder="Enter your email"
@@ -90,6 +91,7 @@ export default function LoginPage() {
                                 <input
                                     type={showPassword ? 'text' : 'password'}
                                     id="password"
+                                    autoComplete="current-password"
                                     {...register('password')}
                                     className="public-input pr-12 text-sm"
                                     placeholder="Enter your password"
@@ -119,10 +121,10 @@ export default function LoginPage() {
 
                         <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
                             <label className="flex items-center">
-                                <input type="checkbox" {...register('remember')} className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer" />
+                                <input type="checkbox" {...register('remember')} className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-2 focus:ring-emerald-500 cursor-pointer" />
                                 <span className="ml-2 text-sm text-slate-600 cursor-pointer select-none">Remember me</span>
                             </label>
-                            <Link to="/forgot-password" className="text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors">
+                            <Link to="/forgot-password" className="text-sm font-medium text-emerald-600 hover:text-emerald-700 transition-colors">
                                 Forgot password?
                             </Link>
                         </div>

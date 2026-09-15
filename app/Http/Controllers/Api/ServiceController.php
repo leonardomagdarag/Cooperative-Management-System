@@ -254,6 +254,7 @@ class ServiceController extends Controller
                 'user_id' => $targetUser->id,
                 'branch_id' => $validated['branch_id'] ?? $targetBranchId,
                 'loan_type' => $product->base_type,
+                'loan_product' => $product->code,
                 'loan_amount' => $validated['amount'],
                 'interest_rate' => $product->interest_rate,
                 'term_months' => $validated['term_months'],

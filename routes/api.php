@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\BackupController;
 use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\ExpenseController;
+use App\Http\Controllers\Api\FaqController;
 use App\Http\Controllers\Api\HistoryController;
 use App\Http\Controllers\Api\LedgerController;
 use App\Http\Controllers\Api\LoanController;
@@ -20,6 +21,7 @@ use App\Http\Controllers\Api\RolePermissionController;
 use App\Http\Controllers\Api\SearchController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\SettingsController;
+use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\NotificationController;
 use App\Jobs\SendEmailJob;
 use App\Mail\ContactMessageMail;
@@ -119,6 +121,17 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
     Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy']);
     Route::delete('/notifications/read/all', [NotificationController::class, 'deleteAllRead']);
+    // FAQs & Knowledge Base
+    Route::get('/faqs', [FaqController::class, 'index']);
+
+    // Tickets & Support Messaging
+    Route::get('/tickets', [TicketController::class, 'index']);
+    Route::post('/tickets', [TicketController::class, 'store']);
+    Route::get('/tickets/support-officers', [TicketController::class, 'supportOfficers']);
+    Route::get('/tickets/{ticket}', [TicketController::class, 'show']);
+    Route::post('/tickets/{ticket}/messages', [TicketController::class, 'reply']);
+    Route::patch('/tickets/{ticket}/status', [TicketController::class, 'updateStatus']);
+    Route::patch('/tickets/{ticket}/assign', [TicketController::class, 'assign']);
 
     // History (member transaction history)
     Route::get('/history', [HistoryController::class, 'index']);
@@ -176,7 +189,7 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     Route::get('/loans', [LoanController::class, 'index']);
     Route::get('/loans/search-members', [LoanController::class, 'searchMembers']);
     Route::get('/loans/loan-products', [LoanController::class, 'loanProducts']);
-    Route::post('/loans', [LoanController::class, 'store']);
+    Route::post('/loans', [LoanController::class, 'store'])->middleware('profile.completed');
     Route::get('/loans/{loan}', [LoanController::class, 'show']);
     Route::put('/loans/{loan}', [LoanController::class, 'update']);
     Route::delete('/loans/{loan}', [LoanController::class, 'destroy']);
@@ -184,6 +197,7 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     Route::post('/loans/{loan}/disburse', [LoanController::class, 'disburse']);
     Route::post('/loans/{loan}/close', [LoanController::class, 'close']);
     Route::post('/loans/{loan}/documents', [LoanController::class, 'uploadDocument']);
+    Route::get('/loans/{loan}/documents/{document}', [LoanController::class, 'downloadDocument'])->name('loans.documents.download');
 
     // Role Permissions (admin only)
     Route::get('/roles', [RolePermissionController::class, 'index']);
@@ -224,10 +238,10 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
 
     // Services
     Route::get('/services', [ServiceController::class, 'index']);
-    Route::post('/services/deposit', [ServiceController::class, 'deposit'])->middleware('service.availability:deposit');
-    Route::post('/services/withdrawal', [ServiceController::class, 'withdrawal'])->middleware('service.availability:withdrawal');
-    Route::post('/services/loan-application', [ServiceController::class, 'loanApplication'])->middleware('service.availability:loan_application');
-    Route::post('/services/loan-payment', [ServiceController::class, 'loanPayment'])->middleware('service.availability:loan_payment');
+    Route::post('/services/deposit', [ServiceController::class, 'deposit'])->middleware(['profile.completed', 'service.availability:deposit']);
+    Route::post('/services/withdrawal', [ServiceController::class, 'withdrawal'])->middleware(['profile.completed', 'service.availability:withdrawal']);
+    Route::post('/services/loan-application', [ServiceController::class, 'loanApplication'])->middleware(['profile.completed', 'service.availability:loan_application']);
+    Route::post('/services/loan-payment', [ServiceController::class, 'loanPayment'])->middleware(['profile.completed', 'service.availability:loan_payment']);
     Route::post('/services/approve/{transaction}', [ServiceController::class, 'approveTransaction']);
     Route::post('/services/transactions/{transaction}/send-otp', [ServiceController::class, 'sendWithdrawalApprovalOtp']);
     Route::get('/services/pending', [ServiceController::class, 'pendingTransactions']);

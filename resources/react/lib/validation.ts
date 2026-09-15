@@ -283,6 +283,19 @@ export function withdrawalSchema(available: number) {
     });
 }
 
+/** Base object schema without superRefine – use .pick() for step-specific validation */
+export function withdrawalBaseSchema(available: number) {
+    return z.object({
+        amount: z.coerce.number().positive('Enter a valid amount').min(100, 'Minimum withdrawal amount is ₱100').max(available, `Amount exceeds available balance of \u20b1${available.toLocaleString()}`),
+        transaction_mode: enumFrom(['counter', 'online', 'bank_transfer'], 'Select a transaction mode'),
+        reason: optionalString(500),
+        bank_name: optionalString(100),
+        account_number: optionalString(50),
+        account_holder: optionalString(100),
+        branch_id: optionalId,
+    });
+}
+
 export const loanApplicationSchema = z.object({
     loan_product_code: requiredString('Select a loan product'),
     amount: amount(1),
@@ -290,6 +303,14 @@ export const loanApplicationSchema = z.object({
     payment_frequency: enumFrom(['weekly', 'bi-weekly', 'monthly', 'quarterly', 'annually'], 'Select a payment frequency'),
     purpose: requiredString('Purpose is required', 500),
     branch_id: optionalId,
+});
+
+/** Step-2-only schema (product, amount, term, frequency) — excludes purpose which is entered on step 3 */
+export const loanApplicationStep2Schema = z.object({
+    loan_product_code: requiredString('Select a loan product'),
+    amount: amount(1),
+    term_months: z.coerce.number().int('Term must be a whole number').min(1, 'Term must be at least 1 month').max(360, 'Term cannot exceed 360 months'),
+    payment_frequency: enumFrom(['weekly', 'bi-weekly', 'monthly', 'quarterly', 'annually'], 'Select a payment frequency'),
 });
 
 export const loanPaymentSchema = z.object({
@@ -392,7 +413,7 @@ export const registerSchema = z.object({
     phone: requiredString('Phone number is required', 20),
     email: z.string().trim().email('Enter a valid email address').min(1, 'Email is required').max(255, 'Maximum of 255 characters'),
     region: z.string().trim().min(1, 'Select your region'),
-    province: z.string().trim().min(1, 'Select your province'),
+    province: optionalString(100),
     city: z.string().trim().min(1, 'Select your city/municipality'),
     barangay: z.string().trim().min(1, 'Select your barangay'),
     street: requiredString('Street address is required'),
@@ -420,7 +441,7 @@ export const registerStepSchemas: Record<number, z.ZodTypeAny> = {
         phone: requiredString('Phone number is required', 20),
         email: z.string().trim().email('Enter a valid email address').min(1, 'Email is required').max(255, 'Maximum of 255 characters'),
         region: z.string().trim().min(1, 'Select your region'),
-        province: z.string().trim().min(1, 'Select your province'),
+        province: optionalString(100),
         city: z.string().trim().min(1, 'Select your city/municipality'),
         barangay: z.string().trim().min(1, 'Select your barangay'),
         street: requiredString('Street address is required'),

@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { validate, loanApplicationSchema, type FieldErrors } from '../../lib/validation';
+import { validate, loanApplicationSchema, loanApplicationStep2Schema, type FieldErrors } from '../../lib/validation';
 import ServiceModal from './ServiceModal';
 
 interface CoMaker { id: number; name: string; user_number: string }
@@ -89,7 +89,8 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
     };
 
     const enterDetails = () => {
-        const errs = validate(loanApplicationSchema, form);
+        // Only validate step-2 fields — purpose is entered on step 3
+        const errs = validate(loanApplicationStep2Schema, form);
         if (selectedProduct && Number(form.amount ?? 0) > Number(selectedProduct.max_amount)) {
             errs.amount = `Amount exceeds the maximum limit of ${peso(selectedProduct.max_amount)}`;
         }
@@ -111,8 +112,13 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
     };
 
     const enterPurpose = () => {
-        const errs = validate(loanApplicationSchema, form);
-        if (form.purpose.trim().length < 10) errs.purpose = 'Purpose must be at least 10 characters';
+        // Only validate purpose on step 3
+        const errs: FieldErrors = {};
+        if (!form.purpose?.trim()) {
+            errs.purpose = 'Purpose is required';
+        } else if (form.purpose.trim().length < 10) {
+            errs.purpose = 'Purpose must be at least 10 characters';
+        }
         setErrors(errs);
         if (Object.keys(errs).length > 0) return;
         setStep(4);

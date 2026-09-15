@@ -219,10 +219,11 @@ class SecurityOtpService
             return;
         }
 
-        // Always surface the code in the application log as a fallback so the
-        // flow stays usable even when the queued email cannot be delivered
-        // (e.g., no queue worker running or the SMTP transport silently fails).
-        Log::info("OTP email ({$purpose}) for {$user->email}: {$otpCode}");
+        // Surface raw OTP in application logs only in local environments or when
+        // explicitly using the log mailer driver to prevent leaking secrets in production.
+        if (app()->environment('local') || config('mail.default') === 'log') {
+            Log::info("OTP email ({$purpose}) for {$user->email}: {$otpCode}");
+        }
 
         if (config('mail.default') === 'log') {
             return;

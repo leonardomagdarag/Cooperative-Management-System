@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
-import { validate, withdrawalSchema, type FieldErrors } from '../../lib/validation';
+import { validate, withdrawalSchema, withdrawalBaseSchema, type FieldErrors } from '../../lib/validation';
 import ServiceModal from './ServiceModal';
 import StepCircles from './StepCircles';
 import ReceiptQR from '../../components/ReceiptQR';
@@ -71,12 +71,27 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
     };
 
     const schema = withdrawalSchema(availableBalance);
+    const baseSchema = withdrawalBaseSchema(availableBalance);
 
     const validateStep = (toStep: number) => {
-        const errs = validate(schema, form);
-        if (!form.reason?.trim()) errs.reason = 'Reason is required';
-        setErrors(errs);
-        if (Object.keys(errs).length > 0) return;
+        let stepErrors: FieldErrors = {};
+
+        if (toStep === 2) {
+            // Step 1 → 2: only validate amount; reason is optional but shown
+            const step1Schema = baseSchema.pick({ amount: true });
+            stepErrors = validate(step1Schema, form);
+            if (!form.reason?.trim()) stepErrors.reason = 'Reason is required';
+        } else if (toStep === 3) {
+            // Step 2 → 3: only validate transaction_mode selection
+            const step2Schema = baseSchema.pick({ transaction_mode: true });
+            stepErrors = validate(step2Schema, form);
+        } else {
+            // Final step: full validation including bank transfer fields
+            stepErrors = validate(schema, form);
+        }
+
+        setErrors(stepErrors);
+        if (Object.keys(stepErrors).length > 0) return;
         setStep(toStep);
     };
 

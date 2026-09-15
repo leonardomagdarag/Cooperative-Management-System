@@ -40,6 +40,19 @@ test('psgc cascaded selectors return data for each level', function () {
         ->assertJsonStructure(['data' => [['code', 'name', 'city_code']]]);
 });
 
+test('cities can be fetched by region_code for province-less regions', function () {
+    $this->seed(PSGCSeeder::class);
+
+    $response = $this->getJson('/psgc/cities?region_code=1300000000&limit=100&order_by=name');
+
+    $response->assertOk()
+        ->assertJsonPath('recordsTotal', fn ($total) => $total > 0)
+        ->assertJsonStructure(['data' => [['code', 'name', 'region_code']]]);
+
+    $cityNames = collect($response->json('data'))->pluck('name');
+    expect($cityNames)->toContain('City of Manila');
+});
+
 test('database seeder includes psgc reference data', function () {
     // Simulate a fresh `migrate --seed` so registration address selectors work.
     $this->seed();

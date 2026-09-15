@@ -8,9 +8,9 @@ interface ModalHeaderProps {
     children?: ReactNode;
 }
 
-export default function ModalHeader({ title, subtitle, onClose, gradientClassName = 'from-indigo-600 to-cyan-600', children }: ModalHeaderProps) {
+export default function ModalHeader({ title, subtitle, onClose, gradientClassName = 'from-emerald-600 to-cyan-600', children }: ModalHeaderProps) {
     return (
-        <div className={`bg-gradient-to-r ${gradientClassName} px-6 py-5 text-white shrink-0`}>
+        <div className={`bg-linear-to-r ${gradientClassName} px-6 py-5 text-white shrink-0`}>
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-lg font-bold">{title}</h2>

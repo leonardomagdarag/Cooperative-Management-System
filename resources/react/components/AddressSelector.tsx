@@ -38,14 +38,84 @@ export default function AddressSelector({ value, onChange, errors = {}, selectCl
     const [provinceItem, setProvinceItem] = useState<SelectedItem | null>(null);
     const [cityItem, setCityItem] = useState<SelectedItem | null>(null);
     const [barangayItem, setBarangayItem] = useState<SelectedItem | null>(null);
+    const [hasNoProvince, setHasNoProvince] = useState(false);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
+        let active = true;
         setLoading(true);
         getRegions()
-            .then(setRegions)
+            .then(async (fetchedRegions) => {
+                if (!active) return;
+                setRegions(fetchedRegions);
+
+                if (value.region) {
+                    const matchedRegion = fetchedRegions.find(r => r.name === value.region);
+                    if (matchedRegion) {
+                        setRegionItem({ code: matchedRegion.code, name: matchedRegion.name });
+                        const provs = await getProvinces(matchedRegion.code);
+                        if (!active) return;
+
+                        if (provs.length === 0) {
+                            setHasNoProvince(true);
+                            setProvinces([]);
+                            const cits = await getCities(undefined, matchedRegion.code);
+                            if (!active) return;
+                            setCities(cits);
+                            if (value.city) {
+                                const matchedCity = cits.find(c => c.name === value.city);
+                                if (matchedCity) {
+                                    setCityItem({ code: matchedCity.code, name: matchedCity.name });
+                                    const brgys = await getBarangays(matchedCity.code);
+                                    if (!active) return;
+                                    setBarangays(brgys);
+                                    if (value.barangay) {
+                                        const matchedBrgy = brgys.find(b => b.name === value.barangay);
+                                        if (matchedBrgy) {
+                                            setBarangayItem({ code: matchedBrgy.code, name: matchedBrgy.name });
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            setHasNoProvince(false);
+                            setProvinces(provs);
+                            if (value.province) {
+                                const matchedProv = provs.find(p => p.name === value.province);
+                                if (matchedProv) {
+                                    setProvinceItem({ code: matchedProv.code, name: matchedProv.name });
+                                    const cits = await getCities(matchedProv.code);
+                                    if (!active) return;
+                                    setCities(cits);
+                                    if (value.city) {
+                                        const matchedCity = cits.find(c => c.name === value.city);
+                                        if (matchedCity) {
+                                            setCityItem({ code: matchedCity.code, name: matchedCity.name });
+                                            const brgys = await getBarangays(matchedCity.code);
+                                            if (!active) return;
+                                            setBarangays(brgys);
+                                            if (value.barangay) {
+                                                const matchedBrgy = brgys.find(b => b.name === value.barangay);
+                                                if (matchedBrgy) {
+                                                    setBarangayItem({ code: matchedBrgy.code, name: matchedBrgy.name });
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            })
             .catch(() => setRegions([]))
-            .finally(() => setLoading(false));
+            .finally(() => {
+                if (active) setLoading(false);
+            });
+
+        return () => {
+            active = false;
+        };
     }, []);
 
     const selectRegion = async (item: SelectedItem | null) => {
@@ -56,12 +126,22 @@ export default function AddressSelector({ value, onChange, errors = {}, selectCl
         setProvinces([]);
         setCities([]);
         setBarangays([]);
+        setHasNoProvince(false);
         onChange({ ...value, region: item?.name ?? '', province: '', city: '', barangay: '' });
 
         if (item) {
             setLoading(true);
             try {
-                setProvinces(await getProvinces(item.code));
+                const provs = await getProvinces(item.code);
+                if (provs.length === 0) {
+                    setHasNoProvince(true);
+                    setProvinces([]);
+                    const cits = await getCities(undefined, item.code);
+                    setCities(cits);
+                } else {
+                    setHasNoProvince(false);
+                    setProvinces(provs);
+                }
             } catch {
                 setProvinces([]);
             } finally {
@@ -121,9 +201,12 @@ export default function AddressSelector({ value, onChange, errors = {}, selectCl
         field: string,
         placeholder: string,
         disabled: boolean,
+        required = true,
     ) => (
         <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">{label}<span className="text-red-500">*</span></label>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+                {label}{required && <span className="text-red-500">*</span>}
+            </label>
             <select
                 value={selected ? selected.name : ''}
                 onChange={e => {
@@ -150,14 +233,29 @@ export default function AddressSelector({ value, onChange, errors = {}, selectCl
         </div>
     );
 
+    const provinceDisabled = !regionItem || hasNoProvince;
+    const provincePlaceholder = hasNoProvince
+        ? 'N/A (Not applicable for this region)'
+        : regionItem
+        ? 'Select Province'
+        : 'Select Region first';
+
+    const cityDisabled = hasNoProvince ? !regionItem : !provinceItem;
+    const cityPlaceholder = hasNoProvince
+        ? (regionItem ? 'Select City/Municipality' : 'Select Region first')
+        : (provinceItem ? 'Select City/Municipality' : 'Select Province first');
+
+    const barangayDisabled = !cityItem;
+    const barangayPlaceholder = cityItem ? 'Select Barangay' : 'Select City first';
+
     return (
         <div className="space-y-4">
             {loading && <p className="text-xs text-slate-500"><i className="fas fa-spinner fa-spin mr-1"></i>Loading locations...</p>}
             <div className="grid md:grid-cols-2 gap-4">
-                {renderSelect('Region', regions, regionItem, selectRegion, 'region', 'Select Region', false)}
-                {renderSelect('Province', provinces, provinceItem, selectProvince, 'province', regionItem ? 'Select Province' : 'Select Region first', !regionItem)}
-                {renderSelect('City/Municipality', cities, cityItem, selectCity, 'city', provinceItem ? 'Select City/Municipality' : 'Select Province first', !provinceItem)}
-                {renderSelect('Barangay', barangays, barangayItem, selectBarangay, 'barangay', cityItem ? 'Select Barangay' : 'Select City first', !cityItem)}
+                {renderSelect('Region', regions, regionItem, selectRegion, 'region', 'Select Region', false, true)}
+                {renderSelect('Province', provinces, provinceItem, selectProvince, 'province', provincePlaceholder, provinceDisabled, !hasNoProvince)}
+                {renderSelect('City/Municipality', cities, cityItem, selectCity, 'city', cityPlaceholder, cityDisabled, true)}
+                {renderSelect('Barangay', barangays, barangayItem, selectBarangay, 'barangay', barangayPlaceholder, barangayDisabled, true)}
             </div>
             <div className="grid md:grid-cols-2 gap-4">
                 {renderInput('street', 'Street Address', 'House No., Street Name')}

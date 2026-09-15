@@ -1,13 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function MemberOverview() {
+    const { user } = useAuth();
     const { data, isLoading } = useQuery({
         queryKey: ['overview-member'],
         queryFn: () => api.get('/api/dashboard'),
     });
 
     const d = data?.data || {};
+    const displayName = user?.first_name ? `${user.first_name}${user.last_name ? ` ${user.last_name}` : ''}` : user?.name || d.user_name || 'Member';
 
     if (isLoading) {
         return (
@@ -23,15 +26,15 @@ export default function MemberOverview() {
 
     return (
         <div className="space-y-6">
-            <div className="bg-gradient-to-r from-cyan-500 to-emerald-500 rounded-2xl shadow-xl p-8 text-white">
+            <div className="bg-gradient-to-r from-emerald-600 to-cyan-600 rounded-2xl shadow-xl p-8 text-white">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-3xl font-bold mb-2">{d.greeting || 'Welcome back'}, {d.user_number || 'Member'}!</h1>
-                        <p className="text-cyan-50 text-lg">Here's your financial overview for today</p>
+                        <h1 className="text-3xl font-bold mb-2">{d.greeting || 'Welcome back'}, {displayName}!</h1>
+                        <p className="text-emerald-50 text-lg">Here's your financial overview for today</p>
                     </div>
                     <div className="text-right">
-                        <p className="text-cyan-50 text-sm">Member ID</p>
-                        <p className="text-2xl font-bold">{d.user_number || '—'}</p>
+                        <p className="text-emerald-100 text-sm">Member ID</p>
+                        <p className="text-2xl font-bold font-mono">{d.user_number || user?.user_number || '—'}</p>
                     </div>
                 </div>
             </div>
@@ -196,9 +199,9 @@ export default function MemberOverview() {
                         {d.announcements && d.announcements.length > 0 ? (
                             <div className="space-y-3">
                                 {d.announcements.map((a: any) => (
-                                    <div key={a.id} className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg">
+                                    <div key={a.id} className="bg-emerald-50/70 border-l-4 border-emerald-500 p-4 rounded-r-lg">
                                         <div className="flex items-start gap-3">
-                                            <svg className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                            <svg className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                                                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                                             </svg>
                                             <div className="flex-1">

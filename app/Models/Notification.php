@@ -116,6 +116,9 @@ class Notification extends Model
             'security_alert' => 'fa-shield-exclamation',
             'email_verification' => 'fa-envelope-circle-check',
             'otp' => 'fa-key',
+            'ticket_created' => 'fa-ticket-alt',
+            'ticket_reply' => 'fa-comments',
+            'ticket_status' => 'fa-circle-check',
             default => 'fa-bell',
         };
     }

@@ -63,17 +63,17 @@ export default function MemberLoansPage() {
             {selected && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => setSelected(null)}>
                     <div className="w-full max-w-5xl h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-                        <div className="bg-gradient-to-r from-cyan-500 to-emerald-500 px-6 py-4 text-white flex items-center justify-between shrink-0">
+                        <div className="bg-linear-to-r from-emerald-600 to-cyan-600 px-6 py-4 text-white flex items-center justify-between shrink-0">
                             <div>
                                 <h2 className="text-lg font-bold">Loan Details — {selected.loan_number}</h2>
                                 <p className="text-sm text-white/80">{selected.loan_type_label || selected.loan_type}</p>
                             </div>
-                            <button onClick={() => setSelected(null)} className="text-white/80 hover:text-white"><i className="fas fa-times text-xl"></i></button>
+                            <button onClick={() => setSelected(null)} className="text-white/80 hover:text-white cursor-pointer"><i className="fas fa-times text-xl"></i></button>
                         </div>
 
                         <div className="border-b px-6 flex gap-0">
                             {(['details', 'schedule', 'history'] as const).map(t => (
-                                <button key={t} onClick={() => setTab(t)} className={`px-4 py-3 text-sm font-semibold border-b-2 transition-colors ${tab === t ? 'border-cyan-600 text-cyan-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                                <button key={t} onClick={() => setTab(t)} className={`px-4 py-3 text-sm font-semibold border-b-2 transition-colors cursor-pointer ${tab === t ? 'border-emerald-600 text-emerald-600 font-semibold' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
                                     {t === 'details' ? 'Loan Details' : t === 'schedule' ? 'Payment Schedule' : 'Payment History'}
                                 </button>
                             ))}
@@ -83,9 +83,9 @@ export default function MemberLoansPage() {
                             {tab === 'details' && (
                                 <div className="space-y-6">
                                     <div className="grid grid-cols-3 gap-4">
-                                        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-5 text-white"><p className="text-sm text-white/80">Loan Amount</p><p className="text-2xl font-bold">₱{Number(selected.loan_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p></div>
-                                        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-5 text-white"><p className="text-sm text-white/80">Total Paid</p><p className="text-2xl font-bold">₱{Number(selected.total_paid).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p></div>
-                                        <div className="bg-gradient-to-br from-orange-500 to-red-500 rounded-xl p-5 text-white"><p className="text-sm text-white/80">Balance Remaining</p><p className="text-2xl font-bold">₱{Number(selected.remaining_balance).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p></div>
+                                        <div className="bg-linear-to-br from-emerald-700 to-teal-800 rounded-xl p-5 text-white shadow-xs"><p className="text-sm text-white/80">Loan Amount</p><p className="text-2xl font-bold">₱{Number(selected.loan_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p></div>
+                                        <div className="bg-linear-to-br from-emerald-600 to-teal-600 rounded-xl p-5 text-white shadow-xs"><p className="text-sm text-white/80">Total Paid</p><p className="text-2xl font-bold">₱{Number(selected.total_paid).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p></div>
+                                        <div className="bg-linear-to-br from-amber-600 to-orange-600 rounded-xl p-5 text-white shadow-xs"><p className="text-sm text-white/80">Balance Remaining</p><p className="text-2xl font-bold">₱{Number(selected.remaining_balance).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p></div>
                                     </div>
 
                                     <div className="grid md:grid-cols-2 gap-6">

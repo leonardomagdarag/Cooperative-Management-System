@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Account;
+use App\Models\Branch;
 use App\Models\Expense;
 use App\Models\Loan;
 use App\Models\Transaction;
@@ -40,8 +41,27 @@ class ReportController extends Controller
             ->whereBetween('expense_date', [$start, $end])
             ->sum('amount');
 
-        $totalInterestEarned = (float) BranchScope::applyToLoans(
+        $payments = $this->completedTransactions($branchId)
+            ->where('transaction_type', 'loan_payment')
+            ->whereBetween('transaction_date', [$start, $end])
+            ->with(['loan' => fn ($q) => $q->select('id', 'loan_amount', 'interest_rate', 'term_months')])
+            ->get(['id', 'amount', 'loan_id']);
+
+        $totalInterestEarned = 0.0;
+        foreach ($payments as $payment) {
+            if ($payment->loan) {
+                $totalPayable = $payment->loan->totalPayable();
+                $totalInterest = $payment->loan->totalInterest();
+                if ($totalPayable > 0) {
+                    $totalInterestEarned += (float) $payment->amount * ($totalInterest / $totalPayable);
+                }
+            }
+        }
+        $totalInterestEarned = round($totalInterestEarned, 2);
+
+        $projectedInterest = (float) BranchScope::applyToLoans(
             Loan::query()
+                ->whereIn('loan_status', ['approved', 'active', 'paid_off'])
                 ->where(function ($q) use ($start, $end) {
                     $q->whereBetween('applied_at', [$start, $end])
                         ->orWhere(function ($q2) use ($start, $end) {
@@ -65,6 +85,7 @@ class ReportController extends Controller
             'total_loan_releases' => (float) ($totals['loan_disbursement'] ?? 0),
             'total_loan_repayments' => (float) ($totals['loan_payment'] ?? 0),
             'total_interest_earned' => $totalInterestEarned,
+            'projected_interest' => round($projectedInterest, 2),
             'total_fees' => (float) ($totals['fee'] ?? 0),
             'total_expenses' => $totalExpenses,
             'net' => $inflows - $outflows,
@@ -386,7 +407,7 @@ class ReportController extends Controller
 
     private function buildBalanceSheet(Carbon $start, Carbon $end, ?int $branchId = null): array
     {
-        $branchName = $branchId !== null ? \App\Models\Branch::find($branchId)?->name : null;
+        $branchName = $branchId !== null ? Branch::find($branchId)?->name : null;
 
         $totalsByType = $this->completedTransactions($branchId)
             ->where(function ($q) use ($end) {

@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
 import { validate, loanProductSchema, type FieldErrors } from '../../lib/validation';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import ModalHeader from '../../components/ui/ModalHeader';
+import SettingsTabHeader from '../settings/SettingsTabHeader';
 
 interface LoanProduct {
     id: number; code: string; name: string; description: string; base_type: string;
@@ -29,10 +31,17 @@ export default function LoanProductsPage() {
     const [expandedId, setExpandedId] = useState<number | null>(null);
     const [form, setForm] = useState<Partial<LoanProduct>>(emptyProduct);
     const [errors, setErrors] = useState<FieldErrors>({});
+    const [confirmState, setConfirmState] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        confirmText?: string;
+        variant?: 'danger' | 'warning' | 'primary';
+        onConfirm: () => void;
+    }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
     const { markDirty, reset, requestClose, renderDialog } = useDiscardGuard();
     const queryClient = useQueryClient();
     const { addToast } = useToast();
-    const navigate = useNavigate();
 
     const { data, isLoading } = useQuery({
         queryKey: ['loan-products'],
@@ -89,38 +98,24 @@ export default function LoanProductsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h2 className="text-2xl font-bold text-gray-900">Loan Products</h2>
-                        <p className="mt-1 text-sm text-gray-600">
-                            Configure loan caps and eligibility rules. Toggle availability per product.
-                        </p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                        {canManage && (
-                            <button
-                                onClick={openCreate}
-                                className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700 focus:outline-none focus:ring-4 focus:ring-cyan-300"
-                            >
-                                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-                                </svg>
-                                Add Loan Product
-                            </button>
-                        )}
-                        <button
-                            onClick={() => navigate('/settings')}
-                            className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-gray-100"
-                        >
-                            Back to Settings
-                        </button>
-                    </div>
-                </div>
-            </div>
+            <SettingsTabHeader
+                eyebrow="Loan configuration"
+                title="Loan Products"
+                description="Configure loan caps and eligibility rules. Toggle availability per product."
+                icon="fa-solid fa-hand-holding-dollar"
+                action={canManage ? (
+                    <button
+                        onClick={openCreate}
+                        className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-200 transition-colors"
+                    >
+                        <i className="fas fa-plus text-xs"></i>
+                        Add Loan Product
+                    </button>
+                ) : undefined}
+            />
 
             {!canManage && (
-                <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-4 text-sm text-yellow-800" role="alert">
+                <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800" role="alert">
                     <span className="font-medium">Heads up:</span> Only admins can manage loan products. You currently have
                     view-only access.
                 </div>
@@ -131,17 +126,17 @@ export default function LoanProductsPage() {
                     <p className="text-xs text-gray-500">Total</p>
                     <p className="text-2xl font-bold text-gray-900">{products.length}</p>
                 </div>
-                <div className="rounded-xl border border-green-200 bg-green-50 p-4 shadow-sm">
-                    <p className="text-xs text-green-600">Active</p>
-                    <p className="text-2xl font-bold text-green-700">{activeCount}</p>
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
+                    <p className="text-xs text-emerald-600">Active</p>
+                    <p className="text-2xl font-bold text-emerald-700">{activeCount}</p>
                 </div>
                 <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 shadow-sm">
                     <p className="text-xs text-gray-500">Inactive</p>
                     <p className="text-2xl font-bold text-gray-600">{inactiveCount}</p>
                 </div>
-                <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-4 shadow-sm">
-                    <p className="text-xs text-cyan-600">Loan Types</p>
-                    <p className="text-2xl font-bold text-cyan-700">{typeCount}</p>
+                <div className="rounded-xl border border-teal-200 bg-teal-50 p-4 shadow-sm">
+                    <p className="text-xs text-teal-600">Loan Types</p>
+                    <p className="text-2xl font-bold text-teal-700">{typeCount}</p>
                 </div>
             </div>
 
@@ -157,7 +152,7 @@ export default function LoanProductsPage() {
                     {canManage && (
                         <button
                             onClick={openCreate}
-                            className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700 focus:outline-none focus:ring-4 focus:ring-cyan-300"
+                            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-200 transition-colors"
                         >
                             <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
@@ -170,12 +165,12 @@ export default function LoanProductsPage() {
                 <div className="space-y-3">
                     {products.map(p => {
                         const open = expandedId === p.id;
-                        const typeBadge = p.base_type === 'group' ? 'bg-purple-50 text-purple-700' : p.base_type === 'special' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700';
+                        const typeBadge = p.base_type === 'group' ? 'bg-purple-50 text-purple-700' : p.base_type === 'special' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700';
                         const noRequirements = !p.requires_no_existing_loan && Number(p.minimum_share_capital) === 0 && Number(p.minimum_membership_years) === 0 && Number(p.required_co_makers) === 0 && !p.requires_interview && !p.requires_special_eligibility;
                         return (
                             <div
                                 key={p.id}
-                                className={`rounded-xl border border-gray-200 bg-white shadow-sm transition-all duration-200 ${open ? 'border-cyan-300 ring-1 ring-cyan-200 shadow-md' : ''}`}
+                                className={`rounded-xl border border-gray-200 bg-white shadow-sm transition-all duration-200 ${open ? 'border-emerald-300 ring-1 ring-emerald-200 shadow-md' : ''}`}
                             >
                                 <button
                                     type="button"
@@ -183,21 +178,21 @@ export default function LoanProductsPage() {
                                     onClick={() => setExpandedId(open ? null : p.id)}
                                     aria-expanded={open}
                                 >
-                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-cyan-50 text-cyan-600">
+                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
                                         <i className={`fa-solid fa-${p.icon || 'wallet'} text-base`}></i>
                                     </div>
 
                                     <div className="min-w-0 flex-1">
                                         <div className="flex flex-wrap items-center gap-1.5">
                                             <span className="text-sm font-semibold text-gray-900">{p.name}</span>
-                                            <span className="rounded bg-cyan-50 px-2 py-0.5 text-xs font-medium text-cyan-700">
+                                            <span className="rounded bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
                                                 {p.code.toUpperCase()}
                                             </span>
                                             <span className={`rounded px-2 py-0.5 text-xs font-medium capitalize ${typeBadge}`}>
                                                 {p.base_type}
                                             </span>
                                             {p.is_active ? (
-                                                <span className="rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">Active</span>
+                                                <span className="rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Active</span>
                                             ) : (
                                                 <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">Inactive</span>
                                             )}
@@ -294,25 +289,32 @@ export default function LoanProductsPage() {
                                             <div className="mt-4 flex items-center justify-end gap-2 border-t border-gray-100 pt-4">
                                                 <button
                                                     onClick={() => openEdit(p)}
-                                                    className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-medium text-cyan-700 hover:bg-cyan-100 focus:outline-none focus:ring-2 focus:ring-cyan-300"
+                                                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-300 transition-colors"
                                                 >
                                                     <i className="fa-solid fa-pen-to-square text-xs"></i> Edit
                                                 </button>
                                                 <button
                                                     onClick={() => toggleMutation.mutate(p.id)}
                                                     disabled={toggleMutation.isPending}
-                                                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 disabled:opacity-50 ${
+                                                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 disabled:opacity-50 transition-colors ${
                                                         p.is_active
                                                             ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 focus:ring-amber-300'
-                                                            : 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100 focus:ring-green-300'
+                                                            : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 focus:ring-emerald-300'
                                                     }`}
                                                 >
                                                     <i className={`fa-solid fa-${p.is_active ? 'eye-slash' : 'eye'} text-xs`}></i>
                                                     {p.is_active ? 'Disable' : 'Enable'}
                                                 </button>
                                                 <button
-                                                    onClick={() => { if (confirm(`Are you sure you want to delete '${p.name}'? This action cannot be undone.`)) deleteMutation.mutate(p.id); }}
-                                                    className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-300"
+                                                    onClick={() => setConfirmState({
+                                                        isOpen: true,
+                                                        title: 'Delete Loan Product',
+                                                        message: `Are you sure you want to delete '${p.name}'? This action cannot be undone.`,
+                                                        confirmText: 'Delete',
+                                                        variant: 'danger',
+                                                        onConfirm: () => deleteMutation.mutate(p.id),
+                                                    })}
+                                                    className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-300 transition-colors"
                                                 >
                                                     <i className="fa-solid fa-trash text-xs"></i> Delete
                                                 </button>
@@ -330,27 +332,13 @@ export default function LoanProductsPage() {
                 <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 pt-16" onClick={requestCloseGuard}>
                     <div className="absolute inset-0 bg-gray-900 opacity-50"></div>
                     <div className="relative z-10 w-full max-w-2xl" onClick={e => e.stopPropagation()}>
-                        <div className="relative rounded-xl bg-white shadow-2xl">
-                            <div className="flex items-start justify-between rounded-t-xl border-b border-gray-200 px-6 py-4">
-                                <div>
-                                    <h3 id="loan-modal-title" className="text-lg font-semibold text-gray-900">
-                                        {editing ? 'Edit Loan Product' : 'Add Loan Product'}
-                                    </h3>
-                                    <p className="mt-0.5 text-xs text-gray-500">
-                                        {editing
-                                            ? 'Update product limits and eligibility rules.'
-                                            : 'Define a new product with limits and member eligibility rules.'}
-                                    </p>
-                                </div>
-                                <button
-                                    onClick={requestCloseGuard}
-                                    className="ml-4 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-300"
-                                >
-                                    <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                                    </svg>
-                                </button>
-                            </div>
+                        <div className="relative rounded-2xl bg-white shadow-2xl overflow-hidden">
+                            <ModalHeader
+                                title={editing ? 'Edit Loan Product' : 'Add Loan Product'}
+                                subtitle={editing ? 'Update product limits and eligibility rules.' : 'Define a new product with limits and member eligibility rules.'}
+                                icon="fa-solid fa-hand-holding-dollar"
+                                onClose={requestCloseGuard}
+                            />
 
                             <div className="max-h-[70vh] overflow-y-auto px-6 py-5">
                                 <form id="loan-product-form" onSubmit={handleSubmit} className="space-y-4">
@@ -383,7 +371,7 @@ export default function LoanProductsPage() {
                                         <select
                                             value={form.base_type}
                                             onChange={e => setField('base_type', e.target.value)}
-                                            className="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-cyan-500 focus:ring-cyan-500"
+                                            className="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-emerald-500 focus:ring-emerald-500"
                                         >
                                             <option value="group">Group</option>
                                             <option value="business">Business</option>
@@ -421,7 +409,7 @@ export default function LoanProductsPage() {
                                             onChange={e => { markDirty(); setForm(f => ({ ...f, description: e.target.value })); }}
                                             rows={3}
                                             placeholder="Brief description of this loan product..."
-                                            className="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-cyan-500 focus:ring-cyan-500"
+                                            className="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-emerald-500 focus:ring-emerald-500"
                                         />
                                     </div>
 
@@ -443,7 +431,7 @@ export default function LoanProductsPage() {
                                 <button
                                     type="button"
                                     onClick={requestCloseGuard}
-                                    className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-gray-100"
+                                    className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-gray-100 transition-colors"
                                 >
                                     Cancel
                                 </button>
@@ -451,7 +439,7 @@ export default function LoanProductsPage() {
                                     type="submit"
                                     form="loan-product-form"
                                     disabled={saveMutation.isPending}
-                                    className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700 focus:outline-none focus:ring-4 focus:ring-cyan-300 disabled:opacity-60"
+                                    className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-200 disabled:opacity-60 transition-colors"
                                 >
                                     {saveMutation.isPending ? 'Saving...' : editing ? 'Update Product' : 'Create Product'}
                                 </button>
@@ -461,6 +449,19 @@ export default function LoanProductsPage() {
                     {renderDialog()}
                 </div>
             )}
+
+            <ConfirmDialog
+                isOpen={confirmState.isOpen}
+                title={confirmState.title}
+                message={confirmState.message}
+                confirmText={confirmState.confirmText}
+                variant={confirmState.variant}
+                onConfirm={() => {
+                    confirmState.onConfirm();
+                    setConfirmState(prev => ({ ...prev, isOpen: false }));
+                }}
+                onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
+            />
         </div>
     );
 }
@@ -478,7 +479,7 @@ function TextInput({ label, value, onChange, required, maxLength, placeholder, h
                 required={required}
                 maxLength={maxLength}
                 placeholder={placeholder}
-                className={`block w-full rounded-lg border bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-cyan-500 focus:ring-cyan-500 ${error ? 'border-red-400' : 'border-gray-300'}`}
+                className={`block w-full rounded-lg border bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-emerald-500 focus:ring-emerald-500 ${error ? 'border-red-400' : 'border-gray-300'}`}
             />
             {helper && <p className="mt-1 text-xs text-gray-500">{helper}</p>}
             {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
@@ -496,7 +497,7 @@ function NumberInput({ label, value, onChange, step, min, error }: { label: stri
                 onChange={e => onChange(Number(e.target.value))}
                 step={step}
                 min={min}
-                className={`block w-full rounded-lg border bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-cyan-500 focus:ring-cyan-500 ${error ? 'border-red-400' : 'border-gray-300'}`}
+                className={`block w-full rounded-lg border bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-emerald-500 focus:ring-emerald-500 ${error ? 'border-red-400' : 'border-gray-300'}`}
             />
             {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
         </div>
@@ -510,7 +511,7 @@ function Checkbox({ label, checked, onChange }: { label: string; checked: boolea
                 type="checkbox"
                 checked={checked}
                 onChange={e => onChange(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500"
+                className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
             />
             {label}
         </label>

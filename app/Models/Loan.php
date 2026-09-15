@@ -16,6 +16,7 @@ class Loan extends Model
         'branch_id',
         'account_id',
         'loan_type',
+        'loan_product',
         'loan_amount',
         'interest_rate',
         'term_months',
@@ -77,6 +78,11 @@ class Loan extends Model
     public function branch()
     {
         return $this->belongsTo(Branch::class);
+    }
+
+    public function product()
+    {
+        return $this->belongsTo(LoanProduct::class, 'loan_product', 'code');
     }
 
     public function approvedBy()

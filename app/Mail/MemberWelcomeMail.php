@@ -15,8 +15,10 @@ class MemberWelcomeMail extends Mailable
     public function __construct(
         public string $name,
         public string $email,
-        public string $plainPassword,
-    ) {}
+        public ?string $setupUrl = null,
+    ) {
+        $this->setupUrl = $setupUrl ?? url('/login');
+    }
 
     public function envelope(): Envelope
     {

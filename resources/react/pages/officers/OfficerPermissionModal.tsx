@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
 import { formatPermissionLabel } from '../../lib/permissions';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 
 type State = 'inherit' | 'allow' | 'disallow';
 
@@ -14,6 +15,7 @@ export default function OfficerPermissionModal({ officer, onClose }: { officer: 
     const [states, setStates] = useState<Record<string, State>>({});
     const [saved, setSaved] = useState<Record<string, State>>({});
     const [confirmingClearAll, setConfirmingClearAll] = useState(false);
+    const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
     const { data, isLoading } = useQuery({
         queryKey: ['officer-permissions', officer.id],
@@ -107,17 +109,20 @@ export default function OfficerPermissionModal({ officer, onClose }: { officer: 
     }, [states]);
 
     const requestClose = () => {
-        if (isDirty && !confirm('You have unsaved permission overrides. Discard changes?')) return;
+        if (isDirty) {
+            setShowDiscardConfirm(true);
+            return;
+        }
         onClose();
     };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={requestClose}>
             <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-                <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white">
+                <div className="bg-gradient-to-r from-emerald-600 to-cyan-600 px-6 py-5 text-white">
                     <div className="flex items-center justify-between">
                         <h2 className="text-lg font-bold">Permission Overrides</h2>
-                        <button onClick={requestClose} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white"><i className="fas fa-times"></i></button>
+                        <button onClick={requestClose} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white transition-colors"><i className="fas fa-times"></i></button>
                     </div>
                     <p className="mt-1 text-sm text-white/80">
                         {officer.name || 'Officer'} inherits permissions from the{' '}
@@ -244,16 +249,29 @@ export default function OfficerPermissionModal({ officer, onClose }: { officer: 
                 </div>
 
                 <div className="flex shrink-0 items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4">
-                    <button onClick={requestClose} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                    <button onClick={requestClose} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
                     <button
                         onClick={() => saveMutation.mutate(dirtyOverrides)}
                         disabled={!isDirty || saveMutation.isPending}
-                        className="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="inline-flex items-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-200 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                         {saveMutation.isPending ? <><i className="fas fa-spinner fa-spin mr-2"></i>Saving...</> : 'Save Overrides'}
                     </button>
                 </div>
             </div>
+
+            <ConfirmDialog
+                isOpen={showDiscardConfirm}
+                title="Discard Changes?"
+                message="You have unsaved permission overrides. Discard changes?"
+                confirmText="Discard"
+                variant="warning"
+                onConfirm={() => {
+                    setShowDiscardConfirm(false);
+                    onClose();
+                }}
+                onCancel={() => setShowDiscardConfirm(false)}
+            />
         </div>
     );
 }

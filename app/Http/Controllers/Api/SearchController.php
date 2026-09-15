@@ -25,6 +25,7 @@ class SearchController extends Controller
         ['label' => 'Settings', 'keywords' => 'preferences security password', 'url' => '/dashboard/settings', 'icon' => 'gear', 'permission' => null, 'role' => null],
         ['label' => 'Messages', 'keywords' => 'chat inbox', 'url' => '/dashboard/messages', 'icon' => 'envelope', 'permission' => null, 'role' => null],
         ['label' => 'Tickets', 'keywords' => 'support helpdesk', 'url' => '/dashboard/tickets', 'icon' => 'life-ring', 'permission' => null, 'role' => null],
+        ['label' => 'Help & FAQs', 'keywords' => 'support guides questions faq knowledge base', 'url' => '/dashboard/settings', 'icon' => 'circle-question', 'permission' => null, 'role' => null],
         ['label' => 'My Loans', 'keywords' => 'borrow loan payments', 'url' => '/dashboard/member-loans', 'icon' => 'file-invoice-dollar', 'permission' => null, 'role' => 'member'],
         ['label' => 'My Transactions', 'keywords' => 'history records', 'url' => '/dashboard/history', 'icon' => 'clock-rotate-left', 'permission' => null, 'role' => 'member'],
         ['label' => 'Members', 'keywords' => 'directory roster', 'url' => '/dashboard/members', 'icon' => 'users', 'permission' => 'members.view', 'role' => null],
@@ -70,14 +71,14 @@ class SearchController extends Controller
 
         if ($canViewAll && $can('loans.view')) {
             $this->appendLoans($groups, $needle, '/dashboard/loans', null, $user);
-        } elseif ($can('loans.view')) {
+        } elseif ($isMember || $can('loans.view')) {
             $this->appendLoans($groups, $needle, '/dashboard/member-loans', $user->id, $user);
         }
 
         if ($canViewAll && $can('transactions.view')) {
             $this->appendLedger($groups, $needle, $user);
             $this->appendExpenses($groups, $needle, $user);
-        } elseif ($can('transactions.view')) {
+        } elseif ($isMember || $can('transactions.view')) {
             $this->appendHistory($groups, $needle, $user);
         }
 
@@ -133,13 +134,13 @@ class SearchController extends Controller
             User::query()->memberUsers()->with('personalData'),
             $viewer
         )->where(function ($query) use ($needle) {
-                $query->where('user_number', 'like', $needle)
-                    ->orWhere('email', 'like', $needle)
-                    ->orWhereHas('personalData', fn ($pd) => $pd
-                        ->where('first_name', 'like', $needle)
-                        ->orWhere('mid_name', 'like', $needle)
-                        ->orWhere('last_name', 'like', $needle));
-            })
+            $query->where('user_number', 'like', $needle)
+                ->orWhere('email', 'like', $needle)
+                ->orWhereHas('personalData', fn ($pd) => $pd
+                    ->where('first_name', 'like', $needle)
+                    ->orWhere('mid_name', 'like', $needle)
+                    ->orWhere('last_name', 'like', $needle));
+        })
             ->limit(6)
             ->get()
             ->map(fn (User $member) => [
@@ -161,13 +162,13 @@ class SearchController extends Controller
             User::query()->officerUsers()->with('personalData'),
             $viewer
         )->where(function ($query) use ($needle) {
-                $query->where('user_number', 'like', $needle)
-                    ->orWhere('email', 'like', $needle)
-                    ->orWhereHas('personalData', fn ($pd) => $pd
-                        ->where('first_name', 'like', $needle)
-                        ->orWhere('mid_name', 'like', $needle)
-                        ->orWhere('last_name', 'like', $needle));
-            })
+            $query->where('user_number', 'like', $needle)
+                ->orWhere('email', 'like', $needle)
+                ->orWhereHas('personalData', fn ($pd) => $pd
+                    ->where('first_name', 'like', $needle)
+                    ->orWhere('mid_name', 'like', $needle)
+                    ->orWhere('last_name', 'like', $needle));
+        })
             ->limit(6)
             ->get()
             ->map(fn (User $officer) => [
@@ -222,15 +223,15 @@ class SearchController extends Controller
             Transaction::query()->with(['account.user.personalData', 'loan']),
             $viewer
         )->where(function ($query) use ($needle) {
-                $query->where('transaction_number', 'like', $needle)
-                    ->orWhere('status', 'like', $needle)
-                    ->orWhere('transaction_type', 'like', $needle)
-                    ->orWhere('note', 'like', $needle)
-                    ->orWhereHas('account.user', fn ($sub) => $sub->where('user_number', 'like', $needle))
-                    ->orWhereHas('account.user.personalData', fn ($sub) => $sub
-                        ->where('first_name', 'like', $needle)
-                        ->orWhere('last_name', 'like', $needle));
-            })
+            $query->where('transaction_number', 'like', $needle)
+                ->orWhere('status', 'like', $needle)
+                ->orWhere('transaction_type', 'like', $needle)
+                ->orWhere('note', 'like', $needle)
+                ->orWhereHas('account.user', fn ($sub) => $sub->where('user_number', 'like', $needle))
+                ->orWhereHas('account.user.personalData', fn ($sub) => $sub
+                    ->where('first_name', 'like', $needle)
+                    ->orWhere('last_name', 'like', $needle));
+        })
             ->orderByDesc('transaction_date')
             ->limit(6)
             ->get()

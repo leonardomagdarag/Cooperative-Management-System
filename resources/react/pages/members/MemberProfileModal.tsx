@@ -111,11 +111,13 @@ export default function MemberProfileModal({ memberId, onClose, onEdit, canEdit,
 
     const statusColor = m.archived_at
         ? 'bg-gray-100 text-gray-600 border-gray-200'
-        : m.account_status === 'active'
-            ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-            : m.account_status === 'terminated'
-                ? 'bg-red-100 text-red-800 border-red-200'
-                : 'bg-gray-100 text-gray-600 border-gray-200';
+        : m.has_pending_application
+            ? 'bg-amber-100 text-amber-800 border-amber-200'
+            : m.account_status === 'active'
+                ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                : m.account_status === 'terminated'
+                    ? 'bg-red-100 text-red-800 border-red-200'
+                    : 'bg-gray-100 text-gray-600 border-gray-200';
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4" onClick={onClose}>
@@ -178,7 +180,7 @@ export default function MemberProfileModal({ memberId, onClose, onEdit, canEdit,
                                             <p className="text-cyan-600 font-semibold mt-1">Member</p>
                                             <p className="text-sm text-gray-600 mt-1">ID: {m.user_number}</p>
                                             <span className={`inline-block mt-3 px-3 py-1 text-xs font-semibold rounded-full border-2 ${statusColor}`}>
-                                                {m.archived_at ? 'ARCHIVED' : (m.account_status || 'INACTIVE').toUpperCase()}
+                                                {m.archived_at ? 'ARCHIVED' : m.has_pending_application ? 'PENDING APPROVAL' : (m.account_status || 'INACTIVE').toUpperCase()}
                                             </span>
                                         </div>
                                     </div>

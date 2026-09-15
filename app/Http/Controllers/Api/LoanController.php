@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Loan;
+use App\Models\LoanDocument;
 use App\Models\LoanProduct;
 use App\Models\Transaction;
 use App\Models\User;
@@ -17,6 +18,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LoanController extends Controller
 {
@@ -25,7 +29,7 @@ class LoanController extends Controller
         $user = Auth::user();
         $canViewAll = $user && ($user->is_officer || $user->hasRole('admin'));
 
-        $query = Loan::with(['branch', 'user.personalData', 'reviewer.personalData', 'groupMembers.personalData']);
+        $query = Loan::with(['branch', 'user.personalData', 'reviewer.personalData', 'groupMembers.personalData', 'product']);
 
         if (! $canViewAll) {
             $query->where('user_id', $user->id);
@@ -40,6 +44,7 @@ class LoanController extends Controller
                     ->orWhere('loan_type', 'like', "%{$search}%")
                     ->orWhere('loan_amount', 'like', "%{$search}%")
                     ->orWhere('loan_status', 'like', "%{$search}%")
+                    ->orWhere('review_status', 'like', "%{$search}%")
                     ->orWhereHas('user.personalData', fn ($sub) => $sub->where('first_name', 'like', "%{$search}%")->orWhere('last_name', 'like', "%{$search}%"))
                     ->orWhereHas('user', fn ($sub) => $sub->where('user_number', 'like', "%{$search}%"));
             });
@@ -61,6 +66,8 @@ class LoanController extends Controller
                 'id' => $l->id,
                 'loan_number' => $l->loan_number,
                 'loan_type' => $l->loan_type,
+                'loan_product' => $l->loan_product,
+                'loan_product_name' => $l->product?->name,
                 'loan_amount' => $l->loan_amount,
                 'interest_rate' => $l->interest_rate,
                 'term_months' => $l->term_months,
@@ -102,6 +109,7 @@ class LoanController extends Controller
         Gate::authorize('view', $loan);
 
         $loan->load([
+            'product',
             'user.personalData',
             'approvedBy.personalData',
             'completedPayments',
@@ -113,6 +121,8 @@ class LoanController extends Controller
             'id' => $loan->id,
             'loan_number' => $loan->loan_number,
             'loan_type' => $loan->loan_type,
+            'loan_product' => $loan->loan_product,
+            'loan_product_name' => $loan->product?->name,
             'loan_amount' => $loan->loan_amount,
             'interest_rate' => $loan->interest_rate,
             'term_months' => $loan->term_months,
@@ -140,7 +150,7 @@ class LoanController extends Controller
                 'original_name' => $d->original_name,
                 'mime_type' => $d->mime_type,
                 'file_size' => $d->file_size,
-                'url' => asset('storage/'.$d->storage_path),
+                'url' => route('loans.documents.download', ['loan' => $loan->id, 'document' => $d->id]),
             ]),
             'group_members' => $loan->groupMembers->map(fn ($gm) => [
                 'id' => $gm->id,
@@ -159,15 +169,30 @@ class LoanController extends Controller
             return response()->json(['data' => []]);
         }
 
+        $tokens = array_filter(preg_split('/\s+/', $search));
+
         $members = User::query()
             ->memberUsers()
             ->with(['personalData', 'branch'])
-            ->where(function ($query) use ($search) {
+            ->where(function ($query) use ($search, $tokens) {
                 $query->where('user_number', 'like', "%{$search}%")
-                    ->orWhereHas('personalData', function ($personalDataQuery) use ($search) {
-                        $personalDataQuery->where('first_name', 'like', "%{$search}%")
-                            ->orWhere('last_name', 'like', "%{$search}%")
-                            ->orWhere('mid_name', 'like', "%{$search}%");
+                    ->orWhereHas('personalData', function ($personalDataQuery) use ($search, $tokens) {
+                        $personalDataQuery->where(function ($sub) use ($search) {
+                            $sub->where('first_name', 'like', "%{$search}%")
+                                ->orWhere('last_name', 'like', "%{$search}%")
+                                ->orWhere('mid_name', 'like', "%{$search}%");
+                        });
+                        if (count($tokens) > 1) {
+                            $personalDataQuery->orWhere(function ($tq) use ($tokens) {
+                                foreach ($tokens as $token) {
+                                    $tq->where(function ($sub) use ($token) {
+                                        $sub->where('first_name', 'like', "%{$token}%")
+                                            ->orWhere('last_name', 'like', "%{$token}%")
+                                            ->orWhere('mid_name', 'like', "%{$token}%");
+                                    });
+                                }
+                            });
+                        }
                     });
             });
 
@@ -217,8 +242,25 @@ class LoanController extends Controller
 
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
-            'loan_product' => 'required|string',
-            'loan_type' => 'required|in:group,business,special',
+            'loan_product' => [
+                'required',
+                'string',
+                function ($attribute, $value, $fail) {
+                    $product = LoanProduct::where('code', $value)->first();
+                    if (! $product) {
+                        if (! in_array($value, ['business', 'group', 'special'], true)) {
+                            $fail('The selected loan product is invalid.');
+                        }
+
+                        return;
+                    }
+
+                    if (! $product->is_active) {
+                        $fail('The selected loan product is currently inactive.');
+                    }
+                },
+            ],
+            'loan_type' => 'nullable|in:group,business,special',
             'loan_status' => 'required|in:pending,approved,active,paid_off',
             'loan_amount' => 'required|numeric|min:1',
             'interest_rate' => 'required|numeric|min:0|max:100',
@@ -228,13 +270,18 @@ class LoanController extends Controller
             'branch_id' => 'nullable|exists:branches,id',
         ]);
 
+        $product = LoanProduct::where('code', $validated['loan_product'])->first();
+        $baseType = $product?->base_type ?? ($validated['loan_type'] ?? (in_array($validated['loan_product'], ['group', 'business', 'special'], true) ? $validated['loan_product'] : 'business'));
+        $productCode = $product?->code ?? $validated['loan_product'];
+
         $isApproved = in_array($validated['loan_status'], ['approved', 'active', 'paid_off'], true);
         $appliedAt = Carbon::parse($validated['applied_at'])->startOfDay();
 
         $loan = Loan::create([
             'user_id' => $validated['user_id'],
             'branch_id' => $validated['branch_id'] ?? User::whereKey($validated['user_id'])->value('branch_id'),
-            'loan_type' => $validated['loan_type'],
+            'loan_type' => $baseType,
+            'loan_product' => $productCode,
             'loan_amount' => $validated['loan_amount'],
             'interest_rate' => $validated['interest_rate'],
             'term_months' => $validated['term_months'],
@@ -257,7 +304,25 @@ class LoanController extends Controller
         Gate::authorize('encode', Loan::class);
 
         $validated = $request->validate([
-            'loan_type' => 'required|in:group,business,special',
+            'loan_product' => [
+                'nullable',
+                'string',
+                function ($attribute, $value, $fail) {
+                    $product = LoanProduct::where('code', $value)->first();
+                    if (! $product) {
+                        if (! in_array($value, ['business', 'group', 'special'], true)) {
+                            $fail('The selected loan product is invalid.');
+                        }
+
+                        return;
+                    }
+
+                    if (! $product->is_active) {
+                        $fail('The selected loan product is currently inactive.');
+                    }
+                },
+            ],
+            'loan_type' => 'nullable|in:group,business,special',
             'loan_amount' => 'required|numeric|min:1',
             'interest_rate' => 'required|numeric|min:0|max:100',
             'term_months' => 'required|integer|min:1|max:360',
@@ -266,15 +331,24 @@ class LoanController extends Controller
             'due_date' => 'nullable|date',
         ]);
 
-        $loan->update([
-            'loan_type' => $validated['loan_type'],
+        $updateData = [
             'loan_amount' => $validated['loan_amount'],
             'interest_rate' => $validated['interest_rate'],
             'term_months' => $validated['term_months'],
             'payment_frequency' => $validated['payment_frequency'],
             'loan_status' => $validated['loan_status'],
             'due_date' => $validated['due_date'] ?? $loan->due_date,
-        ]);
+        ];
+
+        if (! empty($validated['loan_product'])) {
+            $product = LoanProduct::where('code', $validated['loan_product'])->first();
+            $updateData['loan_product'] = $product?->code ?? $validated['loan_product'];
+            $updateData['loan_type'] = $product?->base_type ?? ($validated['loan_type'] ?? $loan->loan_type);
+        } elseif (! empty($validated['loan_type'])) {
+            $updateData['loan_type'] = $validated['loan_type'];
+        }
+
+        $loan->update($updateData);
 
         app(AuditLogService::class)->log('loan.updated', 'Loan record updated.', 'loan', $loan, Auth::user());
 
@@ -290,7 +364,7 @@ class LoanController extends Controller
             return response()->json(['message' => 'Loan is already active.'], 422);
         }
 
-        if (! in_array($loan->loan_status, ['approved', 'active'], true)) {
+        if ($loan->loan_status !== 'approved') {
             return response()->json(['message' => 'Only approved loans can be disbursed.'], 422);
         }
 
@@ -456,7 +530,7 @@ class LoanController extends Controller
         ]);
 
         $upload = $validated['document'];
-        $path = $upload->store('loan-documents/'.$loan->id, 'public');
+        $path = $upload->store('loan-documents/'.$loan->id, 'local');
 
         $document = $loan->documents()->create([
             'original_name' => $upload->getClientOriginalName(),
@@ -482,9 +556,33 @@ class LoanController extends Controller
                 'original_name' => $document->original_name,
                 'mime_type' => $document->mime_type,
                 'file_size' => $document->file_size,
-                'url' => asset('storage/'.$document->storage_path),
+                'url' => route('loans.documents.download', ['loan' => $loan->id, 'document' => $document->id]),
                 'uploaded_at' => $document->created_at->toISOString(),
             ],
         ], 201);
+    }
+
+    public function downloadDocument(Request $request, Loan $loan, LoanDocument $document): StreamedResponse|Response
+    {
+        Gate::authorize('view', $loan);
+
+        abort_unless($document->loan_id === $loan->id, 404);
+
+        $disposition = $request->query('disposition', 'inline');
+        $asAttachment = $disposition === 'attachment' || $request->boolean('download');
+
+        if (Storage::disk('local')->exists($document->storage_path)) {
+            return $asAttachment
+                ? Storage::disk('local')->download($document->storage_path, $document->original_name)
+                : Storage::disk('local')->response($document->storage_path, $document->original_name);
+        }
+
+        if (Storage::disk('public')->exists($document->storage_path)) {
+            return $asAttachment
+                ? Storage::disk('public')->download($document->storage_path, $document->original_name)
+                : Storage::disk('public')->response($document->storage_path, $document->original_name);
+        }
+
+        abort(404, 'Document file not found.');
     }
 }

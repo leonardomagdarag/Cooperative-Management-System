@@ -9,12 +9,21 @@ import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import EmptyState from '../../components/ui/EmptyState';
 import Pagination from '../../components/ui/Pagination';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 
 export default function AnnouncementsPage() {
     const [page, setPage] = useState(1);
     const [showModal, setShowModal] = useState(false);
     const [editing, setEditing] = useState<Announcement | null>(null);
     const [viewing, setViewing] = useState<Announcement | null>(null);
+    const [confirmState, setConfirmState] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        confirmText?: string;
+        variant?: 'danger' | 'warning' | 'primary';
+        onConfirm: () => void;
+    }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
     const queryClient = useQueryClient();
     const { addToast } = useToast();
 
@@ -81,12 +90,19 @@ export default function AnnouncementsPage() {
                                     </div>
                                 </div>
                                 <div className="flex gap-1">
-                                    <Button variant="ghost" size="sm" onClick={() => setViewing(a)} aria-label={`View ${a.title}`}><i className="fas fa-eye"></i></Button>
+                                    <Button variant="ghost" size="sm" onClick={() => setViewing(a)} aria-label={`View ${a.title}`} className="hover:bg-emerald-50 hover:text-emerald-600"><i className="fas fa-eye"></i></Button>
                                     {permissions?.can_update && (
-                                        <Button variant="ghost" size="sm" onClick={() => { setEditing(a); setShowModal(true); }} aria-label={`Edit ${a.title}`}><i className="fas fa-edit"></i></Button>
+                                        <Button variant="ghost" size="sm" onClick={() => { setEditing(a); setShowModal(true); }} aria-label={`Edit ${a.title}`} className="hover:bg-emerald-50 hover:text-emerald-600"><i className="fas fa-edit"></i></Button>
                                     )}
                                     {permissions?.can_delete && (
-                                        <Button variant="ghost" size="sm" onClick={() => { if (confirm('Delete this announcement?')) deleteMutation.mutate(a.id); }} aria-label={`Delete ${a.title}`} className="hover:bg-red-50 hover:text-red-600"><i className="fas fa-trash"></i></Button>
+                                        <Button variant="ghost" size="sm" onClick={() => setConfirmState({
+                                            isOpen: true,
+                                            title: 'Delete Announcement',
+                                            message: `Are you sure you want to delete "${a.title}"? This action cannot be undone.`,
+                                            confirmText: 'Delete',
+                                            variant: 'danger',
+                                            onConfirm: () => deleteMutation.mutate(a.id),
+                                        })} aria-label={`Delete ${a.title}`} className="hover:bg-red-50 hover:text-red-600"><i className="fas fa-trash"></i></Button>
                                     )}
                                 </div>
                             </div>
@@ -96,17 +112,25 @@ export default function AnnouncementsPage() {
             )}
 
             {pagination && pagination.last_page > 1 && (
-                <Pagination page={page} lastPage={pagination.last_page} onChange={setPage} />
+                <div className="mt-6">
+                    <Pagination
+                        page={page}
+                        totalPages={pagination.last_page}
+                        onPageChange={setPage}
+                        total={pagination.total}
+                        perPage={pagination.per_page}
+                    />
+                </div>
             )}
 
             {/* View Modal */}
             {viewing && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => setViewing(null)}>
                     <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-                        <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white shrink-0">
+                        <div className="bg-gradient-to-r from-emerald-600 to-cyan-600 px-6 py-5 text-white shrink-0">
                             <div className="flex items-center justify-between">
                                 <h2 className="text-lg font-bold">{viewing.title}</h2>
-                                <button onClick={() => setViewing(null)} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white"><i className="fas fa-times"></i></button>
+                                <button onClick={() => setViewing(null)} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white transition-colors"><i className="fas fa-times"></i></button>
                             </div>
                         </div>
                         <div className="p-6">
@@ -135,6 +159,19 @@ export default function AnnouncementsPage() {
                     }}
                 />
             )}
+
+            <ConfirmDialog
+                isOpen={confirmState.isOpen}
+                title={confirmState.title}
+                message={confirmState.message}
+                confirmText={confirmState.confirmText}
+                variant={confirmState.variant}
+                onConfirm={() => {
+                    confirmState.onConfirm();
+                    setConfirmState(prev => ({ ...prev, isOpen: false }));
+                }}
+                onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
+            />
         </div>
     );
 }
@@ -205,22 +242,22 @@ function AnnouncementFormModal({ announcement, onClose, onSuccess }: {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={requestCloseGuard}>
             <div className="w-full max-w-lg max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-                <div className="bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-5 text-white shrink-0">
+                <div className="bg-gradient-to-r from-emerald-600 to-cyan-600 px-6 py-5 text-white shrink-0">
                     <div className="flex items-center justify-between">
                         <h2 className="text-lg font-bold">{announcement ? 'Edit' : 'New'} Announcement</h2>
-                        <button onClick={requestCloseGuard} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white"><i className="fas fa-times"></i></button>
+                        <button onClick={requestCloseGuard} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white transition-colors"><i className="fas fa-times"></i></button>
                     </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-6">
                     <form id="announcement-form" onSubmit={handleSubmit} className="space-y-4">
                         <div>
                             <label className="mb-1 block text-sm font-medium text-gray-700">Title</label>
-                            <input name="title" value={title} onChange={e => setTitleD(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${errors.title ? 'border-red-400' : 'border-gray-200'}`} />
+                            <input name="title" value={title} onChange={e => setTitleD(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500 ${errors.title ? 'border-red-400' : 'border-gray-200'}`} />
                             {errors.title && <p className="mt-1 text-xs text-red-600">{errors.title}</p>}
                         </div>
                         <div>
                             <label className="mb-1 block text-sm font-medium text-gray-700">Content</label>
-                            <textarea name="content" rows={4} value={content} onChange={e => setContentD(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${errors.content ? 'border-red-400' : 'border-gray-200'}`} />
+                            <textarea name="content" rows={4} value={content} onChange={e => setContentD(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500 ${errors.content ? 'border-red-400' : 'border-gray-200'}`} />
                             {errors.content && <p className="mt-1 text-xs text-red-600">{errors.content}</p>}
                         </div>
                         <div className="grid grid-cols-2 gap-4">
@@ -230,7 +267,7 @@ function AnnouncementFormModal({ announcement, onClose, onSuccess }: {
                                     name="type"
                                     value={selectedType}
                                     onChange={e => setTypeD(e.target.value)}
-                                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500"
                                 >
                                     <option value="announcement">Announcement</option>
                                     <option value="news">News</option>
@@ -246,7 +283,7 @@ function AnnouncementFormModal({ announcement, onClose, onSuccess }: {
                                                 type="checkbox"
                                                 checked={selectedVisibilities.includes(v)}
                                                 onChange={() => toggleVisibility(v)}
-                                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
                                             />
                                             <span className="text-gray-700 capitalize">{v === 'everyone' ? 'Everyone' : v === 'members' ? 'Members' : v === 'officers' ? 'Officers' : 'Public'}</span>
                                         </label>
@@ -261,30 +298,30 @@ function AnnouncementFormModal({ announcement, onClose, onSuccess }: {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="mb-1 block text-sm font-medium text-gray-700">Event Date</label>
-                                        <DatePicker value={eventDate} onChange={setEventDateD} className={`w-full rounded-lg border px-3 py-2 text-sm ${errors.event_date ? 'border-red-400' : 'border-gray-200'}`} />
+                                        <DatePicker value={eventDate} onChange={setEventDateD} className={`w-full rounded-lg border px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500 ${errors.event_date ? 'border-red-400' : 'border-gray-200'}`} />
                                         <input type="hidden" name="event_date" value={eventDate} />
                                         {errors.event_date && <p className="mt-1 text-xs text-red-600">{errors.event_date}</p>}
                                     </div>
                                     <div>
                                         <label className="mb-1 block text-sm font-medium text-gray-700">Event Time</label>
-                                        <input type="time" name="event_time" defaultValue={announcement?.event_time || ''} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+                                        <input type="time" name="event_time" defaultValue={announcement?.event_time || ''} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500" />
                                     </div>
                                 </div>
                                 <div>
                                     <label className="mb-1 block text-sm font-medium text-gray-700">Event Location</label>
-                                    <input type="text" name="event_location" defaultValue={announcement?.event_location || ''} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" placeholder="Venue or address" />
+                                    <input type="text" name="event_location" defaultValue={announcement?.event_location || ''} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500" placeholder="Venue or address" />
                                 </div>
                             </div>
                         )}
                         <div>
                             <label className="mb-1 block text-sm font-medium text-gray-700">Image</label>
-                            <input type="file" name="image" accept="image/*" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+                            <input type="file" name="image" accept="image/*" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500" />
                         </div>
                     </form>
                 </div>
                 <div className="flex shrink-0 items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 rounded-b-2xl">
-                    <button type="button" onClick={requestCloseGuard} className="rounded-lg border border-gray-200 px-4 py-2 text-sm">Cancel</button>
-                    <button type="submit" form="announcement-form" disabled={isSaving} className="bg-blue-700 hover:bg-blue-800 rounded-lg focus:ring-4 focus:ring-blue-300 text-white px-4 py-2 text-sm font-medium disabled:opacity-50">
+                    <button type="button" onClick={requestCloseGuard} className="rounded-lg border border-gray-200 px-4 py-2 text-sm hover:bg-gray-100 transition-colors">Cancel</button>
+                    <button type="submit" form="announcement-form" disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700 rounded-lg focus:ring-4 focus:ring-emerald-200 text-white px-4 py-2 text-sm font-medium disabled:opacity-50 transition-colors">
                         {isSaving ? 'Saving...' : 'Save'}
                     </button>
                 </div>
