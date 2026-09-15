@@ -1,0 +1,7 @@
+﻿Stage: planner
+Model: opencode/muse-spark-1.3-contributor-free
+Attempt: 2/3
+Started: 2026-09-10T01:44:26.9498716+08:00
+RequiredArtifact: G:\Coding\LaravelProjects\Cooperative_Management\member-management-audit-20260910-014256240-8f0f2f0b\.pipeline/member-management_draft_plan.md
+WorkingDirectory: G:\Coding\LaravelProjects\Cooperative_Management\member-management-audit-20260910-014256240-8f0f2f0b
+ExpectedArtifactParentExists: True

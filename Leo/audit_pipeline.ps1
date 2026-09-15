@@ -95,9 +95,13 @@ function Invoke-OpenCodeStage {
         Write-Host "    [RUN] OpenCode stage '$StageName' with model '$Model' (attempt $attempt/$MaxAttempts)..." -ForegroundColor DarkGray
 
         # Stream output to the visible terminal and retain a text copy for artifact markers.
-        # Writing the preference globally above keeps a non-zero native exit observable here.
+        # Native command failures must remain non-terminating here so their real output and
+        # exit code can be recorded; the caller decides whether the attempt should retry.
         $capturedOutput = @()
+        $stageExitCode = 1
+        $previousErrorActionPreference = $ErrorActionPreference
         try {
+            $ErrorActionPreference = 'Continue'
             $capturedOutput = @(& $openCodeCommand run -m $Model $Prompt 2>&1 | ForEach-Object {
                 $line = "$_"
                 Write-Host $line
@@ -107,7 +111,14 @@ function Invoke-OpenCodeStage {
         }
         catch {
             $stageExitCode = if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } else { 1 }
-            $capturedOutput = @("PowerShell/native-command exception: $($_.Exception.Message)")
+            $capturedOutput = @(
+                "PowerShell/native-command exception: $($_.Exception.Message)"
+                "Exception type: $($_.Exception.GetType().FullName)"
+                "Script stack: $($_.ScriptStackTrace)"
+            )
+        }
+        finally {
+            $ErrorActionPreference = $previousErrorActionPreference
         }
 
         if ($attemptLog) {
