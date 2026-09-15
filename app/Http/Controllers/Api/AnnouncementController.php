@@ -61,6 +61,8 @@ class AnnouncementController extends Controller
     public function show(Announcement $announcement): JsonResponse
     {
         $user = Auth::user();
+        abort_unless($this->canViewAnnouncement($user, $announcement), 403, 'Unauthorized to view this announcement.');
+
         $creatorName = 'Unknown';
         if ($announcement->creator) {
             $creatorName = trim(
@@ -204,6 +206,33 @@ class AnnouncementController extends Controller
             'announcements.update',
             'announcements.delete',
         ])->contains(fn (string $permission) => $user->can($permission)));
+    }
+
+    private function canViewAnnouncement($user, Announcement $announcement): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        if ($this->isOfficerUser($user) && $this->hasAnyAnnouncementPermission($user)) {
+            return true;
+        }
+
+        $visibility = $announcement->visibility;
+        if (is_string($visibility)) {
+            return in_array($visibility, ['cooperative', 'public', 'members', 'everyone'], true);
+        }
+
+        if (is_array($visibility)) {
+            return ! empty(array_intersect($visibility, [
+                Announcement::VISIBILITY_MEMBERS,
+                Announcement::VISIBILITY_PUBLIC,
+                Announcement::VISIBILITY_EVERYONE,
+                'cooperative',
+            ]));
+        }
+
+        return false;
     }
 
     private function serialize(Announcement $a): array

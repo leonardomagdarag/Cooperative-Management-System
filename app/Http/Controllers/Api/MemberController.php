@@ -35,7 +35,11 @@ class MemberController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        abort_unless(Auth::user()?->can('members.view'), 403);
+        if ($request->boolean('is_officer')) {
+            abort_unless(Auth::user()?->can('officers.view') || Auth::user()?->can('members.view'), 403);
+        } else {
+            abort_unless(Auth::user()?->can('members.view'), 403);
+        }
 
         $query = User::query()
             ->with(['branch', 'personalData.address', 'personalData.contact', 'accounts', 'memberApplication']);
@@ -669,9 +673,17 @@ class MemberController extends Controller
 
     public function destroy(User $user): JsonResponse
     {
-        abort_unless(Auth::user()?->can('members.delete'), 403);
+        $isOfficer = (bool) ($user->is_officer || $user->hasAnyRole(PermissionCatalog::officerRoles()) || $user->hasRole('admin'));
 
-        $isOfficer = (bool) ($user->is_officer ?? false);
+        if ($user->hasRole('admin')) {
+            abort_unless(Auth::user()?->hasRole('admin'), 403, 'Only administrators can delete admin accounts.');
+        }
+
+        if ($isOfficer) {
+            abort_unless(Auth::user()?->can('officers.delete'), 403, 'Unauthorized to delete officer accounts.');
+        } else {
+            abort_unless(Auth::user()?->can('members.delete'), 403, 'Unauthorized to delete member accounts.');
+        }
 
         app(AuditLogService::class)->log(
             $isOfficer ? 'officer.deleted' : 'member.deleted',
@@ -682,7 +694,7 @@ class MemberController extends Controller
         );
         $user->delete();
 
-        return response()->json(['message' => 'Member deleted.']);
+        return response()->json(['message' => $isOfficer ? 'Officer deleted.' : 'Member deleted.']);
     }
 
     public function restore(int $user): JsonResponse
@@ -1161,7 +1173,7 @@ class MemberController extends Controller
      */
     private function assertCanAssignRole(mixed $role, string $permission): void
     {
-        if (empty($role)) {
+        if (empty($role) || $role === 'member') {
             return;
         }
 

@@ -25,12 +25,34 @@ class ServiceController extends Controller
     public function index(): JsonResponse
     {
         $user = Auth::user();
+        abort_unless($user && $user->can('services.view'), 403);
+
         $isAdmin = $user->hasRole('admin');
         $isTreasurer = ! $isAdmin && $this->canApprove($user);
         $canManage = $isAdmin || $this->isOfficer($user);
         $isLoanReview = $user->can('loans.update');
 
+        $allowedApprovalTypes = [];
+        if ($user->can('transactions.approve')) {
+            $allowedApprovalTypes = ['deposit', 'withdrawal', 'loan_payment'];
+        } else {
+            if ($user->can('deposits.approve')) {
+                $allowedApprovalTypes[] = 'deposit';
+            }
+            if ($user->can('withdrawals.approve')) {
+                $allowedApprovalTypes[] = 'withdrawal';
+            }
+            if ($user->can('loans.approve')) {
+                $allowedApprovalTypes[] = 'loan_payment';
+            }
+        }
+
         $pendingApprovalsQuery = Transaction::where('status', 'pending');
+        if (empty($allowedApprovalTypes)) {
+            $pendingApprovalsQuery->whereRaw('1 = 0');
+        } else {
+            $pendingApprovalsQuery->whereIn('transaction_type', $allowedApprovalTypes);
+        }
         BranchScope::applyToTransactions($pendingApprovalsQuery, $user);
 
         $pendingLoansQuery = Loan::where('loan_status', 'pending');
@@ -50,6 +72,7 @@ class ServiceController extends Controller
     public function deposit(Request $request): JsonResponse
     {
         $user = Auth::user();
+        abort_unless($user && ($user->can('deposits.create') || $user->can('services.create')), 403, 'Unauthorized to create deposits.');
 
         $validated = $request->validate([
             'member_id' => 'nullable|exists:users,id',
@@ -125,6 +148,7 @@ class ServiceController extends Controller
     public function withdrawal(Request $request): JsonResponse
     {
         $user = Auth::user();
+        abort_unless($user && ($user->can('withdrawals.create') || $user->can('services.create')), 403, 'Unauthorized to request withdrawals.');
 
         $validated = $request->validate([
             'member_id' => 'nullable|exists:users,id',
@@ -202,6 +226,7 @@ class ServiceController extends Controller
     public function loanApplication(Request $request): JsonResponse
     {
         $user = Auth::user();
+        abort_unless($user && ($user->can('loans.create') || $user->can('services.create')), 403, 'Unauthorized to submit loan applications.');
 
         $validated = $request->validate([
             'loan_product_code' => 'required|string',
@@ -297,6 +322,7 @@ class ServiceController extends Controller
     public function loanPayment(Request $request): JsonResponse
     {
         $user = Auth::user();
+        abort_unless($user && ($user->can('transactions.create') || $user->can('services.create') || $user->can('loans.update')), 403, 'Unauthorized to submit loan payments.');
 
         $validated = $request->validate([
             'loan_id' => 'required|exists:loans,id',
@@ -390,7 +416,7 @@ class ServiceController extends Controller
     public function approveTransaction(Request $request, Transaction $transaction): JsonResponse
     {
         $user = Auth::user();
-        abort_unless($this->canApprove($user), 403);
+        abort_unless($this->canApproveTransaction($user, $transaction), 403);
 
         if (! $this->canAccessBranch($user, $transaction->branch_id)) {
             return response()->json(['message' => 'You can only approve transactions in your branch.'], 403);
@@ -504,7 +530,7 @@ class ServiceController extends Controller
     public function sendWithdrawalApprovalOtp(Request $request, Transaction $transaction): JsonResponse
     {
         $user = Auth::user();
-        abort_unless($this->canApprove($user), 403);
+        abort_unless($this->canApproveTransaction($user, $transaction), 403);
 
         if (! $this->canAccessBranch($user, $transaction->branch_id)) {
             return response()->json(['message' => 'You can only approve transactions in your branch.'], 403);
@@ -537,8 +563,24 @@ class ServiceController extends Controller
         $user = Auth::user();
         abort_unless($this->canApprove($user), 403);
 
+        $allowedTypes = [];
+        if ($user->can('transactions.approve')) {
+            $allowedTypes = ['deposit', 'withdrawal', 'loan_payment'];
+        } else {
+            if ($user->can('deposits.approve')) {
+                $allowedTypes[] = 'deposit';
+            }
+            if ($user->can('withdrawals.approve')) {
+                $allowedTypes[] = 'withdrawal';
+            }
+            if ($user->can('loans.approve')) {
+                $allowedTypes[] = 'loan_payment';
+            }
+        }
+
         $transactions = Transaction::with(['account.user.personalData', 'loan'])
-            ->where('status', 'pending');
+            ->where('status', 'pending')
+            ->whereIn('transaction_type', $allowedTypes);
 
         BranchScope::applyToTransactions($transactions, $user);
 
@@ -562,7 +604,25 @@ class ServiceController extends Controller
 
     private function canApprove($user): bool
     {
-        return (bool) ($user && ($user->can('transactions.approve') || $user->can('deposits.approve') || $user->can('withdrawals.approve')));
+        return (bool) ($user && ($user->can('transactions.approve') || $user->can('deposits.approve') || $user->can('withdrawals.approve') || $user->can('loans.approve')));
+    }
+
+    private function canApproveTransaction($user, Transaction $transaction): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->can('transactions.approve')) {
+            return true;
+        }
+
+        return match ($transaction->transaction_type) {
+            'deposit' => $user->can('deposits.approve'),
+            'withdrawal' => $user->can('withdrawals.approve'),
+            'loan_payment' => $user->can('loans.approve'),
+            default => false,
+        };
     }
 
     private function existingDuplicate(array $validated): ?Transaction
