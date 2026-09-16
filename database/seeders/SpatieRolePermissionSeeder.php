@@ -155,8 +155,6 @@ class SpatieRolePermissionSeeder extends Seeder
                 'profile.view',
                 'profile.update',
                 'notifications.view',
-                'tickets.view',
-                'tickets.reply',
             ],
 
             // Inactive and terminated have no permissions

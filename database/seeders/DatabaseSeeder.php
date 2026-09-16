@@ -37,7 +37,6 @@ class DatabaseSeeder extends Seeder
             SystemSettingSeeder::class,
             ServiceAvailabilitySeeder::class,
             LoanProductSeeder::class,
-            RolePermissionSeeder::class,
             AnnouncementSeeder::class,
         ]);
     }

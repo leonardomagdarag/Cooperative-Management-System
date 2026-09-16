@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\SystemSetting;
+use App\Support\PermissionCatalog;
 use Closure;
 use Illuminate\Http\Request;
 
@@ -19,10 +20,9 @@ class CheckServiceAvailability
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
-        $isOfficer = $user->is_officer
-            || $user->primary_role === 'admin'
-            || in_array($user->primary_role, ['manager', 'accountant', 'loan', 'secretary'], true)
-            || $user->hasAnyRole(['admin', 'manager', 'accountant', 'loan', 'secretary']);
+        $isOfficer = (bool) ($user->is_officer
+            || $user->hasRole('admin')
+            || $user->hasAnyRole(PermissionCatalog::officerRoles()));
         $userType = $isOfficer ? 'officer' : 'member';
         $transactionMode = $request->input('transaction_mode');
 

@@ -24,10 +24,13 @@ class TicketPolicy
             return false;
         }
 
-        return $ticket->user_id === $user->id
-            || $user->isSupportStaff()
+        if ($ticket->user_id === $user->id) {
+            return true;
+        }
+
+        return $user->isSupportStaff()
             || $user->can('tickets.manage')
-            || $user->can('tickets.view');
+            || ($user->is_officer && $user->can('tickets.view'));
     }
 
     /**
@@ -47,11 +50,13 @@ class TicketPolicy
             return false;
         }
 
-        if ($user->isSupportStaff() || $user->can('tickets.manage') || $user->can('tickets.reply')) {
-            return true;
+        if ($ticket->user_id === $user->id) {
+            return $ticket->status !== 'closed';
         }
 
-        return $ticket->user_id === $user->id && $ticket->status !== 'closed';
+        return $user->isSupportStaff()
+            || $user->can('tickets.manage')
+            || ($user->is_officer && $user->can('tickets.reply'));
     }
 
     /**

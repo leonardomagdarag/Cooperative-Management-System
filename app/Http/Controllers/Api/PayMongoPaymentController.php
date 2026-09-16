@@ -10,6 +10,7 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\PayMongoService;
+use App\Support\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -97,7 +98,7 @@ class PayMongoPaymentController extends Controller
         $targetUserId = $validated['member_id'] ?? $validated['user_id'] ?? $user->id;
 
         // Permissions check: only officers can initiate payment for another member
-        $canManage = $user->hasRole('admin') || $user->hasAnyRole(['manager', 'accountant', 'loan', 'secretary']);
+        $canManage = (bool) ($user->is_officer || $user->hasRole('admin') || $user->hasAnyRole(PermissionCatalog::officerRoles()));
         if ((int) $targetUserId !== (int) $user->id && ! $canManage) {
             return response()->json(['message' => 'You can only initiate payments for your own account.'], 403);
         }
@@ -257,7 +258,7 @@ class PayMongoPaymentController extends Controller
             || ($transaction->account && (int) $transaction->account->user_id === (int) $user->id)
             || ($transaction->loan && (int) $transaction->loan->user_id === (int) $user->id);
 
-        $isOfficer = $user->hasRole('admin') || $user->hasAnyRole(['manager', 'accountant', 'loan', 'secretary']);
+        $isOfficer = (bool) ($user->is_officer || $user->hasRole('admin') || $user->hasAnyRole(PermissionCatalog::officerRoles()));
 
         if (! $isOwner && ! $isOfficer) {
             return response()->json(['message' => 'Unauthorized to view this transaction.'], 403);

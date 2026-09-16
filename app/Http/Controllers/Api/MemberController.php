@@ -311,7 +311,7 @@ class MemberController extends Controller
                 $request->input('last_name'),
             ])),
             'password_confirmation' => 'required|string|same:password',
-            'role' => 'nullable|string|in:admin,manager,accountant,secretary,loan',
+            'role' => ['nullable', 'string', Rule::exists('roles', 'name')->where('guard_name', 'web')],
             'beneficiaries' => 'nullable|array',
             'beneficiaries.*.first_name' => 'required|string|max:100',
             'beneficiaries.*.last_name' => 'required|string|max:100',
@@ -383,11 +383,16 @@ class MemberController extends Controller
                 'employment_id' => $employment?->id, 'member_id' => $memberId?->id,
             ]);
 
+            $role = $validated['role'] ?? 'member';
+            $isOfficer = ! empty($validated['role']) && $validated['role'] !== 'member';
+
             $user = User::create([
                 'email' => $validated['email'],
                 'password' => Hash::make($validated['password']),
                 'personal_data_id' => $personalData->id,
                 'branch_id' => $this->resolveMemberBranch($validated),
+                'role' => $role,
+                'is_officer' => $isOfficer,
                 'account_status' => 'active',
                 'profile_completion_required' => false,
             ]);
@@ -399,12 +404,7 @@ class MemberController extends Controller
                 }
             }
 
-            $user->assignRole('member');
-
-            if (! empty($validated['role'])) {
-                $user->syncRoles([$validated['role']]);
-                $user->update(['is_officer' => true]);
-            }
+            $user->syncRoles([$role]);
 
             // Create default accounts
             Account::create(['user_id' => $user->id, 'account_type' => 'savings', 'balance' => 0]);
@@ -489,7 +489,7 @@ class MemberController extends Controller
             'employer_name' => 'nullable|string|max:255',
             'position' => 'nullable|string|max:100',
             'monthly_income' => 'nullable|numeric|min:0',
-            'role' => 'nullable|string|in:admin,manager,accountant,secretary,loan',
+            'role' => ['nullable', 'string', Rule::exists('roles', 'name')->where('guard_name', 'web')],
             'password' => PersonPasswordPolicy::passwordRules(true, PersonPasswordPolicy::normalizedNameTokens([
                 $request->input('first_name'),
                 $request->input('mid_name'),
@@ -616,7 +616,7 @@ class MemberController extends Controller
             }
             if (! empty($validated['role'])) {
                 $userData['role'] = $validated['role'];
-                $userData['is_officer'] = true;
+                $userData['is_officer'] = $validated['role'] !== 'member';
                 $user->syncRoles([$validated['role']]);
             }
             $user->update($userData);
@@ -632,7 +632,7 @@ class MemberController extends Controller
                 }
             }
 
-            $isOfficer = ! empty($validated['role']);
+            $isOfficer = ! empty($validated['role']) ? ($validated['role'] !== 'member') : (bool) $user->is_officer;
 
             app(AuditLogService::class)->log(
                 $isOfficer ? 'officer.updated' : 'member.updated',
