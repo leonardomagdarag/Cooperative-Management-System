@@ -33,6 +33,10 @@ export default function Sidebar() {
     const { user, logout } = useAuth();
     const { isOpen, isMobileOpen, closeMobile } = useSidebar();
 
+    const labelClass = isOpen
+        ? 'max-w-64 opacity-100'
+        : 'max-w-64 opacity-100 lg:max-w-0 lg:opacity-0 lg:group-hover:max-w-64 lg:group-hover:opacity-100';
+
     const filteredItems = NAV_ITEMS.filter(item => {
         if (item.roles && (!user || !item.roles.includes(user.primary_role))) {
             return false;
@@ -43,7 +47,7 @@ export default function Sidebar() {
 
     return (
         <aside
-            className={`fixed inset-y-0 left-0 z-40 flex flex-col border-r border-gray-200 bg-white shadow-lg transition-all duration-300 group
+            className={`fixed inset-y-0 left-0 z-40 flex flex-col overflow-hidden border-r border-gray-200 bg-white shadow-lg transition-all duration-300 group
                 ${isOpen ? 'w-64' : 'w-64 lg:w-20 lg:hover:w-64'}
                 ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
                 lg:relative lg:translate-x-0`}
@@ -53,7 +57,7 @@ export default function Sidebar() {
                     <div className="rounded-full overflow-hidden flex items-center justify-center w-10 h-10 shrink-0 ring-2 ring-emerald-500/20">
                         <img src="/images/Logo.png" alt="Settlers Logo" className="w-full h-full object-cover" />
                     </div>
-                    <div className={isOpen ? 'block' : 'block lg:hidden lg:group-hover:block transition-opacity'}>
+                    <div className={`flex flex-col overflow-hidden whitespace-nowrap transition-all duration-300 ${labelClass}`}>
                         <h1 className="font-bold text-lg bg-linear-to-r from-emerald-600 to-cyan-600 bg-clip-text text-transparent whitespace-nowrap">Settlers</h1>
                         <p className="text-xs text-gray-600 whitespace-nowrap">Credit Cooperative</p>
                     </div>
@@ -70,7 +74,7 @@ export default function Sidebar() {
                                 onClick={closeMobile}
                                 title={item.label}
                                 className={({ isActive }) =>
-                                    `flex items-center ${isOpen ? 'justify-start' : 'justify-start lg:justify-center lg:group-hover:justify-start'} gap-3 rounded-lg px-3.5 py-3 transition-all duration-200 ${
+                                    `flex items-center gap-3 rounded-lg px-3.5 py-3 transition-all duration-200 ${
                                         isActive
                                             ? 'bg-linear-to-r from-emerald-500 to-cyan-500 text-white shadow-md'
                                             : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-600'
@@ -78,7 +82,7 @@ export default function Sidebar() {
                                 }
                             >
                                 <i className={`${item.icon} text-lg shrink-0 w-5 text-center`}></i>
-                                <span className={isOpen ? 'flex flex-1 min-w-0' : 'flex lg:hidden lg:group-hover:flex flex-1 min-w-0'}>
+                                <span className={`flex flex-1 min-w-0 overflow-hidden whitespace-nowrap transition-all duration-300 ${labelClass}`}>
                                     <span className="flex-1 text-left font-medium whitespace-nowrap truncate">{item.label}</span>
                                 </span>
                             </NavLink>
@@ -91,10 +95,10 @@ export default function Sidebar() {
                 <button
                     onClick={logout}
                     title="Logout"
-                    className={`w-full flex items-center ${isOpen ? 'justify-start' : 'justify-start lg:justify-center lg:group-hover:justify-start'} gap-3 px-3.5 py-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200`}
+                    className="w-full flex items-center gap-3 px-3.5 py-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
                 >
                     <i className="fas fa-sign-out-alt text-lg shrink-0 w-5 text-center"></i>
-                    <span className={isOpen ? 'flex flex-1 min-w-0' : 'flex lg:hidden lg:group-hover:flex flex-1 min-w-0'}>
+                    <span className={`flex flex-1 min-w-0 overflow-hidden whitespace-nowrap transition-all duration-300 ${labelClass}`}>
                         <span className="flex-1 text-left font-medium whitespace-nowrap">Logout</span>
                     </span>
                 </button>

@@ -11,17 +11,10 @@ interface SidebarContextType {
 const SidebarContext = createContext<SidebarContextType | null>(null);
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
-    const [isOpen, setIsOpen] = useState(() => {
-        return localStorage.getItem('sidebar-open') !== 'false';
-    });
+    const [isOpen, setIsOpen] = useState(true);
     const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-    const toggle = () => {
-        setIsOpen(prev => {
-            localStorage.setItem('sidebar-open', String(!prev));
-            return !prev;
-        });
-    };
+    const toggle = () => setIsOpen(prev => !prev);
 
     const toggleMobile = () => setIsMobileOpen(prev => !prev);
     const closeMobile = () => setIsMobileOpen(false);
