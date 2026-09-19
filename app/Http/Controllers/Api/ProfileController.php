@@ -298,7 +298,7 @@ class ProfileController extends Controller
             $contact->save();
 
             $personalData->fill([
-                'title' => $validated['title'] ?? null,
+                'title' => ! empty($validated['title']) ? $validated['title'] : ($personalData->title ?: 'Member'),
                 'first_name' => $validated['first_name'],
                 'mid_name' => $validated['mid_name'] ?? null,
                 'last_name' => $validated['last_name'],

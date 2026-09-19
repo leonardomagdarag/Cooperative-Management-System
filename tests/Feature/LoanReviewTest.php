@@ -101,3 +101,41 @@ test('loan officer can start review', function () {
     expect($loan->review_status)->toBe('under_review')
         ->and($loan->reviewed_by)->toBe($this->officer->id);
 });
+
+test('review queue only lists pending, not-yet-approved loans', function () {
+    $application = Loan::factory()->create([
+        'user_id' => $this->borrower->id,
+        'branch_id' => $this->officer->branch_id,
+        'loan_status' => 'pending',
+        'approved_by' => null,
+        'approved_at' => null,
+    ]);
+    Loan::factory()->create([
+        'user_id' => $this->borrower->id,
+        'branch_id' => $this->officer->branch_id,
+        'loan_status' => 'active',
+        'approved_by' => $this->admin->id,
+        'approved_at' => now(),
+    ]);
+
+    actingAs($this->officer)
+        ->getJson('/api/loans?loan_status=pending&per_page=50')
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.id', $application->id);
+});
+
+test('pending loan with approval stamp is not treated as an application', function () {
+    $encoded = Loan::factory()->create([
+        'user_id' => $this->borrower->id,
+        'branch_id' => $this->officer->branch_id,
+        'loan_status' => 'pending',
+        'approved_by' => $this->admin->id,
+        'approved_at' => now(),
+    ]);
+
+    actingAs($this->officer)
+        ->getJson('/api/loans?loan_status=pending&per_page=50')
+        ->assertOk()
+        ->assertJsonCount(0, 'data');
+});

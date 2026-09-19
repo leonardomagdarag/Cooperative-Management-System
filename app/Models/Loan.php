@@ -253,4 +253,45 @@ class Loan extends Model
     {
         return $this->hasMany(LoanDocument::class)->latest('created_at');
     }
+
+    public function scopeApplyRange($query, ?string $range = 'today')
+    {
+        $range = $range ?: 'today';
+        $now = now();
+
+        return match ($range) {
+            'today' => $query->where(function ($q) use ($now) {
+                $q->whereDate('applied_at', $now->toDateString())
+                    ->orWhere(function ($q2) use ($now) {
+                        $q2->whereNull('applied_at')->whereDate('created_at', $now->toDateString());
+                    });
+            }),
+            'week' => $query->where(function ($q) use ($now) {
+                $start = $now->copy()->startOfWeek();
+                $end = $now->copy()->endOfWeek();
+                $q->whereBetween('applied_at', [$start, $end])
+                    ->orWhere(function ($q2) use ($start, $end) {
+                        $q2->whereNull('applied_at')->whereBetween('created_at', [$start, $end]);
+                    });
+            }),
+            'month' => $query->where(function ($q) use ($now) {
+                $q->where(function ($q2) use ($now) {
+                    $q2->whereMonth('applied_at', $now->month)
+                        ->whereYear('applied_at', $now->year);
+                })->orWhere(function ($q2) use ($now) {
+                    $q2->whereNull('applied_at')
+                        ->whereMonth('created_at', $now->month)
+                        ->whereYear('created_at', $now->year);
+                });
+            }),
+            'year' => $query->where(function ($q) use ($now) {
+                $q->whereYear('applied_at', $now->year)
+                    ->orWhere(function ($q2) use ($now) {
+                        $q2->whereNull('applied_at')->whereYear('created_at', $now->year);
+                    });
+            }),
+            'all' => $query,
+            default => $query,
+        };
+    }
 }

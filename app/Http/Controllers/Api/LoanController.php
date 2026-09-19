@@ -50,6 +50,15 @@ class LoanController extends Controller
             });
         }
 
+        if ($request->string('loan_status')->toString() !== '') {
+            $query->where('loan_status', $request->string('loan_status')->toString());
+
+            if ($request->string('loan_status')->toString() === 'pending') {
+                // A loan still counts as an application only until it has been approved.
+                $query->whereNull('approved_by')->whereNull('approved_at');
+            }
+        }
+
         // Sort
         $sortField = $request->string('sort', 'created_at')->toString();
         $sortDirection = $request->string('direction', 'desc')->toString();

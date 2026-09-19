@@ -54,7 +54,7 @@ export default function NotificationDropdown() {
     });
 
     const unreadCount = unreadData?.data?.count ?? 0;
-    const notifications: Notification[] = notificationsData?.data?.data ?? [];
+    const notifications: Notification[] = notificationsData?.data?.notifications ?? [];
 
     return (
         <div className="relative" ref={dropdownRef}>

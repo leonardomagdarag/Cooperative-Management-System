@@ -30,6 +30,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Spatie\Activitylog\Models\Activity;
+use App\Support\PermissionCatalog;
 
 class MemberController extends Controller
 {
@@ -151,7 +152,7 @@ class MemberController extends Controller
     public function show(int $user): JsonResponse
     {
         $viewer = Auth::user();
-        abort_unless($viewer?->can('members.view') || $viewer?->is($user), 403);
+        abort_unless($viewer?->can('members.view') || (int) $viewer?->id === $user, 403);
 
         if ($viewer && ! BranchScope::isUnrestricted($viewer)) {
             $target = User::withTrashed()->find($user);
@@ -755,8 +756,8 @@ class MemberController extends Controller
         DB::transaction(function () use ($member) {
             $member->roles()->detach();
 
-            $member->accounts()->delete();
-            $member->loans()->delete();
+            $member->accounts()->forceDelete();
+            $member->loans()->forceDelete();
             $member->beneficiaries()->delete();
             $member->memberApplication?->delete();
 

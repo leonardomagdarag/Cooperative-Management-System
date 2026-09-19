@@ -43,7 +43,9 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
         queryKey: ['reviewable-loans'],
         queryFn: () => api.get('/api/loans?loan_status=pending&per_page=50'),
     });
-    const loans: any[] = data?.data?.data ?? [];
+    const loans: any[] = (data?.data?.data ?? []).filter(
+        (l: any) => l.review_status === null || l.review_status === 'under_review' || l.review_status === 'endorsed_for_approval',
+    );
     const selectedLoan = selectedLoanId ? loans.find((l: any) => l.id === selectedLoanId) ?? null : null;
 
     const reviewMutation = useMutation({
