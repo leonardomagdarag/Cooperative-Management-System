@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router';
 import { api } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -23,6 +24,7 @@ const pendLabel = (type: string) => (type || '').replace(/[_-]/g, ' ').replace(/
 
 export default function AdminOverview() {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const { data, isLoading } = useQuery({
         queryKey: ['overview-admin'],
         queryFn: () => api.get('/api/dashboard'),
@@ -51,6 +53,7 @@ export default function AdminOverview() {
     const pendingTx = d.pending_transactions_list || [];
     const expenses = d.recent_expenses || [];
     const announcements = d.recent_announcements || [];
+    const backupStatus = d.backup_status || null;
 
     return (
         <div className="space-y-6">
@@ -166,6 +169,57 @@ export default function AdminOverview() {
                     </div>
                 </div>
             </div>
+
+            {backupStatus && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center shrink-0">
+                                <i className="fas fa-hard-drive text-emerald-600 w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <h2 className="text-base font-bold text-gray-900">Backup Status</h2>
+                                <p className="text-xs text-gray-500">Automatic backups across all tiers.</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <HealthPill status={backupStatus.health} />
+                            {user?.permissions?.includes('backups.manage') && (
+                                <button type="button" onClick={() => navigate('/dashboard/settings', { state: { tab: 'backups' } })} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">
+                                    Manage backups <i className="fas fa-arrow-right ml-1"></i>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {(['hourly', 'daily', 'offsite'] as const).map(tier => {
+                            const b = backupStatus.tiers?.[tier] || {};
+                            return (
+                                <div key={tier} className={`rounded-xl border p-4 ${b.last_status === 'failed' ? 'border-red-200 bg-red-50/60' : b.last_status === 'running' ? 'border-blue-200 bg-blue-50/60' : 'border-gray-100 bg-gray-50/40'}`}>
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <div className="flex items-center gap-2">
+                                            <i className={`${TIER_ICONS[tier]} text-gray-500 w-4 text-center`}></i>
+                                            <span className="text-sm font-semibold text-gray-900">{TIER_TITLES[tier]}</span>
+                                        </div>
+                                        {b.last_status && (
+                                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_BADGE[b.last_status] || 'bg-gray-100 text-gray-600'}`}>{b.last_status}</span>
+                                        )}
+                                    </div>
+                                    {b.last_status ? (
+                                        <>
+                                            <p className="text-xs text-gray-500 mt-2">Last run {dt(b.last_run_at)}</p>
+                                            {b.last_filename && <p className="text-xs text-gray-700 font-mono truncate mt-1" title={b.last_filename}>{b.last_filename.split('/').pop()}</p>}
+                                            {b.last_status === 'failed' && b.message && <p className="text-xs text-red-600 mt-1 line-clamp-2">{b.message}</p>}
+                                        </>
+                                    ) : (
+                                        <p className="text-xs text-gray-400 mt-2">No automatic run yet.</p>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
                 <div className="xl:col-span-3 bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
@@ -350,6 +404,34 @@ export default function AdminOverview() {
                 </div>
             </div>
         </div>
+    );
+}
+
+const TIER_TITLES: Record<string, string> = { hourly: 'Hourly', daily: 'Daily', offsite: 'Off-Site' };
+const TIER_ICONS: Record<string, string> = { hourly: 'fas fa-clock', daily: 'fas fa-server', offsite: 'fas fa-cloud' };
+const STATUS_BADGE: Record<string, string> = {
+    success: 'bg-emerald-100 text-emerald-700',
+    failed: 'bg-red-100 text-red-700',
+    running: 'bg-blue-100 text-blue-700',
+};
+
+const dt = (v: string | null | undefined) => {
+    if (!v) return '—';
+    const t = new Date(v);
+    return isNaN(t.getTime()) ? '—' : t.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+};
+
+function HealthPill({ status }: { status: string }) {
+    const map: Record<string, { cls: string; icon: string; label: string }> = {
+        ok: { cls: 'bg-emerald-100 text-emerald-700', icon: 'fas fa-check-circle', label: 'Healthy' },
+        attention: { cls: 'bg-red-100 text-red-700', icon: 'fas fa-exclamation-circle', label: 'Needs attention' },
+        never: { cls: 'bg-gray-100 text-gray-600', icon: 'fas fa-circle-notch', label: 'No runs yet' },
+    };
+    const c = map[status] || map.never;
+    return (
+        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${c.cls}`}>
+            <i className={`${c.icon} text-xs`}></i>{c.label}
+        </span>
     );
 }
 

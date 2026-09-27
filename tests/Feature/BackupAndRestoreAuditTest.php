@@ -1,20 +1,25 @@
 <?php
 
-use Spatie\Activitylog\Models\Activity;
 use App\Models\BackupRun;
-use App\Models\SystemSetting;
 use App\Models\User;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\SystemSettingSeeder;
 use Database\Seeders\UserSeeder;
-use Illuminate\Support\Facades\Crypt;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Spatie\Activitylog\Models\Activity;
 
 beforeEach(function () {
     $this->seed(SpatieRolePermissionSeeder::class);
     $this->seed(UserSeeder::class);
     $this->seed(SystemSettingSeeder::class);
+
+    config([
+        'filesystems.disks.b2.key' => null,
+        'filesystems.disks.b2.secret' => null,
+        'filesystems.disks.b2.bucket' => null,
+        'filesystems.disks.b2.endpoint' => null,
+    ]);
 });
 
 function auditAdminWith(array $permissions = []): User
@@ -37,14 +42,11 @@ test('guest cannot access backup endpoints', function () {
     $this->getJson('/api/backups')->assertStatus(401);
     $this->getJson('/api/backups/runs')->assertStatus(401);
     $this->putJson('/api/backups/settings', [])->assertStatus(401);
-    $this->getJson('/api/backups/cloud-credentials')->assertStatus(401);
-    $this->putJson('/api/backups/cloud-credentials', [])->assertStatus(401);
-    $this->postJson('/api/backups/cloud-credentials/test', [])->assertStatus(401);
-    $this->deleteJson('/api/backups/cloud-credentials')->assertStatus(401);
-    $this->postJson('/api/backups/local/run', [])->assertStatus(401);
-    $this->postJson('/api/backups/local/cleanup')->assertStatus(401);
-    $this->getJson('/api/backups/local/download')->assertStatus(401);
-    $this->deleteJson('/api/backups/local/backup')->assertStatus(401);
+    $this->postJson('/api/backups/offsite/test', [])->assertStatus(401);
+    $this->postJson('/api/backups/hourly/run', [])->assertStatus(401);
+    $this->postJson('/api/backups/hourly/cleanup')->assertStatus(401);
+    $this->getJson('/api/backups/hourly/download')->assertStatus(401);
+    $this->deleteJson('/api/backups/hourly/backup')->assertStatus(401);
     $this->postJson('/api/backups/restore', [])->assertStatus(401);
 });
 
@@ -67,8 +69,8 @@ test('member and unauthorized officers are forbidden from backup endpoints', fun
         $this->actingAs($user)->getJson('/api/backups')->assertStatus(403);
         $this->actingAs($user)->getJson('/api/backups/runs')->assertStatus(403);
         $this->actingAs($user)->putJson('/api/backups/settings', [])->assertStatus(403);
-        $this->actingAs($user)->getJson('/api/backups/cloud-credentials')->assertStatus(403);
-        $this->actingAs($user)->postJson('/api/backups/local/run', [])->assertStatus(403);
+        $this->actingAs($user)->postJson('/api/backups/offsite/test')->assertStatus(403);
+        $this->actingAs($user)->postJson('/api/backups/hourly/run', [])->assertStatus(403);
         $this->actingAs($user)->postJson('/api/backups/restore', [])->assertStatus(403);
     }
 });
@@ -79,32 +81,16 @@ test('backups settings validation rules', function () {
     // Empty payload
     $this->actingAs($admin)
         ->putJson('/api/backups/settings', [])
-        ->assertStatus(422)
-        ->assertJsonValidationErrors(['local', 'cloud']);
+        ->assertStatus(422);
 
     // Invalid values
     $this->actingAs($admin)
         ->putJson('/api/backups/settings', [
-            'local' => [
-                'enabled' => true,
-                'schedule' => '',
-                'scope' => 'invalid_scope',
-                'retention_days' => 0, // min is 1
-            ],
-            'cloud' => [
-                'enabled' => false,
-                'schedule' => '0 5 * * *',
-                'scope' => 'db',
-                'retention_days' => 5000, // max is 3650
-            ],
+            'encryption_enabled' => 'not-a-boolean',
+            'unexpected' => 'ignored field should still allow saving',
         ])
         ->assertStatus(422)
-        ->assertJsonValidationErrors([
-            'local.schedule',
-            'local.scope',
-            'local.retention_days',
-            'cloud.retention_days',
-        ]);
+        ->assertJsonValidationErrors(['encryption_enabled']);
 });
 
 test('run rejects invalid tier or invalid scope', function () {
@@ -116,7 +102,7 @@ test('run rejects invalid tier or invalid scope', function () {
         ->assertJson(['message' => 'Invalid tier.']);
 
     $this->actingAs($admin)
-        ->postJson('/api/backups/local/run', ['scope' => 'invalid_scope'])
+        ->postJson('/api/backups/hourly/run', ['scope' => 'invalid_scope'])
         ->assertStatus(422)
         ->assertJson(['message' => 'Invalid scope.']);
 });
@@ -136,7 +122,7 @@ test('restore validation enforces current password and confirmation keyword', fu
     // Missing confirmation and invalid current_password
     $this->actingAs($admin)
         ->postJson('/api/backups/restore', [
-            'tier' => 'local',
+            'tier' => 'hourly',
             'path' => 'Laravel/test.zip',
             'scope' => 'both',
             'current_password' => 'wrong_password',
@@ -151,10 +137,10 @@ test('runs endpoint returns paginated backup runs with user attribution', functi
     $admin = auditAdminWith(['backups.view']);
 
     BackupRun::create([
-        'tier' => 'local',
+        'tier' => 'daily',
         'scope' => 'db',
         'status' => 'success',
-        'filename' => 'Laravel/backup-2026.zip',
+        'filename' => 'Laravel/backup-daily-2026.zip',
         'size' => 1024,
         'started_at' => now()->subMinutes(5),
         'finished_at' => now()->subMinutes(4),
@@ -166,30 +152,7 @@ test('runs endpoint returns paginated backup runs with user attribution', functi
         ->assertOk();
 
     expect($response->json('data.data.0.triggered_by'))->toBe($admin->email)
-        ->and($response->json('data.data.0.filename'))->toBe('Laravel/backup-2026.zip');
-});
-
-test('cloud credentials operations record audit logs', function () {
-    $admin = auditAdminWith(['backups.manage']);
-
-    // Update
-    $this->actingAs($admin)
-        ->putJson('/api/backups/cloud-credentials', [
-            'client_id' => 'client-xyz',
-            'client_secret' => 'secret-xyz',
-            'refresh_token' => 'token-xyz',
-            'folder' => 'Backups',
-        ])
-        ->assertOk();
-
-    expect(Activity::where('event', 'backup.cloud_credentials_updated')->exists())->toBeTrue();
-
-    // Clear
-    $this->actingAs($admin)
-        ->deleteJson('/api/backups/cloud-credentials')
-        ->assertOk();
-
-    expect(Activity::where('event', 'backup.cloud_credentials_cleared')->exists())->toBeTrue();
+        ->and($response->json('data.data.0.filename'))->toBe('Laravel/backup-daily-2026.zip');
 });
 
 test('web route backup ping enforces token when BACKUP_PING_TOKEN is configured', function () {
@@ -203,4 +166,23 @@ test('web route backup ping enforces token when BACKUP_PING_TOKEN is configured'
     // With invalid token
     $this->get('/backup/ping?token=wrong-token')
         ->assertStatus(403);
+});
+
+test('off-site connection test records an audit log when configured and reachable', function () {
+    Storage::fake('b2');
+    config([
+        'filesystems.disks.b2.key' => 'key',
+        'filesystems.disks.b2.secret' => 'secret',
+        'filesystems.disks.b2.region' => 'us-east-005',
+        'filesystems.disks.b2.bucket' => 'bucket',
+        'filesystems.disks.b2.endpoint' => 'https://s3.us-east-005.backblazeb2.com',
+    ]);
+
+    $admin = auditAdminWith(['backups.manage']);
+
+    $this->actingAs($admin)
+        ->postJson('/api/backups/offsite/test')
+        ->assertOk();
+
+    expect(Activity::where('event', 'backup.offsite_connection_tested')->exists())->toBeTrue();
 });

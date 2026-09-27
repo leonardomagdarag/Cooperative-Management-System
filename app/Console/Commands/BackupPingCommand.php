@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Models\SystemSetting;
 use App\Services\BackupService;
 use Illuminate\Console\Command;
 
@@ -12,7 +11,7 @@ class BackupPingCommand extends Command
      * The name and signature of the console command.
      */
     protected $signature = 'backup:ping
-                            {--tier= : Only handle this tier (local|cloud). Omitting handles every enabled tier.}';
+                            {--tier= : Only handle this tier (hourly|daily|offsite). Omitting handles every enabled tier.}';
 
     /**
      * The console command description.
@@ -21,7 +20,7 @@ class BackupPingCommand extends Command
 
     public function handle(BackupService $backupService): int
     {
-        $tiers = ['local', 'cloud'];
+        $tiers = BackupService::VALID_TIERS;
 
         if ($this->option('tier')) {
             $tiers = [$this->option('tier')];
@@ -31,15 +30,9 @@ class BackupPingCommand extends Command
 
         foreach ($tiers as $tier) {
             if (! BackupService::isValidTier($tier)) {
-                $this->error("Unknown backup tier [{$tier}]. Expected: local or cloud.");
+                $this->error("Unknown backup tier [{$tier}]. Expected: hourly, daily or offsite.");
 
                 return self::INVALID;
-            }
-
-            if (! (bool) SystemSetting::get("backup_{$tier}_enabled", $tier === 'local')) {
-                $this->line("{$tier}: disabled, skipping.");
-
-                continue;
             }
 
             if (! $backupService->isDue($tier)) {
@@ -61,6 +54,6 @@ class BackupPingCommand extends Command
             $this->info($line);
         }
 
-        return $handled === [] ? self::SUCCESS : self::SUCCESS;
+        return self::SUCCESS;
     }
 }

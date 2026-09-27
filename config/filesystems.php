@@ -56,15 +56,21 @@ return [
             'report' => false,
         ],
 
-        // Google Drive long-term backup storage (cloud tier).
-        'google' => [
-            'driver' => 'google',
-            // Optional; guard against fully missing credentials at boot.
-            'clientId' => env('GOOGLE_DRIVE_CLIENT_ID'),
-            'clientSecret' => env('GOOGLE_DRIVE_CLIENT_SECRET'),
-            'refreshToken' => env('GOOGLE_DRIVE_REFRESH_TOKEN'),
-            'folder' => env('GOOGLE_DRIVE_FOLDER', ''), // empty = root of the drive
-            // 'teamDriveId' => env('GOOGLE_DRIVE_TEAM_DRIVE_ID'),
+        // Backblaze B2 long-term backup storage (off-site tier). B2 is
+        // S3-compatible; the AWS_* values in .env point at the B2 S3 endpoint.
+        // B2 requires path-style requests, so path-style is forced regardless
+        // of the generic AWS_USE_PATH_STYLE_ENDPOINT value.
+        'b2' => [
+            'driver' => 's3',
+            'key' => env('AWS_ACCESS_KEY_ID'),
+            'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            'region' => env('AWS_DEFAULT_REGION', 'us-east-005'),
+            'bucket' => env('AWS_BUCKET'),
+            'url' => env('AWS_URL'),
+            'endpoint' => env('AWS_ENDPOINT'),
+            'use_path_style_endpoint' => true,
+            'throw' => true,
+            'report' => true,
         ],
 
         's3' => [

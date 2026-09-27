@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\BackupRun;
 use App\Services\AuditLogService;
 use App\Services\BackupService;
-use App\Services\GoogleDriveCredentialService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -16,7 +15,6 @@ class BackupController extends Controller
 {
     public function __construct(
         private readonly BackupService $backupService,
-        private readonly GoogleDriveCredentialService $googleDriveCredentials,
         private readonly AuditLogService $auditLogService,
     ) {
         //
@@ -27,17 +25,15 @@ class BackupController extends Controller
         abort_unless(Auth::user()?->can('backups.view'), 403);
 
         $settings = $this->backupService->settingsPayload();
-        $tiers = [
-            'local' => [
-                'disk' => BackupService::diskFor('local'),
-                'items' => $this->backupService->list('local'),
-            ],
-            'cloud' => [
-                'disk' => BackupService::diskFor('cloud'),
-                'items' => $this->backupService->list('cloud'),
-                'configured' => $this->backupService->isCloudConfigured(),
-            ],
-        ];
+
+        $tiers = [];
+        foreach (BackupService::VALID_TIERS as $tier) {
+            $tiers[$tier] = [
+                'disk' => BackupService::diskFor($tier),
+                'items' => $this->backupService->list($tier),
+                'offsite' => $tier === BackupService::TIER_OFFSITE,
+            ];
+        }
 
         return response()->json([
             'data' => [
@@ -92,27 +88,10 @@ class BackupController extends Controller
         abort_unless(Auth::user()?->can('backups.manage'), 403);
 
         $validated = $request->validate([
-            'encryption_enabled' => 'boolean',
-            'local' => 'required|array',
-            'local.enabled' => 'boolean',
-            'local.schedule' => 'required|string|max:100',
-            'local.scope' => 'required|in:db,files,both',
-            'local.retention_days' => 'required|integer|min:1|max:3650',
-            'cloud' => 'required|array',
-            'cloud.enabled' => 'boolean',
-            'cloud.schedule' => 'required|string|max:100',
-            'cloud.scope' => 'required|in:db,files,both',
-            'cloud.retention_days' => 'required|integer|min:1|max:3650',
+            'encryption_enabled' => 'required|boolean',
         ]);
 
-        if (($validated['cloud']['enabled'] ?? false) && ! $this->backupService->isCloudConfigured()) {
-            return response()->json([
-                'message' => 'Google Drive is not configured. Save the client credentials from Settings → Backup & Restore first.',
-                'code' => 'google_drive_unconfigured',
-            ], 422);
-        }
-
-        $this->backupService->updateSettings($validated);
+        $this->backupService->updateEncryption((bool) ($validated['encryption_enabled'] ?? true));
 
         return response()->json(['message' => 'Backup settings updated.']);
     }
@@ -125,8 +104,8 @@ class BackupController extends Controller
             return response()->json(['message' => 'Invalid tier.'], 422);
         }
 
-        if ($tier === BackupService::TIER_CLOUD && ! $this->backupService->isCloudConfigured()) {
-            return response()->json(['message' => 'Google Drive is not configured. Save the client credentials from Settings → Backup & Restore first.'], 422);
+        if ($tier === BackupService::TIER_OFFSITE && ! $this->backupService->isOffsiteConfigured()) {
+            return response()->json(['message' => 'Backblaze B2 is not configured. Set the AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION, AWS_BUCKET and AWS_ENDPOINT values in .env first.'], 422);
         }
 
         $scope = $request->input('scope', 'both');
@@ -136,13 +115,13 @@ class BackupController extends Controller
         }
 
         try {
-            $run = $this->backupService->run($tier, $scope, Auth::user());
+            $run = $this->backupService->queueRun($tier, $scope, Auth::user());
         } catch (\Throwable $e) {
-            return response()->json(['message' => $e->getMessage()], 500);
+            return response()->json(['message' => $e->getMessage()], $e instanceof \RuntimeException ? 409 : 500);
         }
 
         return response()->json([
-            'message' => $run->status === 'success' ? 'Backup completed successfully.' : 'Backup failed.',
+            'message' => 'Backup queued.',
             'run' => [
                 'id' => $run->id,
                 'tier' => $run->tier,
@@ -153,7 +132,7 @@ class BackupController extends Controller
                 'started_at' => $run->started_at?->toISOString(),
                 'finished_at' => $run->finished_at?->toISOString(),
             ],
-        ], $run->status === 'success' ? 201 : 500);
+        ], 202);
     }
 
     public function cleanup(string $tier): JsonResponse
@@ -195,86 +174,50 @@ class BackupController extends Controller
         try {
             $this->backupService->delete($tier, $path, Auth::user());
         } catch (\Throwable $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return response()->json(['message' => $e->getMessage()], $e instanceof \RuntimeException ? 409 : 422);
         }
 
         return response()->json(['message' => 'Backup deleted.']);
     }
 
-    public function cloudCredentials(): JsonResponse
-    {
-        abort_unless(Auth::user()?->can('backups.view'), 403);
-
-        return response()->json(['data' => $this->googleDriveCredentials->summary()]);
-    }
-
-    public function updateCloudCredentials(Request $request): JsonResponse
+    /**
+     * Manually re-check connectivity to the off-site (Backblaze B2) storage.
+     */
+    public function testOffsite(): JsonResponse
     {
         abort_unless(Auth::user()?->can('backups.manage'), 403);
 
-        $validated = $request->validate([
-            'client_id' => 'nullable|string|max:255',
-            'client_secret' => 'nullable|string|max:255',
-            'refresh_token' => 'nullable|string|max:4096',
-            'folder' => 'nullable|string|max:1024',
-            'team_drive_id' => 'nullable|string|max:255',
-        ]);
-
-        $this->googleDriveCredentials->store($validated);
+        $status = $this->backupService->offsiteStatus();
 
         $this->auditLogService->log(
-            'backup.cloud_credentials_updated',
-            'Google Drive backup credentials were updated.',
+            'backup.offsite_connection_tested',
+            $status['reachable']
+                ? 'Off-site backup connection test succeeded.'
+                : 'Off-site backup connection test failed.',
             'backup',
             null,
             Auth::user(),
-            ['configured' => $this->googleDriveCredentials->isConfigured()],
+            ['reachable' => $status['reachable']],
         );
 
-        return response()->json([
-            'message' => $this->googleDriveCredentials->isConfigured()
-                ? 'Google Drive credentials saved and ready to use.'
-                : 'Google Drive credentials saved. The client ID, secret and refresh token are all required to connect.',
-            'data' => $this->googleDriveCredentials->summary(),
-        ]);
-    }
-
-    public function testCloudCredentials(): JsonResponse
-    {
-        abort_unless(Auth::user()?->can('backups.manage'), 403);
-
-        try {
-            $this->googleDriveCredentials->testConnection();
-        } catch (\Throwable $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+        if (! $status['configured']) {
+            return response()->json([
+                'message' => 'Backblaze B2 is not configured. Set the AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION, AWS_BUCKET and AWS_ENDPOINT values in .env.',
+                'data' => $status,
+            ], 422);
         }
 
-        $this->auditLogService->log(
-            'backup.cloud_credentials_tested',
-            'Google Drive backup connection test succeeded.',
-            'backup',
-            null,
-            Auth::user(),
-        );
+        if (! $status['reachable']) {
+            return response()->json([
+                'message' => 'Could not reach Backblaze B2. Check the .env credentials, bucket and endpoint.',
+                'data' => $status,
+            ], 422);
+        }
 
-        return response()->json(['message' => 'Connected to Google Drive successfully.', 'data' => $this->googleDriveCredentials->summary()]);
-    }
-
-    public function clearCloudCredentials(): JsonResponse
-    {
-        abort_unless(Auth::user()?->can('backups.manage'), 403);
-
-        $this->googleDriveCredentials->clear();
-
-        $this->auditLogService->log(
-            'backup.cloud_credentials_cleared',
-            'Google Drive backup credentials stored in the database were removed.',
-            'backup',
-            null,
-            Auth::user(),
-        );
-
-        return response()->json(['message' => 'Stored Google Drive credentials removed.', 'data' => $this->googleDriveCredentials->summary()]);
+        return response()->json([
+            'message' => 'Connected to Backblaze B2 successfully.',
+            'data' => $status,
+        ]);
     }
 
     public function restore(Request $request): JsonResponse
@@ -282,26 +225,26 @@ class BackupController extends Controller
         abort_unless(Auth::user()?->can('backups.restore'), 403);
 
         $validated = $request->validate([
-            'tier' => 'required|in:local,cloud',
+            'tier' => 'required|in:hourly,daily,offsite',
             'path' => 'required|string|max:500',
             'scope' => 'required|in:db,files,both',
             'current_password' => ['required', 'current_password'],
             'confirmation' => 'required|string|in:RESTORE',
-            'archive_password' => 'required|string',
+            'archive_password' => 'nullable|string',
         ]);
 
         try {
-            $this->backupService->restore(
+            $run = $this->backupService->queueRestore(
                 $validated['tier'],
                 $validated['path'],
                 $validated['scope'],
-                $validated['archive_password'],
+                $validated['archive_password'] ?? '',
                 Auth::user(),
             );
         } catch (\Throwable $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        return response()->json(['message' => 'Restore completed. The application is back online.']);
+        return response()->json(['message' => 'Restore queued. The application will enter maintenance mode only after validation succeeds.', 'run_id' => $run->id], 202);
     }
 }

@@ -260,10 +260,7 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     Route::get('/backups', [BackupController::class, 'index']);
     Route::get('/backups/runs', [BackupController::class, 'runs']);
     Route::put('/backups/settings', [BackupController::class, 'updateSettings']);
-    Route::get('/backups/cloud-credentials', [BackupController::class, 'cloudCredentials']);
-    Route::put('/backups/cloud-credentials', [BackupController::class, 'updateCloudCredentials']);
-    Route::post('/backups/cloud-credentials/test', [BackupController::class, 'testCloudCredentials']);
-    Route::delete('/backups/cloud-credentials', [BackupController::class, 'clearCloudCredentials']);
+    Route::post('/backups/offsite/test', [BackupController::class, 'testOffsite']);
     Route::post('/backups/{tier}/run', [BackupController::class, 'run']);
     Route::post('/backups/{tier}/cleanup', [BackupController::class, 'cleanup']);
     Route::get('/backups/{tier}/download', [BackupController::class, 'download']);

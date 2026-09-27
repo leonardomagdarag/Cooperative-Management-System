@@ -155,7 +155,7 @@ return [
              *
              * Setting of 0 for some algorithms may switch to the strongest compression.
              */
-            'compression_level' => 9,
+            'compression_level' => 6,
 
             /*
          * The filename prefix used for the backup zip file.
@@ -165,12 +165,13 @@ return [
             /*
          * The disk names on which the backups will be stored.
          *
-         * Both tiers are always in the list so the scheduler can target either one.
-         * BackupService narrows "destinations" down to the tier's disk at runtime.
+         * Both on-server and off-site disks are always in the list so the
+         * scheduler can target either one. BackupService narrows
+         * "destinations" down to the tier's disk at runtime.
          */
             'disks' => [
                 'local_backups',
-                'google',
+                'b2',
             ],
 
             /*
@@ -242,11 +243,15 @@ return [
         'notifiable' => Notifiable::class,
 
         'mail' => [
-            'to' => env('BACKUP_NOTIFICATION_EMAIL', env('MAIL_FROM_ADDRESS', 'your@example.com')),
+            // Spatie validates these addresses eagerly while building its config, so a
+            // blank value throws "is not a valid email address" and takes down every
+            // artisan command. The ?: fallbacks absorb empty-string env values, which
+            // env()'s own default argument does not. (?: not || -- || yields a bool.)
+            'to' => env('BACKUP_NOTIFICATION_EMAIL') ?: env('MAIL_FROM_ADDRESS') ?: 'your@example.com',
 
             'from' => [
-                'address' => env('MAIL_FROM_ADDRESS', 'hello@example.com'),
-                'name' => env('MAIL_FROM_NAME', 'Example'),
+                'address' => env('MAIL_FROM_ADDRESS') ?: 'hello@example.com',
+                'name' => env('MAIL_FROM_NAME') ?: 'Example',
             ],
         ],
 
@@ -303,7 +308,7 @@ return [
     'monitor_backups' => [
         [
             'name' => env('APP_NAME', 'laravel-backup'),
-            'disks' => ['local_backups', 'google'],
+            'disks' => ['local_backups', 'b2'],
             'health_checks' => [
                 MaximumAgeInDays::class => 1,
                 MaximumStorageInMegabytes::class => 5000,

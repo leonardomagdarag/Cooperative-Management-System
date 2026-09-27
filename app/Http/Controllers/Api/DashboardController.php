@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Account;
 use App\Models\Announcement;
+use App\Models\BackupRun;
 use App\Models\Expense;
 use App\Models\Loan;
 use App\Models\Transaction;
@@ -266,7 +267,72 @@ class DashboardController extends Controller
             'pending_transactions_list' => $pendingTransactions,
             'recent_expenses' => $recentExpenses,
             'recent_announcements' => $recentAnnouncements,
+            'backup_status' => $this->buildBackupStatus(),
         ]);
+    }
+
+    // ─── Backup status ─────────────────────────────────────────
+
+    private function buildBackupStatus(): array
+    {
+        $tiers = ['hourly', 'daily', 'offsite'];
+
+        $lastRuns = BackupRun::query()
+            ->whereIn('tier', $tiers)
+            ->latest()
+            ->get()
+            ->groupBy('tier')
+            ->map(fn ($runs) => $runs->first());
+
+        $anyRun = false;
+        $anyFailure = false;
+        $latestAt = null;
+
+        foreach ($tiers as $tier) {
+            $last = $lastRuns->get($tier);
+            if ($last) {
+                $anyRun = true;
+                if ($last->status === 'failed') {
+                    $anyFailure = true;
+                }
+                if ($last->started_at && ($latestAt === null || $last->started_at->greaterThan($latestAt))) {
+                    $latestAt = $last->started_at;
+                }
+            }
+        }
+
+        return [
+            'health' => $anyFailure ? 'attention' : ($anyRun ? 'ok' : 'never'),
+            'last_run_at' => $latestAt?->toISOString() ?? null,
+            'tiers' => collect($tiers)->mapWithKeys(fn ($tier) => [
+                $tier => $this->backupTierStatus($lastRuns->get($tier)),
+            ])->all(),
+        ];
+    }
+
+    private function backupTierStatus(?BackupRun $last): array
+    {
+        if (! $last) {
+            return [
+                'last_status' => null,
+                'last_scope' => null,
+                'last_filename' => null,
+                'last_size' => null,
+                'last_run_at' => null,
+                'last_finished_at' => null,
+                'message' => null,
+            ];
+        }
+
+        return [
+            'last_status' => $last->status,
+            'last_scope' => $last->scope,
+            'last_filename' => $last->filename,
+            'last_size' => $last->size,
+            'last_run_at' => $last->started_at?->toISOString(),
+            'last_finished_at' => $last->finished_at?->toISOString(),
+            'message' => $last->message,
+        ];
     }
 
     // ─── Manager ───────────────────────────────────────────────

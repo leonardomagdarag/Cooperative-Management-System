@@ -1,5 +1,8 @@
 import { api } from './client';
 
+export type BackupTier = 'hourly' | 'daily' | 'offsite';
+export type BackupScope = 'db' | 'files' | 'both';
+
 export interface BackupItem {
     path: string;
     name: string;
@@ -7,37 +10,43 @@ export interface BackupItem {
     created_at: string | null;
 }
 
-export interface BackupTierSettings {
-    enabled: boolean;
+export interface BackupTierInfo {
+    disk: string;
     schedule: string;
-    scope: 'db' | 'files' | 'both';
-    retention_days: number;
+    scope: BackupScope;
+    retention: { keep?: number; days?: number };
     last_auto_run: string | null;
-    configured?: boolean;
+}
+
+export interface OffsiteStatus {
+    configured: boolean;
+    reachable: boolean | null;
+    checked_at: string | null;
 }
 
 export interface BackupSettings {
     encryption_enabled: boolean;
-    mesh: {
-        local: BackupTierSettings;
-        cloud: BackupTierSettings;
-    };
+    tiers: Record<BackupTier, BackupTierInfo>;
+    offsite: OffsiteStatus;
+}
+
+export interface BackupTierList {
+    hourly: { disk: string; items: BackupItem[] };
+    daily: { disk: string; items: BackupItem[] };
+    offsite: { disk: string; items: BackupItem[] };
 }
 
 export interface BackupIndexData {
     settings: BackupSettings;
-    tiers: {
-        local: { disk: string; items: BackupItem[] };
-        cloud: { disk: string; items: BackupItem[]; configured: boolean };
-    };
+    tiers: BackupTierList;
     recent_runs: BackupRun[];
 }
 
 export interface BackupRun {
     id: number;
-    tier: 'local' | 'cloud';
-    scope: 'db' | 'files' | 'both';
-    status: 'running' | 'success' | 'failed';
+    tier: BackupTier;
+    scope: BackupScope;
+    status: 'queued' | 'running' | 'success' | 'failed';
     filename: string | null;
     size: number | null;
     message: string | null;
@@ -50,74 +59,37 @@ export async function getBackups() {
     return api.get('/api/backups');
 }
 
-export async function updateBackupSettings(data: {
-    encryption_enabled: boolean;
-    local: Omit<BackupTierSettings, 'last_auto_run' | 'configured'>;
-    cloud: Omit<BackupTierSettings, 'last_auto_run' | 'configured'>;
-}) {
+export async function updateBackupSettings(data: { encryption_enabled: boolean }) {
     return api.put('/api/backups/settings', data);
 }
 
-export async function runBackup(tier: 'local' | 'cloud', scope: 'db' | 'files' | 'both') {
+export async function runBackup(tier: BackupTier, scope: BackupScope) {
     return api.post(`/api/backups/${tier}/run`, { scope });
 }
 
-export async function cleanupBackup(tier: 'local' | 'cloud') {
+export async function cleanupBackup(tier: BackupTier) {
     return api.post(`/api/backups/${tier}/cleanup`);
+}
+
+export async function testOffsiteStorage() {
+    return api.post('/api/backups/offsite/test');
 }
 
 export function backupDownloadUrl(tier: string, path: string) {
     return `/api/backups/${tier}/download?file=${encodeURIComponent(path)}`;
 }
 
-export async function deleteBackup(tier: 'local' | 'cloud', path: string) {
+export async function deleteBackup(tier: BackupTier, path: string) {
     return api.delete(`/api/backups/${tier}/backup`, { params: { file: path } });
 }
 
 export async function restoreBackup(data: {
-    tier: 'local' | 'cloud';
+    tier: BackupTier;
     path: string;
-    scope: 'db' | 'files' | 'both';
+    scope: BackupScope;
     current_password: string;
     confirmation: string;
-    archive_password: string;
+    archive_password?: string;
 }) {
     return api.post('/api/backups/restore', data);
-}
-
-export interface CloudCredentialsSummary {
-    configured: boolean;
-    folder: string | null;
-    team_drive_id: string | null;
-    stored: {
-        client_id: boolean;
-        client_secret: boolean;
-        refresh_token: boolean;
-        folder: boolean;
-        team_drive_id: boolean;
-    };
-}
-
-export interface CloudCredentialsInput {
-    client_id?: string;
-    client_secret?: string;
-    refresh_token?: string;
-    folder?: string;
-    team_drive_id?: string;
-}
-
-export async function getCloudCredentials() {
-    return api.get('/api/backups/cloud-credentials');
-}
-
-export async function saveCloudCredentials(data: CloudCredentialsInput) {
-    return api.put('/api/backups/cloud-credentials', data);
-}
-
-export async function testCloudCredentials() {
-    return api.post('/api/backups/cloud-credentials/test');
-}
-
-export async function clearCloudCredentials() {
-    return api.delete('/api/backups/cloud-credentials');
 }

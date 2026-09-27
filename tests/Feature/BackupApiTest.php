@@ -1,22 +1,29 @@
 <?php
 
-use App\Models\AppCredential;
 use App\Models\BackupRun;
 use App\Models\SystemSetting;
 use App\Models\User;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\SystemSettingSeeder;
 use Database\Seeders\UserSeeder;
-use Illuminate\Support\Facades\Crypt;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 beforeEach(function () {
     $this->seed(SpatieRolePermissionSeeder::class);
     $this->seed(UserSeeder::class);
     $this->seed(SystemSettingSeeder::class);
+
+    // Off-site (Backblaze B2) is unconfigured in tests by default so no live
+    // network calls are attempted.
+    config([
+        'filesystems.disks.b2.key' => null,
+        'filesystems.disks.b2.secret' => null,
+        'filesystems.disks.b2.bucket' => null,
+        'filesystems.disks.b2.endpoint' => null,
+    ]);
 });
 
-function adminWithPermission(string $permission): User
+function backupAdminWith(string $permission): User
 {
     $admin = User::factory()->create([
         'role' => 'admin',
@@ -44,13 +51,13 @@ test('backups index requires the backups.view permission', function () {
 });
 
 test('admin with backups.view can read backup index and recent runs', function () {
-    $admin = adminWithPermission('backups.view');
+    $admin = backupAdminWith('backups.view');
 
     BackupRun::create([
-        'tier' => 'local',
+        'tier' => 'daily',
         'scope' => 'both',
         'status' => 'success',
-        'filename' => 'Laravel/backup-test.zip',
+        'filename' => 'Laravel/backup-daily-test.zip',
         'size' => 123,
         'started_at' => now()->subMinute(),
         'finished_at' => now(),
@@ -60,40 +67,42 @@ test('admin with backups.view can read backup index and recent runs', function (
         ->getJson('/api/backups')
         ->assertOk()
         ->assertJsonPath('data.settings.encryption_enabled', true)
-        ->assertJsonPath('data.settings.mesh.local.enabled', true)
+        ->assertJsonPath('data.settings.offsite.configured', false)
+        ->assertJsonStructure([
+            'data' => [
+                'settings' => ['tiers' => ['hourly', 'daily', 'offsite']],
+                'tiers' => ['hourly', 'daily', 'offsite'],
+            ],
+        ])
         ->assertJsonCount(1, 'data.recent_runs');
 });
 
-test('admin can update backup settings without cloud config', function () {
-    $admin = adminWithPermission('backups.manage');
+test('admin can toggle backup encryption from settings', function () {
+    $admin = backupAdminWith('backups.manage');
 
     $this->actingAs($admin)
-        ->putJson('/api/backups/settings', [
-            'encryption_enabled' => true,
-            'local' => ['enabled' => true, 'schedule' => '0 4 * * *', 'scope' => 'db', 'retention_days' => 3],
-            'cloud' => ['enabled' => false, 'schedule' => '0 5 * * 1', 'scope' => 'both', 'retention_days' => 14],
-        ])
+        ->putJson('/api/backups/settings', ['encryption_enabled' => false])
         ->assertOk()
         ->assertJsonPath('message', 'Backup settings updated.');
 
-    expect(SystemSetting::get('backup_local_schedule'))->toBe('0 4 * * *')
-        ->and(SystemSetting::get('backup_local_retention_days'))->toBe(3)
-        ->and(SystemSetting::get('backup_cloud_enabled'))->toBe(false);
+    expect(SystemSetting::get('backup_encryption_enabled'))->toBeFalse();
 });
 
-test('enabling the cloud tier while unconfigured is rejected', function () {
-    config(['filesystems.disks.google.clientId' => null]);
-
-    $admin = adminWithPermission('backups.manage');
+test('backup settings rejects an empty payload', function () {
+    $admin = backupAdminWith('backups.manage');
 
     $this->actingAs($admin)
-        ->putJson('/api/backups/settings', [
-            'encryption_enabled' => true,
-            'local' => ['enabled' => true, 'schedule' => '0 4 * * *', 'scope' => 'both', 'retention_days' => 3],
-            'cloud' => ['enabled' => true, 'schedule' => '0 5 * * 1', 'scope' => 'both', 'retention_days' => 14],
-        ])
+        ->putJson('/api/backups/settings', [])
+        ->assertStatus(422);
+});
+
+test('enabling the off-site tier while unconfigured is rejected on run', function () {
+    $admin = backupAdminWith('backups.manage');
+
+    $this->actingAs($admin)
+        ->postJson('/api/backups/offsite/run', ['scope' => 'both'])
         ->assertStatus(422)
-        ->assertJson(['code' => 'google_drive_unconfigured']);
+        ->assertJson(['message' => 'Backblaze B2 is not configured. Set the AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION, AWS_BUCKET and AWS_ENDPOINT values in .env first.']);
 });
 
 test('restore rejects when unauthenticated actor lacks backups.restore permission', function () {
@@ -106,8 +115,8 @@ test('restore rejects when unauthenticated actor lacks backups.restore permissio
 
     $this->actingAs($member)
         ->postJson('/api/backups/restore', [
-            'tier' => 'local',
-            'path' => 'Laravel/backup.zip',
+            'tier' => 'hourly',
+            'path' => 'Laravel/backup-hourly-test.zip',
             'scope' => 'both',
             'current_password' => 'password',
             'confirmation' => 'RESTORE',
@@ -116,20 +125,35 @@ test('restore rejects when unauthenticated actor lacks backups.restore permissio
         ->assertStatus(403);
 });
 
-test('backups.manage allows running a local files backup that writes an archive', function () {
-    config(['backup.backup.password' => 'test-encryption-key']);
-    config(['filesystems.disks.google.clientId' => null]);
-
-    $admin = adminWithPermission('backups.manage');
+test('run rejects invalid tier or invalid scope', function () {
+    $admin = backupAdminWith('backups.manage');
 
     $this->actingAs($admin)
-        ->postJson('/api/backups/local/run', ['scope' => 'files'])
-        ->assertStatus(201);
+        ->postJson('/api/backups/invalid_tier/run')
+        ->assertStatus(422)
+        ->assertJson(['message' => 'Invalid tier.']);
 
-    expect(BackupRun::where('tier', 'local')->latest()->first()->status)->toBe('success');
+    $this->actingAs($admin)
+        ->postJson('/api/backups/hourly/run', ['scope' => 'invalid_scope'])
+        ->assertStatus(422)
+        ->assertJson(['message' => 'Invalid scope.']);
 });
 
-test('cloud credentials status is not exposed without the backups.view permission', function () {
+test('backups.manage queues an hourly files backup', function () {
+    config(['backup.backup.password' => 'test-encryption-key']);
+    config(['backup.backup.encryption' => 'none']);
+
+    $admin = backupAdminWith('backups.manage');
+
+    $this->actingAs($admin)
+        ->postJson('/api/backups/hourly/run', ['scope' => 'files'])
+        ->assertStatus(202)
+        ->assertJsonPath('run.status', 'queued');
+
+    expect(BackupRun::where('tier', 'hourly')->latest()->first()->status)->toBe('success');
+});
+
+test('off-site status and test endpoint require backups.manage and report unconfigured', function () {
     $member = User::factory()->create([
         'role' => 'member',
         'email' => 'member-c-'.Str::random(8).'@example.com',
@@ -138,69 +162,33 @@ test('cloud credentials status is not exposed without the backups.view permissio
     ]);
 
     $this->actingAs($member)
-        ->getJson('/api/backups/cloud-credentials')
+        ->postJson('/api/backups/offsite/test')
         ->assertStatus(403);
-});
 
-test('admin can save Google Drive credentials and they are stored encrypted', function () {
-    config(['filesystems.disks.google.clientId' => null]);
-
-    $admin = adminWithPermission('backups.manage');
+    $admin = backupAdminWith('backups.manage');
 
     $this->actingAs($admin)
-        ->putJson('/api/backups/cloud-credentials', [
-            'client_id' => 'client-123.apps.googleusercontent.com',
-            'client_secret' => 'super-secret',
-            'refresh_token' => 'ref-token-abc',
-            'folder' => 'Coop Backups',
-        ])
-        ->assertOk()
-        ->assertJsonPath('data.configured', true)
-        ->assertJsonPath('data.folder', 'Coop Backups');
-
-    $stored = AppCredential::where('key', 'gdrive_client_secret')->first();
-    expect($stored)->not->toBeNull();
-
-    // Value must be encrypted at rest (never plaintext in the table).
-    $raw = DB::table('app_credentials')->where('key', 'gdrive_client_secret')->value('value');
-    expect($raw)->not->toBe('super-secret')
-        ->and(Crypt::decryptString($raw))->toBe('super-secret');
-
-    // The cloud tier becomes configured, so enabling it in settings now works.
-    $this->actingAs($admin)
-        ->putJson('/api/backups/settings', [
-            'encryption_enabled' => true,
-            'local' => ['enabled' => true, 'schedule' => '0 4 * * *', 'scope' => 'both', 'retention_days' => 3],
-            'cloud' => ['enabled' => true, 'schedule' => '0 5 * * 1', 'scope' => 'both', 'retention_days' => 14],
-        ])
-        ->assertOk()
-        ->assertJsonPath('message', 'Backup settings updated.');
+        ->postJson('/api/backups/offsite/test')
+        ->assertStatus(422)
+        ->assertJsonPath('data.configured', false)
+        ->assertJsonPath('data.reachable', null);
 });
 
-test('cloud credentials summary never leaks secret values', function () {
-    AppCredential::create(['key' => 'gdrive_client_secret', 'value' => 'super-secret']);
+test('off-site reports as connected when configured and reachable', function () {
+    Storage::fake('b2');
+    config([
+        'filesystems.disks.b2.key' => 'some-key',
+        'filesystems.disks.b2.secret' => 'some-secret',
+        'filesystems.disks.b2.region' => 'us-east-005',
+        'filesystems.disks.b2.bucket' => 'some-bucket',
+        'filesystems.disks.b2.endpoint' => 'https://s3.us-east-005.backblazeb2.com',
+    ]);
 
-    $admin = adminWithPermission('backups.view');
+    $admin = backupAdminWith('backups.manage');
 
     $response = $this->actingAs($admin)
-        ->getJson('/api/backups/cloud-credentials')
-        ->assertOk();
-
-    expect($response->json('data'))->not->toHaveKey('client_secret')
-        ->and($response->getContent())->not->toContain('super-secret')
-        ->and($response->json('data.stored.client_secret'))->toBeTrue();
-});
-
-test('admin can remove stored Google Drive credentials', function () {
-    AppCredential::create(['key' => 'gdrive_client_id', 'value' => 'client-123']);
-    AppCredential::create(['key' => 'gdrive_refresh_token', 'value' => 'token']);
-
-    $admin = adminWithPermission('backups.manage');
-
-    $this->actingAs($admin)
-        ->deleteJson('/api/backups/cloud-credentials')
+        ->postJson('/api/backups/offsite/test')
         ->assertOk()
-        ->assertJsonPath('data.configured', false);
-
-    expect(AppCredential::count())->toBe(0);
+        ->assertJsonPath('data.configured', true)
+        ->assertJsonPath('data.reachable', true);
 });

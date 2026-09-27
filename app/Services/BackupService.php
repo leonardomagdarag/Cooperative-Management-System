@@ -3,6 +3,9 @@
 namespace App\Services;
 
 use App\Models\BackupRun;
+use App\Models\RestoreRun;
+use App\Jobs\RunBackupJob;
+use App\Jobs\RestoreBackupJob;
 use App\Models\SystemSetting;
 use App\Models\User;
 use Cron\CronExpression;
@@ -20,9 +23,11 @@ use Throwable;
 
 class BackupService
 {
-    public const TIER_LOCAL = 'local';
+    public const TIER_HOURLY = 'hourly';
 
-    public const TIER_CLOUD = 'cloud';
+    public const TIER_DAILY = 'daily';
+
+    public const TIER_OFFSITE = 'offsite';
 
     public const SCOPE_DB = 'db';
 
@@ -30,16 +35,56 @@ class BackupService
 
     public const SCOPE_BOTH = 'both';
 
+    /**
+     * Where each backup job stores its archives.
+     *
+     * Both hourly and daily live on the shared on-server disk; the off-site
+     * job writes to the Backblaze B2 S3-compatible disk. Because hourly and
+     * daily share a disk, each tier writes with its own filename prefix so
+     * listing and cleanup always know which job an archive belongs to.
+     */
     public const DISKS = [
-        self::TIER_LOCAL => 'local_backups',
-        self::TIER_CLOUD => 'google',
+        self::TIER_HOURLY => 'local_backups',
+        self::TIER_DAILY => 'local_backups',
+        self::TIER_OFFSITE => 'b2',
     ];
+
+    /**
+     * Fixed schedules. Daily jobs are anchored at 03:00; hourly runs on the
+     * hour. These are deliberate system defaults — no longer user-editable.
+     */
+    public const SCHEDULES = [
+        self::TIER_HOURLY => '0 * * * *',
+        self::TIER_DAILY => '0 3 * * *',
+        self::TIER_OFFSITE => '0 3 * * *',
+    ];
+
+    /**
+     * Per-tier archive filename prefix. Keeps archives distinguishable on
+     * shared disks and lets each tier's retention act only on its own files.
+     */
+    public const FILENAME_PREFIXES = [
+        self::TIER_HOURLY => 'backup-hourly-',
+        self::TIER_DAILY => 'backup-daily-',
+        self::TIER_OFFSITE => 'backup-offsite-',
+    ];
+
+    /**
+     * How many of the newest hourly archives to retain at any time.
+     */
+    public const HOURLY_KEEP = 3;
+
+    /**
+     * How many days of archives to retain for the daily and off-site jobs.
+     */
+    public const RETENTION_DAYS = 7;
 
     public const VALID_SCOPES = [self::SCOPE_DB, self::SCOPE_FILES, self::SCOPE_BOTH];
 
+    public const VALID_TIERS = [self::TIER_HOURLY, self::TIER_DAILY, self::TIER_OFFSITE];
+
     public function __construct(
         private readonly AuditLogService $auditLogService,
-        private readonly GoogleDriveCredentialService $googleDriveCredentials,
     ) {
         //
     }
@@ -51,7 +96,7 @@ class BackupService
 
     public static function isValidTier(string $tier): bool
     {
-        return isset(self::DISKS[$tier]);
+        return in_array($tier, self::VALID_TIERS, true);
     }
 
     public static function isValidScope(string $scope): bool
@@ -59,9 +104,36 @@ class BackupService
         return in_array($scope, self::VALID_SCOPES, true);
     }
 
-    public function isCloudConfigured(): bool
+    public static function prefixFor(string $tier): string
     {
-        return $this->googleDriveCredentials->isConfigured();
+        return self::FILENAME_PREFIXES[$tier];
+    }
+
+    /** Both spellings are readers during the archive compatibility window. */
+    public static function prefixesFor(string $tier): array
+    {
+        return $tier === self::TIER_OFFSITE
+            ? [self::prefixFor($tier), 'backup-offsight-']
+            : [self::prefixFor($tier)];
+    }
+
+    public static function scheduleFor(string $tier): string
+    {
+        return self::SCHEDULES[$tier];
+    }
+
+    /**
+     * Whether the Backblaze B2 off-site tier has its credentials/endpoint
+     * configured (from .env, via the filesystems "b2" disk).
+     */
+    public function isOffsiteConfigured(): bool
+    {
+        $disk = config('filesystems.disks.b2');
+
+        return (bool) ($disk['key'] ?? null)
+            && (bool) ($disk['secret'] ?? null)
+            && (bool) ($disk['bucket'] ?? null)
+            && (bool) ($disk['endpoint'] ?? null);
     }
 
     /**
@@ -76,8 +148,6 @@ class BackupService
             throw new InvalidArgumentException("Unknown backup scope [{$scope}].");
         }
 
-        $this->applyRuntimeConfiguration($tier);
-
         $run = BackupRun::create([
             'tier' => $tier,
             'scope' => $scope,
@@ -86,10 +156,56 @@ class BackupService
             'triggered_by' => $actor instanceof User ? $actor->id : null,
         ]);
 
+        $this->executeRun($run, $actor);
+
+        return $run->fresh();
+    }
+
+    /** Queue a run after persisting its observable state. */
+    public function queueRun(string $tier, string $scope, ?User $actor = null): BackupRun
+    {
+        if (! self::isValidTier($tier) || ! self::isValidScope($scope)) {
+            throw new InvalidArgumentException('Invalid backup tier or scope.');
+        }
+        if (BackupRun::query()->where('tier', $tier)->whereIn('status', ['queued', 'running'])->exists()) {
+            throw new RuntimeException("A {$tier} backup is already queued or running.");
+        }
+        if (RestoreRun::query()->whereIn('status', ['queued', 'running'])->exists()) {
+            throw new RuntimeException('A restore operation is already queued or running.');
+        }
+        $run = BackupRun::create(['tier' => $tier, 'scope' => $scope, 'status' => 'queued', 'triggered_by' => $actor?->id]);
+        RunBackupJob::dispatch($run->id);
+        return $run;
+    }
+
+    public function queueRestore(string $tier, string $path, string $scope, string $password, User $actor): RestoreRun
+    {
+        $this->validateRestoreRequest($tier, $path, $scope, $password);
+        if (BackupRun::query()->whereIn('status', ['queued', 'running'])->exists() || RestoreRun::query()->whereIn('status', ['queued', 'running'])->exists()) {
+            throw new RuntimeException('A backup or restore operation is already queued or running.');
+        }
+        $run = RestoreRun::create(['tier' => $tier, 'path' => $path, 'scope' => $scope, 'status' => 'queued', 'triggered_by' => $actor->id]);
+        RestoreBackupJob::dispatch($run->id, $password);
+        return $run;
+    }
+
+    /** Execute the already-created run. Kept separate so HTTP only enqueues. */
+    public function executeRun(BackupRun $run, Model|Authenticatable|null $actor = null): void
+    {
+        $tier = $run->tier;
+        $scope = $run->scope;
+        $this->applyRuntimeConfiguration($tier, (string) $run->id);
         try {
             // Spatie's own mail notifications would block a run (or fail it) when the
             // SMTP channel is unavailable. Status is surfaced via audit logs + the UI.
-            $params = ['--only-to-disk' => self::diskFor($tier), '--disable-notifications' => true, '--no-interaction' => true];
+            //
+            // --config=backup forces the spawned command to rebuild its Config from
+            // the (per-tier narrowed) backup config repository instead of trusting the
+            // container's scoped binding, which can snapshot a stale full-disk list.
+            if ($tier === self::TIER_OFFSITE) {
+                $backup = $this->replicateDailyArchive();
+            } else {
+            $params = ['--only-to-disk' => self::diskFor($tier), '--disable-notifications' => true, '--no-interaction' => true, '--config' => 'backup'];
 
             if ($scope === self::SCOPE_DB) {
                 $params['--only-db'] = true;
@@ -104,6 +220,7 @@ class BackupService
             }
 
             $backup = $this->newestBackupOnDisk($tier);
+            }
 
             $run->update([
                 'status' => 'success',
@@ -141,30 +258,23 @@ class BackupService
 
             throw $e;
         }
-
-        return $run;
     }
 
     /**
-     * Run the configured automatic backup for a tier if it is due.
-     * Returns null when the tier is disabled or not due yet.
+     * Run a tier's automatic backup if it is due.
+     * Returns null when not due yet.
      */
     public function runIfDue(string $tier, Model|Authenticatable|null $actor = null): ?BackupRun
     {
-        if (! (bool) SystemSetting::get("backup_{$tier}_enabled", $tier === self::TIER_LOCAL)) {
-            return null;
+        if (! self::isValidTier($tier)) {
+            throw new InvalidArgumentException("Unknown backup tier [{$tier}].");
         }
 
         if (! $this->isDue($tier)) {
             return null;
         }
 
-        $scope = (string) SystemSetting::get("backup_{$tier}_scope", self::SCOPE_BOTH);
-        if (! self::isValidScope($scope)) {
-            $scope = self::SCOPE_BOTH;
-        }
-
-        $run = $this->run($tier, $scope, $actor);
+        $run = $this->queueRun($tier, self::SCOPE_BOTH, $actor instanceof User ? $actor : null);
 
         SystemSetting::query()->updateOrCreate(
             ['key' => "backup_{$tier}_last_auto_run"],
@@ -181,11 +291,15 @@ class BackupService
     }
 
     /**
-     * Whether the tier's schedule says a run is due now.
+     * Whether the tier's fixed schedule says a run is due now.
      */
     public function isDue(string $tier): bool
     {
-        $expression = (string) SystemSetting::get("backup_{$tier}_schedule", $tier === self::TIER_LOCAL ? '0 2 * * *' : '0 3 * * 1');
+        if (! self::isValidTier($tier)) {
+            return false;
+        }
+
+        $expression = self::scheduleFor($tier);
 
         try {
             $cron = CronExpression::factory($expression);
@@ -209,7 +323,7 @@ class BackupService
     }
 
     /**
-     * List backups stored on the given tier's disk.
+     * List backups stored on the given tier's disk (its own prefix only).
      */
     public function list(string $tier): array
     {
@@ -217,15 +331,16 @@ class BackupService
             throw new InvalidArgumentException("Unknown backup tier [{$tier}].");
         }
 
-        if ($tier === self::TIER_CLOUD && ! $this->isCloudConfigured()) {
+        if ($tier === self::TIER_OFFSITE && ! $this->isOffsiteConfigured()) {
             return [];
         }
 
         try {
             $disk = Storage::disk(self::diskFor($tier));
             $base = (string) config('backup.backup.name');
+            $prefix = self::prefixFor($tier);
             $files = collect($disk->allFiles($base))
-                ->filter(fn (string $path) => str_ends_with($path, '.zip'))
+                ->filter(fn (string $path) => Str::startsWith(basename($path), self::prefixesFor($tier)) && str_ends_with($path, '.zip'))
                 ->sort()
                 ->values();
         } catch (Throwable) {
@@ -301,22 +416,22 @@ class BackupService
     }
 
     /**
-     * Delete old backups on the tier's disk according to its retention policy.
+     * Delete old backups on the tier's disk according to its fixed policy.
      *
-     * Retention = number of days to keep the newest backup. We intentionally
-     * skip spatie's backup:clean abstraction here: it resolves its Config from
-     * the container's scoped binding, which does not reliably honour our
-     * per-tier overrides when invoked in-process. Direct deletion on the tier's
-     * disk is deterministic and keeps old archives out of the cloud tier too.
+     * - hourly:  keep the 3 newest archives, delete the rest.
+     * - daily / off-site: keep archives newer than RETENTION_DAYS, delete older.
+     *
+     * We intentionally skip spatie's backup:clean abstraction here: it resolves
+     * its Config from the container's scoped binding, which does not reliably
+     * honour our per-tier overrides when invoked in-process. Direct deletion on
+     * the tier's disk is deterministic and keeps old archives out of the
+     * shared on-server disk too.
      */
     public function cleanup(string $tier, Model|Authenticatable|null $actor = null): void
     {
-        if ($tier === self::TIER_CLOUD && ! $this->isCloudConfigured()) {
-            throw new RuntimeException('Google Drive is not configured. Save the credentials from Settings → Backup & Restore or set GOOGLE_DRIVE_* values in .env.');
+        if ($tier === self::TIER_OFFSITE && ! $this->isOffsiteConfigured()) {
+            throw new RuntimeException('Backblaze B2 is not configured. Set the AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION, AWS_BUCKET and AWS_ENDPOINT values in .env.');
         }
-
-        $retentionDays = max(1, (int) SystemSetting::get("backup_{$tier}_retention_days", $tier === self::TIER_LOCAL ? 7 : 30));
-        $cutoff = now()->subDays($retentionDays);
 
         $disk = Storage::disk(self::diskFor($tier));
         $base = (string) config('backup.backup.name');
@@ -324,21 +439,23 @@ class BackupService
         $deleted = 0;
 
         try {
-            foreach ($disk->allFiles($base) as $path) {
-                if (! str_ends_with($path, '.zip')) {
-                    continue;
-                }
+            $archives = collect($disk->allFiles($base))
+                ->filter(fn (string $path) => Str::startsWith(basename($path), self::prefixesFor($tier)) && str_ends_with($path, '.zip'))
+                ->values();
 
-                $lastModified = $disk->lastModified($path);
+            if ($tier === self::TIER_HOURLY) {
+                // Keep the newest HOURLY_KEEP archives; oldest filenames sort first.
+                $toDelete = $archives->sort()->take(max(0, $archives->count() - self::HOURLY_KEEP));
+            } else {
+                $cutoff = now()->subDays(self::RETENTION_DAYS);
+                $toDelete = $archives->filter(function (string $path) use ($disk, $cutoff) {
+                    $lastModified = $disk->lastModified($path);
 
-                if (! is_int($lastModified)) {
-                    continue;
-                }
+                    return is_int($lastModified) && Carbon::createFromTimestamp($lastModified)->lt($cutoff);
+                });
+            }
 
-                if (Carbon::createFromTimestamp($lastModified)->gte($cutoff)) {
-                    continue;
-                }
-
+            foreach ($toDelete as $path) {
                 $disk->delete($path);
                 $deleted++;
             }
@@ -361,7 +478,7 @@ class BackupService
             'backup',
             null,
             $actor,
-            ['tier' => $tier, 'deleted' => $deleted, 'retention_days' => $retentionDays],
+            ['tier' => $tier, 'deleted' => $deleted],
         );
     }
 
@@ -372,21 +489,7 @@ class BackupService
      */
     public function restore(string $tier, string $path, string $scope, string $password, Model|Authenticatable|null $actor = null): void
     {
-        if (! self::isValidScope($scope)) {
-            throw new InvalidArgumentException("Unknown restore scope [{$scope}].");
-        }
-
-        $configuredPassword = config('backup.backup.password');
-        $encryptionEnabled = (bool) SystemSetting::get('backup_encryption_enabled', true);
-
-        if ($encryptionEnabled && (! is_string($configuredPassword) || $configuredPassword === '' || ! hash_equals($configuredPassword, $password))) {
-            throw new RuntimeException('The archive encryption password does not match BACKUP_ARCHIVE_PASSWORD.');
-        }
-
-        if (! $this->fileExists($tier, $path)) {
-            throw new RuntimeException('Backup file not found.');
-        }
-
+        $this->validateRestoreRequest($tier, $path, $scope, $password);
         $this->applyRuntimeConfiguration($tier);
 
         $restoreSecret = Str::random(32);
@@ -406,28 +509,31 @@ class BackupService
 
             $this->clearCaches();
         } catch (Throwable $e) {
-            $this->auditLogService->log(
-                'backup.restore_failed',
-                "Restore failed from the {$tier} tier ({$path}).",
-                'backup',
-                null,
-                $actor,
-                ['tier' => $tier, 'file' => $path, 'scope' => $scope, 'error' => Str::limit($e->getMessage(), 2000)],
-            );
-
+            $this->auditLogService->log('backup.restore_failed', "Restore failed from the {$tier} tier ({$path}).", 'backup', null, $actor, ['tier' => $tier, 'file' => $path, 'scope' => $scope, 'error' => Str::limit($e->getMessage(), 2000)]);
             throw $e;
         } finally {
             Artisan::call('up');
         }
 
-        $this->auditLogService->log(
-            'backup.restored',
-            "Database restored from a {$tier} tier backup (scope: {$scope}).",
-            'backup',
-            null,
-            $actor,
-            ['tier' => $tier, 'file' => $path, 'scope' => $scope, 'files_restored' => $restoredFiles],
-        );
+        $this->auditLogService->log('backup.restored', "Database restored from a {$tier} tier backup (scope: {$scope}).", 'backup', null, $actor, ['tier' => $tier, 'file' => $path, 'scope' => $scope, 'files_restored' => $restoredFiles]);
+    }
+
+    private function validateRestoreRequest(string $tier, string $path, string $scope, string $password): void
+    {
+        if (! self::isValidScope($scope)) {
+            throw new InvalidArgumentException("Unknown restore scope [{$scope}].");
+        }
+
+        $configuredPassword = config('backup.backup.password');
+        $encryptionEnabled = (bool) SystemSetting::get('backup_encryption_enabled', true);
+
+        if ($encryptionEnabled && (! is_string($configuredPassword) || $configuredPassword === '' || ! hash_equals($configuredPassword, $password))) {
+            throw new RuntimeException('The archive encryption password does not match BACKUP_ARCHIVE_PASSWORD.');
+        }
+
+        if (! $this->fileExists($tier, $path)) {
+            throw new RuntimeException('Backup file not found.');
+        }
     }
 
     /**
@@ -476,59 +582,97 @@ class BackupService
     }
 
     /**
-     * Publish backup settings + tier state for the Settings UI.
+     * Current connectivity + config status for the off-site (B2) tier.
      */
-    public function settingsPayload(): array
+    public function offsiteStatus(): array
     {
+        $configured = $this->isOffsiteConfigured();
+
+        if (! $configured) {
+            return [
+                'configured' => false,
+                'reachable' => null,
+                'checked_at' => null,
+            ];
+        }
+
+        $reachable = false;
+        $checkedAt = now();
+
+        try {
+            $base = (string) config('backup.backup.name');
+
+            // A light probe: listing the archive folder fails fast when the
+            // bucket/endpoint/credentials are invalid or unreachable. The disk
+            // must NOT be forgotten first — forgetDisk drops the custom factory
+            // (e.g. a test fake) and forces a real remote re-resolve.
+            Storage::disk(self::diskFor(self::TIER_OFFSITE))->allFiles($base);
+            $reachable = true;
+        } catch (Throwable) {
+            // Unreachable — status surfaces in the UI as "not reachable".
+        }
+
         return [
-            'encryption_enabled' => (bool) SystemSetting::get('backup_encryption_enabled', true),
-            'mesh' => [
-                'local' => [
-                    'enabled' => (bool) SystemSetting::get('backup_local_enabled', true),
-                    'schedule' => (string) SystemSetting::get('backup_local_schedule', '0 2 * * *'),
-                    'scope' => (string) SystemSetting::get('backup_local_scope', self::SCOPE_BOTH),
-                    'retention_days' => (int) SystemSetting::get('backup_local_retention_days', 7),
-                    'last_auto_run' => SystemSetting::get('backup_local_last_auto_run'),
-                ],
-                'cloud' => [
-                    'enabled' => (bool) SystemSetting::get('backup_cloud_enabled', false),
-                    'schedule' => (string) SystemSetting::get('backup_cloud_schedule', '0 3 * * 1'),
-                    'scope' => (string) SystemSetting::get('backup_cloud_scope', self::SCOPE_BOTH),
-                    'retention_days' => (int) SystemSetting::get('backup_cloud_retention_days', 30),
-                    'last_auto_run' => SystemSetting::get('backup_cloud_last_auto_run'),
-                    'configured' => $this->isCloudConfigured(),
-                ],
-            ],
+            'configured' => true,
+            'reachable' => $reachable,
+            'checked_at' => $checkedAt->toISOString(),
         ];
     }
 
     /**
-     * Persist backup settings from the Settings UI.
+     * Publish backup settings + tier state for the Settings UI.
      */
-    public function updateSettings(array $validated): void
+    public function settingsPayload(): array
     {
-        SystemSetting::set('backup_encryption_enabled', (bool) ($validated['encryption_enabled'] ?? true));
+        $tiers = [];
 
-        foreach (self::DISKS as $tier => $disk) {
-            $base = "backup_{$tier}";
-            SystemSetting::set("{$base}_enabled", (bool) ($validated[$tier]['enabled'] ?? null));
-            SystemSetting::set("{$base}_schedule", (string) ($validated[$tier]['schedule'] ?? null));
-            SystemSetting::set("{$base}_scope", (string) ($validated[$tier]['scope'] ?? self::SCOPE_BOTH));
-            SystemSetting::set("{$base}_retention_days", max(1, (int) ($validated[$tier]['retention_days'] ?? 7)));
+        foreach (self::VALID_TIERS as $tier) {
+            $tiers[$tier] = [
+                'disk' => self::diskFor($tier),
+                'schedule' => self::scheduleFor($tier),
+                'scope' => self::SCOPE_BOTH,
+                'last_auto_run' => SystemSetting::get("backup_{$tier}_last_auto_run"),
+            ];
+
+            if ($tier === self::TIER_HOURLY) {
+                $tiers[$tier]['retention'] = ['keep' => self::HOURLY_KEEP];
+            } else {
+                $tiers[$tier]['retention'] = ['days' => self::RETENTION_DAYS];
+            }
         }
+
+        return [
+            'encryption_enabled' => (bool) SystemSetting::get('backup_encryption_enabled', true),
+            'tiers' => $tiers,
+            'offsite' => $this->offsiteStatus(),
+        ];
     }
 
     /**
-     * Point the backup engine at the tier's disk and retention values for the
-     * duration of this process (CLI schedules and API calls alike).
+     * Persist the encryption toggle from the Settings UI.
      */
-    private function applyRuntimeConfiguration(string $tier): void
+    public function updateEncryption(bool $enabled): void
+    {
+        SystemSetting::set('backup_encryption_enabled', $enabled);
+    }
+
+    /**
+     * Point the backup engine at the tier's disk, filename prefix and retention
+     * for the duration of this process (CLI schedules and API calls alike).
+     */
+    private function applyRuntimeConfiguration(string $tier, ?string $runId = null): void
     {
         $disk = self::diskFor($tier);
 
-        // Point the "destination" disk list at the tier's disk only so the spawned
-        // backup:run command writes to the correct tier.
+        // Point the "destination" disk list at the tier's disk only so the
+        // spawned backup:run command writes to the correct tier, using the
+        // tier's own prefix so shared disks stay distinguishable.
         config(['backup.backup.destination.disks' => [$disk]]);
+        config(['backup.backup.destination.filename_prefix' => self::prefixFor($tier)]);
+        // Operations never share a working directory, including after a worker restart.
+        if ($runId !== null) {
+            config(['backup.backup.temporary_directory' => storage_path('app/backup-temp/'.Str::uuid().'-'.$runId)]);
+        }
 
         // Spatie resolves its Config as a scoped binding that can snapshot the
         // config before our override is applied. Force a fresh instance so the
@@ -538,10 +682,11 @@ class BackupService
         app()->instance(Config::class, $config);
         app()->bind(CleanupStrategy::class, $config->cleanup->strategy);
 
-        $retentionDays = max(1, (int) SystemSetting::get("backup_{$tier}_retention_days", $tier === self::TIER_LOCAL ? 7 : 30));
-
+        // Our own cleanup() enforces the fixed per-tier retention after each
+        // successful run; spatie's strategy is disabled to avoid it getting a
+        // foot in the door.
         config([
-            'backup.cleanup.default_strategy.keep_all_backups_for_days' => $retentionDays,
+            'backup.cleanup.default_strategy.keep_all_backups_for_days' => 3650,
             'backup.cleanup.default_strategy.keep_daily_backups_for_days' => 0,
             'backup.cleanup.default_strategy.keep_weekly_backups_for_weeks' => 0,
             'backup.cleanup.default_strategy.keep_monthly_backups_for_months' => 0,
@@ -574,5 +719,40 @@ class BackupService
         } catch (Throwable) {
             // Clearing caches is best-effort after a restore.
         }
+    }
+
+    /** Copy the verified local daily archive; B2 is a replica, never a second dump. */
+    private function replicateDailyArchive(): array
+    {
+        if (! $this->isOffsiteConfigured()) {
+            throw new RuntimeException('Backblaze B2 is not configured. Set the AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION, AWS_BUCKET and AWS_ENDPOINT values in .env.');
+        }
+        $daily = $this->newestBackupOnDisk(self::TIER_DAILY);
+        if (! $daily) {
+            throw new RuntimeException('No verified daily archive is available to replicate off-site.');
+        }
+        $source = Storage::disk(self::diskFor(self::TIER_DAILY));
+        $destination = Storage::disk(self::diskFor(self::TIER_OFFSITE));
+        $path = dirname($daily['path']).'/'.Str::replaceFirst('backup-daily-', self::prefixFor(self::TIER_OFFSITE), basename($daily['path']));
+        $stream = $source->readStream($daily['path']);
+        if ($stream === false || ! $destination->writeStream($path, $stream)) {
+            if (is_resource($stream)) { fclose($stream); }
+            throw new RuntimeException('Could not upload the verified daily archive to Backblaze B2.');
+        }
+        fclose($stream);
+        return ['path' => $path, 'size' => $daily['size']];
+    }
+
+    /** Translate known native failures into an actionable, safe operator message. */
+    public function operatorMessage(Throwable $e): string
+    {
+        $message = $e->getMessage();
+        if (str_contains($message, '10106') || str_contains(strtolower($message), 'winsock')) {
+            return 'mysqldump could not initialize a Windows TCP socket (10106). Restart the database stack; if it persists, repair or restart Windows networking before retrying.';
+        }
+        if (str_contains(strtolower($message), 'mysqldump') && str_contains(strtolower($message), 'not found')) {
+            return 'mysqldump is unavailable. Verify DB_DUMP_BINARY_PATH points to its directory and the worker can read it.';
+        }
+        return Str::limit($message, 2000);
     }
 }

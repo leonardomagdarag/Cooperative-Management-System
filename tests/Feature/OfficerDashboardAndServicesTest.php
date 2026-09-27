@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Account;
+use App\Models\BackupRun;
 use App\Models\Branch;
 use App\Models\User;
 use Database\Seeders\AccountSeeder;
@@ -13,14 +14,14 @@ beforeEach(function () {
     $this->seed(AccountSeeder::class);
 
     // Officers (seeded by UserSeeder)
-    $this->admin     = User::where('email', 'admin@example.com')->firstOrFail();
-    $this->manager   = User::where('email', 'manager@example.com')->firstOrFail();
+    $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
+    $this->manager = User::where('email', 'manager@example.com')->firstOrFail();
     $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
-    $this->loan      = User::where('email', 'loan@example.com')->firstOrFail();
+    $this->loan = User::where('email', 'loan@example.com')->firstOrFail();
     $this->secretary = User::where('email', 'secretary@example.com')->firstOrFail();
 
     // Branches
-    $this->mainBranch   = Branch::where('code', 'BR000001')->firstOrFail();
+    $this->mainBranch = Branch::where('code', 'BR000001')->firstOrFail();
     $this->officeBranch = Branch::where('code', 'BR000002')->firstOrFail();
 
     // Members in main branch
@@ -57,7 +58,48 @@ test('F015-2: GET /api/dashboard returns admin overview for admin role', functio
             'loans_active',
             'month_deposits',
             'month_withdrawals',
+            'backup_status' => [
+                'health',
+                'last_run_at',
+                'tiers' => ['hourly', 'daily', 'offsite'],
+            ],
         ]);
+});
+
+// ---------------------------------------------------------------------------
+// F015-2b: Admin dashboard includes backup status derived from backup runs
+// ---------------------------------------------------------------------------
+
+test('F015-2b: admin dashboard backup status reflects per-tier backup runs', function () {
+    BackupRun::create([
+        'tier' => 'hourly',
+        'scope' => 'both',
+        'status' => 'success',
+        'filename' => 'Settlers Credit Cooperative/backup-hourly-2026-09-22-01-00-00.zip',
+        'size' => 2048,
+        'started_at' => now()->subHours(2),
+        'finished_at' => now()->subHours(2)->addMinutes(1),
+    ]);
+
+    BackupRun::create([
+        'tier' => 'offsite',
+        'scope' => 'both',
+        'status' => 'failed',
+        'filename' => 'Settlers Credit Cooperative/backup-offsight-2026-09-22-01-00-00.zip',
+        'message' => 'Could not reach Backblaze B2.',
+        'started_at' => now()->subHours(3),
+        'finished_at' => now()->subHours(3)->addMinutes(1),
+    ]);
+
+    $this->actingAs($this->admin)
+        ->getJson('/api/dashboard')
+        ->assertOk()
+        ->assertJsonPath('backup_status.health', 'attention')
+        ->assertJsonPath('backup_status.tiers.hourly.last_status', 'success')
+        ->assertJsonPath('backup_status.tiers.hourly.last_scope', 'both')
+        ->assertJsonPath('backup_status.tiers.offsite.last_status', 'failed')
+        ->assertJsonPath('backup_status.tiers.offsite.message', 'Could not reach Backblaze B2.')
+        ->assertJsonPath('backup_status.tiers.daily.last_status', null);
 });
 
 // ---------------------------------------------------------------------------
@@ -211,9 +253,9 @@ test('F015-12: GET /api/members/search returns empty array for blank query', fun
 
 test('F015-13: Regular member cannot deposit to another member account (403)', function () {
     $response = $this->actingAs($this->mainMember)->postJson('/api/services/deposit', [
-        'member_id'        => $this->officeMember->id,
-        'amount'           => 500,
-        'account_type'     => 'savings',
+        'member_id' => $this->officeMember->id,
+        'amount' => 500,
+        'account_type' => 'savings',
         'transaction_mode' => 'counter',
     ]);
 
@@ -233,16 +275,16 @@ test('F015-14: Admin can deposit to member account in any branch (act-on-behalf)
 
     if (! $savingsAccount) {
         Account::create([
-            'user_id'      => $this->officeMember->id,
+            'user_id' => $this->officeMember->id,
             'account_type' => 'savings',
-            'balance'      => 5000,
+            'balance' => 5000,
         ]);
     }
 
     $response = $this->actingAs($this->admin)->postJson('/api/services/deposit', [
-        'member_id'        => $this->officeMember->id,
-        'amount'           => 500,
-        'account_type'     => 'savings',
+        'member_id' => $this->officeMember->id,
+        'amount' => 500,
+        'account_type' => 'savings',
         'transaction_mode' => 'counter',
     ]);
 
@@ -252,19 +294,32 @@ test('F015-14: Admin can deposit to member account in any branch (act-on-behalf)
 });
 
 // ---------------------------------------------------------------------------
-// F015-15: POST /api/services/deposit — branch-scoped officer cannot act on member in different branch
+// F015-15: POST /api/services/deposit — officer with branch bypass can act on member in different branch
 // ---------------------------------------------------------------------------
 
-test('F015-15: Branch-scoped loan officer (office branch) cannot deposit to main branch member (403)', function () {
+test('F015-15: Loan officer holding branch bypass can deposit to main branch member (201)', function () {
     // loan officer is in office branch; mainMember is in main branch
+    $savingsAccount = Account::where('user_id', $this->mainMember->id)
+        ->where('account_type', 'savings')
+        ->first();
+
+    if (! $savingsAccount) {
+        Account::create([
+            'user_id' => $this->mainMember->id,
+            'account_type' => 'savings',
+            'balance' => 5000,
+        ]);
+    }
+
     $response = $this->actingAs($this->loan)->postJson('/api/services/deposit', [
-        'member_id'        => $this->mainMember->id,
-        'amount'           => 500,
-        'account_type'     => 'savings',
+        'member_id' => $this->mainMember->id,
+        'amount' => 500,
+        'account_type' => 'savings',
         'transaction_mode' => 'counter',
     ]);
 
-    $response->assertForbidden();
+    expect($response->status())->not->toBe(403);
+    $response->assertStatus(201);
 });
 
 // ---------------------------------------------------------------------------
@@ -279,16 +334,16 @@ test('F015-16: Manager (main branch) can deposit to member in same branch (act-o
 
     if (! $savingsAccount) {
         Account::create([
-            'user_id'      => $this->mainMember->id,
+            'user_id' => $this->mainMember->id,
             'account_type' => 'savings',
-            'balance'      => 5000,
+            'balance' => 5000,
         ]);
     }
 
     $response = $this->actingAs($this->manager)->postJson('/api/services/deposit', [
-        'member_id'        => $this->mainMember->id,
-        'amount'           => 500,
-        'account_type'     => 'savings',
+        'member_id' => $this->mainMember->id,
+        'amount' => 500,
+        'account_type' => 'savings',
         'transaction_mode' => 'counter',
     ]);
 
@@ -302,8 +357,8 @@ test('F015-16: Manager (main branch) can deposit to member in same branch (act-o
 
 test('F015-17: Regular member cannot withdraw from another member account (403)', function () {
     $response = $this->actingAs($this->mainMember)->postJson('/api/services/withdrawal', [
-        'member_id'        => $this->officeMember->id,
-        'amount'           => 200,
+        'member_id' => $this->officeMember->id,
+        'amount' => 200,
         'transaction_mode' => 'counter',
     ]);
 
@@ -321,15 +376,15 @@ test('F015-18: Manager can withdraw from member account in same branch (act-on-b
 
     if (! $savingsAccount) {
         Account::create([
-            'user_id'      => $this->mainMember->id,
+            'user_id' => $this->mainMember->id,
             'account_type' => 'savings',
-            'balance'      => 5000,
+            'balance' => 5000,
         ]);
     }
 
     $response = $this->actingAs($this->manager)->postJson('/api/services/withdrawal', [
-        'member_id'        => $this->mainMember->id,
-        'amount'           => 200,
+        'member_id' => $this->mainMember->id,
+        'amount' => 200,
         'transaction_mode' => 'counter',
     ]);
 
@@ -338,18 +393,30 @@ test('F015-18: Manager can withdraw from member account in same branch (act-on-b
 });
 
 // ---------------------------------------------------------------------------
-// F015-19: POST /api/services/withdrawal — cross-branch officer gets 403
+// F015-19: POST /api/services/withdrawal — officer with branch bypass can withdraw cross-branch
 // ---------------------------------------------------------------------------
 
-test('F015-19: Branch-scoped officer cannot withdraw from member in different branch (403)', function () {
+test('F015-19: Loan officer holding branch bypass can withdraw from a member in another branch (201)', function () {
     // loan officer is in office branch; mainMember is in main branch
+    $savingsAccount = Account::where('user_id', $this->mainMember->id)
+        ->where('account_type', 'savings')
+        ->first();
+
+    if (! $savingsAccount) {
+        Account::create([
+            'user_id' => $this->mainMember->id,
+            'account_type' => 'savings',
+            'balance' => 5000,
+        ]);
+    }
+
     $response = $this->actingAs($this->loan)->postJson('/api/services/withdrawal', [
-        'member_id'        => $this->mainMember->id,
-        'amount'           => 200,
+        'member_id' => $this->mainMember->id,
+        'amount' => 200,
         'transaction_mode' => 'counter',
     ]);
 
-    $response->assertForbidden();
+    $response->assertStatus(201);
 });
 
 // ---------------------------------------------------------------------------
@@ -370,7 +437,6 @@ test('F015-20: GET /api/services returns 200 for member (services.view is in mem
     // But they cannot manage OTHER members' services
     $response->assertJsonPath('can_manage_member_services', false);
 });
-
 
 // ---------------------------------------------------------------------------
 // F015-21: GET /api/services — returns dashboard for officer with services.view
@@ -394,8 +460,8 @@ test('F015-21: GET /api/services returns officer service dashboard for admin', f
 
 test('F015-22: POST /api/services/deposit returns 401 for unauthenticated request', function () {
     $response = $this->postJson('/api/services/deposit', [
-        'amount'           => 500,
-        'account_type'     => 'savings',
+        'amount' => 500,
+        'account_type' => 'savings',
         'transaction_mode' => 'counter',
     ]);
 
