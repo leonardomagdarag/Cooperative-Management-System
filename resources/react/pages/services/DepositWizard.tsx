@@ -18,6 +18,7 @@ interface AvailabilityFlags {
     officer?: boolean;
     counter?: boolean;
     online?: boolean;
+    bank_transfer?: boolean;
 }
 
 const detailsSchema = depositSchema.pick({ amount: true, account_type: true, note: true });
@@ -52,7 +53,7 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
         onDirtyChange?.(!receipt && (form.amount !== '' || form.note !== '' || form.transaction_mode !== '' || !!proof));
     }, [form, proof, receipt, onDirtyChange]);
 
-    const isModeAvailable = (mode: 'counter' | 'online' | 'paymongo'): boolean => {
+    const isModeAvailable = (mode: 'counter' | 'online' | 'bank_transfer' | 'paymongo'): boolean => {
         if (mode === 'paymongo') {
             if (!isPayMongoAvailable) return false;
             if (availability && (!availability.global || availability.online === false)) return false;
@@ -122,7 +123,9 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
 
     const handleSubmitManual = () => {
         const errs = validate(depositSchema, form);
-        if (form.transaction_mode === 'online' && !proof) errs.proof = 'Payment proof is required for online deposits';
+        if ((form.transaction_mode === 'online' || form.transaction_mode === 'bank_transfer') && !proof) {
+            errs.proof = 'Payment proof is required for this deposit';
+        }
         if (proof && proof.size > 10240 * 1024) errs.proof = 'Proof must be 10MB or smaller';
         setErrors(errs);
         if (Object.keys(errs).length > 0) {
@@ -228,13 +231,12 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
                     <h4 className="text-lg font-semibold text-gray-900 mb-4">Choose Payment Method</h4>
 
                     <div className="space-y-3">
-                        {/* Option 1: PayMongo Secure Gateway (if enabled) */}
-                        {isPayMongoAvailable && (
+                        {/* Option 1: PayMongo Secure Gateway (only when online payment is enabled) */}
+                        {isModeAvailable('paymongo') && (
                             <button
                                 type="button"
                                 onClick={() => { setField('transaction_mode', 'paymongo'); setErrors(prev => ({ ...prev, transaction_mode: '' })); }}
-                                disabled={!isModeAvailable('paymongo')}
-                                className={`w-full p-4 border-2 rounded-lg text-left transition-all ${form.transaction_mode === 'paymongo' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-300 hover:border-emerald-300'} ${!isModeAvailable('paymongo') ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`w-full p-4 border-2 rounded-lg text-left transition-all ${form.transaction_mode === 'paymongo' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-300 hover:border-emerald-300'}`}
                             >
                                 <div className="flex items-center gap-3">
                                     <div className={`w-12 h-12 rounded-full flex items-center justify-center ${form.transaction_mode === 'paymongo' ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
@@ -272,23 +274,23 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
                             </div>
                         </button>
 
-                        {/* Option 3: Manual Bank Transfer / Proof Upload */}
+                        {/* Option 3: Offline Bank Transfer / Proof Upload (not tied to online payment) */}
                         <button
                             type="button"
-                            onClick={() => { setField('transaction_mode', 'online'); setErrors(prev => ({ ...prev, transaction_mode: '' })); }}
-                            disabled={!isModeAvailable('online')}
-                            className={`w-full p-4 border-2 rounded-lg text-left transition-all ${form.transaction_mode === 'online' ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-green-300'} ${!isModeAvailable('online') ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            onClick={() => { setField('transaction_mode', 'bank_transfer'); setErrors(prev => ({ ...prev, transaction_mode: '' })); }}
+                            disabled={!isModeAvailable('bank_transfer')}
+                            className={`w-full p-4 border-2 rounded-lg text-left transition-all ${form.transaction_mode === 'bank_transfer' ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-green-300'} ${!isModeAvailable('bank_transfer') ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                             <div className="flex items-center gap-3">
-                                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${form.transaction_mode === 'online' ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${form.transaction_mode === 'bank_transfer' ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
                                     <i className="fas fa-file-upload text-xl"></i>
                                 </div>
                                 <div className="flex-1">
-                                    <p className="font-semibold text-gray-900">Manual Transfer & Proof Upload</p>
-                                    <p className="text-sm text-gray-600">Upload deposit slip or transfer screenshot for officer verification</p>
+                                    <p className="font-semibold text-gray-900">Bank Transfer (Requires Proof)</p>
+                                    <p className="text-sm text-gray-600">Offline bank transfer &mdash; upload deposit slip or transfer screenshot for officer verification</p>
                                 </div>
-                                {!isModeAvailable('online') && <p className="text-xs text-amber-600"><i className="fas fa-tools mr-1"></i>Under maintenance</p>}
-                                {isModeAvailable('online') && form.transaction_mode === 'online' && <i className="fas fa-check-circle text-green-500 text-xl"></i>}
+                                {!isModeAvailable('bank_transfer') && <p className="text-xs text-amber-600"><i className="fas fa-tools mr-1"></i>Under maintenance</p>}
+                                {isModeAvailable('bank_transfer') && form.transaction_mode === 'bank_transfer' && <i className="fas fa-check-circle text-green-500 text-xl"></i>}
                             </div>
                         </button>
                     </div>
@@ -323,7 +325,7 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
                             <span className="text-gray-600">Payment Channel:</span>
                             <span className="font-semibold text-gray-900">
                                 {form.transaction_mode === 'paymongo' ? 'PayMongo Secure Online Checkout' :
-                                 form.transaction_mode === 'counter' ? 'Over the Counter' : 'Manual Proof Upload'}
+                                 form.transaction_mode === 'counter' ? 'Over the Counter' : 'Bank Transfer (Proof Upload)'}
                             </span>
                         </div>
                         {form.note && (
@@ -451,8 +453,8 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
                     <p className="text-gray-600 mb-6">
                         {receipt?.status === 'completed'
                             ? 'Your deposit has been verified and your account balance has been updated.'
-                            : form.transaction_mode === 'online'
-                                ? 'Your online deposit proof has been uploaded and is pending officer verification.'
+                            : form.transaction_mode === 'bank_transfer' || form.transaction_mode === 'online'
+                                ? 'Your bank transfer proof has been uploaded and is pending officer verification.'
                                 : 'Please visit our office to complete your counter deposit.'}
                     </p>
 

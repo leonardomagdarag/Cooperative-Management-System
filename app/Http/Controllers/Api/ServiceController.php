@@ -79,14 +79,14 @@ class ServiceController extends Controller
             'user_id' => 'nullable|exists:users,id',
             'amount' => 'required|numeric|min:100',
             'account_type' => 'required|in:savings,share-capital',
-            'transaction_mode' => 'required|in:counter,online',
+            'transaction_mode' => 'required|in:counter,online,bank_transfer',
             'note' => 'nullable|string|max:500',
             'proof' => [
                 'nullable',
                 'file',
                 'mimes:jpg,jpeg,png,pdf',
                 'max:10240',
-                Rule::requiredIf($request->input('transaction_mode') === 'online'),
+                Rule::requiredIf(in_array($request->input('transaction_mode'), ['online', 'bank_transfer'], true)),
             ],
             'client_request_id' => 'nullable|string|min:8|max:100',
             'branch_id' => 'nullable|exists:branches,id',
@@ -328,8 +328,15 @@ class ServiceController extends Controller
             'loan_id' => 'required|exists:loans,id',
             'amount' => 'required|numeric|min:1',
             'account_id' => 'nullable|exists:accounts,id',
-            'transaction_mode' => 'required|in:counter,online',
+            'transaction_mode' => 'required|in:counter,online,bank_transfer',
             'note' => 'nullable|string|max:500',
+            'proof' => [
+                'nullable',
+                'file',
+                'mimes:jpg,jpeg,png,pdf',
+                'max:10240',
+                Rule::requiredIf($request->input('transaction_mode') === 'bank_transfer'),
+            ],
             'member_id' => 'nullable|exists:users,id',
             'user_id' => 'nullable|exists:users,id',
             'client_request_id' => 'nullable|string|min:8|max:100',
@@ -375,7 +382,12 @@ class ServiceController extends Controller
 
         $status = $validated['transaction_mode'] === 'counter' ? 'completed' : 'pending';
 
-        $transaction = DB::transaction(function () use ($account, $loan, $validated, $status, $user, $targetBranchId) {
+        $proofPath = null;
+        if ($request->hasFile('proof')) {
+            $proofPath = $request->file('proof')->store('transaction-proofs', 'public');
+        }
+
+        $transaction = DB::transaction(function () use ($account, $loan, $validated, $status, $proofPath, $user, $targetBranchId) {
             $lockedAccount = Account::whereKey($account->id)->lockForUpdate()->firstOrFail();
 
             if ((float) $lockedAccount->balance < (float) $validated['amount']) {
@@ -392,6 +404,8 @@ class ServiceController extends Controller
                 'status' => $status,
                 'transaction_mode' => $validated['transaction_mode'],
                 'note' => $validated['note'] ?? null,
+                'proof_of_payment_path' => $proofPath,
+                'proof_of_payment_uploaded_at' => $proofPath ? now() : null,
                 'transaction_date' => now(),
                 'recorded_by' => Auth::id(),
             ]);

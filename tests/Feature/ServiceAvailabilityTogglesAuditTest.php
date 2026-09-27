@@ -2,6 +2,7 @@
 
 use App\Models\Account;
 use App\Models\Branch;
+use App\Models\Loan;
 use App\Models\Notification;
 use App\Models\SystemSetting;
 use App\Models\User;
@@ -9,6 +10,8 @@ use Database\Seeders\AccountSeeder;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\SystemSettingSeeder;
 use Database\Seeders\UserSeeder;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 beforeEach(function () {
     $this->seed(SpatieRolePermissionSeeder::class);
@@ -202,4 +205,99 @@ test('F020-10: notify_affected dispatches notifications when services become new
         ->first();
     expect($memberNotif)->not->toBeNull()
         ->and($memberNotif->message)->toContain('Deposit');
+});
+
+test('F020-11: offline bank transfer deposit stays available when online payment is disabled and requires proof', function () {
+    Storage::fake('public');
+
+    // Disable the online deposit channel only
+    SystemSetting::set('service_deposit_enabled', true);
+    SystemSetting::set('service_deposit_member_enabled', true);
+    SystemSetting::set('service_deposit_online_enabled', false);
+    SystemSetting::set('service_deposit_counter_enabled', true);
+
+    $this->actingAs($this->member);
+    $balanceBefore = (float) $this->account->fresh()->balance;
+
+    // bank_transfer deposit without proof must be rejected
+    $this->postJson('/api/services/deposit', [
+        'account_id' => $this->account->id,
+        'amount' => 500,
+        'account_type' => 'savings',
+        'transaction_mode' => 'bank_transfer',
+    ])->assertUnprocessable()
+        ->assertJsonValidationErrors('proof');
+
+    // bank_transfer deposit with proof must pass availability AND validation, staying pending
+    $this->postJson('/api/services/deposit', [
+        'account_id' => $this->account->id,
+        'amount' => 500,
+        'account_type' => 'savings',
+        'transaction_mode' => 'bank_transfer',
+        'proof' => UploadedFile::fake()->create('transfer.jpg', 100, 'image/jpeg'),
+    ])->assertCreated();
+
+    $txn = \App\Models\Transaction::query()
+        ->where('account_id', $this->account->id)
+        ->where('transaction_type', 'deposit')
+        ->latest('id')
+        ->first();
+
+    expect($txn)->not->toBeNull()
+        ->and($txn->transaction_mode)->toBe('bank_transfer')
+        ->and($txn->status)->toBe('pending')
+        ->and($txn->proof_of_payment_path)->not->toBeNull()
+        ->and((float) $this->account->fresh()->balance)->toBe($balanceBefore);
+});
+
+test('F020-12: offline bank transfer loan payment stays available when online payment is disabled and requires proof', function () {
+    Storage::fake('public');
+
+    // Disable the online loan payment channel only
+    SystemSetting::set('service_loan_payment_enabled', true);
+    SystemSetting::set('service_loan_payment_member_enabled', true);
+    SystemSetting::set('service_loan_payment_online_enabled', false);
+    SystemSetting::set('service_loan_payment_counter_enabled', true);
+
+    $this->account->update(['balance' => 5000]);
+
+    $loan = Loan::factory()->create([
+        'user_id' => $this->member->id,
+        'loan_amount' => 1000,
+        'interest_rate' => 12,
+        'term_months' => 1,
+        'payment_frequency' => 'monthly',
+        'loan_status' => 'active',
+    ]);
+
+    $this->actingAs($this->member);
+
+    // bank_transfer loan payment without proof must be rejected
+    $this->postJson('/api/services/loan-payment', [
+        'loan_id' => $loan->id,
+        'amount' => 620,
+        'transaction_mode' => 'bank_transfer',
+    ])->assertUnprocessable()
+        ->assertJsonValidationErrors('proof');
+
+    // bank_transfer loan payment with proof must pass, staying pending
+    $this->postJson('/api/services/loan-payment', [
+        'loan_id' => $loan->id,
+        'amount' => 620,
+        'transaction_mode' => 'bank_transfer',
+        'proof' => UploadedFile::fake()->create('transfer.jpg', 100, 'image/jpeg'),
+    ])->assertCreated();
+
+    $payment = \App\Models\Transaction::query()
+        ->where('loan_id', $loan->id)
+        ->where('transaction_type', 'loan_payment')
+        ->latest('id')
+        ->first();
+
+    expect($payment)->not->toBeNull()
+        ->and($payment->transaction_mode)->toBe('bank_transfer')
+        ->and($payment->status)->toBe('pending')
+        ->and($payment->proof_of_payment_path)->not->toBeNull()
+        ->and($loan->fresh()->loan_status)->toBe('active')
+        ->and((float) $this->account->fresh()->balance)->toBe(5000.0);
 });

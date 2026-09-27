@@ -18,6 +18,7 @@ interface AvailabilityFlags {
     officer?: boolean;
     counter?: boolean;
     online?: boolean;
+    bank_transfer?: boolean;
 }
 
 interface LoanOption {
@@ -46,7 +47,7 @@ const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.replace(/_/g, ' 
 
 const modeLabels: Record<string, { title: string; sub: string; icon: string }> = {
     counter: { title: 'Over the Counter', sub: 'Visit our office to make payment', icon: 'fa-cash-register' },
-    online: { title: 'Online/Digital Wallet', sub: 'GCash, Bank Transfer, or Online Banking', icon: 'fa-mobile-alt' },
+    bank_transfer: { title: 'Bank Transfer', sub: 'Offline bank transfer with proof of payment', icon: 'fa-landmark' },
 };
 
 export default function LoanPaymentWizard({ onComplete, onRequestClose, selectedMember, onDirtyChange, availability }: {
@@ -60,6 +61,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
     const [form, setForm] = useState({ loan_id: '', schedule_key: '', amount: '', transaction_mode: '', note: '' });
     const [receipt, setReceipt] = useState<any>(null);
     const [checkoutSession, setCheckoutSession] = useState<CheckoutResponse | null>(null);
+    const [proof, setProof] = useState<File | null>(null);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const { addToast } = useToast();
     const requestIdRef = useRef<string | null>(null);
@@ -75,10 +77,10 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
     const setField = (key: string, value: string) => setForm(f => ({ ...f, [key]: value }));
 
     useEffect(() => {
-        onDirtyChange?.(!receipt && (form.loan_id !== '' || form.schedule_key !== '' || form.amount !== '' || form.transaction_mode !== '' || form.note !== ''));
-    }, [form, receipt, onDirtyChange]);
+        onDirtyChange?.(!receipt && (form.loan_id !== '' || form.schedule_key !== '' || form.amount !== '' || form.transaction_mode !== '' || form.note !== '' || !!proof));
+    }, [form, receipt, onDirtyChange, proof]);
 
-    const isModeAvailable = (mode: 'counter' | 'online' | 'paymongo'): boolean => {
+    const isModeAvailable = (mode: 'counter' | 'online' | 'bank_transfer' | 'paymongo'): boolean => {
         if (mode === 'paymongo') {
             if (!isPayMongoAvailable) return false;
             if (availability && (!availability.global || availability.online === false)) return false;
@@ -215,23 +217,24 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
             const note = [
                 selectedMember ? 'Processed by officer' : '',
                 `Loan payment for ${selectedLoan?.loan_number ?? ''}`,
-                form.transaction_mode === 'counter' ? 'Over the counter' : 'Online payment',
+                form.transaction_mode === 'counter' ? 'Over the counter' : 'Bank transfer',
                 form.note,
             ].filter(Boolean).join(' | ');
-            return api.post('/api/services/loan-payment', {
-                loan_id: Number(form.loan_id),
-                amount: Number(form.amount),
-                transaction_mode: form.transaction_mode,
-                note,
-                client_request_id: requestIdRef.current!,
-                ...(selectedMember ? { user_id: selectedMember.id } : {}),
-            });
+            const fd = new FormData();
+            fd.append('loan_id', String(form.loan_id));
+            fd.append('amount', String(form.amount));
+            fd.append('transaction_mode', form.transaction_mode);
+            fd.append('note', note || '');
+            fd.append('client_request_id', requestIdRef.current!);
+            if (selectedMember) fd.append('user_id', String(selectedMember.id));
+            if (proof) fd.append('proof', proof);
+            return api.post('/api/services/loan-payment', fd);
         },
         onSuccess: (res: any) => {
             requestIdRef.current = null;
             addToast('Loan payment submitted', 'success');
             setReceipt(res.data?.data || { message: res.data?.message });
-            setStep(form.transaction_mode === 'counter' ? 99 : 4);
+            setStep(form.transaction_mode === 'counter' ? 99 : form.transaction_mode === 'bank_transfer' ? 5 : 4);
         },
         onError: (err: any) => {
             requestIdRef.current = null;
@@ -242,13 +245,18 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
     const handleSubmit = () => {
         if (form.transaction_mode === 'paymongo') {
             paymongoCheckoutMutation.mutate();
-        } else {
-            requestIdRef.current = requestIdRef.current ?? crypto.randomUUID();
-            submitMutation.mutate();
+            return;
         }
+        if (form.transaction_mode === 'bank_transfer' && !proof) {
+            setErrors({ proof: 'Payment proof is required for bank transfer.' });
+            addToast('Payment proof is required for bank transfer.', 'error');
+            return;
+        }
+        requestIdRef.current = requestIdRef.current ?? crypto.randomUUID();
+        submitMutation.mutate();
     };
 
-    const stepCount = (form.transaction_mode === 'paymongo' || form.transaction_mode === 'online') ? 4 : 3;
+    const stepCount = form.transaction_mode === 'paymongo' ? 4 : 3;
 
     return (
         <ServiceModal
@@ -380,13 +388,12 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                     <h4 className="text-lg font-semibold text-gray-900 mb-4">Choose Payment Method</h4>
 
                     <div className="space-y-3">
-                        {/* Option 1: PayMongo Secure Gateway (if enabled) */}
-                        {isPayMongoAvailable && (
+                        {/* Option 1: PayMongo Secure Gateway (only when online payment is enabled) */}
+                        {isModeAvailable('paymongo') && (
                             <button
                                 type="button"
                                 onClick={() => { setField('transaction_mode', 'paymongo'); setErrors(prev => ({ ...prev, transaction_mode: '' })); }}
-                                disabled={!isModeAvailable('paymongo')}
-                                className={`w-full p-4 border-2 rounded-lg text-left transition-all ${form.transaction_mode === 'paymongo' ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-300'} ${!isModeAvailable('paymongo') ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`w-full p-4 border-2 rounded-lg text-left transition-all ${form.transaction_mode === 'paymongo' ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-300'}`}
                             >
                                 <div className="flex items-center gap-3">
                                     <div className={`w-12 h-12 rounded-full flex items-center justify-center ${form.transaction_mode === 'paymongo' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
@@ -404,8 +411,8 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                             </button>
                         )}
 
-                        {/* Option 2: Over the Counter & Manual Online */}
-                        {(['counter', 'online'] as const).map(mode => {
+                        {/* Option 2: Over the Counter & Offline Bank Transfer */}
+                        {(['counter', 'bank_transfer'] as const).map(mode => {
                             const ml = modeLabels[mode];
                             const selected = form.transaction_mode === mode;
                             const available = isModeAvailable(mode);
@@ -472,7 +479,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                                     ? 'PayMongo Online Payment'
                                     : form.transaction_mode === 'counter'
                                         ? 'Over the Counter'
-                                        : 'Online/Digital Wallet'}
+                                        : 'Bank Transfer (Requires Proof)'}
                             </span>
                         </div>
                         {form.note && (
@@ -498,11 +505,17 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                             </p>
                         </div>
                     ) : (
-                        <div className="bg-green-50 border-l-4 border-green-400 p-4">
-                            <p className="text-sm text-green-700">
-                                <i className="fas fa-info-circle mr-2"></i>
-                                Your payment will be processed through our secure online payment portal.
-                            </p>
+                        <div className="space-y-2">
+                            <label className="block text-sm font-medium text-gray-700">Proof of Payment</label>
+                            <input
+                                type="file"
+                                accept=".jpg,.jpeg,.png,.webp,.pdf"
+                                onChange={e => setProof(e.target.files?.[0] || null)}
+                                className={`block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 ${errors.proof ? 'border-red-400' : ''}`}
+                            />
+                            <p className="text-xs text-gray-500">Upload a screenshot, receipt, or PDF proof of your bank transfer before submitting.</p>
+                            {proof && <p className="text-xs font-medium text-gray-700">Selected: {proof.name}</p>}
+                            {errors.proof && <span className="text-red-500 text-xs">{errors.proof}</span>}
                         </div>
                     )}
 
@@ -643,7 +656,9 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                                     ? `PayMongo (${capitalize(receipt.payment_method_used || 'online')})`
                                     : receipt.transaction_mode === 'counter'
                                         ? 'Over the Counter'
-                                        : 'Online/Digital Wallet'}
+                                        : receipt.transaction_mode === 'bank_transfer'
+                                            ? 'Bank Transfer'
+                                            : 'Online/Digital Wallet'}
                             </span>
                         </div>
                         <div className="flex justify-between text-sm">

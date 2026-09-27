@@ -260,7 +260,7 @@ export const officerSchema = z.object({
 export const depositSchema = z.object({
     amount: amount(100),
     account_type: enumFrom(['savings', 'share-capital'], 'Select a valid account type'),
-    transaction_mode: enumFrom(['counter', 'online'], 'Select a transaction mode'),
+    transaction_mode: enumFrom(['counter', 'online', 'bank_transfer'], 'Select a transaction mode'),
     note: optionalString(500),
     branch_id: optionalId,
 });
@@ -317,7 +317,7 @@ export const loanPaymentSchema = z.object({
     loan_id: requiredString('Select a loan'),
     account_id: requiredString('Select an account'),
     amount: amount(1),
-    transaction_mode: enumFrom(['counter', 'online'], 'Select a transaction mode'),
+    transaction_mode: enumFrom(['counter', 'online', 'bank_transfer'], 'Select a transaction mode'),
     branch_id: optionalId,
 });
 
