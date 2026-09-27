@@ -28,7 +28,7 @@ test('F030-1: unauthenticated requests to tickets endpoints return 401', functio
     $this->patchJson('/api/tickets/1/assign', [])->assertUnauthorized();
 });
 
-test('F030-2: support staff can post internal notes; leaked to members via API (Defect F030-01)', function () {
+test('F030-2: support staff can post internal notes; members cannot view them (Defect F030-01 fixed)', function () {
     $ticket = Ticket::create([
         'user_id' => $this->member->id,
         'subject' => 'Account Discrepancy',
@@ -46,13 +46,27 @@ test('F030-2: support staff can post internal notes; leaked to members via API (
     $response->assertStatus(201)
         ->assertJsonPath('data.is_internal_note', true);
 
-    // Member views ticket detail: demonstrates defect F030-01 where internal notes leak to requester
+    // Member views ticket detail: internal note must NOT leak to the requester
     $memberResponse = $this->actingAs($this->member)->getJson("/api/tickets/{$ticket->id}");
     $memberResponse->assertOk();
 
     $messages = $memberResponse->json('data.messages');
     $internalNotes = collect($messages)->filter(fn ($m) => $m['is_internal_note'] === true);
-    expect($internalNotes)->not->toBeEmpty();
+    expect($internalNotes)->toBeEmpty();
+
+    // Member list view must not expose an internal note snippet
+    $listResponse = $this->actingAs($this->member)->getJson('/api/tickets');
+    $listResponse->assertOk();
+    $snippet = collect($listResponse->json('data'))
+        ->firstWhere('id', $ticket->id)['latest_message_snippet'] ?? null;
+    expect($snippet)->toBeNull();
+
+    // Support staff still see the internal note
+    $staffResponse = $this->actingAs($this->accountant)->getJson("/api/tickets/{$ticket->id}");
+    $staffResponse->assertOk();
+    $staffMessages = $staffResponse->json('data.messages');
+    $staffInternalNotes = collect($staffMessages)->filter(fn ($m) => $m['is_internal_note'] === true);
+    expect($staffInternalNotes)->not->toBeEmpty();
 });
 
 test('F030-3: ticket status transition lifecycle records timestamps correctly', function () {

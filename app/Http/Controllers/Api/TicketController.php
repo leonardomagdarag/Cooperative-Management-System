@@ -100,7 +100,7 @@ class TicketController extends Controller
             ->paginate($perPage);
 
         return response()->json([
-            'data' => $paginator->getCollection()->map(fn (Ticket $t) => $this->serializeTicketSummary($t)),
+            'data' => $paginator->getCollection()->map(fn (Ticket $t) => $this->serializeTicketSummary($t, $user)),
             'pagination' => [
                 'current_page' => $paginator->currentPage(),
                 'last_page' => $paginator->lastPage(),
@@ -180,14 +180,14 @@ class TicketController extends Controller
 
         return response()->json([
             'message' => 'Ticket created successfully.',
-            'data' => $this->serializeTicketDetail($ticket->fresh(['user.personalData', 'user.roles', 'messages.attachments'])),
+            'data' => $this->serializeTicketDetail($ticket->fresh(['user.personalData', 'user.roles', 'messages.attachments']), $user),
         ], 201);
     }
 
     /**
      * Display the specified ticket.
      */
-    public function show(Ticket $ticket): JsonResponse
+    public function show(Request $request, Ticket $ticket): JsonResponse
     {
         Gate::authorize('view', $ticket);
 
@@ -202,7 +202,7 @@ class TicketController extends Controller
         ]);
 
         return response()->json([
-            'data' => $this->serializeTicketDetail($ticket),
+            'data' => $this->serializeTicketDetail($ticket, $request->user()),
             'meta' => [
                 'can_reply' => Auth::user()->can('reply', $ticket),
                 'can_update_status' => Auth::user()->can('updateStatus', $ticket),
@@ -278,7 +278,7 @@ class TicketController extends Controller
 
         return response()->json([
             'message' => 'Reply posted successfully.',
-            'data' => $this->serializeMessage($message->fresh(['user.personalData', 'user.roles', 'attachments'])),
+            'data' => $this->serializeMessage($message->fresh(['user.personalData', 'user.roles', 'attachments']), $user),
             'ticket_status' => $ticket->status,
         ], 201);
     }
@@ -377,11 +377,18 @@ class TicketController extends Controller
     // Serialization helpers
     // ─────────────────────────────────────────────────────────────────────────
 
-    protected function serializeTicketSummary(Ticket $t): array
+    protected function serializeTicketSummary(Ticket $t, ?User $viewer = null): array
     {
+        $viewer = $viewer ?? Auth::user();
+        $canViewInternal = $viewer && $viewer->isSupportStaff();
         $requesterName = $t->user ? ($t->user->name ?: $t->user->email) : 'Unknown';
         $assigneeName = $t->assignee ? ($t->assignee->name ?: $t->assignee->email) : null;
         $latestMessage = $t->messages->first();
+
+        $latestSnippet = null;
+        if ($latestMessage && ($canViewInternal || ! (bool) $latestMessage->is_internal_note)) {
+            $latestSnippet = substr($latestMessage->message, 0, 100);
+        }
 
         return [
             'id' => $t->id,
@@ -399,12 +406,14 @@ class TicketController extends Controller
             'last_reply_at' => $t->last_reply_at?->toISOString(),
             'created_at' => $t->created_at?->toISOString(),
             'created_at_human' => $t->created_at?->diffForHumans(),
-            'latest_message_snippet' => $latestMessage ? substr($latestMessage->message, 0, 100) : null,
+            'latest_message_snippet' => $latestSnippet,
         ];
     }
 
-    protected function serializeTicketDetail(Ticket $t): array
+    protected function serializeTicketDetail(Ticket $t, ?User $viewer = null): array
     {
+        $viewer = $viewer ?? Auth::user();
+        $canViewInternal = $viewer && $viewer->isSupportStaff();
         $requesterName = $t->user ? ($t->user->name ?: $t->user->email) : 'Unknown';
         $assigneeName = $t->assignee ? ($t->assignee->name ?: $t->assignee->email) : null;
 
@@ -426,12 +435,17 @@ class TicketController extends Controller
             'closed_at' => $t->closed_at?->toISOString(),
             'created_at' => $t->created_at?->toISOString(),
             'created_at_human' => $t->created_at?->diffForHumans(),
-            'messages' => $t->messages->map(fn (TicketMessage $m) => $this->serializeMessage($m)),
+            'messages' => $t->messages
+                ->filter(fn (TicketMessage $m) => $canViewInternal || ! (bool) $m->is_internal_note)
+                ->values()
+                ->map(fn (TicketMessage $m) => $this->serializeMessage($m, $viewer)),
         ];
     }
 
-    protected function serializeMessage(TicketMessage $m): array
+    protected function serializeMessage(TicketMessage $m, ?User $viewer = null): array
     {
+        $viewer = $viewer ?? Auth::user();
+        $canViewInternal = $viewer && $viewer->isSupportStaff();
         $authorName = $m->user ? ($m->user->name ?: $m->user->email) : 'Unknown';
 
         return [
@@ -440,7 +454,7 @@ class TicketController extends Controller
             'author_name' => $authorName,
             'author_role' => $m->user?->primary_role ?: 'user',
             'is_staff' => $m->user ? $m->user->isSupportStaff() : false,
-            'message' => $m->message,
+            'message' => $m->is_internal_note && ! $canViewInternal ? null : $m->message,
             'is_internal_note' => (bool) $m->is_internal_note,
             'created_at' => $m->created_at?->toISOString(),
             'created_at_human' => $m->created_at?->diffForHumans(),
