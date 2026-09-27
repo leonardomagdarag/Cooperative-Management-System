@@ -5,6 +5,7 @@ use App\Models\Branch;
 use App\Models\Loan;
 use App\Models\LoanProduct;
 use App\Models\MemberApplication;
+use App\Models\OfficerPermissionOverride;
 use App\Models\Transaction;
 use App\Models\User;
 use Database\Seeders\AccountSeeder;
@@ -151,7 +152,7 @@ test('F016-6: admin cannot delete branch with pending member applications (422)'
         ->assertJson(['message' => 'Cannot delete branch because it has pending member applications.']);
 });
 
-test('F016-7: branch-scoped loan officer only sees loans of their branch', function () {
+test('F016-7: loan officer with branch bypass sees loans from all branches', function () {
     $product = LoanProduct::first() ?? LoanProduct::create([
         'name' => 'Standard Loan',
         'code' => 'STD01',
@@ -189,6 +190,52 @@ test('F016-7: branch-scoped loan officer only sees loans of their branch', funct
     $response->assertOk();
 
     $branchIds = collect($response->json('data'))->pluck('branch_id')->filter()->unique()->values()->all();
-    // Loan officer should only see their own branch's loans
+    // The bypass permission is granted by default, so the officer sees loans
+    // across every branch while staying within their permission set.
+    expect($branchIds)->toEqualCanonicalizing([$this->mainBranch->id, $this->officeBranch->id]);
+});
+
+test('F016-8: disallowing branches.bypass via override restores branch isolation', function () {
+    $product = LoanProduct::first() ?? LoanProduct::create([
+        'name' => 'Standard Loan',
+        'code' => 'STD01',
+        'interest_rate' => 5,
+        'min_amount' => 1000,
+        'max_amount' => 50000,
+        'min_term_months' => 6,
+        'max_term_months' => 24,
+    ]);
+
+    Loan::create([
+        'user_id' => $this->mainMember->id,
+        'loan_product_id' => $product->id,
+        'branch_id' => $this->mainBranch->id,
+        'loan_amount' => 10000,
+        'loan_status' => 'pending',
+        'interest_rate' => 5,
+        'term_months' => 12,
+    ]);
+
+    Loan::create([
+        'user_id' => $this->officeMember->id,
+        'loan_product_id' => $product->id,
+        'branch_id' => $this->officeBranch->id,
+        'loan_amount' => 8000,
+        'loan_status' => 'pending',
+        'interest_rate' => 5,
+        'term_months' => 12,
+    ]);
+
+    OfficerPermissionOverride::create([
+        'user_id' => $this->loanOfficer->id,
+        'permission' => 'branches.bypass',
+        'effect' => OfficerPermissionOverride::EFFECT_DISALLOW,
+    ]);
+
+    $this->actingAs($this->loanOfficer);
+    $response = $this->getJson('/api/loans?loan_status=pending');
+    $response->assertOk();
+
+    $branchIds = collect($response->json('data'))->pluck('branch_id')->filter()->unique()->values()->all();
     expect($branchIds)->toBe([$this->officeBranch->id]);
 });

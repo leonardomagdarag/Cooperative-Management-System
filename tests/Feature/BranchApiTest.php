@@ -84,7 +84,7 @@ test('admin can filter members by branch', function () {
     expect($names)->toContain('USR000012')->not->toContain('USR000007');
 });
 
-test('branch-scoped manager only sees members of their own branch', function () {
+test('manager with branch bypass sees members from all branches', function () {
     $this->actingAs($this->manager);
 
     $response = $this->getJson('/api/members');
@@ -92,23 +92,26 @@ test('branch-scoped manager only sees members of their own branch', function () 
     $response->assertOk();
     $data = $response->json('data');
     expect($data)->not->toBeEmpty()
-        ->and(collect($data)->pluck('branch_name')->unique()->all())->toBe(['Main']);
-    expect(collect($data)->pluck('user_number'))->not->toContain('USR000012');
+        ->and(collect($data)->pluck('branch_name')->unique()->values()->all())
+        ->toEqualCanonicalizing(['Main', 'Branch']);
+    expect(collect($data)->pluck('user_number'))->toContain('USR000012');
 });
 
-test('branch-scoped manager is locked to their own branch even with a branch filter', function () {
+test('manager with branch bypass can narrow the member list via the branch filter', function () {
     $this->actingAs($this->manager);
 
     $response = $this->getJson('/api/members?branch_id='.$this->office->id);
 
     $response->assertOk();
-    expect(collect($response->json('data'))->pluck('branch_name')->unique()->all())->toBe(['Main']);
+    expect(collect($response->json('data'))->pluck('branch_name')->unique()->values()->all())->toBe(['Branch']);
 });
 
-test('branch-scoped manager cannot view a member from another branch', function () {
+test('manager with branch bypass can view a member from another branch', function () {
     $this->actingAs($this->manager);
 
-    $this->getJson('/api/members/'.$this->officeMember->id)->assertForbidden();
+    $this->getJson('/api/members/'.$this->officeMember->id)
+        ->assertOk()
+        ->assertJsonPath('user_number', 'USR000012');
 });
 
 test('branch-scoped manager can view members of their own branch', function () {
@@ -119,7 +122,7 @@ test('branch-scoped manager can view members of their own branch', function () {
         ->assertJsonPath('user_number', 'USR000007');
 });
 
-test('expenses are scoped to the manager branch', function () {
+test('expenses expose all branches for an officer holding branch bypass', function () {
     Expense::create([
         'category' => 'Utilities',
         'description' => 'Main rent',
@@ -142,11 +145,11 @@ test('expenses are scoped to the manager branch', function () {
     $response = $this->getJson('/api/expenses');
 
     $response->assertOk();
-    $branches = collect($response->json('data'))->pluck('branch_name')->unique()->all();
-    expect($branches)->toBe(['Main']);
+    $branches = collect($response->json('data'))->pluck('branch_name')->unique()->values()->all();
+    expect($branches)->toEqualCanonicalizing(['Main', 'Branch']);
 });
 
-test('ledger transactions are scoped to the manager branch', function () {
+test('ledger transactions expose all branches for an officer holding branch bypass', function () {
     $mainAccount = Account::factory()->create([
         'user_id' => $this->mainMember->id,
         'account_type' => 'savings',
@@ -176,8 +179,8 @@ test('ledger transactions are scoped to the manager branch', function () {
     $response = $this->getJson('/api/ledger');
 
     $response->assertOk();
-    $branches = collect($response->json('data'))->pluck('branch_name')->unique()->all();
-    expect($branches)->toBe(['Main']);
+    $branches = collect($response->json('data'))->pluck('branch_name')->unique()->values()->all();
+    expect($branches)->toEqualCanonicalizing(['Main', 'Branch']);
 });
 
 test('manager role preset does not grant branch management', function () {

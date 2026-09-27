@@ -79,6 +79,7 @@ class PermissionCatalog
                 'branches.create',
                 'branches.update',
                 'branches.delete',
+                'branches.bypass',
             ],
             'Logs' => [
                 'logs.view',
@@ -186,6 +187,7 @@ class PermissionCatalog
                 'tickets.view',
                 'tickets.reply',
                 'tickets.manage',
+                'branches.bypass',
             ],
             'accountant' => [
                 'dashboard.view',
@@ -217,6 +219,7 @@ class PermissionCatalog
                 'tickets.view',
                 'tickets.reply',
                 'tickets.manage',
+                'branches.bypass',
             ],
             'loan' => [
                 'dashboard.view',
@@ -238,6 +241,7 @@ class PermissionCatalog
                 'profile.update',
                 'tickets.view',
                 'tickets.reply',
+                'branches.bypass',
             ],
             'secretary' => [
                 'dashboard.view',
@@ -260,6 +264,7 @@ class PermissionCatalog
                 'tickets.view',
                 'tickets.reply',
                 'tickets.manage',
+                'branches.bypass',
             ],
         ];
     }

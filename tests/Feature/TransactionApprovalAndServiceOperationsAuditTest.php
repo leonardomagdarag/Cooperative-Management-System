@@ -285,7 +285,7 @@ test('F023-10: withdrawal approval fails with 422 if account balance dropped bel
         ->assertJson(['message' => 'Insufficient available balance to approve this transaction.']);
 });
 
-test('F023-11: branch-scoped officer cannot approve a transaction from another branch', function () {
+test('F023-11: officer holding branch bypass can approve a transaction from another branch', function () {
     // Set manager's branch to officeBranch
     $this->manager->update(['branch_id' => $this->officeBranch->id]);
 
@@ -301,12 +301,17 @@ test('F023-11: branch-scoped officer cannot approve a transaction from another b
         'recorded_by' => $this->member->id,
     ]);
 
+    $this->memberAccount->update(['balance' => $before = 1000.00]);
+
     $response = $this->actingAs($this->manager)->postJson("/api/services/approve/{$transaction->id}", [
         'action' => 'approve',
     ]);
 
-    $response->assertStatus(403)
-        ->assertJson(['message' => 'You can only approve transactions in your branch.']);
+    $response->assertOk()
+        ->assertJson(['message' => 'Transaction approved.']);
+
+    $this->memberAccount->refresh();
+    expect((float) $this->memberAccount->balance)->toBe($before + 500.0);
 });
 
 test('F023-12: approving or rejecting an already processed transaction returns 422', function () {

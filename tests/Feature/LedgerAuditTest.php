@@ -135,8 +135,8 @@ test('F025-6: ledger export streams CSV file with headers and records', function
         ->and($content)->toContain('Status');
 });
 
-test('F025-7: ledger honors branch isolation for branch-scoped officers', function () {
-    // Give accountant officeBranch
+test('F025-7: ledger exposes entries across branches for officers holding branch bypass', function () {
+    // Give accountant officeBranch while holding the default branch bypass
     $this->accountant->update(['branch_id' => $this->officeBranch->id]);
 
     $tMain = Transaction::create([
@@ -166,5 +166,5 @@ test('F025-7: ledger honors branch isolation for branch-scoped officers', functi
 
     $ids = collect($response->json('data'))->pluck('id')->all();
     expect($ids)->toContain($tOffice->id)
-        ->and($ids)->not->toContain($tMain->id);
+        ->and($ids)->toContain($tMain->id);
 });

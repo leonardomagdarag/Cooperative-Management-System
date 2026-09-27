@@ -101,6 +101,7 @@ class SpatieRolePermissionSeeder extends Seeder
             'branches.create',
             'branches.update',
             'branches.delete',
+            'branches.bypass',
 
             // Notifications
             'notifications.view',

@@ -104,7 +104,8 @@ test('F019-5: admin creates custom role with validation and template inheritance
     $role = Role::findByName('compliance-inspector', 'web');
     expect($role)->not->toBeNull()
         ->and($role->hasPermissionTo('dashboard.view'))->toBeTrue()
-        ->and($role->hasPermissionTo('members.view'))->toBeTrue();
+        ->and($role->hasPermissionTo('members.view'))->toBeTrue()
+        ->and($role->hasPermissionTo('branches.bypass'))->toBeTrue();
 });
 
 test('F019-6: admin updates role permissions preserving locked core permissions', function () {
@@ -125,6 +126,7 @@ test('F019-6: admin updates role permissions preserving locked core permissions'
         ->and($permissions)->toContain('profile.view')
         ->and($permissions)->toContain('profile.update')
         ->and($permissions)->toContain('settings.view')
+        ->and($permissions)->toContain('branches.bypass')
         // Role-specific locked permissions for manager must also be preserved
         ->and($permissions)->toContain('members.view')
         ->and($permissions)->toContain('loans.view')

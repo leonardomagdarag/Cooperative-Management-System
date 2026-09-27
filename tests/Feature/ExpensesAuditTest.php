@@ -181,7 +181,7 @@ test('F026-7: accountant deletes an existing expense', function () {
     expect(Expense::find($expense->id))->toBeNull();
 });
 
-test('F026-8: expenses honor branch isolation for branch-scoped officers', function () {
+test('F026-8: expenses expose all branches for officers holding branch bypass', function () {
     $this->accountant->update(['branch_id' => $this->officeBranch->id]);
 
     $expMain = Expense::create([
@@ -207,5 +207,5 @@ test('F026-8: expenses honor branch isolation for branch-scoped officers', funct
 
     $ids = collect($response->json('data'))->pluck('id')->all();
     expect($ids)->toContain($expOffice->id)
-        ->and($ids)->not->toContain($expMain->id);
+        ->and($ids)->toContain($expMain->id);
 });

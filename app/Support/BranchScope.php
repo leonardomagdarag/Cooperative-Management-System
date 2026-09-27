@@ -9,7 +9,8 @@ class BranchScope
 {
     /**
      * Whether the viewer is exempt from branch scoping. Admins, developers,
-     * and users without an assigned branch see data across all branches.
+     * users granted the branches.bypass permission, and users without an
+     * assigned branch see data across all branches.
      */
     public static function isUnrestricted(?User $viewer): bool
     {
@@ -18,6 +19,10 @@ class BranchScope
         }
 
         if ($viewer->hasRole('admin') || $viewer->hasRole('developer')) {
+            return true;
+        }
+
+        if ($viewer->can('branches.bypass')) {
             return true;
         }
 

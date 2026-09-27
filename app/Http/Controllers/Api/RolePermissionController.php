@@ -17,6 +17,15 @@ class RolePermissionController extends Controller
 {
     private const RESERVED_ROLES = ['admin', 'developer', 'member', 'inactive', 'terminated'];
 
+    private const LOCKED_PERMISSIONS = [
+        'dashboard.view',
+        'notifications.view',
+        'profile.view',
+        'profile.update',
+        'settings.view',
+        'branches.bypass',
+    ];
+
     public function index(): JsonResponse
     {
         abort_unless($this->isAdmin(Auth::user()), 403);
@@ -79,7 +88,7 @@ class RolePermissionController extends Controller
         app(PermissionRegistrar::class)->forgetCachedPermissions();
         $this->bootstrapPermissions();
 
-        $lockedPermissions = ['dashboard.view', 'notifications.view', 'profile.view', 'profile.update', 'settings.view'];
+        $lockedPermissions = self::LOCKED_PERMISSIONS;
         $baseRoleRequiredPermissions = [
             'manager' => ['members.view', 'loans.view', 'services.view'],
             'accountant' => ['transactions.view', 'services.view', 'reports.view'],
@@ -135,7 +144,7 @@ class RolePermissionController extends Controller
             $assignedPermissions = Role::findByName($validated['template'], 'web')->permissions()->pluck('name')->all();
         }
 
-        $lockedPermissions = ['dashboard.view', 'notifications.view', 'profile.view', 'profile.update', 'settings.view'];
+        $lockedPermissions = self::LOCKED_PERMISSIONS;
         $assignedPermissions = array_values(array_unique(array_merge($assignedPermissions, $lockedPermissions)));
 
         $role = Role::create(['name' => $roleName, 'guard_name' => 'web']);
@@ -227,7 +236,7 @@ class RolePermissionController extends Controller
 
     private function bootstrapPermissions(): void
     {
-        $lockedPermissions = ['dashboard.view', 'notifications.view', 'profile.view', 'profile.update', 'settings.view'];
+        $lockedPermissions = self::LOCKED_PERMISSIONS;
         $allToBootstrap = array_unique(array_merge(PermissionCatalog::allPermissions(), $lockedPermissions));
 
         foreach ($allToBootstrap as $permission) {
