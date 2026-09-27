@@ -190,6 +190,9 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     Route::get('/reports/options', [ReportController::class, 'options']);
     Route::get('/reports/balance-sheet', [ReportController::class, 'balanceSheet']);
     Route::get('/reports/balance-sheet/download', [ReportController::class, 'downloadBalanceSheet']);
+    Route::get('/reports/members', [ReportController::class, 'members']);
+    Route::get('/reports/officers', [ReportController::class, 'officers']);
+    Route::post('/reports/export', [ReportController::class, 'export']);
 
     // Loans
     Route::get('/loans', [LoanController::class, 'index']);
