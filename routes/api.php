@@ -129,6 +129,7 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     Route::delete('/notifications/read/all', [NotificationController::class, 'deleteAllRead']);
     // FAQs & Knowledge Base
     Route::get('/faqs', [FaqController::class, 'index']);
+    Route::put('/faqs', [FaqController::class, 'update']);
 
     // Tickets & Support Messaging
     Route::get('/tickets', [TicketController::class, 'index']);

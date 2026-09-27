@@ -91,6 +91,17 @@ export interface FaqCategory {
     faqs: FaqItem[];
 }
 
+export interface HelpContent {
+    header_description: string;
+    callout_title: string;
+    callout_description: string;
+}
+
+export interface FaqPayload {
+    data: FaqCategory[];
+    content: HelpContent;
+}
+
 export interface TicketQueryParams {
     scope?: 'all' | 'mine';
     status_group?: 'active' | 'closed';
@@ -141,7 +152,12 @@ export async function getSupportOfficers(): Promise<SupportOfficer[]> {
     return res.data.data;
 }
 
-export async function getFaqs(): Promise<FaqCategory[]> {
+export async function getFaqs(): Promise<FaqPayload> {
     const res = await api.get('/api/faqs');
-    return res.data.data;
+    return res.data;
+}
+
+export async function updateFaqs(categories: FaqCategory[], content: HelpContent): Promise<{ message: string }> {
+    const res = await api.put('/api/faqs', { categories, content });
+    return res.data;
 }

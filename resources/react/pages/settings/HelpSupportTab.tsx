@@ -1,13 +1,19 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'react-router';
-import { getFaqs, getTickets, type FaqCategory, type TicketSummary } from '../../api/tickets';
+import { getFaqs, getTickets, updateFaqs, type FaqCategory, type HelpContent, type TicketSummary } from '../../api/tickets';
 import NewTicketModal from '../../components/tickets/NewTicketModal';
 import TicketDetailModal from '../../components/tickets/TicketDetailModal';
 import Button from '../../components/ui/Button';
 import SettingsTabHeader from './SettingsTabHeader';
+import HelpKnowledgeBaseEditor from './HelpKnowledgeBaseEditor';
+import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
 
 export default function HelpSupportTab() {
+    const { user } = useAuth();
+    const { addToast } = useToast();
+    const queryClient = useQueryClient();
     const location = useLocation();
     const initialSubTab = (location.state as { subTab?: 'faqs' | 'tickets' } | null)?.subTab || 'faqs';
 
@@ -19,14 +25,31 @@ export default function HelpSupportTab() {
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
     const [expandedFaqIndex, setExpandedFaqIndex] = useState<string | null>(null);
 
+    // Edit mode (admins only)
+    const [isEditing, setIsEditing] = useState(false);
+    const canManage = user?.permissions?.includes('settings.update') || user?.primary_role === 'admin';
+
     // Ticket modals
     const [isNewTicketOpen, setIsNewTicketOpen] = useState(false);
     const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
 
     // Query FAQs
-    const { data: faqCategories = [], isLoading: isLoadingFaqs } = useQuery({
+    const { data: kbData, isLoading: isLoadingFaqs } = useQuery({
         queryKey: ['faqs'],
         queryFn: getFaqs,
+    });
+
+    const faqCategories = kbData?.data ?? [];
+    const helpContent = kbData?.content;
+
+    const saveMutation = useMutation({
+        mutationFn: ({ categories, content }: { categories: FaqCategory[]; content: HelpContent }) => updateFaqs(categories, content),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['faqs'] });
+            addToast('Help & Support content updated successfully.', 'success');
+            setIsEditing(false);
+        },
+        onError: (err: any) => addToast(err.response?.data?.message || 'Failed to save changes', 'error'),
     });
 
     // Query User's Tickets
@@ -99,8 +122,26 @@ export default function HelpSupportTab() {
             <SettingsTabHeader
                 eyebrow="Helpdesk & Support"
                 title="Help & Support"
-                description="Explore system guides, search frequently asked questions, or communicate with cooperative support staff."
+                description={helpContent?.header_description || 'Explore system guides, search frequently asked questions, or communicate with cooperative support staff.'}
                 icon="fas fa-life-ring"
+                action={canManage && helpContent ? (
+                    <Button
+                        type="button"
+                        variant={isEditing ? 'secondary' : 'primary'}
+                        size="sm"
+                        onClick={() => {
+                            if (isEditing) {
+                                setIsEditing(false);
+                            } else {
+                                setActiveSubTab('faqs');
+                                setIsEditing(true);
+                            }
+                        }}
+                    >
+                        {isEditing ? <i className="fas fa-times mr-1.5"></i> : <i className="fas fa-pen mr-1.5"></i>}
+                        {isEditing ? 'Exit Editor' : 'Edit Page'}
+                    </Button>
+                ) : undefined}
             />
 
             {/* Sub-tab Switcher */}
@@ -120,7 +161,10 @@ export default function HelpSupportTab() {
 
                 <button
                     type="button"
-                    onClick={() => setActiveSubTab('tickets')}
+                    onClick={() => {
+                        setActiveSubTab('tickets');
+                        setIsEditing(false);
+                    }}
                     className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
                         activeSubTab === 'tickets'
                             ? 'border-emerald-600 text-emerald-600'
@@ -138,7 +182,17 @@ export default function HelpSupportTab() {
             </div>
 
             {/* Sub-tab 1: FAQs & Guides */}
-            {activeSubTab === 'faqs' && (
+            {activeSubTab === 'faqs' && isEditing && helpContent && (
+                <HelpKnowledgeBaseEditor
+                    categories={faqCategories}
+                    content={helpContent}
+                    isSaving={saveMutation.isPending}
+                    onCancel={() => setIsEditing(false)}
+                    onSave={(categories, content) => saveMutation.mutate({ categories, content })}
+                />
+            )}
+
+            {activeSubTab === 'faqs' && !isEditing && (
                 <div className="space-y-6">
                     {/* Search & Categories Bar */}
                     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs space-y-4">
@@ -288,9 +342,9 @@ export default function HelpSupportTab() {
                                 <i className="fas fa-headset"></i>
                             </div>
                             <div>
-                                <h4 className="font-bold text-gray-900 text-base">Still need assistance?</h4>
+                                <h4 className="font-bold text-gray-900 text-base">{helpContent?.callout_title || 'Still need assistance?'}</h4>
                                 <p className="text-xs text-gray-600 mt-0.5">
-                                    Our support team and officers are ready to help fix your issue or answer questions.
+                                    {helpContent?.callout_description || 'Our support team and officers are ready to help fix your issue or answer questions.'}
                                 </p>
                             </div>
                         </div>
