@@ -143,10 +143,10 @@ export default function ExpensesPage() {
                                     <tr key={e.id} className="hover:bg-gray-50">
                                         <td className="p-4 text-sm text-gray-500 whitespace-nowrap">{e.expense_date}</td>
                                         <td className="p-4"><span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-amber-100 text-amber-700">{e.category}</span></td>
-                                        <td className="p-4 text-sm text-gray-700">{e.description || '—'}</td>
+                                        <td className="p-4 text-sm text-gray-700 truncate max-w-[300px]" title={e.description}>{e.description || '—'}</td>
                                         <td className="p-4 text-sm font-medium text-right text-gray-900">₱{Number(e.amount).toLocaleString()}</td>
-                                        <td className="p-4 text-sm text-gray-500">{e.recorded_by || '—'}</td>
-                                        {canAssignBranch && <td className="p-4 whitespace-nowrap"><BranchBadge name={e.branch_name} /></td>}
+                                        <td className="p-4 text-sm text-gray-500 whitespace-nowrap truncate max-w-[180px]" title={e.recorded_by || '—'}>{e.recorded_by || '—'}</td>
+                                        {canAssignBranch && <td className="p-4 truncate" title={e.branch_name}><BranchBadge name={e.branch_name} /></td>}
                                         {canManage && (
                                             <td className="p-4">
                                                 <div className="flex gap-1">

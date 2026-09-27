@@ -39,8 +39,8 @@ export default function MemberLoansPage() {
                             <tbody className="divide-y divide-gray-200">
                                 {loans.map((l: any) => (
                                     <tr key={l.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => { setSelected(l); setTab('details'); }}>
-                                        <td className="px-6 py-3 font-mono text-xs font-medium">{l.loan_number}</td>
-                                        <td className="px-6 py-3">{l.loan_type_label || l.loan_type}</td>
+                                        <td className="px-6 py-3 font-mono text-xs font-medium whitespace-nowrap truncate max-w-[160px]" title={l.loan_number}>{l.loan_number}</td>
+                                        <td className="px-6 py-3 whitespace-nowrap truncate max-w-[220px]" title={l.loan_type_label || l.loan_type}>{l.loan_type_label || l.loan_type}</td>
                                         <td className="px-6 py-3 text-right font-medium">₱{Number(l.loan_amount).toLocaleString()}</td>
                                         <td className="px-6 py-3 text-center">{Number(l.interest_rate).toFixed(1)}%</td>
                                         <td className="px-6 py-3 text-center">
@@ -149,7 +149,7 @@ export default function MemberLoansPage() {
                                         <table className="min-w-full text-sm"><thead className="bg-gray-50"><tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider"><th className="px-4 py-2">#</th><th className="px-4 py-2">Transaction #</th><th className="px-4 py-2 text-right">Amount</th><th className="px-4 py-2">Date</th><th className="px-4 py-2">Status</th></tr></thead>
                                             <tbody className="divide-y divide-gray-100">
                                                 {selected.completed_payments.map((p: any) => (
-                                                    <tr key={p.id} className="hover:bg-gray-50"><td className="px-4 py-2">{p.payment_number}</td><td className="px-4 py-2 font-mono text-xs">{p.transaction_number}</td><td className="px-4 py-2 text-right font-medium">₱{Number(p.amount).toLocaleString()}</td><td className="px-4 py-2 text-gray-500">{p.payment_date}</td><td className="px-4 py-2"><span className="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">{p.status}</span></td></tr>
+                                                    <tr key={p.id} className="hover:bg-gray-50"><td className="px-4 py-2">{p.payment_number}</td><td className="px-4 py-2 font-mono text-xs truncate max-w-[220px]" title={p.transaction_number}>{p.transaction_number}</td><td className="px-4 py-2 text-right font-medium">₱{Number(p.amount).toLocaleString()}</td><td className="px-4 py-2 text-gray-500">{p.payment_date}</td><td className="px-4 py-2"><span className="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">{p.status}</span></td></tr>
                                                 ))}
                                             </tbody>
                                         </table>

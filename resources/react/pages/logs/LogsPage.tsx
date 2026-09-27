@@ -84,7 +84,7 @@ export default function LogsPage() {
                                         <td className="p-4 text-sm text-gray-500 whitespace-nowrap">
                                             {new Date(log.created_at).toLocaleString()}
                                         </td>
-                                        <td className="p-4 text-sm font-medium text-gray-900">
+                                        <td className="p-4 text-sm font-medium text-gray-900 truncate" title={log.causer?.name || 'System'}>
                                             {log.causer?.name || 'System'}
                                         </td>
                                         <td className="p-4">

@@ -240,13 +240,13 @@ export default function LoansPage() {
                                 {loans.map((l: any) => (
                                     <tr key={l.id} className="hover:bg-gray-50">
                                         <td className="p-4 text-sm font-medium text-gray-900">{l.loan_number}</td>
-                                        <td className="p-4 text-sm font-medium text-gray-900">{l.borrower?.name || 'Unknown'}{l.borrower?.user_number && <div className="text-xs text-gray-500">{l.borrower.user_number}</div>}</td>
+                                        <td className="p-4 text-sm font-medium text-gray-900 truncate" title={l.borrower?.name || 'Unknown'}>{l.borrower?.name || 'Unknown'}{l.borrower?.user_number && <div className="text-xs text-gray-500">{l.borrower.user_number}</div>}</td>
                                         <td className="p-4 text-base font-semibold text-gray-900">₱{Number(l.loan_amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                        <td className="p-4"><span className="px-2.5 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800 rounded capitalize">{l.loan_product_name || l.loan_product || l.loan_type}</span></td>
+                                        <td className="p-4 truncate" title={l.loan_product_name || l.loan_product || l.loan_type}><span className="px-2.5 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800 rounded capitalize">{l.loan_product_name || l.loan_product || l.loan_type}</span></td>
                                         <td className="p-4">
                                             <span className={`px-2.5 py-0.5 text-xs font-medium rounded ${getStatusColor(l.loan_status)}`}>{getStatusLabel(l.loan_status)}</span>
                                         </td>
-                                        {canAssignBranch && <td className="p-4 whitespace-nowrap"><BranchBadge name={l.branch_name} /></td>}
+                                        {canAssignBranch && <td className="p-4 truncate" title={l.branch_name}><BranchBadge name={l.branch_name} /></td>}
                                         <td className="p-4 text-sm text-gray-900">{l.created_at}</td>
                                         <td className="p-4">
                                             <div className="flex items-center gap-1">

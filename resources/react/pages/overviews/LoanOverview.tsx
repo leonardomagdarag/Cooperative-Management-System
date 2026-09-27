@@ -135,8 +135,8 @@ export default function LoanOverview() {
                                     <tbody className="divide-y divide-gray-50">
                                         {pendingLoans.map((l: any) => (
                                             <tr key={l.id} className="hover:bg-gray-50/50 transition-colors">
-                                                <td className="px-6 py-3 font-medium text-gray-900">{l.member_name}</td>
-                                                <td className="px-6 py-3 text-gray-600 text-xs">{titleCase(l.loan_type)}</td>
+                                                <td className="px-6 py-3 font-medium text-gray-900 truncate max-w-[220px]" title={l.member_name}>{l.member_name}</td>
+                                                <td className="px-6 py-3 text-gray-600 text-xs truncate max-w-[180px]" title={l.loan_type}>{titleCase(l.loan_type)}</td>
                                                 <td className="px-6 py-3 font-bold text-gray-900">{peso(l.loan_amount)}</td>
                                                 <td className="px-6 py-3 text-xs text-gray-400">{md(l.created_at)}</td>
                                             </tr>
@@ -169,7 +169,7 @@ export default function LoanOverview() {
                                     <tbody className="divide-y divide-gray-50">
                                         {overdueLoans.map((l: any) => (
                                             <tr key={l.id} className="hover:bg-red-50/30 transition-colors">
-                                                <td className="px-6 py-3 font-medium text-gray-900">{l.member_name}</td>
+                                                <td className="px-6 py-3 font-medium text-gray-900 truncate max-w-[220px]" title={l.member_name}>{l.member_name}</td>
                                                 <td className="px-6 py-3 font-bold text-gray-900">{peso(l.loan_amount)}</td>
                                                 <td className="px-6 py-3 text-xs text-red-600">{l.due_date}</td>
                                                 <td className="px-6 py-3">

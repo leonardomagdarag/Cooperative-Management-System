@@ -125,12 +125,12 @@ export default function OfficersPage() {
                                         {officers.map((o: any) => (
                                             <tr key={o.id} className="hover:bg-gray-50">
                                                 {canEdit && <td className="p-4 text-sm font-semibold text-gray-900 whitespace-nowrap">{o.user_number}</td>}
-                                                <td className="p-4 text-sm font-medium text-gray-900 whitespace-nowrap">{o.name || 'Unknown'}</td>
-                                                <td className="p-4 whitespace-nowrap">{o.title ? <span className="px-2.5 py-0.5 text-xs font-medium bg-cyan-100 text-cyan-800 rounded">{o.title.replace(/_/g, ' ')?.replace(/\b\w/g, c => c.toUpperCase())}</span> : <span className="text-xs text-gray-400">N/A</span>}</td>
+                                                <td className="p-4 text-sm font-medium text-gray-900 truncate" title={o.name || 'Unknown'}>{o.name || 'Unknown'}</td>
+                                                <td className="p-4 truncate" title={o.title}>{o.title ? <span className="px-2.5 py-0.5 text-xs font-medium bg-cyan-100 text-cyan-800 rounded">{o.title.replace(/_/g, ' ')?.replace(/\b\w/g, c => c.toUpperCase())}</span> : <span className="text-xs text-gray-400">N/A</span>}</td>
                                                 <td className="p-4 whitespace-nowrap"><span className="px-2.5 py-0.5 text-xs font-medium bg-purple-100 text-purple-800 rounded capitalize">{o.primary_role || 'Officer'}</span></td>
-                                                {canAssignBranch && <td className="p-4 whitespace-nowrap"><BranchBadge name={o.branch_name} /></td>}
+                                                {canAssignBranch && <td className="p-4 truncate" title={o.branch_name}><BranchBadge name={o.branch_name} /></td>}
                                                 <td className="p-4 whitespace-nowrap"><span className={`px-2.5 py-0.5 text-xs font-medium rounded ${o.account_status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>{o.account_status === 'active' ? 'Active' : 'Inactive'}</span></td>
-                                                <td className="p-4 text-sm text-gray-500">{o.email || '—'}</td>
+                                                <td className="p-4 text-sm text-gray-500 truncate" title={o.email || '—'}>{o.email || '—'}</td>
                                                 <td className="p-4 whitespace-nowrap">
                                                     <div className="flex items-center gap-1">
                                                         <button onClick={() => setViewing(o)} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="View"><i className="fas fa-eye text-sm"></i></button>

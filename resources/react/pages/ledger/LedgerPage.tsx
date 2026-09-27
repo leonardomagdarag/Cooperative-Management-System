@@ -190,12 +190,12 @@ export default function LedgerPage() {
                             <tbody className="divide-y divide-gray-100">
                                 {transactions.map((t: any) => (
                                     <tr key={t.id} className="hover:bg-gray-50">
-                                        <td className="p-4 text-sm font-medium text-gray-900">{t.transaction_number}</td>
-                                        <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{t.account_holder || '—'}{t.user_number && <div className="text-xs text-gray-500">{t.user_number}</div>}</td>
+                                        <td className="p-4 text-sm font-medium text-gray-900 truncate" title={t.transaction_number}>{t.transaction_number}</td>
+                                        <td className="p-4 text-sm text-gray-900 truncate" title={t.account_holder || '—'}>{t.account_holder || '—'}{t.user_number && <div className="text-xs text-gray-500">{t.user_number}</div>}</td>
                                         <td className="p-4"><span className={`px-2.5 py-0.5 text-xs font-medium rounded ${getTypeColor(t.transaction_type)}`}>{getTypeLabel(t.transaction_type)}</span></td>
                                         <td className={`p-4 text-sm font-semibold whitespace-nowrap ${t.transaction_type === 'withdrawal' || t.transaction_type === 'fee' ? 'text-red-600' : 'text-green-600'}`}>{(t.transaction_type === 'withdrawal' || t.transaction_type === 'fee') ? '-' : '+'}₱{Number(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                         <td className="p-4"><span className={`text-xs font-medium ${t.status === 'completed' ? 'text-emerald-600' : 'text-amber-600'}`}>{t.status}</span></td>
-                                        {canAssignBranch && <td className="p-4 whitespace-nowrap"><BranchBadge name={t.branch_name} /></td>}
+                                        {canAssignBranch && <td className="p-4 truncate" title={t.branch_name}><BranchBadge name={t.branch_name} /></td>}
                                         <td className="p-4 text-sm text-gray-500">{t.note || '—'}</td>
                                         <td className="p-4 text-sm text-gray-500">{t.transaction_date || '—'}</td>
                                         {canEdit && (

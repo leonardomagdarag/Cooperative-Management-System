@@ -285,9 +285,9 @@ export default function AdminOverview() {
                                 <tbody className="divide-y divide-gray-50">
                                     {pendingTx.map((t: any) => (
                                         <tr key={t.id} className="hover:bg-gray-50/50 transition-colors">
-                                            <td className="px-6 py-3 font-mono text-xs text-gray-700">{t.transaction_number}</td>
+                                            <td className="px-6 py-3 font-mono text-xs text-gray-700 truncate max-w-[160px]" title={t.transaction_number}>{t.transaction_number}</td>
                                             <td className="px-6 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${pendBadge(t.transaction_type)}`}>{pendLabel(t.transaction_type)}</span></td>
-                                            <td className="px-6 py-3 font-medium text-gray-900">{t.member_name}</td>
+                                            <td className="px-6 py-3 font-medium text-gray-900 truncate max-w-[220px]" title={t.member_name}>{t.member_name}</td>
                                             <td className="px-6 py-3 font-bold text-gray-900">{peso(t.amount)}</td>
                                             <td className="px-6 py-3 text-xs text-gray-400">{md(t.created_at_raw)}</td>
                                         </tr>

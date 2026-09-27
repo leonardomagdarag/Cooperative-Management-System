@@ -196,7 +196,7 @@ export default function MembersPage() {
                                     <tbody className="bg-white divide-y divide-gray-200">
                                         {members.map((m: any) => (
                                             <tr key={m.id} className="hover:bg-gray-50">
-                                                <td className="p-4 text-sm font-medium text-gray-900 whitespace-nowrap">{m.name || 'Unknown'}</td>
+                                                <td className="p-4 text-sm font-medium text-gray-900 truncate" title={m.name || 'Unknown'}>{m.name || 'Unknown'}</td>
                                                 {canViewMemberId && <td className="p-4 text-sm font-mono text-gray-500 whitespace-nowrap">{m.user_number || '—'}</td>}
                                                 <td className="p-4 whitespace-nowrap">
                                                     {m.archived_at ? (
@@ -207,7 +207,7 @@ export default function MembersPage() {
                                                         <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${m.account_status === 'active' ? 'bg-emerald-100 text-emerald-700' : m.account_status === 'terminated' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>{m.account_status}</span>
                                                     )}
                                                 </td>
-                                                {canAssignBranch && <td className="p-4 whitespace-nowrap"><BranchBadge name={m.branch_name} /></td>}
+                                                {canAssignBranch && <td className="p-4 truncate" title={m.branch_name}><BranchBadge name={m.branch_name} /></td>}
                                                 <td className="p-4 text-sm text-gray-500 whitespace-nowrap">{m.created_at ? new Date(m.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : '—'}</td>
                                                 <td className="p-4 min-w-0">
                                                     <span className="block truncate text-sm text-gray-500" title={m.email}>{m.email || '—'}</span>

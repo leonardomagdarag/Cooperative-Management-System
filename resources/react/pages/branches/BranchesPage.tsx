@@ -140,15 +140,15 @@ export default function BranchesPage() {
                                 <tr key={b.id} className="hover:bg-gray-50">
                                     <td className="px-4 py-3">
                                         <div className="flex items-center gap-2">
-                                            <span className="text-sm font-semibold text-gray-900">{b.name}</span>
+                                            <span className="text-sm font-semibold text-gray-900 truncate max-w-[240px]" title={b.name}>{b.name}</span>
                                             {b.is_head_office && <Badge variant="info">Head Office</Badge>}
                                         </div>
                                         <span className="text-xs text-gray-400 font-mono">{b.code}</span>
                                     </td>
-                                    <td className="px-4 py-3 text-sm text-gray-600">{b.address || '—'}</td>
-                                    <td className="px-4 py-3 text-sm text-gray-600">
-                                        <div>{b.contact_number || '—'}</div>
-                                        <div className="text-xs text-gray-400">{b.email || '—'}</div>
+                                    <td className="px-4 py-3 text-sm text-gray-600 truncate max-w-[260px]" title={b.address}>{b.address || '—'}</td>
+                                    <td className="px-4 py-3 text-sm text-gray-600 max-w-[240px]">
+                                        <div className="truncate" title={b.contact_number}>{b.contact_number || '—'}</div>
+                                        <div className="text-xs text-gray-400 truncate" title={b.email}>{b.email || '—'}</div>
                                     </td>
                                     <td className="px-4 py-3 text-center text-sm text-gray-600">
                                         <div>{b.members_count} members</div>
