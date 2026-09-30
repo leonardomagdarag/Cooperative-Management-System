@@ -3,64 +3,39 @@
 namespace Database\Factories;
 
 use App\Models\Address;
+use Database\Seeders\Support\MemberRoster;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
+/**
+ * Addresses of members of this cooperative.
+ *
+ * The membership is drawn from Calauan, Laguna, so a factory address anywhere
+ * else in the country would contradict the branch the member is filed under.
+ * The municipality, province, region and zip are therefore fixed and only the
+ * barangay and street vary.
+ */
 class AddressFactory extends Factory
 {
     protected $model = Address::class;
 
     public function definition(): array
     {
-        $cities = [
-            'Quezon City',
-            'Manila',
-            'Caloocan',
-            'Davao City',
-            'Cebu City',
-            'Makati',
-            'Pasig',
-            'Taguig',
-            'Parañaque',
-            'Las Piñas',
-            'Mandaluyong',
-            'Muntinlupa',
-            'San Juan',
-            'Marikina',
-            'Valenzuela',
-        ];
+        $municipality = MemberRoster::MUNICIPALITY;
 
-        $regions = [
-            'NCR' => 'Metro Manila',
-            'Region VII' => 'Central Visayas',
-            'Region XI' => 'Davao Region',
-            'Region III' => 'Central Luzon',
-            'Region IV-A' => 'CALABARZON',
-        ];
-
-        $barangays = [
-            'Barangay 1',
-            'Barangay 2',
-            'San Antonio',
-            'Santa Cruz',
-            'Poblacion',
-            'New Era',
-            'Commonwealth',
-            'Tandang Sora',
-            'Holy Spirit',
-            'Bagong Silang',
-            'Veterans Village',
-        ];
-
-        $region = fake()->randomElement(array_keys($regions));
+        $barangay = fake()->randomElement(MemberRoster::CALAUAN_BARANGAYS);
 
         return [
-            'country' => 'Philippines',
-            'region' => $regions[$region],
-            'province' => fake()->randomElement(['Metro Manila', 'Cebu', 'Davao del Sur', 'Bulacan', 'Cavite']),
-            'city_municipality' => fake()->randomElement($cities),
-            'barangay' => fake()->randomElement($barangays),
-            'street' => fake()->streetAddress(),
-            'zip_code' => fake()->randomElement(['1100', '1200', '1400', '1500', '1600', '6000', '8000']),
+            'country' => $municipality['country'],
+            'region' => $municipality['region'],
+            'province' => $municipality['province'],
+            'city_municipality' => $municipality['city_municipality'],
+            'barangay' => $barangay,
+            'street' => sprintf(
+                'Purok %d, sitio %s',
+                fake()->numberBetween(1, 7),
+                fake()->randomElement(['Maligaya', 'Bayanihan', 'Sto. Niño', 'Ligtas', 'Kaunlaran', 'Mabuhay']),
+            ),
+            'zip_code' => $municipality['zip_code'],
         ];
     }
 }

@@ -4,7 +4,8 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "dev": "vite",
+        "dev:queue": "php artisan queue:listen --queue=backups,emails,default --tries=1"
     },
     "devDependencies": {
         "@playwright/test": "^1.63.0",

@@ -191,6 +191,24 @@ class ServiceAvailabilitySeeder extends Seeder
                 'description' => 'Allow officers to process loan applications for members',
                 'is_editable' => true,
             ],
+            [
+                'key' => 'service_loan_application_counter_enabled',
+                'value' => '1',
+                'type' => 'boolean',
+                'group' => 'service_availability',
+                'label' => 'Loan Applications - Counter (OTC)',
+                'description' => 'Allow members to file loan applications over the counter',
+                'is_editable' => true,
+            ],
+            [
+                'key' => 'service_loan_application_online_enabled',
+                'value' => '1',
+                'type' => 'boolean',
+                'group' => 'service_availability',
+                'label' => 'Loan Applications - Online',
+                'description' => 'Allow members to file loan applications from the member portal',
+                'is_editable' => true,
+            ],
         ];
 
         foreach ($settings as $setting) {

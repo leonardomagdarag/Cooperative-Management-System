@@ -1,3 +1,4 @@
+import HelpTip from '../../components/ui/HelpTip';
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
@@ -272,6 +273,7 @@ export default function RolePermissionsPage() {
                 title="Roles & Permissions"
                 description="Configure permissions for database roles. Core system features remain accessible to all roles."
                 icon="fas fa-user-shield"
+                helpText="Permissions determine which screens and actions a role can access. Changes affect every user assigned that role; individual officer overrides may further allow or deny access."
                 action={
                     <button
                         type="button"

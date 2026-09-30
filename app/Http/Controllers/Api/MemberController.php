@@ -10,13 +10,17 @@ use App\Models\Address;
 use App\Models\Beneficiary;
 use App\Models\Contact;
 use App\Models\Employment;
+use App\Models\Expense;
 use App\Models\MemberId;
+use App\Models\Notification;
 use App\Models\PersonalData;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
 use App\Support\BranchScope;
+use App\Support\PermissionCatalog;
 use App\Support\PersonPasswordPolicy;
 use App\Support\SearchFilter;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -30,7 +34,6 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Spatie\Activitylog\Models\Activity;
-use App\Support\PermissionCatalog;
 
 class MemberController extends Controller
 {
@@ -755,6 +758,20 @@ class MemberController extends Controller
 
         DB::transaction(function () use ($member) {
             $member->roles()->detach();
+
+            // The ledger has to go before the accounts and the loans, because
+            // every entry points at one or the other and a permanent deletion
+            // has to leave nothing behind that would trip a foreign key.
+            Transaction::query()
+                ->where(function ($q) use ($member) {
+                    $q->whereIn('account_id', $member->accounts()->withTrashed()->pluck('accounts.id'))
+                        ->orWhereIn('loan_id', $member->loans()->withTrashed()->pluck('loans.id'))
+                        ->orWhere('recorded_by', $member->id);
+                })
+                ->forceDelete();
+
+            Notification::where('user_id', $member->id)->delete();
+            Expense::where('recorded_by', $member->id)->update(['recorded_by' => null]);
 
             $member->accounts()->forceDelete();
             $member->loans()->forceDelete();

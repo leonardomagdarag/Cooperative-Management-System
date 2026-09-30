@@ -1,3 +1,4 @@
+import HelpTip from '../../components/ui/HelpTip';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
@@ -189,7 +190,7 @@ export default function LoansPage() {
         <>
             <div className="p-4 bg-white block sm:flex items-center justify-between border-b border-gray-200 lg:mt-1.5">
                 <div>
-                    <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl">Loans</h1>
+                    <h1 className="flex items-center gap-2 text-xl font-semibold text-gray-900 sm:text-2xl">Loans <HelpTip text="Loan records move through review, approval, disbursement, and repayment. Encoding a loan records an application; it does not itself disburse funds." /></h1>
                     <p className="text-sm text-gray-500">Manage loan applications and records</p>
                 </div>
                 {canEncode && (

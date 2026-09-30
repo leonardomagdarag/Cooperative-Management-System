@@ -93,7 +93,7 @@ test('manager with branch bypass sees members from all branches', function () {
     $data = $response->json('data');
     expect($data)->not->toBeEmpty()
         ->and(collect($data)->pluck('branch_name')->unique()->values()->all())
-        ->toEqualCanonicalizing(['Main', 'Branch']);
+        ->toEqualCanonicalizing(['Main', 'Branch Office']);
     expect(collect($data)->pluck('user_number'))->toContain('USR000012');
 });
 
@@ -103,7 +103,7 @@ test('manager with branch bypass can narrow the member list via the branch filte
     $response = $this->getJson('/api/members?branch_id='.$this->office->id);
 
     $response->assertOk();
-    expect(collect($response->json('data'))->pluck('branch_name')->unique()->values()->all())->toBe(['Branch']);
+    expect(collect($response->json('data'))->pluck('branch_name')->unique()->values()->all())->toBe(['Branch Office']);
 });
 
 test('manager with branch bypass can view a member from another branch', function () {
@@ -146,7 +146,7 @@ test('expenses expose all branches for an officer holding branch bypass', functi
 
     $response->assertOk();
     $branches = collect($response->json('data'))->pluck('branch_name')->unique()->values()->all();
-    expect($branches)->toEqualCanonicalizing(['Main', 'Branch']);
+    expect($branches)->toEqualCanonicalizing(['Main', 'Branch Office']);
 });
 
 test('ledger transactions expose all branches for an officer holding branch bypass', function () {
@@ -180,7 +180,7 @@ test('ledger transactions expose all branches for an officer holding branch bypa
 
     $response->assertOk();
     $branches = collect($response->json('data'))->pluck('branch_name')->unique()->values()->all();
-    expect($branches)->toEqualCanonicalizing(['Main', 'Branch']);
+    expect($branches)->toEqualCanonicalizing(['Main', 'Branch Office']);
 });
 
 test('manager role preset does not grant branch management', function () {

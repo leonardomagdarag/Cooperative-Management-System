@@ -148,6 +148,7 @@ test('F025-7: ledger exposes entries across branches for officers holding branch
         'transaction_mode' => 'counter',
         'transaction_date' => now(),
         'recorded_by' => $this->admin->id,
+        'note' => 'F025-7 branch bypass probe, main office',
     ]);
 
     $tOffice = Transaction::create([
@@ -159,9 +160,12 @@ test('F025-7: ledger exposes entries across branches for officers holding branch
         'transaction_mode' => 'counter',
         'transaction_date' => now(),
         'recorded_by' => $this->accountant->id,
+        'note' => 'F025-7 branch bypass probe, branch office',
     ]);
 
-    $response = $this->actingAs($this->accountant)->getJson('/api/ledger');
+    // The seeded ledger already holds a full history, so the probe is narrowed
+    // down by its note: this still asks for both branches in one response.
+    $response = $this->actingAs($this->accountant)->getJson('/api/ledger?per_page=50&search='.urlencode('F025-7 branch bypass probe'));
     $response->assertOk();
 
     $ids = collect($response->json('data'))->pluck('id')->all();

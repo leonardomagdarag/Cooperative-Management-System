@@ -81,7 +81,7 @@ export default function ServiceAvailabilityPage() {
     if (isError) return <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700">Failed to load service availability: {(error as any)?.message || 'Unknown error'}</div>;
 
     return <div className={`space-y-4 ${changes.length > 0 ? 'pb-20' : ''}`}>
-        <SettingsTabHeader eyebrow="System operations" title="Service Availability" description="Control which services, audiences, and transaction channels are currently available." icon="fas fa-toggle-on" />
+        <SettingsTabHeader eyebrow="System operations" title="Service Availability" description="Control which services, audiences, and transaction channels are currently available." icon="fas fa-toggle-on" helpText="The global switch controls the whole service. Audience switches control member or officer access; channel switches control Counter, Online, or Bank Transfer. Disabled services cannot be used until re-enabled." />
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             {(Object.keys(serviceConfig) as ServiceKey[]).map(service => {

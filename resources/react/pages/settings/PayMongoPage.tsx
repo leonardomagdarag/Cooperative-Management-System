@@ -1,3 +1,4 @@
+import HelpTip from '../../components/ui/HelpTip';
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -173,7 +174,7 @@ export default function PayMongoPage() {
                     </div>
                     <div>
                         <div className="flex items-center gap-2">
-                            <h3 className="font-semibold text-base">PayMongo Payment Gateway</h3>
+                            <h3 className="flex items-center gap-2 font-semibold text-base">PayMongo Payment Gateway <HelpTip text="Sandbox mode is for testing and does not collect real payments. Live mode uses production credentials and processes real charges. Configure and test credentials before enabling payments." /></h3>
                             <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${
                                 !summary?.enabled ? 'bg-gray-200 text-gray-700' :
                                 summary?.mode === 'live' ? 'bg-emerald-200 text-emerald-900' : 'bg-blue-200 text-blue-900'

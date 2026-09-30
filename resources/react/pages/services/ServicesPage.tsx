@@ -1,3 +1,4 @@
+import HelpTip from '../../components/ui/HelpTip';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
@@ -238,7 +239,7 @@ export default function ServicesPage() {
     return (
         <div className="space-y-6">
             <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <h1 className="text-2xl font-bold text-gray-900">Services</h1>
+                <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900">Services <HelpTip text="Choose a service to start a deposit, withdrawal, loan application, or loan payment. Officers may first need to select the member whose account they are serving." /></h1>
                 <p className="mt-1 text-sm text-gray-500">Select a service to get started</p>
             </div>
 

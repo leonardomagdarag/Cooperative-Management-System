@@ -2,36 +2,180 @@
 
 namespace Database\Seeders;
 
+use App\Models\Address;
 use App\Models\Branch;
+use App\Models\Contact;
+use App\Models\Employment;
+use App\Models\MemberId;
 use App\Models\PersonalData;
 use App\Models\User;
+use Database\Seeders\Support\MemberRoster;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 
+/**
+ * Creates the fixed demo logins and the ten rostered members.
+ *
+ * Member identity is not invented here — it comes from MemberRoster so the
+ * seeders that run afterwards (accounts, loans, transactions) see the same
+ * people, the same join dates and the same branch assignments.
+ */
 class UserSeeder extends Seeder
 {
-    private function createSeedUser(array $attributes, array $personalData): User
+    /**
+     * Create (or refresh) a user together with its full personal profile.
+     *
+     * Seeders are routinely re-run during local development, so the fixed
+     * email is the identity key: an existing account is reused and its
+     * supporting profile rows are updated in place rather than duplicated.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @param  array<string, mixed>  $profile
+     */
+    private function createSeedUser(array $attributes, array $profile): User
     {
-        // Seeders may be run more than once during local development. Reuse the
-        // fixed account instead of creating another row with the same email.
-        $existing = User::query()->where('email', $attributes['email'])->first();
+        $email = User::normalizeEmail($attributes['email']);
+        $existing = User::query()->where('email', $email)->first();
+
+        $personalDataId = $this->syncProfile($existing?->personalData, $email, $profile);
 
         if ($existing) {
-            if ($existing->branch_id === null && ! empty($attributes['branch_id'])) {
-                $existing->forceFill(['branch_id' => $attributes['branch_id']])->save();
+            $changes = [
+                'personal_data_id' => $personalDataId,
+                'branch_id' => $attributes['branch_id'] ?? $existing->branch_id,
+                'role' => $attributes['role'] ?? $existing->role,
+            ];
+
+            foreach (['special_loan_eligible', 'profile_completed_at', 'is_officer'] as $flag) {
+                if (array_key_exists($flag, $attributes)) {
+                    $changes[$flag] = $attributes[$flag];
+                }
             }
+
+            $existing->forceFill($changes)->save();
 
             return $existing;
         }
 
-        $attributes['personal_data_id'] = PersonalData::factory()->create($personalData)->id;
+        return User::withoutTimestamps(function () use ($attributes, $personalDataId) {
+            $user = new User;
+            $user->forceFill(array_merge($attributes, ['personal_data_id' => $personalDataId]));
+            $user->email_verified_at = now();
+            $user->created_at = $attributes['created_at'] ?? now();
+            $user->updated_at = $user->created_at;
+            $user->save();
 
-        $user = User::create($attributes);
+            return $user;
+        });
+    }
 
-        // Seed logins are verified by default so demo accounts can access the app.
-        $user->forceFill(['email_verified_at' => now()])->save();
+    /**
+     * Create or refresh the address/contact/employment/ID rows behind a profile.
+     *
+     * Each of those tables is one-to-one with a person — personal_data holds a
+     * unique foreign key to each of them — so rows are updated in place rather
+     * than looked up by content, otherwise two members living in the same
+     * barangay would end up sharing one address.
+     *
+     * @param  array<string, mixed>  $profile
+     */
+    private function syncProfile(?PersonalData $existing, string $email, array $profile): int
+    {
+        $address = $existing?->address ?? new Address;
+        $address->fill(array_merge(MemberRoster::MUNICIPALITY, [
+            'barangay' => $profile['barangay'],
+            'street' => $profile['street'],
+        ]));
+        $address->save();
 
-        return $user;
+        $contact = $existing?->contact ?? new Contact;
+        $contact->fill([
+            'phone_no' => $profile['phone'],
+            'phone_verified_at' => now(),
+            'email' => $email,
+            'email_verified_at' => now(),
+        ]);
+        $contact->save();
+
+        $employment = $existing?->employment ?? new Employment;
+        $employment->fill($profile['employment']);
+        $employment->save();
+
+        $memberId = $existing?->memberId ?? new MemberId;
+        $memberId->fill($profile['identifiers']);
+        $memberId->save();
+
+        $personalData = $existing ?? new PersonalData;
+        $personalData->fill([
+            'title' => $profile['title'] ?? 'Member',
+            'first_name' => $profile['first_name'],
+            'mid_name' => $profile['mid_name'] ?? null,
+            'last_name' => $profile['last_name'],
+            'birth_date' => $profile['birth_date'] ?? null,
+            'birthplace' => $profile['birthplace'] ?? null,
+            'gender' => $profile['gender'] ?? null,
+            'education' => $profile['education'] ?? null,
+            'civil_status' => $profile['civil_status'] ?? null,
+            'religion' => $profile['religion'] ?? null,
+            'address_id' => $address->id,
+            'contact_id' => $contact->id,
+            'employment_id' => $employment->id,
+            'member_id' => $memberId->id,
+        ]);
+        $personalData->save();
+
+        return $personalData->id;
+    }
+
+    /**
+     * Derive a stable digit string from a seed.
+     *
+     * Government ID numbers have to look real, but they must not change on
+     * every re-seed, so they are derived from the member's user number rather
+     * than randomised.
+     */
+    private function digitsFrom(string $seed, int $length): string
+    {
+        $digits = '';
+        $hash = abs(crc32($seed));
+
+        while (strlen($digits) < $length) {
+            $hash = abs(crc32($hash.'|'.$seed));
+            $digits .= (string) ($hash % 10);
+        }
+
+        return substr($digits, 0, $length);
+    }
+
+    /**
+     * @param  list<int>  $sizes
+     */
+    private function groupDigits(string $digits, array $sizes): string
+    {
+        $parts = [];
+        $offset = 0;
+
+        foreach ($sizes as $size) {
+            $parts[] = substr($digits, $offset, $size);
+            $offset += $size;
+        }
+
+        return implode('-', $parts);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function governmentIdentifiers(string $userNumber, string $barangay): array
+    {
+        return [
+            'national_id' => $this->groupDigits($this->digitsFrom($userNumber.'|national', 16), [4, 4, 4, 4]),
+            'tin' => $this->groupDigits($this->digitsFrom($userNumber.'|tin', 12), [3, 3, 3, 3]),
+            'sss' => $this->groupDigits($this->digitsFrom($userNumber.'|sss', 10), [2, 7, 1]),
+            'philhealth' => $this->groupDigits($this->digitsFrom($userNumber.'|philhealth', 12), [2, 9, 1]),
+            'barangay_id' => MemberRoster::barangayCode($barangay) ?? '',
+        ];
     }
 
     private function buildMemberEmail(string $firstName, string $lastName): string
@@ -51,17 +195,18 @@ class UserSeeder extends Seeder
         // the call here lets feature tests seed UserSeeder directly.
         $this->call(BranchSeeder::class);
 
-        // ===================================
-        // CORE ACCOUNTS (Keep for testing)
-        // ===================================
-        $mainBranch = Branch::query()->where('code', 'BR000001')->first();
-        $branchOffice = Branch::query()->where('code', 'BR000002')->first();
+        $branches = Branch::query()->whereIn('code', ['BR000001', 'BR000002'])->get()->keyBy('code');
 
-        if (! $mainBranch || ! $branchOffice) {
+        if ($branches->count() !== 2) {
             throw new \RuntimeException('BranchSeeder must run before UserSeeder.');
         }
 
-        // Create developer account
+        $mainBranch = $branches['BR000001'];
+        $branchOffice = $branches['BR000002'];
+
+        // ===================================
+        // CORE ACCOUNTS (Keep for testing)
+        // ===================================
         $developer = $this->createSeedUser([
             'user_number' => 'USR000001',
             'email' => 'developer@example.com',
@@ -71,91 +216,109 @@ class UserSeeder extends Seeder
         ], [
             'first_name' => 'Leo',
             'last_name' => 'Magdarag',
-            'birth_date' => '2000-01-01',
             'title' => 'Member',
+            'birth_date' => '2000-01-01',
+            'barangay' => 'Santo Tomas',
+            'street' => 'Purok 1',
+            'phone' => '09171234590',
+            'employment' => [
+                'employment_type' => 'private',
+                'company' => null,
+                'position' => 'Systems Developer',
+                'monthly_income' => 65000,
+            ],
+            'identifiers' => $this->governmentIdentifiers('USR000001', 'Santo Tomas'),
         ]);
         $developer->assignRole('developer');
 
-        // Create one seeded user for each officer role. Officers are tied to a
-        // branch so branch-scoping can be demonstrated for managers/staff.
+        // One seeded user per officer role. Officers are tied to a branch so
+        // branch scoping can be demonstrated for managers and staff. The loan
+        // officer sits at the branch office but covers both branches, which is
+        // why head-office applicants are interviewed by USR000005 too.
         $officers = [
-            ['role' => 'admin', 'firstName' => 'Quennie Joy', 'lastName' => 'Almazan', 'title' => 'Chairman', 'userNumber' => 'USR000002', 'birthDate' => '1985-01-01', 'branch' => $mainBranch->id],
-            ['role' => 'manager', 'firstName' => 'Carl Michael', 'lastName' => 'Bigal', 'title' => 'Vice Chairman', 'userNumber' => 'USR000003', 'branch' => $mainBranch->id],
-            ['role' => 'accountant', 'firstName' => 'Jasmin', 'lastName' => 'Latayan', 'title' => 'Accountant', 'userNumber' => 'USR000004', 'branch' => $mainBranch->id],
-            ['role' => 'loan', 'firstName' => 'Leanard', 'lastName' => 'Guiriba', 'title' => 'Loan Officer', 'userNumber' => 'USR000005', 'branch' => $branchOffice->id],
-            ['role' => 'secretary', 'firstName' => 'Jenica', 'lastName' => 'Malveda', 'title' => 'Secretary', 'userNumber' => 'USR000006', 'branch' => $branchOffice->id],
+            ['role' => 'admin', 'userNumber' => 'USR000002', 'firstName' => 'Quennie Joy', 'lastName' => 'Almazan', 'title' => 'Chairman', 'birthDate' => '1985-01-20', 'gender' => 'female', 'barangay' => 'Santo Tomas', 'position' => 'Cooperative Chairman', 'type' => 'self-employed', 'company' => null, 'income' => 72000, 'branch' => $mainBranch->id, 'monthsAgo' => 132],
+            ['role' => 'manager', 'userNumber' => 'USR000003', 'firstName' => 'Carl Michael', 'lastName' => 'Bigal', 'title' => 'Vice Chairman', 'birthDate' => '1983-09-14', 'gender' => 'male', 'barangay' => 'San Isidro', 'position' => 'General Manager', 'type' => 'private', 'company' => 'Settlers Credit Cooperative', 'income' => 58000, 'branch' => $mainBranch->id, 'monthsAgo' => 128],
+            ['role' => 'accountant', 'userNumber' => 'USR000004', 'firstName' => 'Jasmin', 'lastName' => 'Latayan', 'title' => 'Accountant', 'birthDate' => '1990-05-06', 'gender' => 'female', 'barangay' => 'Mabacan', 'position' => 'Staff Accountant', 'type' => 'private', 'company' => 'Settlers Credit Cooperative', 'income' => 41000, 'branch' => $mainBranch->id, 'monthsAgo' => 74],
+            ['role' => 'loan', 'userNumber' => 'USR000005', 'firstName' => 'Leanard', 'lastName' => 'Guiriba', 'title' => 'Loan Officer', 'birthDate' => '1988-11-23', 'gender' => 'male', 'barangay' => 'Masiit', 'position' => 'Loan Officer', 'type' => 'private', 'company' => 'Settlers Credit Cooperative', 'income' => 45000, 'branch' => $branchOffice->id, 'monthsAgo' => 86],
+            ['role' => 'secretary', 'userNumber' => 'USR000006', 'firstName' => 'Jenica', 'lastName' => 'Malveda', 'title' => 'Secretary', 'birthDate' => '1992-02-11', 'gender' => 'female', 'barangay' => 'Dayap', 'position' => 'Corporate Secretary', 'type' => 'private', 'company' => 'Settlers Credit Cooperative', 'income' => 38000, 'branch' => $branchOffice->id, 'monthsAgo' => 61],
         ];
 
-        foreach ($officers as $officerData) {
-            $personalData = [
-                'first_name' => $officerData['firstName'],
-                'last_name' => $officerData['lastName'],
-                'title' => $officerData['title'],
-            ];
+        foreach ($officers as $officer) {
+            $userNumber = $officer['userNumber'];
 
-            if (isset($officerData['birthDate'])) {
-                $personalData['birth_date'] = $officerData['birthDate'];
-            }
-
-            $officer = $this->createSeedUser([
-                'user_number' => $officerData['userNumber'],
-                'email' => strtolower($officerData['role']).'@example.com',
+            $created = $this->createSeedUser([
+                'user_number' => $userNumber,
+                'email' => strtolower($officer['role']).'@example.com',
                 'password' => Hash::make('password'),
-                'role' => $officerData['role'],
+                'role' => $officer['role'],
                 'is_officer' => true,
-                'branch_id' => $officerData['branch'],
-            ], $personalData);
-            $officer->assignRole($officerData['role']);
+                'branch_id' => $officer['branch'],
+                'created_at' => Carbon::now()->subMonths($officer['monthsAgo'])->startOfMonth()->day(5)->setTime(9, 0),
+            ], [
+                'first_name' => $officer['firstName'],
+                'last_name' => $officer['lastName'],
+                'title' => $officer['title'],
+                'birth_date' => $officer['birthDate'],
+                'birthplace' => 'Calauan, Laguna',
+                'gender' => $officer['gender'],
+                'education' => 'Bachelor\'s Degree',
+                'civil_status' => 'married',
+                'religion' => 'Catholic',
+                'phone' => '0917'.$this->digitsFrom($userNumber.'|phone', 7),
+                'barangay' => $officer['barangay'],
+                'street' => 'Purok 1',
+                'employment' => [
+                    'employment_type' => $officer['type'],
+                    'company' => $officer['company'],
+                    'position' => $officer['position'],
+                    'monthly_income' => $officer['income'],
+                ],
+                'identifiers' => $this->governmentIdentifiers($userNumber, $officer['barangay']),
+            ]);
+
+            $created->assignRole($officer['role']);
         }
 
         // ===================================
-        // GENERATE MEMBER USERS
+        // ROSTERED MEMBERS
         // ===================================
+        foreach (MemberRoster::all() as $member) {
+            $branch = $branches[$member['branch_code']] ?? $mainBranch;
+            $joinedAt = MemberRoster::joinedAt($member);
 
-        $members = [
-            ['userNumber' => 'USR000007', 'firstName' => 'Arjay', 'lastName' => 'Ramos', 'branch' => $mainBranch->id],
-            ['userNumber' => 'USR000008', 'firstName' => 'Cris David', 'lastName' => 'Jarabejo', 'branch' => $mainBranch->id],
-            ['userNumber' => 'USR000009', 'firstName' => 'Glendo', 'lastName' => 'Camarines', 'branch' => $mainBranch->id],
-            ['userNumber' => 'USR000010', 'firstName' => 'Jerrelyn', 'lastName' => 'Amper', 'branch' => $mainBranch->id],
-            ['userNumber' => 'USR000011', 'firstName' => 'Jean Leslie', 'lastName' => 'Velasco', 'branch' => $mainBranch->id],
-            ['userNumber' => 'USR000012', 'firstName' => 'Jeral Jean', 'lastName' => 'Cabillon', 'branch' => $branchOffice->id],
-            ['userNumber' => 'USR000013', 'firstName' => 'Leo Angelo', 'lastName' => 'Centeno', 'branch' => $branchOffice->id],
-            ['userNumber' => 'USR000014', 'firstName' => 'Alyson', 'lastName' => 'Penano', 'branch' => $branchOffice->id],
-            ['userNumber' => 'USR000015', 'firstName' => 'Ravie', 'lastName' => 'Premor', 'branch' => $branchOffice->id],
-            [
-                'userNumber' => 'USR000016',
-                'firstName' => 'Leo',
-                'lastName' => 'Magdarag',
-                'midName' => 'Baluyot',
-                'birthDate' => '1995-06-15',
-                'email' => 'leo.baluyot.magdarag039@gmail.com',
-                'branch' => $branchOffice->id,
-            ],
-        ];
-
-        foreach ($members as $memberData) {
-            $personalData = [
-                'first_name' => $memberData['firstName'],
-                'last_name' => $memberData['lastName'],
-                'title' => 'Member',
-            ];
-
-            if (isset($memberData['midName'])) {
-                $personalData['mid_name'] = $memberData['midName'];
-            }
-
-            if (isset($memberData['birthDate'])) {
-                $personalData['birth_date'] = $memberData['birthDate'];
-            }
-
-            $member = $this->createSeedUser([
-                'user_number' => $memberData['userNumber'],
-                'email' => $memberData['email'] ?? $this->buildMemberEmail($memberData['firstName'], $memberData['lastName']),
+            $created = $this->createSeedUser([
+                'user_number' => $member['user_number'],
+                'email' => $member['email'] ?? $this->buildMemberEmail($member['first_name'], $member['last_name']),
                 'password' => Hash::make('password'),
                 'role' => 'member',
-                'branch_id' => $memberData['branch'],
-            ], $personalData);
-            $member->assignRole('member');
+                'branch_id' => $branch->id,
+                'special_loan_eligible' => (bool) $member['special_loan_eligible'],
+                'profile_completed_at' => $joinedAt->copy()->addDays(21)->setTime(14, 30),
+                'created_at' => $joinedAt,
+            ], [
+                'first_name' => $member['first_name'],
+                'mid_name' => $member['mid_name'] ?? null,
+                'last_name' => $member['last_name'],
+                'title' => 'Member',
+                'birth_date' => $member['birth_date'],
+                'birthplace' => 'Calauan, Laguna',
+                'gender' => $member['gender'],
+                'education' => $member['education'],
+                'civil_status' => $member['civil_status'],
+                'religion' => $member['religion'],
+                'phone' => $member['phone'],
+                'barangay' => $member['barangay'],
+                'street' => $member['street'],
+                'employment' => [
+                    'employment_type' => $member['employment']['type'],
+                    'company' => $member['employment']['company'],
+                    'position' => $member['employment']['position'],
+                    'monthly_income' => $member['employment']['monthly_income'],
+                ],
+                'identifiers' => $this->governmentIdentifiers($member['user_number'], $member['barangay']),
+            ]);
+
+            $created->assignRole('member');
         }
     }
 }

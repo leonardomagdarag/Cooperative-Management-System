@@ -1,3 +1,4 @@
+import HelpTip from '../../components/ui/HelpTip';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '../../contexts/ToastContext';
@@ -178,6 +179,7 @@ export default function BackupPage() {
                 title="Backup & Restore"
                 description="Automatic encrypted backups run on a fixed schedule. Download archives, test the off-site connection, or restore when needed."
                 icon="fas fa-hard-drive"
+                helpText="Keep backups in a separate location and confirm schedules are running. Restoring replaces current data with the selected archive, so verify the archive and scope before starting a restore."
             />
 
             {/* Off-site connection */}

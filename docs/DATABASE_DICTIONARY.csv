@@ -1,0 +1,553 @@
+Table Name,Field Name,Type,Length,Description
+accounts,id,bigint,N/A,Auto-incrementing primary key.
+accounts,account_number,varchar,20,Unique cooperative account number printed on passbooks.
+accounts,user_id,bigint,N/A,Foreign key to users.id - the member who owns the account.
+accounts,account_type,enum,N/A,Account classification: savings or share-capital. Defaults to savings.
+accounts,balance,decimal,15,2,Current ledger balance of the account. Defaults to 0.
+accounts,created_at,timestamp,N/A,Record creation timestamp.
+accounts,updated_at,timestamp,N/A,Record last-update timestamp.
+accounts,deleted_at,timestamp,N/A,Soft-delete marker; NULL while the account is active.
+accounts,,,,Main purpose: Stores every member's savings and share-capital ledger account and its running balance.
+activity_log,id,bigint,N/A,Auto-incrementing primary key.
+activity_log,log_name,varchar,255,Event channel/category name (indexed).
+activity_log,description,text,N/A,Human-readable description of the logged event.
+activity_log,subject_type,varchar,255,Class name of the model the event relates to (polymorphic).
+activity_log,subject_id,bigint,N/A,Primary key of the related model (polymorphic).
+activity_log,event,varchar,255,Spatie activitylog event key such as created or updated.
+activity_log,causer_type,varchar,255,Class name of the user or model that caused the event (polymorphic).
+activity_log,causer_id,bigint,N/A,Primary key of the causer (polymorphic).
+activity_log,properties,json,N/A,JSON blob holding the changed attributes and event context.
+activity_log,batch_uuid,char,36,UUID that groups several related log entries into one batch.
+activity_log,created_at,timestamp,N/A,Timestamp when the entry was written.
+activity_log,updated_at,timestamp,N/A,Timestamp when the entry was last updated.
+activity_log,,,,Main purpose: Immutable audit trail of state-changing actions performed in the system, written by AuditLogService with 365-day retention.
+addresses,id,bigint,N/A,Auto-incrementing primary key.
+addresses,country,varchar,100,Country of residence.
+addresses,region,varchar,100,Region or region code.
+addresses,province,varchar,100,Province (indexed).
+addresses,city_municipality,varchar,100,City or municipality (indexed).
+addresses,barangay,varchar,100,Barangay (indexed).
+addresses,street,varchar,255,Street address and house number.
+addresses,zip_code,varchar,20,Postal ZIP code.
+addresses,,,,Main purpose: Reusable Philippine address block kept separate from personal_data so address records can be shared and indexed independently.
+announcements,id,bigint,N/A,Auto-incrementing primary key.
+announcements,title,varchar,255,Headline of the announcement.
+announcements,content,text,N/A,Body text of the announcement.
+announcements,created_by,bigint,N/A,Foreign key to users.id; set to NULL if the author is removed.
+announcements,type,enum,N/A,Post classification: news / announcement / event. Defaults to announcement.
+announcements,visibility,text,N/A,Serialized list of roles permitted to view the post.
+announcements,category,varchar,100,Optional topic category for filtering.
+announcements,image_path,varchar,255,Storage path of the optional cover image.
+announcements,event_date,date,N/A,Date of the event for event-type posts.
+announcements,event_time,varchar,50,Start time of the event stored as free text.
+announcements,event_location,varchar,255,Venue of the event.
+announcements,created_at,timestamp,N/A,Record creation timestamp.
+announcements,updated_at,timestamp,N/A,Record last-update timestamp.
+announcements,deleted_at,timestamp,N/A,Soft-delete marker.
+announcements,,,,Main purpose: Publishes news, general announcements and event notices to the membership with role-based visibility.
+app_credentials,id,bigint,N/A,Auto-incrementing primary key.
+app_credentials,key,varchar,255,Unique credential name used to look the secret up.
+app_credentials,value,text,N/A,Stored secret or environment value.
+app_credentials,label,varchar,255,Human-readable label for the admin settings screen.
+app_credentials,description,text,N/A,Notes explaining what the credential is used for.
+app_credentials,created_at,timestamp,N/A,Record creation timestamp.
+app_credentials,updated_at,timestamp,N/A,Record last-update timestamp.
+app_credentials,,,,Main purpose: Holds third-party and integration secrets (for example PayMongo keys) in the database instead of the .env file.
+archived_transactions,id,bigint,N/A,Auto-incrementing primary key.
+archived_transactions,original_id,bigint,N/A,Primary key of the transactions row that was archived (indexed).
+archived_transactions,transaction_number,varchar,20,Transaction reference copied from the original row (indexed).
+archived_transactions,transaction_type,enum,N/A,Type of the archived entry: deposit / withdrawal / loan_payment / loan_disbursement / interest / fee.
+archived_transactions,account_id,bigint,N/A,Primary key of the affected account (indexed).
+archived_transactions,loan_id,bigint,N/A,Primary key of the affected loan.
+archived_transactions,amount,decimal,15,2,Transaction amount.
+archived_transactions,transaction_date,datetime,N/A,Effective date of the transaction (indexed).
+archived_transactions,note,text,N/A,Free-text note carried over from the original row.
+archived_transactions,recorded_by,bigint,N/A,Primary key of the user who originally recorded it.
+archived_transactions,created_at,timestamp,N/A,Timestamp copied from the original row.
+archived_transactions,updated_at,timestamp,N/A,Timestamp copied from the original row.
+archived_transactions,archived_at,timestamp,N/A,Timestamp when the row was moved out of the live transactions table. Defaults to current.
+archived_transactions,,,,Main purpose: Cold storage for transactions pulled out of the live ledger to keep the hot table small while preserving history.
+backup_runs,id,bigint,N/A,Auto-incrementing primary key.
+backup_runs,tier,varchar,20,Backup tier or fixed job name such as daily and offsite. Widened from an enum on 2026-09-22.
+backup_runs,scope,enum,N/A,What was captured: db / files / both.
+backup_runs,status,varchar,20,Lifecycle state: queued / running / success / failed. Defaults to queued.
+backup_runs,filename,varchar,255,Name of the resulting archive file.
+backup_runs,size,bigint,N/A,Archive size in bytes.
+backup_runs,message,text,N/A,Human-readable outcome or error output.
+backup_runs,started_at,timestamp,N/A,Timestamp when the job began executing.
+backup_runs,finished_at,timestamp,N/A,Timestamp when the job completed.
+backup_runs,triggered_by,bigint,N/A,Foreign key to users.id; set to NULL if the triggering user is removed.
+backup_runs,created_at,timestamp,N/A,Record creation timestamp.
+backup_runs,updated_at,timestamp,N/A,Record last-update timestamp.
+backup_runs,,,,Main purpose: Execution log for the three backup tiers so operators can see which backups ran, how long they took and whether they succeeded.
+barangays,code,varchar,20,Primary key. PSGC 10-digit barangay code assigned by PSA.
+barangays,name,varchar,255,Official name of the barangay (indexed).
+barangays,city_code,varchar,20,PSGC code of the parent city or municipality (indexed).
+barangays,created_at,timestamp,N/A,Record creation timestamp.
+barangays,updated_at,timestamp,N/A,Record last-update timestamp.
+barangays,,,,Main purpose: Part of the bundled PSGC reference set; the finest administrative unit in the system and a source for address autocomplete. Created by the schoolees/laravel-psgc package and populated by PSGCSeeder.
+beneficiaries,id,bigint,N/A,Auto-incrementing primary key.
+beneficiaries,user_id,bigint,N/A,Foreign key to users.id - the member nominating the beneficiary.
+beneficiaries,first_name,varchar,100,Beneficiary first name.
+beneficiaries,last_name,varchar,100,Beneficiary last name.
+beneficiaries,mid_name,varchar,100,Beneficiary middle name.
+beneficiaries,birth_date,date,N/A,Beneficiary date of birth.
+beneficiaries,relationship,varchar,100,Relationship of the beneficiary to the member.
+beneficiaries,phone_no,varchar,11,Beneficiary contact number.
+beneficiaries,street,varchar,255,Beneficiary street address.
+beneficiaries,barangay,varchar,100,Beneficiary barangay.
+beneficiaries,city,varchar,100,Beneficiary city or municipality.
+beneficiaries,province,varchar,100,Beneficiary province.
+beneficiaries,postal_code,varchar,10,Beneficiary postal code.
+beneficiaries,created_at,timestamp,N/A,Record creation timestamp.
+beneficiaries,updated_at,timestamp,N/A,Record last-update timestamp.
+beneficiaries,,,,Main purpose: Records the people a member designates to receive benefits, used for death-claim and payout processing.
+board_members,id,bigint,N/A,Auto-incrementing primary key.
+board_members,name,varchar,255,Full name of the board member.
+board_members,position,varchar,255,Board office held such as Chairman or Treasurer (indexed).
+board_members,title,varchar,255,Optional honorific or secondary title.
+board_members,motto,text,N/A,Personal motto or advocacy statement.
+board_members,photo,varchar,255,Storage path of the portrait image.
+board_members,email,varchar,255,Contact email address.
+board_members,phone,varchar,255,Contact phone number.
+board_members,bio,text,N/A,Biographical narrative shown on the public site.
+board_members,term_start,date,N/A,Start date of the current term.
+board_members,term_end,date,N/A,End date of the current term.
+board_members,order,int,N/A,Display sort order (reserved SQL word; always quoted). Defaults to 0.
+board_members,is_active,tinyint,1,Whether the member appears on the public site. Defaults to true.
+board_members,created_at,timestamp,N/A,Record creation timestamp.
+board_members,updated_at,timestamp,N/A,Record last-update timestamp.
+board_members,,,,Main purpose: Powers the public About and Governance page by listing the current board of directors and their profiles.
+branches,id,bigint,N/A,Auto-incrementing primary key.
+branches,code,varchar,20,Unique short branch code.
+branches,name,varchar,120,Unique branch name.
+branches,is_head_office,tinyint,1,Marks the main or head office branch. Defaults to false.
+branches,address,varchar,255,Street address of the branch.
+branches,contact_number,varchar,30,Branch telephone or mobile number.
+branches,email,varchar,120,Branch email address.
+branches,is_active,tinyint,1,Whether the branch is currently operating. Defaults to true.
+branches,created_at,timestamp,N/A,Record creation timestamp.
+branches,updated_at,timestamp,N/A,Record last-update timestamp.
+branches,deleted_at,timestamp,N/A,Soft-delete marker.
+branches,,,,Main purpose: Defines the cooperative's physical branches and is the anchor for multi-branch data isolation (BranchScope).
+cache,key,varchar,255,Cache item key. Primary key.
+cache,value,mediumtext,N/A,Serialized value stored for the key.
+cache,expiration,int,N/A,Unix timestamp at which the entry becomes invalid.
+cache,,,,Main purpose: Laravel's generic file/database cache store used for framework and application caching.
+cache_locks,key,varchar,255,Lock key. Primary key.
+cache_locks,owner,varchar,255,Identifier of the process currently holding the lock.
+cache_locks,expiration,int,N/A,Unix timestamp at which the lock is released automatically.
+cache_locks,,,,Main purpose: Prevents cache stampedes by recording which process holds a lock on a given key.
+cities,code,varchar,20,Primary key. PSGC code of the city or municipality.
+cities,name,varchar,255,Official name of the city or municipality (indexed).
+cities,region_code,varchar,20,PSGC code of the parent region (indexed).
+cities,province_code,varchar,20,PSGC code of the parent province (indexed). NULL for HUC/ICC and other province-independent entities.
+cities,is_city,tinyint,1,True for cities and municipalities; false for other settlement types. Defaults to true.
+cities,city_class,varchar,20,PSA classification such as HUC / ICC / component city. NULL when unclassified.
+cities,created_at,timestamp,N/A,Record creation timestamp.
+cities,updated_at,timestamp,N/A,Record last-update timestamp.
+cities,,,,Main purpose: Part of the bundled PSGC reference set; resolves the city/municipality layer of an address and drives province-dependent form behaviour. Created by the schoolees/laravel-psgc package and populated by PSGCSeeder.
+contacts,id,bigint,N/A,Auto-incrementing primary key.
+contacts,phone_no,varchar,11,Philippine mobile number in 11-digit format (indexed).
+contacts,phone_verified_at,timestamp,N/A,Set once the phone number has been confirmed by OTP.
+contacts,email,varchar,255,Email address; unique across all member contact records.
+contacts,email_verified_at,timestamp,N/A,Set once the email address has been confirmed.
+contacts,facebook,varchar,255,Facebook profile link (indexed).
+contacts,,,,Main purpose: Reusable contact-method block holding each member's phone, email and Facebook details plus their verification timestamps.
+employments,id,bigint,N/A,Auto-incrementing primary key.
+employments,employment_type,enum,N/A,Work arrangement: full-time / part-time / self-employed / freelancer / government / private / ofw / retired / unemployed / student / homemaker.
+employments,company,varchar,255,Employer or business name.
+employments,position,varchar,100,Job title or occupation.
+employments,monthly_income,decimal,15,2,Declared monthly income used for loan affordability assessment.
+employments,other_income_source,varchar,255,Source of additional income.
+employments,other_income_amount,decimal,15,2,Monthly amount from the additional income source.
+employments,created_at,timestamp,N/A,Record creation timestamp.
+employments,updated_at,timestamp,N/A,Record last-update timestamp.
+employments,,,,Main purpose: Captures a member's employment and income profile that drives credit assessment and eligibility rules.
+expenses,id,bigint,N/A,Auto-incrementing primary key.
+expenses,category,varchar,100,Expense classification such as utilities or supplies (indexed).
+expenses,description,text,N/A,Explanation of what the expense was for.
+expenses,amount,decimal,15,2,Expense amount.
+expenses,expense_date,datetime,N/A,Date the expense was incurred (indexed).
+expenses,recorded_by,bigint,N/A,Foreign key to users.id - the staff member who logged the expense.
+expenses,branch_id,bigint,N/A,Foreign key to branches.id - the branch that owns the expense.
+expenses,created_at,timestamp,N/A,Record creation timestamp.
+expenses,updated_at,timestamp,N/A,Record last-update timestamp.
+expenses,,,,Main purpose: Records operating expenditures per branch so the cooperative can report income against expenses.
+failed_jobs,id,bigint,N/A,Auto-incrementing primary key.
+failed_jobs,uuid,varchar,255,Unique identifier of the failed job.
+failed_jobs,connection,text,N/A,Queue connection the job was pushed onto.
+failed_jobs,queue,text,N/A,Queue name the job was pushed onto.
+failed_jobs,payload,longtext,N/A,Serialized job payload.
+failed_jobs,exception,longtext,N/A,Full stack trace of the exception that caused the failure.
+failed_jobs,failed_at,timestamp,N/A,Timestamp when the job failed. Defaults to current.
+failed_jobs,,,,Main purpose: Captures jobs that exhausted their retries so they can be inspected and replayed with queue:failed.
+group_loan_members,id,bigint,N/A,Auto-incrementing primary key.
+group_loan_members,loan_id,bigint,N/A,Foreign key to loans.id; cascades on delete. Unique together with user_id.
+group_loan_members,user_id,bigint,N/A,Foreign key to users.id; cascades on delete. Unique together with loan_id.
+group_loan_members,has_approved,tinyint,1,Whether the co-member has already approved the group loan. Defaults to false.
+group_loan_members,approved_at,timestamp,N/A,Timestamp of the co-member's approval.
+group_loan_members,created_at,timestamp,N/A,Record creation timestamp.
+group_loan_members,updated_at,timestamp,N/A,Record last-update timestamp.
+group_loan_members,,,,Main purpose: Join table listing the members who jointly co-sign a group loan and tracking each one's approval.
+images,id,bigint,N/A,Auto-incrementing primary key.
+images,member_id,varchar,16,Cooperative member number the image belongs to.
+images,drive_file_id,varchar,255,Identifier of the file on the external cloud drive.
+images,mime_type,varchar,255,MIME type of the stored image.
+images,is_archived,varchar,255,Archive state flag for the image.
+images,created_at,timestamp,N/A,Record creation timestamp.
+images,updated_at,timestamp,N/A,Record last-update timestamp.
+images,,,,Main purpose: Legacy registry mapping member numbers to images kept on external cloud storage.
+jobs,id,bigint,N/A,Auto-incrementing primary key.
+jobs,queue,varchar,255,Queue name the job was pushed onto (indexed). Used for the default and emails queues.
+jobs,payload,longtext,N/A,Serialized job payload.
+jobs,attempts,tinyint,N/A,Unsigned attempt counter incremented by each worker run.
+jobs,reserved_at,int,N/A,Unsigned Unix timestamp when a worker reserved the job. NULL when unreserved.
+jobs,available_at,int,N/A,Unsigned Unix timestamp when the job becomes available to workers.
+jobs,created_at,int,N/A,Unsigned Unix timestamp when the job was enqueued.
+jobs,,,,Main purpose: Laravel's database queue; holds pending email and backup jobs until a queue worker picks them up.
+loan_documents,id,bigint,N/A,Auto-incrementing primary key.
+loan_documents,loan_id,bigint,N/A,Foreign key to loans.id; cascades on delete.
+loan_documents,original_name,varchar,255,Filename as uploaded by the member.
+loan_documents,storage_path,varchar,255,Path where the file is stored on the server.
+loan_documents,mime_type,varchar,120,MIME type of the uploaded document.
+loan_documents,file_size,bigint,N/A,File size in bytes. Defaults to 0.
+loan_documents,uploaded_by,bigint,N/A,Foreign key to users.id; set to NULL if the uploader is removed.
+loan_documents,created_at,timestamp,N/A,Record creation timestamp.
+loan_documents,updated_at,timestamp,N/A,Record last-update timestamp.
+loan_documents,,,,Main purpose: Stores the supporting documents members attach to a loan application.
+loan_products,id,bigint,N/A,Auto-incrementing primary key.
+loan_products,code,varchar,50,Unique short code identifying the product.
+loan_products,name,varchar,120,Display name of the loan product.
+loan_products,description,text,N/A,Marketing and eligibility description shown to members.
+loan_products,base_type,enum,N/A,Underlying loan category: group / business / special. Defaults to business.
+loan_products,icon,varchar,50,Front-end icon key. Defaults to wallet.
+loan_products,interest_rate,decimal,5,2,Default annual interest rate percentage.
+loan_products,max_amount,decimal,15,2,Maximum principal the product may grant. Defaults to 0.
+loan_products,max_term,int,N/A,Unsigned maximum term in months. Defaults to 1.
+loan_products,is_active,tinyint,1,Whether the product is offered to members. Defaults to true.
+loan_products,requires_no_existing_loan,tinyint,1,Restricts the product to members with no outstanding loan. Defaults to false.
+loan_products,minimum_share_capital,decimal,15,2,Minimum share-capital balance required to qualify.
+loan_products,minimum_membership_years,int,N/A,Unsigned minimum years of membership required to qualify. Defaults to 0.
+loan_products,required_co_makers,tinyint,N/A,Unsigned number of co-makers the product requires. Defaults to 0.
+loan_products,requires_interview,tinyint,1,Whether a face-to-face interview is mandatory. Defaults to false.
+loan_products,requires_special_eligibility,tinyint,1,Whether the member must be flagged special_loan_eligible. Defaults to false.
+loan_products,sort_order,int,N/A,Unsigned ordering used when listing products. Defaults to 0.
+loan_products,created_at,timestamp,N/A,Record creation timestamp.
+loan_products,updated_at,timestamp,N/A,Record last-update timestamp.
+loan_products,,,,Main purpose: Configurable catalogue of loan offerings with their interest rates, limits and eligibility rules, administered from the dashboard.
+loans,id,bigint,N/A,Auto-incrementing primary key.
+loans,loan_number,varchar,20,Unique human-readable loan reference number.
+loans,user_id,bigint,N/A,Foreign key to users.id - the borrower.
+loans,branch_id,bigint,N/A,Foreign key to branches.id - the branch that owns and services the loan.
+loans,account_id,bigint,N/A,Foreign key to accounts.id - the account used for disbursement and repayment. Set to NULL if the account is deleted.
+loans,loan_type,enum,N/A,Loan category: group / business / special. Defaults to business.
+loans,loan_product,varchar,50,Loan product code matched against loan_products.code (indexed).
+loans,loan_amount,decimal,15,2,Principal amount requested or approved.
+loans,interest_rate,decimal,5,2,Annual interest rate percentage applied to the loan.
+loans,term_months,int,N/A,Repayment term expressed in months.
+loans,payment_frequency,enum,N/A,Amortisation schedule: weekly / bi-weekly / monthly / quarterly / annually. Defaults to monthly.
+loans,loan_status,enum,N/A,Lifecycle state: pending / approved / active / paid_off. Defaults to pending.
+loans,review_status,enum,N/A,Credit-review outcome: under_review / endorsed_for_approval / review_rejected.
+loans,reviewed_by,bigint,N/A,Foreign key to users.id - the officer who endorsed or rejected. Set to NULL on user delete.
+loans,reviewed_at,timestamp,N/A,Timestamp when the credit review was completed.
+loans,review_notes,text,N/A,Justification or notes written during the credit review.
+loans,applied_at,datetime,N/A,Timestamp when the member submitted the application.
+loans,approved_at,datetime,N/A,Timestamp when the loan was formally approved.
+loans,approved_by,bigint,N/A,Foreign key to users.id - the officer who approved the loan.
+loans,due_date,date,N/A,Maturity date of the loan.
+loans,employment_id,bigint,N/A,Foreign key to employments.id used for the assessment. Set to NULL on delete.
+loans,interview_schedule,datetime,N/A,Scheduled date and time of the borrower interview.
+loans,interview_status,enum,N/A,Interview progress: pending / scheduled / completed / cancelled. Defaults to pending.
+loans,interview_officer_id,bigint,N/A,Foreign key to users.id - the officer who conducted the interview. Set to NULL on user delete.
+loans,interview_notes,text,N/A,Findings recorded during the interview.
+loans,created_at,timestamp,N/A,Record creation timestamp.
+loans,updated_at,timestamp,N/A,Record last-update timestamp.
+loans,deleted_at,timestamp,N/A,Soft-delete marker.
+loans,,,,Main purpose: Central loan record covering the full lifecycle from application through credit review, interview, approval and repayment.
+logs,id,bigint,N/A,Auto-incrementing primary key.
+logs,user_id,bigint,N/A,Foreign key to users.id; NULL when the actor is not authenticated.
+logs,activity,varchar,255,Short name of the activity performed.
+logs,description,text,N/A,Additional detail about the activity.
+logs,ip_address,varchar,45,IP address the activity originated from.
+logs,created_at,timestamp,N/A,Record creation timestamp.
+logs,updated_at,timestamp,N/A,Record last-update timestamp.
+logs,,,,Main purpose: Lightweight in-app activity log for login and user-management events; complements the richer activity_log table.
+member_applications,id,bigint,N/A,Auto-incrementing primary key.
+member_applications,user_id,bigint,N/A,Foreign key to users.id once the applicant has an account. Set to NULL on user delete.
+member_applications,branch_id,bigint,N/A,Foreign key to branches.id - the branch the application was filed with.
+member_applications,application_number,varchar,30,Unique application reference number.
+member_applications,original_email,varchar,255,Email address supplied on the application form.
+member_applications,first_name,varchar,255,Applicant first name.
+member_applications,last_name,varchar,255,Applicant last name.
+member_applications,phone,varchar,255,Applicant contact number.
+member_applications,membership_type,varchar,255,Membership class applied for. Defaults to Regular.
+member_applications,status,enum,N/A,Review outcome: pending / approved / declined. Defaults to pending.
+member_applications,decline_reason,text,N/A,Explanation given when the application was declined.
+member_applications,reviewed_by,bigint,N/A,Foreign key to users.id - the officer who reviewed the application. Set to NULL on user delete.
+member_applications,reviewed_at,timestamp,N/A,Timestamp when the review was completed.
+member_applications,created_at,timestamp,N/A,Record creation timestamp.
+member_applications,updated_at,timestamp,N/A,Record last-update timestamp.
+member_applications,,,,Main purpose: Manages the membership application pipeline from public sign-up through officer approval or rejection.
+member_ids,id,bigint,N/A,Auto-incrementing primary key.
+member_ids,national_id,varchar,64,National government ID number.
+member_ids,tin,varchar,64,Tax Identification Number (TIN).
+member_ids,sss,varchar,64,Social Security System (SSS) number.
+member_ids,philhealth,varchar,64,PhilHealth membership number.
+member_ids,barangay_id,varchar,64,Barangay or government ID reference number.
+member_ids,national_id_photo,varchar,500,Storage path of the uploaded national ID photo.
+member_ids,tin_photo,varchar,500,Storage path of the uploaded TIN photo.
+member_ids,sss_photo,varchar,500,Storage path of the uploaded SSS photo.
+member_ids,philhealth_photo,varchar,500,Storage path of the uploaded PhilHealth photo.
+member_ids,barangay_id_photo,varchar,500,Storage path of the uploaded barangay ID photo.
+member_ids,proof_of_registration_path,varchar,500,Storage path of the proof of business or employment registration.
+member_ids,other_document_path,varchar,500,Storage path of any additional supporting document.
+member_ids,created_at,timestamp,N/A,Record creation timestamp.
+member_ids,updated_at,timestamp,N/A,Record last-update timestamp.
+member_ids,,,,Main purpose: Stores each member's government identification numbers and the paths to the scanned or photographed proof documents.
+model_has_permissions,permission_id,bigint,N/A,Foreign key to permissions.id; cascades on delete. Part of the composite primary key.
+model_has_permissions,model_type,varchar,255,Class name of the model granted the permission (indexed with model_id).
+model_has_permissions,model_id,bigint,N/A,Primary key of the model granted the permission. Part of the composite primary key.
+model_has_permissions,,,,Main purpose: Spatie many-to-many pivot attaching permissions directly to individual model instances rather than to a role.
+model_has_roles,role_id,bigint,N/A,Foreign key to roles.id; cascades on delete. Part of the composite primary key.
+model_has_roles,model_type,varchar,255,Class name of the model assigned the role (indexed with model_id).
+model_has_roles,model_id,bigint,N/A,Primary key of the model assigned the role. Part of the composite primary key.
+model_has_roles,,,,Main purpose: Spatie many-to-many pivot that assigns roles (and therefore role-based permissions) to users.
+notifications,id,bigint,N/A,Auto-incrementing primary key.
+notifications,user_id,bigint,N/A,Foreign key to users.id; cascades on delete.
+notifications,type,enum,N/A,Category: announcement / loan_due / loan_approved / loan_rejected / loan_payment / security_alert / email_verification / otp / general / member_application / member_approved / member_declined / ticket_created / ticket_reply / ticket_status.
+notifications,title,varchar,255,Headline shown in the notification list.
+notifications,message,text,N/A,Body text of the notification.
+notifications,related_id,bigint,N/A,Primary key of the record the notification refers to.
+notifications,related_type,varchar,255,Class name of the related record (polymorphic).
+notifications,action_url,varchar,255,Front-end route opened when the notification is clicked.
+notifications,is_read,tinyint,1,Whether the recipient has read the notification. Defaults to false.
+notifications,read_at,timestamp,N/A,Timestamp when the notification was read.
+notifications,priority,enum,N/A,Display priority: low / normal / high / urgent. Defaults to normal.
+notifications,expires_at,timestamp,N/A,Timestamp after which the notification is no longer shown.
+notifications,created_at,timestamp,N/A,Record creation timestamp.
+notifications,updated_at,timestamp,N/A,Record last-update timestamp.
+notifications,,,,Main purpose: In-app notification inbox delivering loan, membership, security and support-ticket updates to individual users.
+officer_permission_overrides,id,bigint,N/A,Auto-incrementing primary key.
+officer_permission_overrides,user_id,bigint,N/A,Foreign key to users.id; cascades on delete. Unique together with permission.
+officer_permission_overrides,permission,varchar,255,Name of the permission being overridden.
+officer_permission_overrides,effect,varchar,16,Direction of the override: allow or disallow.
+officer_permission_overrides,created_at,timestamp,N/A,Record creation timestamp.
+officer_permission_overrides,updated_at,timestamp,N/A,Record last-update timestamp.
+officer_permission_overrides,,,,Main purpose: Per-officer allow or disallow exceptions layered on top of Spatie role permissions in User::can().
+otp_challenges,id,bigint,N/A,Auto-incrementing primary key.
+otp_challenges,user_id,bigint,N/A,Foreign key to users.id; cascades on delete.
+otp_challenges,purpose,varchar,60,Operation the code authorises such as login or withdrawal (indexed with user_id and expires_at).
+otp_challenges,code_hash,varchar,255,Hash of the one-time code; the plaintext is never stored.
+otp_challenges,context_hash,varchar,64,SHA-256 hash of the operation context binding the code to one specific request (indexed with expires_at).
+otp_challenges,context,json,N/A,JSON snapshot of the context the code was issued for.
+otp_challenges,attempts,tinyint,N/A,Unsigned count of failed verification attempts. Defaults to 0.
+otp_challenges,max_attempts,tinyint,N/A,Unsigned attempt cap before the challenge is invalidated. Defaults to 5.
+otp_challenges,expires_at,timestamp,N/A,Timestamp when the code stops being valid.
+otp_challenges,consumed_at,timestamp,N/A,Set once the code has been successfully redeemed.
+otp_challenges,created_at,timestamp,N/A,Record creation timestamp.
+otp_challenges,updated_at,timestamp,N/A,Record last-update timestamp.
+otp_challenges,,,,Main purpose: Issues and verifies hashed one-time passcodes for step-up authentication on sensitive operations, with attempt limits and expiry.
+password_reset_tokens,email,varchar,255,Email address of the user requesting a reset. Primary key.
+password_reset_tokens,token,varchar,255,Hashed password reset token.
+password_reset_tokens,created_at,timestamp,N/A,Timestamp when the reset token was generated.
+password_reset_tokens,,,,Main purpose: Stores single-use hashed tokens backing the forgot-password flow.
+paymongo_webhook_events,id,bigint,N/A,Auto-incrementing primary key.
+paymongo_webhook_events,event_id,varchar,150,Unique identifier of the inbound PayMongo event; enforces idempotency.
+paymongo_webhook_events,event_type,varchar,100,PayMongo event name such as payment.paid (indexed).
+paymongo_webhook_events,payload,json,N/A,Full decoded webhook body retained for troubleshooting.
+paymongo_webhook_events,processed_at,timestamp,N/A,Set once the event has been handled; NULL while still pending.
+paymongo_webhook_events,created_at,timestamp,N/A,Record creation timestamp.
+paymongo_webhook_events,updated_at,timestamp,N/A,Record last-update timestamp.
+paymongo_webhook_events,,,,Main purpose: Receives and de-duplicates PayMongo payment webhooks so online transactions are confirmed exactly once.
+permissions,id,bigint,N/A,Auto-incrementing primary key.
+permissions,name,varchar,255,Permission name such as loans.approve. Unique together with guard_name.
+permissions,guard_name,varchar,255,Auth guard the permission applies to; always web in this system.
+permissions,created_at,timestamp,N/A,Record creation timestamp.
+permissions,updated_at,timestamp,N/A,Record last-update timestamp.
+permissions,,,,Main purpose: Canonical catalogue of every permission the application checks; the single source of truth is app/Support/PermissionCatalog.php.
+personal_data,id,bigint,N/A,Auto-incrementing primary key.
+personal_data,personal_data_number,varchar,20,Unique cooperative personal-data reference number.
+personal_data,title,enum,N/A,Position or title: Chairman / Vice Chairman / Secretary / Treasurer / Loan Officer / Accountant / Member. Defaults to Member.
+personal_data,first_name,varchar,100,First name (indexed).
+personal_data,last_name,varchar,100,Last name (indexed).
+personal_data,mid_name,varchar,100,Middle name (indexed).
+personal_data,suffix,varchar,50,Name suffix such as Jr. or III.
+personal_data,birth_date,date,N/A,Date of birth.
+personal_data,birthplace,varchar,255,Place of birth.
+personal_data,gender,enum,N/A,Gender: male / female / other.
+personal_data,education,varchar,255,Highest educational attainment.
+personal_data,civil_status,enum,N/A,Marital status: single / married / widowed / separated.
+personal_data,religion,varchar,64,Religious affiliation.
+personal_data,profile_picture,varchar,500,Storage path of the profile photo.
+personal_data,address_id,bigint,N/A,Foreign key to addresses.id; unique so one address serves at most one person.
+personal_data,contact_id,bigint,N/A,Foreign key to contacts.id; unique so one contact block serves at most one person.
+personal_data,employment_id,bigint,N/A,Foreign key to employments.id; unique so one employment record serves at most one person.
+personal_data,member_id,bigint,N/A,Foreign key to member_ids.id; unique so one ID bundle serves at most one person.
+personal_data,created_at,timestamp,N/A,Record creation timestamp.
+personal_data,updated_at,timestamp,N/A,Record last-update timestamp.
+personal_data,deleted_at,timestamp,N/A,Soft-delete marker.
+personal_data,,,,Main purpose: The personal identity record of every member and officer, linking to the normalised address, contact, employment and ID sub-tables.
+provinces,code,varchar,20,Primary key. PSGC code of the province.
+provinces,name,varchar,255,Official name of the province (indexed).
+provinces,region_code,varchar,20,PSGC code of the parent region (indexed).
+provinces,created_at,timestamp,N/A,Record creation timestamp.
+provinces,updated_at,timestamp,N/A,Record last-update timestamp.
+provinces,,,,Main purpose: Part of the bundled PSGC reference set; the administrative layer between region and city used to scope addresses and branch coverage. Created by the schoolees/laravel-psgc package and populated by PSGCSeeder.
+regions,code,varchar,20,Primary key. PSGC code of the region.
+regions,name,varchar,255,Official name of the region (indexed).
+regions,short_name,varchar,255,Abbreviated region name used in compact UI labels.
+regions,created_at,timestamp,N/A,Record creation timestamp.
+regions,updated_at,timestamp,N/A,Record last-update timestamp.
+regions,,,,Main purpose: Part of the bundled PSGC reference set; the top level of the Philippine administrative hierarchy and the root of all address lookups. Created by the schoolees/laravel-psgc package and populated by PSGCSeeder.
+restore_runs,id,bigint,N/A,Auto-incrementing primary key.
+restore_runs,tier,varchar,20,Backup tier the restore was taken from.
+restore_runs,path,varchar,500,Filesystem or object-storage path of the archive being restored.
+restore_runs,scope,varchar,10,What is being restored: db or files.
+restore_runs,status,varchar,20,Lifecycle state: queued / running / success / failed. Defaults to queued.
+restore_runs,message,text,N/A,Human-readable outcome or error output.
+restore_runs,rollback_path,varchar,500,Path of the pre-restore safety snapshot kept for rollback.
+restore_runs,started_at,timestamp,N/A,Timestamp when the restore began executing.
+restore_runs,finished_at,timestamp,N/A,Timestamp when the restore completed.
+restore_runs,triggered_by,bigint,N/A,Foreign key to users.id; set to NULL if the triggering user is removed.
+restore_runs,created_at,timestamp,N/A,Record creation timestamp.
+restore_runs,updated_at,timestamp,N/A,Record last-update timestamp.
+restore_runs,,,,Main purpose: Execution log for restore operations, recording the safety snapshot taken before the restore was applied.
+role_has_permissions,permission_id,bigint,N/A,Foreign key to permissions.id; cascades on delete. Part of the composite primary key.
+role_has_permissions,role_id,bigint,N/A,Foreign key to roles.id; cascades on delete. Part of the composite primary key.
+role_has_permissions,,,,Main purpose: Spatie pivot defining which permissions each role grants.
+role_permissions,id,bigint,N/A,Auto-incrementing primary key.
+role_permissions,role,varchar,255,Role name the bundle applies to. Unique together with section.
+role_permissions,section,varchar,255,Functional section of the system such as loans or members. Unique together with role.
+role_permissions,permissions,json,N/A,JSON array of the permission names granted for that role and section.
+role_permissions,is_active,tinyint,1,Whether the bundle is currently applied. Defaults to true.
+role_permissions,created_at,timestamp,N/A,Record creation timestamp.
+role_permissions,updated_at,timestamp,N/A,Record last-update timestamp.
+role_permissions,,,,Main purpose: Section-by-section view of each role's permission set, used by the admin matrix UI to edit role capabilities.
+roles,id,bigint,N/A,Auto-incrementing primary key.
+roles,name,varchar,255,Role name. Unique together with guard_name.
+roles,guard_name,varchar,255,Auth guard the role applies to; always web in this system.
+roles,created_at,timestamp,N/A,Record creation timestamp.
+roles,updated_at,timestamp,N/A,Record last-update timestamp.
+roles,,,,Main purpose: Defines the roles a user can hold (admin / manager / member / loan officer and similar) which determine baseline access.
+sessions,id,varchar,255,Session identifier issued to the browser. Primary key.
+sessions,user_id,bigint,N/A,Foreign key value identifying the authenticated user (indexed).
+sessions,ip_address,varchar,45,Client IP address the session originated from.
+sessions,user_agent,text,N/A,Browser and client user-agent string.
+sessions,payload,longtext,N/A,Serialized session data.
+sessions,last_activity,int,N/A,Unix timestamp of the last request on the session (indexed); used for idle-timeout checks.
+sessions,,,,Main purpose: Laravel's database session store backing the cookie/session authentication used by the whole application.
+site_contents,id,bigint,N/A,Auto-incrementing primary key.
+site_contents,section,varchar,255,Page or section the content belongs to. Unique together with key.
+site_contents,key,varchar,255,Content identifier within the section. Unique together with section.
+site_contents,value,text,N/A,The editable content value.
+site_contents,type,varchar,255,Rendering type such as text / textarea / image. Defaults to text.
+site_contents,description,text,N/A,Notes for administrators describing what the field controls.
+site_contents,order,int,N/A,Display sort order (reserved SQL word; always quoted). Defaults to 0.
+site_contents,is_active,tinyint,1,Whether the content entry is rendered. Defaults to true.
+site_contents,created_at,timestamp,N/A,Record creation timestamp.
+site_contents,updated_at,timestamp,N/A,Record last-update timestamp.
+site_contents,,,,Main purpose: Makes the public-facing website copy (homepage text, about page, contact details) editable without a code deployment.
+system_settings,id,bigint,N/A,Auto-incrementing primary key.
+system_settings,key,varchar,255,Unique setting key (reserved SQL word; always quoted).
+system_settings,value,text,N/A,Stored setting value.
+system_settings,type,varchar,255,Input or casting type. Defaults to text.
+system_settings,group,varchar,255,Grouping used by the settings UI such as general or backup. Defaults to general.
+system_settings,label,varchar,255,Human-readable label shown to administrators.
+system_settings,description,text,N/A,Explanation of what the setting controls.
+system_settings,options,text,N/A,Allowed values for select-type settings.
+system_settings,is_editable,tinyint,1,Whether administrators may change the value. Defaults to true.
+system_settings,requires_restart,tinyint,1,Flags settings that need a worker or application restart to take effect. Defaults to false.
+system_settings,created_at,timestamp,N/A,Record creation timestamp.
+system_settings,updated_at,timestamp,N/A,Record last-update timestamp.
+system_settings,,,,Main purpose: Stores runtime configuration such as service-availability switches and per-tier backup cron expressions, editable from the admin panel.
+ticket_attachments,id,bigint,N/A,Auto-incrementing primary key.
+ticket_attachments,ticket_id,bigint,N/A,Foreign key to tickets.id; cascades on delete (indexed).
+ticket_attachments,ticket_message_id,bigint,N/A,Foreign key to ticket_messages.id; cascades on delete (indexed).
+ticket_attachments,file_path,varchar,255,Path where the file is stored on the server.
+ticket_attachments,file_name,varchar,255,Original filename of the attachment.
+ticket_attachments,file_size,bigint,N/A,File size in bytes.
+ticket_attachments,mime_type,varchar,100,MIME type of the attachment.
+ticket_attachments,created_at,timestamp,N/A,Record creation timestamp.
+ticket_attachments,updated_at,timestamp,N/A,Record last-update timestamp.
+ticket_attachments,,,,Main purpose: Stores files and screenshots attached to a support-ticket reply.
+ticket_messages,id,bigint,N/A,Auto-incrementing primary key.
+ticket_messages,ticket_id,bigint,N/A,Foreign key to tickets.id; cascades on delete.
+ticket_messages,user_id,bigint,N/A,Foreign key to users.id - the author of the message; cascades on delete.
+ticket_messages,message,text,N/A,Body text of the reply.
+ticket_messages,is_internal_note,tinyint,1,Whether the message is a staff-only note hidden from the member. Defaults to false.
+ticket_messages,created_at,timestamp,N/A,Record creation timestamp.
+ticket_messages,updated_at,timestamp,N/A,Record last-update timestamp.
+ticket_messages,,,,Main purpose: Holds the full conversation thread of a support ticket including internal officer notes.
+tickets,id,bigint,N/A,Auto-incrementing primary key.
+tickets,ticket_number,varchar,32,Unique human-readable ticket reference.
+tickets,user_id,bigint,N/A,Foreign key to users.id - the member who raised the ticket; cascades on delete.
+tickets,assigned_to,bigint,N/A,Foreign key to users.id - the officer handling it. Set to NULL on user delete.
+tickets,subject,varchar,255,Short summary of the issue.
+tickets,category,varchar,50,Ticket category used for routing and filtering (indexed).
+tickets,priority,enum,N/A,Priority: low / medium / high / urgent. Defaults to medium.
+tickets,status,enum,N/A,Workflow state: open / in_progress / resolved / closed. Defaults to open.
+tickets,last_reply_at,timestamp,N/A,Timestamp of the most recent message in the thread.
+tickets,resolved_at,timestamp,N/A,Timestamp when the ticket was marked resolved.
+tickets,closed_at,timestamp,N/A,Timestamp when the ticket was closed.
+tickets,created_at,timestamp,N/A,Record creation timestamp.
+tickets,updated_at,timestamp,N/A,Record last-update timestamp.
+tickets,deleted_at,timestamp,N/A,Soft-delete marker.
+tickets,,,,Main purpose: Provides the member support-ticket system with assignment, priority and status tracking.
+transactions,id,bigint,N/A,Auto-incrementing primary key.
+transactions,transaction_number,varchar,20,Unique human-readable transaction reference.
+transactions,client_request_id,varchar,100,Client-supplied idempotency key; unique and prevents duplicate submissions.
+transactions,transaction_type,enum,N/A,Kind of movement: deposit / withdrawal / loan_payment / loan_disbursement / fee. Defaults to deposit.
+transactions,transaction_mode,varchar,255,Channel used to perform the transaction such as over-the-counter.
+transactions,payment_gateway,varchar,50,Online payment provider such as PayMongo (indexed).
+transactions,payment_method_used,varchar,50,Specific gateway method such as GCash or Maya.
+transactions,paymongo_checkout_session_id,varchar,100,PayMongo checkout session identifier (indexed).
+transactions,paymongo_payment_intent_id,varchar,100,PayMongo payment-intent identifier (indexed).
+transactions,paymongo_payment_id,varchar,100,PayMongo payment identifier (indexed).
+transactions,paymongo_fee,decimal,15,2,Fee charged by the gateway on the payment.
+transactions,status,enum,N/A,Approval state: pending / approved / rejected / completed. Defaults to pending.
+transactions,account_id,bigint,N/A,Foreign key to accounts.id - the account the money moved through.
+transactions,loan_id,bigint,N/A,Foreign key to loans.id - the loan affected by a payment or disbursement.
+transactions,amount,decimal,15,2,Transaction amount; positive for all recorded movements.
+transactions,transaction_date,datetime,N/A,Effective date of the transaction (indexed).
+transactions,note,text,N/A,Free-text note or narration.
+transactions,recorded_by,bigint,N/A,Foreign key to users.id - the member or officer who created the entry.
+transactions,branch_id,bigint,N/A,Foreign key to branches.id - the branch that owns the transaction.
+transactions,approved_by,bigint,N/A,Foreign key to users.id - the officer who approved it.
+transactions,approved_at,datetime,N/A,Timestamp when the transaction was approved.
+transactions,rejection_reason,text,N/A,Explanation given when the transaction was rejected.
+transactions,proof_of_payment_path,varchar,255,Storage path of the uploaded proof-of-payment image.
+transactions,proof_of_payment_uploaded_at,timestamp,N/A,Timestamp when the proof of payment was uploaded.
+transactions,created_at,timestamp,N/A,Record creation timestamp.
+transactions,updated_at,timestamp,N/A,Record last-update timestamp.
+transactions,,,,Main purpose: The cooperative's financial ledger; one immutable row per deposit, withdrawal, loan payment, disbursement or fee, with an approval workflow.
+trusted_devices,id,bigint,N/A,Auto-incrementing primary key.
+trusted_devices,user_id,bigint,N/A,Foreign key to users.id; cascades on delete.
+trusted_devices,fingerprint,varchar,64,SHA-256 hash of the device and browser fingerprint. Unique together with user_id.
+trusted_devices,device_label,varchar,255,Human-readable name of the trusted device.
+trusted_devices,last_ip_address,varchar,45,IP address last seen from this device.
+trusted_devices,user_agent,text,N/A,Browser user-agent captured when the device was trusted.
+trusted_devices,trusted_until,timestamp,N/A,Timestamp at which the trust window ends.
+trusted_devices,last_used_at,timestamp,N/A,Timestamp of the last successful login from this device.
+trusted_devices,is_active,tinyint,1,Whether the trust record is still honoured (indexed with user_id). Defaults to true.
+trusted_devices,created_at,timestamp,N/A,Record creation timestamp.
+trusted_devices,updated_at,timestamp,N/A,Record last-update timestamp.
+trusted_devices,,,,Main purpose: Remembers devices a user has OTP-verified so repeat logins can skip the code while still enforcing step-up auth elsewhere.
+users,id,bigint,N/A,Auto-incrementing primary key.
+users,user_number,varchar,20,Unique human-readable member or officer number.
+users,personal_data_id,bigint,N/A,Foreign key to personal_data.id (indexed); set to NULL on delete.
+users,branch_id,bigint,N/A,Foreign key to branches.id - the user's home branch. Set to NULL on delete.
+users,email,varchar,255,Login email address; unique across the system.
+users,email_verified_at,timestamp,N/A,Set once the login email has been confirmed.
+users,password,varchar,255,Bcrypt hash of the account password.
+users,remember_token,varchar,100,Token backing the remember-me cookie.
+users,role,varchar,50,Primary role name; free text to support custom dynamic roles. Widened from an enum on 2026-09-16.
+users,account_status,enum,N/A,Account state: active / inactive / terminated. Defaults to active.
+users,is_officer,tinyint,1,True when the user is staff and therefore subject to officer permission overrides (indexed).
+users,special_loan_eligible,tinyint,1,Grants the member access to special loan products. Defaults to false.
+users,profile_completion_required,tinyint,1,Whether the member must complete their profile before using services.
+users,profile_completed_at,timestamp,N/A,Set once profile completion has been satisfied.
+users,created_at,timestamp,N/A,Record creation timestamp.
+users,updated_at,timestamp,N/A,Record last-update timestamp.
+users,deleted_at,timestamp,N/A,Soft-delete marker.
+users,,,,Main purpose: The authentication and access-control record for every member and officer, linking to personal data, branch assignment and Spatie roles.

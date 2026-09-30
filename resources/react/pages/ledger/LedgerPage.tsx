@@ -1,3 +1,4 @@
+import HelpTip from '../../components/ui/HelpTip';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
@@ -114,7 +115,7 @@ export default function LedgerPage() {
         <>
             <div className="p-4 bg-white block sm:flex items-center justify-between border-b border-gray-200 lg:mt-1.5">
                 <div>
-                    <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl">Ledger</h1>
+                    <h1 className="flex items-center gap-2 text-xl font-semibold text-gray-900 sm:text-2xl">Ledger <HelpTip text="The ledger is the financial transaction record. Use filters to narrow the entries; exports follow the currently selected filters and your branch access." /></h1>
                     <p className="text-sm text-gray-500">Track all financial transactions</p>
                 </div>
                 <div className="mt-3 sm:mt-0 flex gap-2">

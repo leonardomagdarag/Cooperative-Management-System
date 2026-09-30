@@ -1,3 +1,4 @@
+import HelpTip from '../../components/ui/HelpTip';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Bar, Doughnut } from 'react-chartjs-2';
@@ -306,7 +307,7 @@ export default function ReportsPage() {
     return (
         <div className="p-4 bg-white border-b border-gray-200 lg:mt-1.5">
             <div className="mb-4">
-                <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl">Reports</h1>
+                <h1 className="flex items-center gap-2 text-xl font-semibold text-gray-900 sm:text-2xl">Reports <HelpTip text="Select a report and date range to view matching records. Some reports offer additional member, loan, or category filters; exports use the selected criteria." /></h1>
                 <p className="text-sm text-gray-500">View financial summaries and activity reports</p>
             </div>
 
