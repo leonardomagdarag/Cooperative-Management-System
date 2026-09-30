@@ -10,7 +10,6 @@ use App\Models\OtpChallenge;
 use App\Models\SystemSetting;
 use App\Models\TrustedDevice;
 use App\Models\User;
-use App\Services\TextBeeService;
 use Illuminate\Contracts\Session\Session;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -231,16 +230,41 @@ class SecurityOtpService
             return;
         }
 
+        // OTP is sent inline rather than queued. The challenge lives for
+        // `security_otp_expiry_minutes` (10 by default), and on shared hosting
+        // the queue only drains when cron fires. Waiting on that tick spent
+        // most of the window in the jobs table, and a `backoff` retry could
+        // not land before the code expired anyway. One SMTP round trip is
+        // cheap next to losing the code to a worker gap.
         try {
-            // OTP is time-sensitive — try async first, fall back to sync
-            SendOtpEmailJob::dispatch($user->id, $purpose, $otpCode);
+            Mail::to($user->email)->send(new OtpCodeMail($user, $purpose, $otpCode));
         } catch (Throwable $e) {
-            // If job dispatch fails (e.g., queue connection down), send synchronously
+            // A mail blip must not fail the sign-in, so this is logged and
+            // swallowed. The user can request a new code.
+            Log::error("OTP email failed for user {$user->id} ({$purpose}): {$e->getMessage()}");
+
+            // Guarded separately: the audit write hits the database, and if the
+            // mail failure *was* a database problem this would throw straight
+            // out of the handler and fail the sign-in we are trying to protect.
             try {
-                $mailable = new OtpCodeMail($user, $purpose, $otpCode);
-                Mail::to($user->email)->send($mailable);
+                $this->auditLogService->log(
+                    'email.failed',
+                    "OTP email failed for user {$user->id}: {$e->getMessage()}",
+                    'email',
+                    null,
+                    null,
+                    ['user_id' => $user->id, 'purpose' => $purpose]
+                );
+            } catch (Throwable $e3) {
+                Log::error("Failed to audit OTP email failure for user {$user->id}: {$e3->getMessage()}");
+            }
+
+            // Hand off to the queue as a second attempt. This only runs on the
+            // failure path, so it costs nothing when SMTP is healthy.
+            try {
+                SendOtpEmailJob::dispatch($user->id, $purpose, $otpCode);
             } catch (Throwable $e2) {
-                Log::error("OTP email failed for user {$user->id}: {$e2->getMessage()}");
+                Log::error("OTP email retry dispatch failed for user {$user->id}: {$e2->getMessage()}");
             }
         }
     }
