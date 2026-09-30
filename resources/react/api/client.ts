@@ -36,6 +36,15 @@ api.interceptors.response.use(
             const redirect = error.response.data?.redirect;
             window.location.href = redirect || '/security/verify-otp';
         }
+        // The backend flags its own maintenance responses with `maintenance: true`
+        // rather than a status code we can switch on: sign-in being switched off
+        // answers 403 from the login endpoint and 503 from the public guard.
+        if (error.response?.data?.maintenance === true) {
+            const redirect = error.response.data?.redirect;
+            if (redirect && !window.location.pathname.startsWith(redirect)) {
+                window.location.href = redirect;
+            }
+        }
         return Promise.reject(error);
     }
 );

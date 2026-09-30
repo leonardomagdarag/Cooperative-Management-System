@@ -10,6 +10,7 @@ use App\Services\AuditLogService;
 use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
 use App\Services\TurnstileService;
+use App\Support\MaintenanceState;
 use App\Support\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -52,22 +53,33 @@ class AuthController extends Controller
         }
 
         $isOfficer = $user->hasAnyRole(['admin', 'manager', 'accountant', 'loan', 'secretary']);
-        $loginAllowed = $isOfficer
-            ? (bool) SystemSetting::get('service_login_officer_enabled', true)
-            : (bool) SystemSetting::get('service_login_member_enabled', true);
+        $audience = $isOfficer ? MaintenanceState::AUDIENCE_OFFICER : MaintenanceState::AUDIENCE_MEMBER;
+
+        // The global switch is checked here as well as in
+        // EnsurePublicLoginEnabled: /api/login carries only ['web', 'throttle'],
+        // so the middleware never runs for it and the global switch would
+        // otherwise be advisory rather than enforced.
+        $loginAllowed = (bool) SystemSetting::get('service_login_enabled', true)
+            && (bool) SystemSetting::get("service_login_{$audience}_enabled", true);
 
         if (! $loginAllowed) {
+            MaintenanceState::enterLoginUnavailable($audience);
+
             $this->auditLogService->log(
                 'auth.login_blocked',
                 'Login blocked because login is disabled for this role.',
                 'auth',
                 $user,
                 $user,
-                ['user_type' => $isOfficer ? 'officer' : 'member']
+                ['user_type' => $audience]
             );
 
             return response()->json([
                 'message' => 'Login is currently unavailable for your account. Please try again later.',
+                'maintenance' => true,
+                'reason' => MaintenanceState::REASON_LOGIN,
+                'audience' => $audience,
+                'redirect' => '/maintenance',
             ], 403);
         }
 

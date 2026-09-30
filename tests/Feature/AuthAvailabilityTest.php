@@ -33,8 +33,13 @@ function seedAuthAvailability(array $overrides = []): void
 test('global login availability drives the public login route', function () {
     seedAuthAvailability(['service_login_enabled' => false]);
 
-    $this->get('/login')->assertRedirect(route('home_page', absolute: false));
-    post('/login', ['email' => 'admin@example.com', 'password' => 'password'])->assertRedirect(route('home_page', absolute: false));
+    // The maintenance page replaces the old silent redirect to the home page.
+    $this->get('/login')
+        ->assertStatus(503)
+        ->assertSee('Sign-in is temporarily unavailable');
+
+    post('/login', ['email' => 'admin@example.com', 'password' => 'password'])
+        ->assertStatus(503);
 
     seedAuthAvailability(['service_login_enabled' => true]);
     $this->get('/login')->assertOk();

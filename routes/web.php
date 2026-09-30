@@ -9,6 +9,7 @@ use App\Http\Controllers\PageController;
 use App\Http\Controllers\PasswordController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\ProfileController;
+use App\Support\MaintenanceState;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
@@ -120,6 +121,28 @@ Route::middleware(['auth', 'otp.verified', 'verified'])->group(function () {
         })->name($legacyName);
     }
 });
+
+// === Maintenance Page ===
+// A standalone page the SPA can navigate to when login is switched off. It is
+// served as Blade rather than through the catch-all below because the SPA has to
+// boot, and booting calls the API, which is exactly what is unavailable.
+// During a restore this route is never reached: Laravel's maintenance mode
+// short-circuits first and serves errors/503, which renders the same view.
+Route::get('/maintenance', function () {
+    try {
+        // Re-derive the notice from the live settings rather than trusting whatever
+        // was recorded earlier, so a switch flipped outside the UI still reads true.
+        MaintenanceState::syncLoginAvailability();
+    } catch (Throwable) {
+        // This page exists for when the system is broken. An unreachable database
+        // is one of the ways it can be, and the recorded state -- or the generic
+        // fallback -- is still worth showing.
+    }
+
+    return response()->view('maintenance', [
+        'maintenance' => MaintenanceState::describe(),
+    ], MaintenanceState::isActive() ? 503 : 200);
+})->name('maintenance');
 
 // === Backup Cron Fallback Ping ===
 // Shared hosts without cron support can hit this endpoint (every minute) with

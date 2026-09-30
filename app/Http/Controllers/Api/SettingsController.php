@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
+use App\Support\MaintenanceState;
 use App\Support\PersonPasswordPolicy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -255,6 +256,11 @@ class SettingsController extends Controller
         if (($validated['notify_affected'] ?? false) && $newlyUnavailable !== []) {
             $this->notifyAffectedUsers($newlyUnavailable);
         }
+
+        // The notice behind /maintenance is only ever added to by the middleware and
+        // the login endpoint, so re-enabling sign-in has to clear it explicitly or
+        // the page keeps claiming the opposite and keeps answering 503.
+        MaintenanceState::syncLoginAvailability();
 
         return response()->json(['message' => 'Service availability updated.']);
     }

@@ -8,6 +8,7 @@ use App\Jobs\RunBackupJob;
 use App\Jobs\RestoreBackupJob;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Support\MaintenanceState;
 use Cron\CronExpression;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
@@ -493,11 +494,19 @@ class BackupService
         $this->applyRuntimeConfiguration($tier);
 
         $restoreSecret = Str::random(32);
-        Artisan::call('down', ['--secret' => $restoreSecret]);
-
         $restoredFiles = false;
+        $wentDown = false;
+
+        // The notice is recorded before going down and cleared after coming back
+        // up, so the maintenance page can explain itself. A crash in between
+        // leaves the file behind; MaintenanceState treats an entry older than its
+        // staleness window as debris and falls back to generic copy.
+        MaintenanceState::enter(MaintenanceState::REASON_RESTORE);
 
         try {
+            Artisan::call('down', ['--secret' => $restoreSecret]);
+            $wentDown = true;
+
             if (in_array($scope, [self::SCOPE_DB, self::SCOPE_BOTH], true)) {
                 $this->restoreDatabase($tier, $path, $password);
             }
@@ -512,7 +521,16 @@ class BackupService
             $this->auditLogService->log('backup.restore_failed', "Restore failed from the {$tier} tier ({$path}).", 'backup', null, $actor, ['tier' => $tier, 'file' => $path, 'scope' => $scope, 'error' => Str::limit($e->getMessage(), 2000)]);
             throw $e;
         } finally {
-            Artisan::call('up');
+            // Nested finally: a failing `up` must not strand the notice, or the
+            // site comes back up still claiming to be restoring. Being left down
+            // is the worse failure and is allowed to surface.
+            try {
+                if ($wentDown) {
+                    Artisan::call('up');
+                }
+            } finally {
+                MaintenanceState::leave();
+            }
         }
 
         $this->auditLogService->log('backup.restored', "Database restored from a {$tier} tier backup (scope: {$scope}).", 'backup', null, $actor, ['tier' => $tier, 'file' => $path, 'scope' => $scope, 'files_restored' => $restoredFiles]);
