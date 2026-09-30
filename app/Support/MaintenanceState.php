@@ -215,7 +215,8 @@ final class MaintenanceState
         $copy = match ($reason) {
             self::REASON_RESTORE => [
                 'headline' => 'We are restoring your data',
-                'message' => 'A backup restore is underway. The system is being returned to a recent verified archive, so transactions and balances may change once it finishes. Nothing you submitted has been lost.',
+                'message' => 'A backup restore is underway and the entire cooperative management system is offline while it runs. Nobody can sign in or transact until it finishes, so this will stay up for the whole duration rather than only for members.',
+                'detail' => 'The system is being returned to a recent verified archive, so transactions and balances may change once it finishes. If a restore is interrupted it can stay offline until it is resolved.',
             ],
             self::REASON_LOGIN => self::loginCopy($audience),
             default => [

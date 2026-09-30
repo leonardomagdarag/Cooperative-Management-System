@@ -111,7 +111,7 @@ export default function BackupPage() {
     const [runTarget, setRunTarget] = useState<{ tier: BackupTier; scope: BackupScope } | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<{ tier: BackupTier; item: BackupItem } | null>(null);
     const [restoreTarget, setRestoreTarget] = useState<{ tier: BackupTier; item: BackupItem } | null>(null);
-    const [restoreForm, setRestoreForm] = useState({ scope: 'both' as BackupScope, current_password: '', confirmation: '', archive_password: '' });
+    const [restoreForm, setRestoreForm] = useState({ scope: 'both' as BackupScope, current_password: '', confirmation: '', archive_password: '', acknowledged: false });
 
     const { data, isLoading, isError, error } = useQuery({ queryKey: ['backups'], queryFn: getBackups, refetchInterval: query => {
         const runs = (query.state.data?.data?.data as BackupIndexData | undefined)?.recent_runs ?? [];
@@ -160,7 +160,7 @@ export default function BackupPage() {
             confirmation: restoreForm.confirmation,
             archive_password: restoreForm.archive_password,
         }),
-        onSuccess: (res: any) => { invalidate(); setRestoreTarget(null); setRestoreForm({ scope: 'both', current_password: '', confirmation: '', archive_password: '' }); addToast(res?.data?.message || 'Restore queued.', 'success'); },
+        onSuccess: (res: any) => { invalidate(); setRestoreTarget(null); setRestoreForm({ scope: 'both', current_password: '', confirmation: '', archive_password: '', acknowledged: false }); addToast(res?.data?.message || 'Restore queued.', 'success'); },
         onError: (err: any) => addToast(err.response?.data?.message || 'Restore failed.', 'error'),
     });
 
@@ -363,15 +363,15 @@ export default function BackupPage() {
                 title="Restore from backup"
                 description={restoreTarget?.item.name}
                 danger
-                onCancel={() => { setRestoreTarget(null); setRestoreForm({ scope: 'both', current_password: '', confirmation: '', archive_password: '' }); }}
+                onCancel={() => { setRestoreTarget(null); setRestoreForm({ scope: 'both', current_password: '', confirmation: '', archive_password: '', acknowledged: false }); }}
                 onConfirm={() => restoreTarget && restoreMutation.mutate()}
                 confirmLabel={restoreMutation.isPending ? 'Restoring...' : 'Restore Now'}
-                confirmDisabled={restoreMutation.isPending || restoreForm.current_password.length === 0 || restoreForm.confirmation !== 'RESTORE'}
+                confirmDisabled={restoreMutation.isPending || restoreForm.current_password.length === 0 || restoreForm.confirmation !== 'RESTORE' || !restoreForm.acknowledged}
             >
-                <div className="space-y-4">
+<div className="space-y-4">
                     <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                        <p className="font-semibold flex items-center gap-2"><i className="fas fa-exclamation-triangle"></i> Dangerous operation</p>
-                        <p className="mt-1 text-xs">This replaces the current data and puts the application into maintenance mode until it finishes. It is gated by your password and requires typing <strong>RESTORE</strong> to confirm.</p>
+                        <p className="font-semibold flex items-center gap-2"><i className="fas fa-exclamation-triangle"></i> The whole system goes offline</p>
+                        <p className="mt-1 text-xs">For the entire duration of the restore, the cooperative management system is completely unavailable. Every member, officer and administrator is signed out and blocked &mdash; including you, and including the officer who started the restore. Nobody can deposit, withdraw, borrow, repay, or use any other feature until it finishes. It is gated by your password and requires typing <strong>RESTORE</strong> to confirm.</p>
                     </div>
                     <div>
                         <label className="mb-1 block text-xs font-medium text-gray-600">What to restore</label>
@@ -389,10 +389,19 @@ export default function BackupPage() {
                         <label className="mb-1 block text-xs font-medium text-gray-600">Backup password <span className="font-normal text-gray-400">(leave blank only for unencrypted archives)</span></label>
                         <input type="password" value={restoreForm.archive_password} onChange={e => setRestoreForm(f => ({ ...f, archive_password: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" placeholder="Enter the backup password" />
                     </div>
-                    <div>
+<div>
                         <label className="mb-1 block text-xs font-medium text-gray-600">Type <strong>RESTORE</strong> to confirm</label>
                         <input value={restoreForm.confirmation} onChange={e => setRestoreForm(f => ({ ...f, confirmation: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
                     </div>
+                    {/* Final confirmation. Typing RESTORE proves intent, but it does not
+                        prove the operator understood that everyone is locked out, which is
+                        the consequence that actually matters here. */}
+                    <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm ${restoreForm.acknowledged ? 'border-red-300 bg-red-50 text-red-800' : 'border-gray-200 bg-gray-50 text-gray-700'}`}>
+                        <input type="checkbox" checked={restoreForm.acknowledged} onChange={e => setRestoreForm(f => ({ ...f, acknowledged: e.target.checked }))} className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-red-600 focus:ring-red-500" />
+                        <span className="text-xs">
+                            <span className="font-semibold">Final confirmation.</span> I understand the <strong>entire system is unusable</strong> for the full duration of this restore. All members and officers will see a maintenance notice and will not be able to sign in or transact. If the restore fails or is interrupted, the system may stay offline until it is resolved.
+                        </span>
+                    </label>
                 </div>
             </ConfirmModal>
         </div>

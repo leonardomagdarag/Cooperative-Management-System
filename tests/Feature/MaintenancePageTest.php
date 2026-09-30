@@ -123,12 +123,25 @@ test('maintenance mode serves the restore copy on every route', function () {
     foreach (['/', '/login', '/dashboard'] as $path) {
         $this->get($path)
             ->assertStatus(503)
-            ->assertSee('We are restoring your data');
+            ->assertSee('We are restoring your data')
+            // The page has to say this is a total outage, not a member-only
+            // pause -- everyone is locked out, officers included.
+            ->assertSee('entire cooperative management system is offline');
     }
 
     Artisan::call('up');
 
     $this->get('/')->assertOk();
+});
+
+test('the restore copy never claims submitted data is safe', function () {
+    // "Nothing you submitted has been lost" cannot be promised: an interrupted
+    // restore can discard writes made after the archive was taken.
+    MaintenanceState::enter(MaintenanceState::REASON_RESTORE);
+
+    $this->get('/maintenance')
+        ->assertStatus(503)
+        ->assertDontSee('Nothing you submitted has been lost');
 });
 
 test('a plain artisan down falls back to generic copy', function () {
