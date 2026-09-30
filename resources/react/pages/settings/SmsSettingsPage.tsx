@@ -35,19 +35,21 @@ export default function SmsSettingsPage() {
         }
     });
 
+    const [testPhone, setTestPhone] = useState('');
+
     const testSmsMutation = useMutation({
-        mutationFn: async () => {
-            return api.post('/api/settings/sms/test');
+        mutationFn: async (phone: string) => {
+            return api.post('/api/settings/sms/test', { phone_number: phone });
         },
         onSuccess: (res) => {
             if (res.data.success) {
-                addToast('Test SMS sent successfully to your verified phone.', 'success');
+                addToast('Test SMS sent successfully.', 'success');
             } else {
                 addToast(res.data.message || 'SMS test failed.', 'error');
             }
         },
         onError: (err: any) => {
-            addToast(err.response?.data?.message || 'Failed to send test SMS. Make sure your profile has a verified phone number.', 'error');
+            addToast(err.response?.data?.message || 'Failed to send test SMS.', 'error');
         }
     });
 
@@ -117,18 +119,25 @@ export default function SmsSettingsPage() {
                 <div className="pt-6 border-t border-gray-100">
                     <h3 className="font-semibold text-gray-900 mb-2">Test SMS</h3>
                     <p className="text-sm text-gray-500 mb-4">
-                        Send a test SMS to your own phone number to verify the configuration.
-                        <br />
-                        <span className="font-medium text-gray-700">Note:</span> Your account profile must have a verified phone number.
+                        Send a test SMS to verify the configuration.
                     </p>
-                    <button
-                        onClick={() => testSmsMutation.mutate()}
-                        disabled={!isActive || testSmsMutation.isPending}
-                        className="rounded-lg bg-white border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-                    >
-                        <i className="fas fa-paper-plane mr-2"></i>
-                        {testSmsMutation.isPending ? 'Sending...' : 'Send Test SMS to my phone'}
-                    </button>
+                    <div className="flex gap-3 max-w-md">
+                        <input
+                            type="text"
+                            placeholder="Enter phone number (e.g. 0917...)"
+                            value={testPhone}
+                            onChange={(e) => setTestPhone(e.target.value)}
+                            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        />
+                        <button
+                            onClick={() => testSmsMutation.mutate(testPhone)}
+                            disabled={!isActive || testSmsMutation.isPending || !testPhone.trim()}
+                            className="rounded-lg bg-white border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors whitespace-nowrap"
+                        >
+                            <i className="fas fa-paper-plane mr-2"></i>
+                            {testSmsMutation.isPending ? 'Sending...' : 'Send Test'}
+                        </button>
+                    </div>
                 </div>
             </div>
 

@@ -441,12 +441,11 @@ class SettingsController extends Controller
     {
         abort_unless(Auth::user()?->can('settings.update'), 403);
 
-        $user = $request->user();
-        $phone = $user->contact?->phone_no;
+        $validated = $request->validate([
+            'phone_number' => 'required|string|max:20',
+        ]);
 
-        if (! $phone || ! $user->contact?->phone_verified_at) {
-            return response()->json(['message' => 'No verified phone on your profile.'], 422);
-        }
+        $phone = $validated['phone_number'];
 
         $sent = app(TextBeeService::class)->send(
             $phone,
