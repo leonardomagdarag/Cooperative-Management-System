@@ -5,6 +5,9 @@
 .env
 .env.backup
 .env.production
+# Environment templates carrying real credentials. Only .env.example is tracked.
+.env.example.dev
+.env.example.prod
 .phpactor.json
 .phpunit.result.cache
 /.fleet
