@@ -102,4 +102,42 @@ class OtpChallengeController extends Controller
 
         return back()->with('success', 'A new verification code was sent to your email.');
     }
+
+    public function resendViaSms(Request $request)
+    {
+        $user = Auth::user();
+        if (! $user || ! $request->session()->get('security.pending_otp', false)) {
+            return redirect()->route('login_page');
+        }
+
+        if (! $this->securityOtpService->userCanReceiveSms($user)) {
+            return back()->withErrors(['otp' => 'SMS is not available for your account.']);
+        }
+
+        $purpose = (string) $request->session()->get('security.pending_otp_purpose', $this->securityOtpService->newDevicePurpose());
+
+        // Enforce a minimum interval between sends
+        $recentChallenge = OtpChallenge::query()
+            ->where('user_id', $user->id)
+            ->where('purpose', $purpose)
+            ->where('created_at', '>', now()->subSeconds(30))
+            ->latest('id')
+            ->first();
+
+        if ($recentChallenge) {
+            $secondsLeft = max(1, (int) $recentChallenge->created_at->addSeconds(30)->diffInSeconds(now()));
+
+            return back()->withErrors([
+                'otp' => "Please wait {$secondsLeft} second(s) before requesting a new code.",
+            ]);
+        }
+
+        $fingerprint = (string) $request->session()->get('security.pending_otp_fingerprint', '');
+
+        $issued = $this->securityOtpService->issueChallenge($user, $purpose, ['fingerprint' => $fingerprint]);
+        $this->securityOtpService->sendOtpSms($user, $purpose, $issued['otp_code']);
+        $this->securityOtpService->stashDebugCode($request->session(), $issued['otp_code']);
+
+        return back()->with('success', 'A new verification code was sent to your mobile number.');
+    }
 }

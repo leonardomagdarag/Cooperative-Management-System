@@ -7,6 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
 import { validate, officerSchema, officerEditSchema, officerStepSchemas, passwordStrength, type FieldErrors } from '../../lib/validation';
+import OtpVerifyField from '../../components/OtpVerifyField';
 
 const steps = [
     { title: 'Personal Information', icon: 'fas fa-user' },
@@ -58,6 +59,10 @@ export default function OfficerFormModal({ officer, onClose }: { officer?: any; 
     });
     const [profilePhoto, setProfilePhoto] = useState<File | null>(null);
     const [photoPreview, setPhotoPreview] = useState(officer?.personal_data?.profile_picture || '');
+    
+    // For new officers, email and phone must be verified via OTP.
+    const [isEmailVerified, setIsEmailVerified] = useState(isEdit);
+    const [isPhoneVerified, setIsPhoneVerified] = useState(isEdit);
 
     const saveMutation = useMutation({
         mutationFn: (payload: any) => {
@@ -92,6 +97,12 @@ export default function OfficerFormModal({ officer, onClose }: { officer?: any; 
         if (schema) {
             errs = validate(schema, form);
         }
+
+        if (step === 1 && !isEdit) {
+            if (!isEmailVerified) errs.email = 'Email must be verified first.';
+            if (!isPhoneVerified) errs.phone_number = 'Phone must be verified first.';
+        }
+
         setErrors(errs);
         if (Object.keys(errs).length > 0) return;
         setStep(step + 1);
@@ -221,8 +232,53 @@ export default function OfficerFormModal({ officer, onClose }: { officer?: any; 
                             <>
                                 <h3 className="font-semibold text-gray-900 flex items-center gap-2"><i className="fas fa-address-book text-emerald-600"></i>Contact Details</h3>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div><label className="block text-xs font-medium text-gray-500 mb-1">Email *</label><input type="email" value={form.email} onChange={e => { set('email', e.target.value); clearError('email'); }} className={`w-full rounded-lg border p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 ${errors.email ? 'border-red-400' : 'border-gray-300'}`} />{errors.email && <p className="mt-1 text-xs text-red-600">{errors.email}</p>}</div>
-                                    <div><label className="block text-xs font-medium text-gray-500 mb-1">Phone Number *</label><input value={form.phone_number} onChange={e => { set('phone_number', e.target.value); clearError('phone_number'); }} className={`w-full rounded-lg border p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 ${errors.phone_number ? 'border-red-400' : 'border-gray-300'}`} />{errors.phone_number && <p className="mt-1 text-xs text-red-600">{errors.phone_number}</p>}</div>
+                                    {isEdit ? (
+                                        <>
+                                            <div><label className="block text-xs font-medium text-gray-500 mb-1">Email *</label><input type="email" value={form.email} onChange={e => { set('email', e.target.value); clearError('email'); }} className={`w-full rounded-lg border p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 ${errors.email ? 'border-red-400' : 'border-gray-300'}`} disabled />{errors.email && <p className="mt-1 text-xs text-red-600">{errors.email}</p>}</div>
+                                            <div><label className="block text-xs font-medium text-gray-500 mb-1">Phone Number *</label><input value={form.phone_number} onChange={e => { set('phone_number', e.target.value); clearError('phone_number'); }} className={`w-full rounded-lg border p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 ${errors.phone_number ? 'border-red-400' : 'border-gray-300'}`} />{errors.phone_number && <p className="mt-1 text-xs text-red-600">{errors.phone_number}</p>}</div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <OtpVerifyField
+                                                label="Email *"
+                                                value={form.email}
+                                                onChange={v => { set('email', v); clearError('email'); setIsEmailVerified(false); }}
+                                                type="email"
+                                                error={errors.email}
+                                                isVerified={isEmailVerified}
+                                                onSendOtp={async (email) => {
+                                                    const res = await api.post('/api/officers/verify-email/send', { email });
+                                                    return res.data;
+                                                }}
+                                                onVerifyOtp={async (email, otp) => {
+                                                    const res = await api.post('/api/officers/verify-email', { email, otp_code: otp });
+                                                    if (res.data.message === 'Email verified successfully.') {
+                                                        setIsEmailVerified(true);
+                                                    }
+                                                    return { success: true, message: res.data.message };
+                                                }}
+                                            />
+                                            <OtpVerifyField
+                                                label="Phone Number *"
+                                                value={form.phone_number}
+                                                onChange={v => { set('phone_number', v); clearError('phone_number'); setIsPhoneVerified(false); }}
+                                                type="tel"
+                                                error={errors.phone_number}
+                                                isVerified={isPhoneVerified}
+                                                onSendOtp={async (phone) => {
+                                                    const res = await api.post('/api/officers/verify-phone/send', { phone_no: phone });
+                                                    return res.data;
+                                                }}
+                                                onVerifyOtp={async (phone, otp) => {
+                                                    const res = await api.post('/api/officers/verify-phone', { phone_no: phone, otp_code: otp });
+                                                    if (res.data.message === 'Phone verified successfully.') {
+                                                        setIsPhoneVerified(true);
+                                                    }
+                                                    return { success: true, message: res.data.message };
+                                                }}
+                                            />
+                                        </>
+                                    )}
                                     <div className="col-span-2"><label className="block text-xs font-medium text-gray-500 mb-1">Street</label><input value={form.street} onChange={e => set('street', e.target.value)} className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-emerald-500" /></div>
                                     <div><label className="block text-xs font-medium text-gray-500 mb-1">Barangay</label><input value={form.barangay} onChange={e => set('barangay', e.target.value)} className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-emerald-500" /></div>
                                     <div><label className="block text-xs font-medium text-gray-500 mb-1">City</label><input value={form.city} onChange={e => set('city', e.target.value)} className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-emerald-500" /></div>

@@ -38,10 +38,23 @@
             <button type="submit" class="public-btn public-btn-primary w-full">Verify and continue</button>
         </form>
 
-        <form method="POST" action="{{ route('otp.challenge.resend') }}" class="mt-3 text-center">
-            @csrf
-            <button type="submit" class="text-sm font-medium text-emerald-700 hover:text-emerald-800">Resend code</button>
-        </form>
+        @if (auth()->check() && app(\App\Services\SecurityOtpService::class)->userCanReceiveSms(auth()->user()))
+            <div class="mt-3 flex items-center justify-between text-sm">
+                <form method="POST" action="{{ route('otp.challenge.resend') }}">
+                    @csrf
+                    <button type="submit" class="font-medium text-emerald-700 hover:text-emerald-800">Resend email</button>
+                </form>
+                <form method="POST" action="{{ route('otp.challenge.resend_sms') }}">
+                    @csrf
+                    <button type="submit" class="font-medium text-emerald-700 hover:text-emerald-800">Send via SMS instead</button>
+                </form>
+            </div>
+        @else
+            <form method="POST" action="{{ route('otp.challenge.resend') }}" class="mt-3 text-center">
+                @csrf
+                <button type="submit" class="text-sm font-medium text-emerald-700 hover:text-emerald-800">Resend code</button>
+            </form>
+        @endif
 
         <form method="POST" action="{{ route('logout') }}" class="mt-4 border-t border-slate-100 pt-4 text-center">
             @csrf

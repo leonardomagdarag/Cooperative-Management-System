@@ -3,12 +3,14 @@
 namespace App\Services;
 
 use App\Jobs\SendOtpEmailJob;
+use App\Jobs\SendSmsJob;
 use App\Mail\OtpCodeMail;
 use App\Models\Notification;
 use App\Models\OtpChallenge;
 use App\Models\SystemSetting;
 use App\Models\TrustedDevice;
 use App\Models\User;
+use App\Services\TextBeeService;
 use Illuminate\Contracts\Session\Session;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -241,6 +243,45 @@ class SecurityOtpService
                 Log::error("OTP email failed for user {$user->id}: {$e2->getMessage()}");
             }
         }
+    }
+
+    public function sendOtpSms(User $user, string $purpose, string $otpCode): void
+    {
+        $phone = $user->contact?->phone_no;
+        if (! $phone || ! $user->contact?->phone_verified_at) {
+            return;
+        }
+
+        if (! app(TextBeeService::class)->isEnabled()) {
+            return;
+        }
+
+        $label = match ($purpose) {
+            'new_device_login' => 'new device login',
+            'withdrawal_approval' => 'withdrawal approval',
+            'password_change' => 'password change',
+            'email_change' => 'email address change',
+            'member_password_change' => 'password reset',
+            'officer_phone_verify' => 'phone verification',
+            'phone_verification' => 'phone verification',
+            default => 'security verification',
+        };
+
+        $message = "Settlers CC: Your {$label} OTP is {$otpCode}. Valid for 10 mins. Never share this.";
+
+        try {
+            SendSmsJob::dispatch($phone, $message, 'otp.sms');
+        } catch (Throwable $e) {
+            Log::warning("OTP SMS job dispatch failed for user {$user->id}: {$e->getMessage()}");
+            app(TextBeeService::class)->send($phone, $message);
+        }
+    }
+
+    public function userCanReceiveSms(User $user): bool
+    {
+        return $user->contact?->phone_verified_at !== null
+            && $user->contact?->phone_no !== null
+            && app(TextBeeService::class)->isEnabled();
     }
 
     public function stashDebugCode(Session $session, string $otpCode): void

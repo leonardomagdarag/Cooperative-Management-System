@@ -112,6 +112,8 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     Route::put('/profile', [ProfileController::class, 'update']);
     Route::post('/profile/email/send-otp', [ProfileController::class, 'sendEmailChangeOtp']);
     Route::get('/profile/completion', [ProfileController::class, 'completion']);
+    Route::post('/profile/phone/send-otp', [\App\Http\Controllers\Api\PhoneVerificationController::class, 'sendOtp']);
+    Route::post('/profile/phone/verify', [\App\Http\Controllers\Api\PhoneVerificationController::class, 'verifyOtp']);
 
     // Settings
     Route::put('/settings/password', [SettingsController::class, 'changePassword']);
@@ -119,6 +121,9 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     Route::post('/settings/revoke-devices', [SettingsController::class, 'revokeDevices']);
     Route::post('/settings/deactivate-account', [SettingsController::class, 'deactivateAccount']);
     Route::delete('/settings/account', [SettingsController::class, 'deleteAccount']);
+    Route::get('/settings/sms', [SettingsController::class, 'getSmsSettings']);
+    Route::put('/settings/sms', [SettingsController::class, 'updateSmsSettings']);
+    Route::post('/settings/sms/test', [SettingsController::class, 'testSms']);
 
     // Notifications
     Route::get('/notifications', [NotificationController::class, 'index']);
@@ -245,6 +250,12 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     // Officer permission overrides (admin)
     Route::get('/officers/{user}/permissions', [OfficerPermissionController::class, 'index']);
     Route::put('/officers/{user}/permissions', [OfficerPermissionController::class, 'update']);
+    
+    // Officer creation verification
+    Route::post('/officers/verify-email/send', [\App\Http\Controllers\Api\OfficerVerificationController::class, 'sendEmailOtp']);
+    Route::post('/officers/verify-email', [\App\Http\Controllers\Api\OfficerVerificationController::class, 'verifyEmailOtp']);
+    Route::post('/officers/verify-phone/send', [\App\Http\Controllers\Api\OfficerVerificationController::class, 'sendPhoneOtp']);
+    Route::post('/officers/verify-phone', [\App\Http\Controllers\Api\OfficerVerificationController::class, 'verifyPhoneOtp']);
 
     // Services
     Route::get('/services', [ServiceController::class, 'index']);

@@ -36,13 +36,25 @@ class AuthController extends Controller
         }
 
         $request->validate([
-            'email' => 'required|email',
+            'email' => 'required|string',
             'password' => 'required',
         ]);
 
-        $email = User::normalizeEmail($request->input('email'));
+        $loginId = $request->input('email');
+        $emailNorm = User::normalizeEmail($loginId);
+        
         $user = User::query()
-            ->whereRaw('LOWER(TRIM(email)) = ?', [$email])
+            ->where(function($q) use ($emailNorm, $loginId) {
+                $q->whereRaw('LOWER(TRIM(users.email)) = ?', [$emailNorm]);
+                
+                $cleanPhone = preg_replace('/[^0-9\+]/', '', $loginId);
+                if (strlen($cleanPhone) >= 10) {
+                    $q->orWhereHas('personalData.contact', function ($contactQuery) use ($cleanPhone) {
+                        $contactQuery->where('phone_no', $cleanPhone)
+                                     ->whereNotNull('phone_verified_at');
+                    });
+                }
+            })
             ->get()
             ->first(fn (User $candidate) => Hash::check($request->password, $candidate->password));
 

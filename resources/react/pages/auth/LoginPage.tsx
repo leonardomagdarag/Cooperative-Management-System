@@ -10,7 +10,7 @@ import { useToast } from '../../contexts/ToastContext';
 import TurnstileWidget from '../../components/TurnstileWidget';
 
 const loginSchema = z.object({
-    email: z.string().email('Please enter a valid email'),
+    email: z.string().min(1, 'Please enter your email or phone number'),
     password: z.string().min(1, 'Password is required'),
     remember: z.boolean().optional(),
 });
@@ -73,14 +73,14 @@ export default function LoginPage() {
 
                     {loginEnabled ? <form className="space-y-3" onSubmit={handleSubmit(onSubmit)}>
                         <div>
-                            <label htmlFor="email" className="block text-xs font-medium text-slate-500 mb-1.5">Email</label>
+                            <label htmlFor="email" className="block text-xs font-medium text-slate-500 mb-1.5">Email or Mobile Number</label>
                             <input
-                                type="email"
+                                type="text"
                                 id="email"
                                 autoComplete="username"
                                 {...register('email')}
                                 className="public-input text-sm"
-                                placeholder="Enter your email"
+                                placeholder="Enter your email or phone number"
                             />
                             {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email.message}</p>}
                         </div>

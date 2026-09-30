@@ -19,6 +19,8 @@ import BackupPage from './BackupPage';
 import PayMongoPage from './PayMongoPage';
 import HelpSupportTab from './HelpSupportTab';
 import SettingsTabHeader from './SettingsTabHeader';
+import SmsSettingsPage from './SmsSettingsPage';
+import OtpVerifyField from '../../components/OtpVerifyField';
 
 interface SettingsTab {
     key: string;
@@ -45,6 +47,7 @@ export default function SettingsPage() {
         { key: 'loan-products', label: 'Loan Products', icon: 'fa-solid fa-hand-holding-dollar', visible: !isMember && canViewLoans },
         { key: 'role-permissions', label: 'Roles & Permissions', icon: 'fas fa-user-shield', visible: !isMember && canManagePermissions },
         { key: 'service-availability', label: 'Service Availability', icon: 'fas fa-toggle-on', visible: !isMember && canViewSettings },
+        { key: 'sms', label: 'SMS Service', icon: 'fas fa-comment-sms', visible: !isMember && canViewSettings },
         { key: 'paymongo', label: 'Payment Gateway', icon: 'fas fa-credit-card', visible: !isMember && canViewSettings },
         { key: 'backups', label: 'Backup & Restore', icon: 'fas fa-hard-drive', visible: !isMember && canManageBackups },
     ];
@@ -73,6 +76,7 @@ export default function SettingsPage() {
               activeTab === 'loan-products' ? <LoanProductsPage /> :
               activeTab === 'role-permissions' ? <RolePermissionsPage /> :
               activeTab === 'service-availability' ? <ServiceAvailabilityPage /> :
+              activeTab === 'sms' ? <SmsSettingsPage /> :
               activeTab === 'paymongo' ? <PayMongoPage /> :
               activeTab === 'backups' ? <BackupPage /> :
               activeTab === 'help-support' ? <HelpSupportTab /> :
@@ -468,7 +472,22 @@ function ProfileEditForm({ profileData, isSaving, onSave, onCancel }: { profileD
                 <Field label="Education" k="education" />
                 <Field label="Civil Status" k="civil_status" />
                 <Field label="Religion" k="religion" />
-                <Field label="Phone Number" k="phone_no" error={errors.phone_number} />
+                <OtpVerifyField
+                    label="Phone Number"
+                    value={values.phone_no}
+                    onChange={(v) => set('phone_no', v)}
+                    type="tel"
+                    error={errors.phone_number}
+                    isVerified={!!cont?.phone_verified_at && values.phone_no === cont?.phone_no}
+                    onSendOtp={async (phone) => {
+                        const res = await api.post('/api/profile/phone/send-otp', { phone_no: phone });
+                        return res.data;
+                    }}
+                    onVerifyOtp={async (phone, otp) => {
+                        const res = await api.post('/api/profile/phone/verify', { phone_no: phone, otp_code: otp });
+                        return { success: true, message: res.data.message };
+                    }}
+                />
                 <div className="col-span-2">
                     <Field label="Email" k="email" type="email" error={errors.email} />
                     <EmailChangeVerification

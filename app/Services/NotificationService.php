@@ -419,6 +419,25 @@ class NotificationService
     // Security alert notifications
     // ─────────────────────────────────────────────────────────────────────────
 
+    private function safeSendSecuritySms(User $user, string $message): void
+    {
+        $phone = $user->contact?->phone_no;
+        if (! $phone || ! $user->contact?->phone_verified_at) {
+            return;
+        }
+
+        if (! app(TextBeeService::class)->isEnabled()) {
+            return;
+        }
+
+        try {
+            \App\Jobs\SendSmsJob::dispatch($phone, $message, 'security.alert');
+        } catch (Throwable $e) {
+            Log::warning("Security alert SMS job dispatch failed for user {$user->id}: {$e->getMessage()}");
+            app(TextBeeService::class)->send($phone, $message);
+        }
+    }
+
     public function notifyNewLogin(User $user, string $ipAddress, bool $sendEmail = true): void
     {
         $this->create(
@@ -437,6 +456,8 @@ class NotificationService
                 Log::warning("Failed to dispatch security alert job: {$e->getMessage()}");
             }
         }
+
+        $this->safeSendSecuritySms($user, "Settlers CC Alert: A new login was detected on your account from IP: {$ipAddress}.");
     }
 
     public function notifyFailedLogins(User $user, int $attempts, string $ipAddress, bool $sendEmail = true): void
@@ -460,6 +481,8 @@ class NotificationService
                 Log::warning("Failed to dispatch security alert job: {$e->getMessage()}");
             }
         }
+
+        $this->safeSendSecuritySms($user, "Settlers CC Alert: We detected {$attempts} failed login attempts from IP: {$ipAddress}. If this wasn't you, secure your account.");
     }
 
     public function notifyPasswordChanged(User $user, bool $sendEmail = true): void
@@ -480,6 +503,8 @@ class NotificationService
                 Log::warning("Failed to dispatch security alert job: {$e->getMessage()}");
             }
         }
+
+        $this->safeSendSecuritySms($user, "Settlers CC Alert: Your account password was changed. Contact support immediately if this wasn't you.");
     }
 
     public function notifyEmailChanged(User $user, string $newEmail, bool $sendEmail = true): void
@@ -500,6 +525,8 @@ class NotificationService
                 Log::warning("Failed to dispatch security alert job: {$e->getMessage()}");
             }
         }
+
+        $this->safeSendSecuritySms($user, "Settlers CC Alert: Your account email was changed to {$newEmail}. Contact support if this wasn't you.");
     }
 
     public function notifyEmailVerification(User $user): void

@@ -95,6 +95,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/security/verify-otp/resend', [OtpChallengeController::class, 'resend'])
         ->middleware('throttle:2,1')
         ->name('otp.challenge.resend');
+    Route::post('/security/verify-otp/resend-sms', [OtpChallengeController::class, 'resendViaSms'])
+        ->middleware('throttle:2,1')
+        ->name('otp.challenge.resend_sms');
 });
 
 Route::middleware(['auth', 'otp.verified', 'verified'])->get('/notifications', function () {

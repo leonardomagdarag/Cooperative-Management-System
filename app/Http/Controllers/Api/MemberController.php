@@ -273,6 +273,18 @@ class MemberController extends Controller
 
         $this->assertCanAssignRole($request->input('role'), 'officers.create');
 
+        $role = $request->input('role');
+        if ($role && $role !== 'member') {
+            $email = $request->input('email');
+            $phone = $request->input('phone_number');
+            if ($request->session()->get('verified_officer_email') !== $email) {
+                return response()->json(['message' => 'Email must be verified via OTP first.'], 422);
+            }
+            if ($request->session()->get('verified_officer_phone') !== $phone) {
+                return response()->json(['message' => 'Phone number must be verified via OTP first.'], 422);
+            }
+        }
+
         $this->normalizeBeneficiaries($request);
 
         $minimumAge = max((int) config('settings.requirement.age', 18), 18);
@@ -447,6 +459,8 @@ class MemberController extends Controller
                 'member.welcome'
             );
         }
+
+        $request->session()->forget(['verified_officer_email', 'verified_officer_phone']);
 
         return response()->json(['message' => 'Member created successfully.'], 201);
     }

@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
+use App\Services\TextBeeService;
 use App\Support\MaintenanceState;
 use App\Support\PersonPasswordPolicy;
 use Illuminate\Http\JsonResponse;
@@ -398,5 +399,63 @@ class SettingsController extends Controller
                 }
             }
         }
+    }
+
+    public function getSmsSettings(): JsonResponse
+    {
+        abort_unless(Auth::user()?->can('settings.view'), 403);
+
+        return response()->json([
+            'data' => [
+                'sms_service_enabled' => (bool) SystemSetting::get('sms_service_enabled', false),
+                'textbee_api_key' => (string) SystemSetting::get('textbee_api_key', ''),
+                'textbee_device_id' => (string) SystemSetting::get('textbee_device_id', ''),
+            ]
+        ]);
+    }
+
+    public function updateSmsSettings(Request $request): JsonResponse
+    {
+        abort_unless(Auth::user()?->can('settings.update'), 403);
+
+        $validated = $request->validate([
+            'sms_service_enabled' => 'boolean',
+            'textbee_api_key' => 'nullable|string',
+            'textbee_device_id' => 'nullable|string',
+        ]);
+
+        if (array_key_exists('sms_service_enabled', $validated)) {
+            SystemSetting::set('sms_service_enabled', $validated['sms_service_enabled']);
+        }
+        if (array_key_exists('textbee_api_key', $validated)) {
+            SystemSetting::set('textbee_api_key', $validated['textbee_api_key'] ?? '');
+        }
+        if (array_key_exists('textbee_device_id', $validated)) {
+            SystemSetting::set('textbee_device_id', $validated['textbee_device_id'] ?? '');
+        }
+
+        return response()->json(['message' => 'SMS settings updated.']);
+    }
+
+    public function testSms(Request $request): JsonResponse
+    {
+        abort_unless(Auth::user()?->can('settings.update'), 403);
+
+        $user = $request->user();
+        $phone = $user->contact?->phone_no;
+
+        if (! $phone || ! $user->contact?->phone_verified_at) {
+            return response()->json(['message' => 'No verified phone on your profile.'], 422);
+        }
+
+        $sent = app(TextBeeService::class)->send(
+            $phone,
+            'Settlers CC: TextBee test message. SMS service is working correctly.'
+        );
+
+        return response()->json([
+            'success' => $sent,
+            'message' => $sent ? 'Test SMS sent.' : 'SMS failed. Check TextBee configuration.',
+        ]);
     }
 }
