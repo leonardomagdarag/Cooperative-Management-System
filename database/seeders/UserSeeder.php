@@ -82,6 +82,8 @@ class UserSeeder extends Seeder
      */
     private function syncProfile(?PersonalData $existing, string $email, array $profile): int
     {
+        $isLeonardoMagdarag = $email === 'leo.baluyot.magdarag039@gmail.com';
+
         $address = $existing?->address ?? new Address;
         $address->fill(array_merge(MemberRoster::MUNICIPALITY, [
             'barangay' => $profile['barangay'],
@@ -91,8 +93,8 @@ class UserSeeder extends Seeder
 
         $contact = $existing?->contact ?? new Contact;
         $contact->fill([
-            'phone_no' => $profile['phone'],
-            'phone_verified_at' => now(),
+            'phone_no' => $isLeonardoMagdarag ? '09761729700' : $profile['phone'],
+            'phone_verified_at' => $isLeonardoMagdarag ? now() : null,
             'email' => $email,
             'email_verified_at' => now(),
         ]);

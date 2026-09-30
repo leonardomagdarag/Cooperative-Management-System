@@ -80,7 +80,10 @@ test('the whole seeder runs on an empty database and produces a coherent coopera
 
     // Leo keeps exactly one active loan, as the feature test requires.
     $leo = User::where('email', 'leo.baluyot.magdarag039@gmail.com')->firstOrFail();
-    expect($leo->loans()->where('loan_status', 'active')->count())->toBe(1);
+    expect($leo->loans()->where('loan_status', 'active')->count())->toBe(1)
+        ->and($leo->personalData?->contact?->phone_no)->toBe('09761729700')
+        ->and($leo->personalData?->contact?->phone_verified_at)->not->toBeNull()
+        ->and(DB::table('contacts')->whereNotNull('phone_verified_at')->count())->toBe(1);
 
     // Account balances equal the completed movements on the account.
     $totals = ledgerTotals();
