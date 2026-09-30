@@ -370,7 +370,30 @@ Other system settings (seeded, `SystemSettingSeeder`): site name/tagline, mainte
 
 ---
 
-## 9. Permission Catalog (Summary)
+## 9. Maintenance & Downtime Page
+
+`resources/views/maintenance.blade.php` (standalone Blade, no Vite/DB/session) at `GET /maintenance`, plus `resources/views/errors/503.blade.php`, which renders the same view whenever Laravel maintenance mode is active.
+
+**When it appears**
+
+| Trigger | Reaches | Copy |
+|---|---|---|
+| Login `global` off | `GET /login`, `POST /api/login` | "sign-in is temporarily unavailable", everyone affected |
+| Login `member` off | `POST /api/login` (members only; officers still sign in) | Names the audience, states officers are unaffected |
+| Login `officer` off | `POST /api/login` (officers only; members still sign in) | Names the audience, states members are unaffected |
+| Restore in progress | **Every** route (Laravel maintenance mode) | "We are restoring your data" |
+| Plain `artisan down` | Every route | Generic "scheduled maintenance" |
+
+**Behaviour**
+
+- Auto-refreshes (`<meta http-equiv="refresh">`, 15s default, 5–30s) and offers a **Try again** link. No separate admin bypass was added — a restore keeps the existing random `--secret` bypass.
+- `POST /api/login` answers **403**, the `GET /login` guard answers **503**, both tagged `maintenance: true` + `redirect: /maintenance`; `resources/react/api/client.ts` follows the redirect. (These statuses are deliberate — 423 is reserved for OTP/service gating.)
+- Sign-in switches are enforced in three places that must stay in agreement: `EnsurePublicLoginEnabled` (`GET /login`), `Api\AuthController::login` (the API, which historically ignored the *global* switch entirely), and the audience flags that select the copy.
+- State lives in `storage/app/maintenance-state.json`, not cache or the DB, because a restore replaces both. `MaintenanceState::syncLoginAvailability()` re-derives the reason from `SystemSetting` on read, so a switch flipped outside the UI (or re-enabled by an admin) still reads true. Entries older than the staleness window are treated as debris and fall back to generic copy.
+
+---
+
+## 10. Permission Catalog (Summary)
 
 Full list (`PermissionCatalog::groups()` / `SpatieRolePermissionSeeder`): `dashboard.view`; `members.view|create|update|delete|approve|view-full-details`; `services.view|create|update`; `loans.view|create|encode|update|approve|reject|disburse`; `transactions.view|view-all|create|update|approve|void|export`; `deposits.view|create|approve|reject`; `withdrawals.view|create|approve|reject`; `reports.view|export|financial|audit`; `announcements.view|create|update|delete`; `settings.view|update`; `backups.view|manage|restore`; `logs.view|export`; `officers.view|create|update|delete|manage-permissions`; `branches.view|create|update|delete`; `notifications.view|manage`; `profile.view|update`. `logs.export` is a declared permission, not evidence that a log-export route/UI exists.
 
@@ -378,9 +401,9 @@ Defaults per role are in `PermissionCatalog::rolePresets()` (§5); `admin` gets 
 
 ---
 
-## 10. Cross-Cutting / Technical Notes
+## 11. Cross-Cutting / Technical Notes
 
-- SPA entry `resources/react/main.tsx` → `routes/web.php` catch-all serves `react` view; Vite proxies `/api`, `/sanctum`, auth routes to Laravel.
+- SPA entry `resources/react/main.tsx` → `routes/web.php` catch-all serves `react` view; Vite proxies `/api`, `/sanctum`, auth routes to Laravel. The catch-all **must stay last** in `routes/web.php`; `/maintenance` is declared before it and is itself in the Vite proxy list.
 - Session + Sanctum auth; DB drivers for session/cache/queue (`php artisan queue:listen` required for emails/notifications).
 - Queued jobs: `SendEmailJob` (contact, OTP, notifications, reminders); artisan commands: cleanup/archive/notifications/loan reminders.
 - File uploads: `php artisan storage:link` (loan docs, announcement images, profile).

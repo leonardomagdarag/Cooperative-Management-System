@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Cooperative management system for **Settlers Credit Cooperative**. Laravel 12 monolith (PHP 8.4) serving a **React 19 SPA**, session-authenticated with Sanctum, permissions via Spatie. No Blade page-per-view — the entire UI is one React app.
+Cooperative management system for **Settlers Credit Cooperative**. Laravel 12 monolith (PHP 8.4) serving a **React 19 SPA**, session-authenticated with Sanctum, permissions via Spatie. No Blade page-per-view — the entire UI is one React app, the sole exception being the standalone maintenance page (see Architecture).
 
 ## Architecture
 
@@ -12,6 +12,9 @@ Cooperative management system for **Settlers Credit Cooperative**. Laravel 12 mo
 - **HTTP 423 is overloaded**: `EnsureOtpVerified` (redirect to `/security/verify-otp`) and `CheckServiceAvailability` (service under maintenance) both return it. `resources/react/api/client.ts` intercepts 423 and hard-redirects — be careful adding new 423 semantics.
 - `resources/react/api/client.ts` is the axios instance: sends `XSRF-TOKEN` cookie as `X-XSRF-TOKEN`, reloads on 419, redirects on 423. Use it instead of raw `axios`.
 - `resources/react/pages/**` is organized by feature; route → component mapping and per-section permission gates live in `DashboardRouter` inside `App.tsx`, not in a router config file.
+- **The maintenance page is the one deliberate exception to "everything is React".** `resources/views/maintenance.blade.php` is standalone inline-CSS Blade with no Vite tag, no session, and no database reads — it has to render when the database is the thing that is broken, so it must never grow a dependency on one. `Route::get('/maintenance')` in `routes/web.php` is declared **before** the catch-all and is also in the Vite proxy list.
+- **Maintenance state is a file, not cache.** `app/Support/MaintenanceState.php` stores `storage/app/maintenance-state.json` because a restore replaces the database that the cache and `SystemSetting` tables live in. `BackupService::restore()` brackets Laravel `down`/`up` with `enter`/`leave`; the nested `finally` is deliberate, so a failing `up` cannot strand a notice that outlives the outage. Entries older than the staleness window are treated as debris. `errors/503.blade.php` renders the same view for Laravel maintenance mode, which is what serves *every* route during a restore — `/maintenance` is never reached then. Keep the existing `--secret` bypass in `Artisan::call('down', ...)`.
+- **Sign-in switches are enforced in three places**, all of which matter: `EnsurePublicLoginEnabled` guards `GET /login`, `Api\AuthController::login` guards the API (it historically missed the *global* switch entirely), and the per-audience switches decide which copy the page shows. `MaintenanceState::syncLoginAvailability()` re-derives the reason from `SystemSetting` rather than trusting the recorded file, and must be called wherever a stale notice would be misleading.
 
 ## Roles & permissions
 
