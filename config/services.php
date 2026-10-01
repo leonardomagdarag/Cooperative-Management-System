@@ -41,4 +41,8 @@ return [
         'ca_bundle' => env('TURNSTILE_CA_BUNDLE'),
     ],
 
+    'textbee' => [
+        'api_key' => env('TEXTBEE_API_KEY', ''),
+    ],
+
 ];

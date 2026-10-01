@@ -124,6 +124,7 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     Route::get('/settings/sms', [SettingsController::class, 'getSmsSettings']);
     Route::put('/settings/sms', [SettingsController::class, 'updateSmsSettings']);
     Route::post('/settings/sms/test', [SettingsController::class, 'testSms']);
+    Route::post('/settings/email/test', [SettingsController::class, 'testEmail'])->middleware('throttle:3,1');
 
     // Notifications
     Route::get('/notifications', [NotificationController::class, 'index']);

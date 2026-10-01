@@ -6,9 +6,13 @@ import SettingsTabHeader from './SettingsTabHeader';
 
 interface SmsSettings {
     sms_service_enabled: boolean;
-    textbee_api_key: string;
+    textbee_api_key_configured: boolean;
     textbee_device_id: string;
 }
+
+type SmsSettingsUpdate = Partial<Pick<SmsSettings, 'sms_service_enabled' | 'textbee_device_id'>> & {
+    textbee_api_key?: string;
+};
 
 export default function SmsSettingsPage() {
     const { addToast } = useToast();
@@ -23,7 +27,7 @@ export default function SmsSettingsPage() {
     });
 
     const updateMutation = useMutation({
-        mutationFn: async (data: Partial<SmsSettings>) => {
+        mutationFn: async (data: SmsSettingsUpdate) => {
             return api.put('/api/settings/sms', data);
         },
         onSuccess: () => {
@@ -59,11 +63,11 @@ export default function SmsSettingsPage() {
 
     const settings = settingsData || {
         sms_service_enabled: false,
-        textbee_api_key: '',
+        textbee_api_key_configured: false,
         textbee_device_id: ''
     };
 
-    const isApiKeyConfigured = settings.textbee_api_key.trim() !== '';
+    const isApiKeyConfigured = settings.textbee_api_key_configured;
     const isActive = settings.sms_service_enabled && isApiKeyConfigured;
 
     return (
@@ -158,9 +162,18 @@ export default function SmsSettingsPage() {
     );
 }
 
-function ApiKeyForm({ settings, onSave, isSaving }: { settings: SmsSettings, onSave: (data: Partial<SmsSettings>) => void, isSaving: boolean }) {
-    const [apiKey, setApiKey] = useState(settings.textbee_api_key);
+function ApiKeyForm({ settings, onSave, isSaving }: { settings: SmsSettings, onSave: (data: SmsSettingsUpdate) => void, isSaving: boolean }) {
+    const [apiKey, setApiKey] = useState('');
     const [deviceId, setDeviceId] = useState(settings.textbee_device_id);
+    const hasChanges = apiKey.trim() !== '' || deviceId !== settings.textbee_device_id;
+
+    const save = () => {
+        const data: SmsSettingsUpdate = { textbee_device_id: deviceId };
+        if (apiKey.trim()) {
+            data.textbee_api_key = apiKey.trim();
+        }
+        onSave(data);
+    };
 
     return (
         <div className="space-y-4">
@@ -171,12 +184,12 @@ function ApiKeyForm({ settings, onSave, isSaving }: { settings: SmsSettings, onS
                         type="password"
                         value={apiKey}
                         onChange={(e) => setApiKey(e.target.value)}
-                        placeholder="Enter your API key"
+                        placeholder={settings.textbee_api_key_configured ? 'Configured — enter a new key to replace' : 'Enter your API key'}
                         className="w-full max-w-md rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                     />
                     <button
-                        onClick={() => onSave({ textbee_api_key: apiKey, textbee_device_id: deviceId })}
-                        disabled={isSaving || (apiKey === settings.textbee_api_key && deviceId === settings.textbee_device_id)}
+                        onClick={save}
+                        disabled={isSaving || !hasChanges}
                         className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
                     >
                         Save

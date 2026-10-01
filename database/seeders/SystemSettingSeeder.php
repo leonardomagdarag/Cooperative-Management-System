@@ -129,6 +129,27 @@ class SystemSettingSeeder extends Seeder
             SystemSetting::updateOrCreate(['key' => $setting['key']], $setting);
         }
 
-        $this->command?->info('Seeded '.count($settings).' system settings.');
+        SystemSetting::firstOrCreate(['key' => 'sms_service_enabled'], [
+            'value' => '0',
+            'type' => 'boolean',
+            'group' => 'integrations',
+            'label' => 'SMS Service Enabled',
+            'description' => 'Globally enable or disable TextBee SMS delivery',
+            'is_editable' => true,
+        ]);
+
+        $textbeeApiKey = SystemSetting::firstOrNew(['key' => 'textbee_api_key']);
+        if (blank($textbeeApiKey->value)) {
+            $textbeeApiKey->fill([
+                'value' => (string) config('services.textbee.api_key', ''),
+                'type' => 'string',
+                'group' => 'integrations',
+                'label' => 'TextBee API Key',
+                'description' => 'API key used by the TextBee SMS integration',
+                'is_editable' => true,
+            ])->save();
+        }
+
+        $this->command?->info('Seeded '.(count($settings) + 2).' system settings.');
     }
 }

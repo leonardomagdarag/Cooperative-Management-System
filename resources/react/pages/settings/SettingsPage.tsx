@@ -20,6 +20,7 @@ import PayMongoPage from './PayMongoPage';
 import HelpSupportTab from './HelpSupportTab';
 import SettingsTabHeader from './SettingsTabHeader';
 import SmsSettingsPage from './SmsSettingsPage';
+import EmailSettingsPage from './EmailSettingsPage';
 import OtpVerifyField from '../../components/OtpVerifyField';
 
 interface SettingsTab {
@@ -48,6 +49,7 @@ export default function SettingsPage() {
         { key: 'role-permissions', label: 'Roles & Permissions', icon: 'fas fa-user-shield', visible: !isMember && canManagePermissions },
         { key: 'service-availability', label: 'Service Availability', icon: 'fas fa-toggle-on', visible: !isMember && canViewSettings },
         { key: 'sms', label: 'SMS Service', icon: 'fas fa-comment-sms', visible: !isMember && canViewSettings },
+        { key: 'email', label: 'Email Service', icon: 'fas fa-envelope', visible: !isMember && canManageSettings },
         { key: 'paymongo', label: 'Payment Gateway', icon: 'fas fa-credit-card', visible: !isMember && canViewSettings },
         { key: 'backups', label: 'Backup & Restore', icon: 'fas fa-hard-drive', visible: !isMember && canManageBackups },
     ];
@@ -77,6 +79,7 @@ export default function SettingsPage() {
               activeTab === 'role-permissions' ? <RolePermissionsPage /> :
               activeTab === 'service-availability' ? <ServiceAvailabilityPage /> :
               activeTab === 'sms' ? <SmsSettingsPage /> :
+              activeTab === 'email' ? <EmailSettingsPage /> :
               activeTab === 'paymongo' ? <PayMongoPage /> :
               activeTab === 'backups' ? <BackupPage /> :
               activeTab === 'help-support' ? <HelpSupportTab /> :

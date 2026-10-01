@@ -10,7 +10,9 @@ class TextBeeService
 {
     private function apiKey(): string
     {
-        return (string) SystemSetting::get('textbee_api_key', '');
+        $setting = (string) SystemSetting::get('textbee_api_key', '');
+
+        return $setting !== '' ? $setting : (string) config('services.textbee.api_key', '');
     }
 
     private function deviceId(): ?string
@@ -24,8 +26,12 @@ class TextBeeService
      */
     public function isEnabled(): bool
     {
-        return $this->apiKey() !== ''
-            && (bool) SystemSetting::get('sms_service_enabled', false);
+        return $this->isConfigured() && (bool) SystemSetting::get('sms_service_enabled', false);
+    }
+
+    public function isConfigured(): bool
+    {
+        return $this->apiKey() !== '';
     }
 
     /**

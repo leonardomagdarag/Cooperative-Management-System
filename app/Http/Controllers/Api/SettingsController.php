@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Mail\EmailConfigurationTestMail;
 use App\Models\SystemSetting;
 use App\Models\TrustedDevice;
 use App\Models\User;
@@ -15,7 +16,10 @@ use App\Support\PersonPasswordPolicy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Throwable;
 
 class SettingsController extends Controller
 {
@@ -408,9 +412,9 @@ class SettingsController extends Controller
         return response()->json([
             'data' => [
                 'sms_service_enabled' => (bool) SystemSetting::get('sms_service_enabled', false),
-                'textbee_api_key' => (string) SystemSetting::get('textbee_api_key', ''),
+                'textbee_api_key_configured' => app(TextBeeService::class)->isConfigured(),
                 'textbee_device_id' => (string) SystemSetting::get('textbee_device_id', ''),
-            ]
+            ],
         ]);
     }
 
@@ -420,7 +424,7 @@ class SettingsController extends Controller
 
         $validated = $request->validate([
             'sms_service_enabled' => 'boolean',
-            'textbee_api_key' => 'nullable|string',
+            'textbee_api_key' => 'nullable|string|max:255',
             'textbee_device_id' => 'nullable|string',
         ]);
 
@@ -456,5 +460,33 @@ class SettingsController extends Controller
             'success' => $sent,
             'message' => $sent ? 'Test SMS sent.' : 'SMS failed. Check TextBee configuration.',
         ]);
+    }
+
+    public function testEmail(Request $request): JsonResponse
+    {
+        abort_unless(Auth::user()?->can('settings.update'), 403);
+
+        $validated = $request->validate([
+            'email' => ['required', 'email', 'max:255'],
+        ]);
+
+        try {
+            Mail::to($validated['email'])->send(new EmailConfigurationTestMail);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Test email sent.',
+            ]);
+        } catch (Throwable $e) {
+            Log::error('Email configuration test failed.', [
+                'user_id' => Auth::id(),
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Test email failed. Check the mail configuration and server logs.',
+            ], 502);
+        }
     }
 }
