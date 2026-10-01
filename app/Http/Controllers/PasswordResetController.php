@@ -71,6 +71,17 @@ class PasswordResetController extends Controller
                 ]
             );
 
+            // The SPA submits this endpoint over XHR, so a redirect is followed as a
+            // cross-origin request that fails and surfaces as "could not send the code"
+            // even though the code went out. Answer JSON in that case. The wording stays
+            // deliberately vague so the response cannot be used to probe for accounts.
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'If an account exists with that email address, a reset code has been sent.',
+                ]);
+            }
+
             return back()->with('success', 'If an account exists with that email address, a reset code has been sent.');
         }
 
@@ -102,6 +113,13 @@ class PasswordResetController extends Controller
                 ]
             );
 
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'A 6-digit reset code has been sent to your email address.',
+                ]);
+            }
+
             // Redirect to reset form with email
             return redirect()->route('password.reset.form', ['email' => $email])
                 ->with('success', 'A 6-digit reset code has been sent to your email address.');
@@ -120,6 +138,13 @@ class PasswordResetController extends Controller
                     'email' => $email,
                 ]
             );
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to send reset email. Please try again in a few minutes.',
+                ], 500);
+            }
 
             return back()->with('error', 'Failed to send reset email. Please try again in a few minutes.');
         }

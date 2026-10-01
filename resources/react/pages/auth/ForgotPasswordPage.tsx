@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { forgotPassword } from '../../api/auth';
-import TurnstileWidget from '../../components/TurnstileWidget';
+import TurnstileWidget, { TurnstileWidgetRef } from '../../components/TurnstileWidget';
 
 const schema = z.object({
     email: z.string().email('Please enter a valid email'),
@@ -13,7 +13,7 @@ const schema = z.object({
 type Form = z.infer<typeof schema>;
 
 export default function ForgotPasswordPage() {
-    const turnstileRef = useRef<any>(null);
+    const turnstileRef = useRef<TurnstileWidgetRef>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [sent, setSent] = useState(false);
     const [submittedEmail, setSubmittedEmail] = useState('');
@@ -24,14 +24,30 @@ export default function ForgotPasswordPage() {
     });
 
     const onSubmit = async (data: Form) => {
+        const token = turnstileRef.current?.getToken() ?? '';
+
+        // The widget mints its token asynchronously, so an impatient submit would
+        // otherwise send an empty value and bounce off the server's `required` rule.
+        if (!token) {
+            setError('Please complete the captcha verification before sending the code.');
+            return;
+        }
+
         setIsSubmitting(true);
         setError('');
         try {
-            await forgotPassword(data.email, turnstileRef.current?.getToken?.());
+            await forgotPassword(data.email, token);
             setSubmittedEmail(data.email);
             setSent(true);
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to send reset code. Please try again.');
+            // Turnstile tokens are single-use, so a spent or rejected one must be
+            // cleared or every subsequent attempt fails identically.
+            turnstileRef.current?.reset();
+            setError(
+                err.response?.data?.errors?.['cf-turnstile-response']
+                    || err.response?.data?.message
+                    || 'Failed to send reset code. Please try again.'
+            );
         } finally {
             setIsSubmitting(false);
         }
