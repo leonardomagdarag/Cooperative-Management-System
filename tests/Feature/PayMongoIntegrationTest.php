@@ -83,6 +83,37 @@ test('normal authenticated member cannot access PayMongo settings or credentials
         ->assertStatus(403);
 });
 
+test('non-admin settings users cannot access PayMongo configuration or tests', function () {
+    $officer = User::factory()->create([
+        'role' => 'secretary',
+        'email' => 'secretary-'.Str::random(8).'@example.com',
+        'password' => 'password',
+        'account_status' => 'active',
+    ]);
+    $officer->syncRoles(['secretary']);
+    $officer->givePermissionTo(['settings.view', 'settings.update']);
+
+    $this->actingAs($officer)
+        ->getJson('/api/settings/paymongo')
+        ->assertForbidden();
+
+    $this->actingAs($officer)
+        ->putJson('/api/settings/paymongo', ['enabled' => false, 'mode' => 'sandbox', 'enabled_methods' => []])
+        ->assertForbidden();
+
+    $this->actingAs($officer)
+        ->putJson('/api/settings/paymongo/credentials', ['test_secret_key' => 'sk_test_hacked'])
+        ->assertForbidden();
+
+    $this->actingAs($officer)
+        ->deleteJson('/api/settings/paymongo/credentials')
+        ->assertForbidden();
+
+    $this->actingAs($officer)
+        ->postJson('/api/settings/paymongo/test')
+        ->assertForbidden();
+});
+
 test('admin can save PayMongo credentials and secret keys are encrypted at rest in the database', function () {
     $admin = createTestAdmin();
 

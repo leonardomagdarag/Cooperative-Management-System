@@ -754,39 +754,42 @@ test('member create rejects an email already used on a contact record', function
         'email' => 'taken@example.com',
     ]);
 
-    $this->postJson('/api/members', [
-        'first_name' => 'Taken',
-        'last_name' => 'Email',
-        'birth_date' => now()->subYears(30)->toDateString(),
-        'gender' => 'male',
-        'civil_status' => 'single',
-        'email' => 'taken@example.com',
-        'phone_number' => '09171234567',
-        'password' => 'S3curepass!',
-        'password_confirmation' => 'S3curepass!',
-    ])->assertUnprocessable()
+    $this->withSession(['verified_officer_phone' => '09171234567'])
+        ->postJson('/api/members', [
+            'first_name' => 'Taken',
+            'last_name' => 'Email',
+            'birth_date' => now()->subYears(30)->toDateString(),
+            'gender' => 'male',
+            'civil_status' => 'single',
+            'email' => 'taken@example.com',
+            'phone_number' => '09171234567',
+            'password' => 'S3curepass!',
+            'password_confirmation' => 'S3curepass!',
+        ])->assertUnprocessable()
         ->assertJsonValidationErrors('email');
 });
 
 test('admin-created member starts unverified and receives a verification notification', function () {
     actingAs($this->admin);
 
-    $this->postJson('/api/members', [
-        'first_name' => 'Carl',
-        'last_name' => 'Miguel',
-        'birth_date' => now()->subYears(25)->toDateString(),
-        'gender' => 'male',
-        'civil_status' => 'single',
-        'email' => 'carl.miguel@example.com',
-        'phone_number' => '09171234567',
-        'password' => 'S3curepass!',
-        'password_confirmation' => 'S3curepass!',
-    ])->assertCreated();
+    $this->withSession(['verified_officer_phone' => '09171234567'])
+        ->postJson('/api/members', [
+            'first_name' => 'Carl',
+            'last_name' => 'Miguel',
+            'birth_date' => now()->subYears(25)->toDateString(),
+            'gender' => 'male',
+            'civil_status' => 'single',
+            'email' => 'carl.miguel@example.com',
+            'phone_number' => '09171234567',
+            'password' => 'S3curepass!',
+            'password_confirmation' => 'S3curepass!',
+        ])->assertCreated();
 
     $member = User::where('email', 'carl.miguel@example.com')->firstOrFail();
 
     expect($member->email_verified_at)->toBeNull();
     expect($member->notifications()->where('type', 'email_verification')->exists())->toBeTrue();
+    expect($member->personalData->contact->phone_verified_at)->not->toBeNull();
 });
 
 test('member cannot pay another member loan without supplying their own id', function () {

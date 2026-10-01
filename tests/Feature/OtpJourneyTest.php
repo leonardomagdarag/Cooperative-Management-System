@@ -1,8 +1,8 @@
 <?php
 
+use App\Jobs\SendSmsJob;
 use App\Mail\EmailVerificationMail;
 use App\Mail\OtpCodeMail;
-use App\Jobs\SendSmsJob;
 use App\Models\User;
 use App\Services\SecurityOtpService;
 use App\Services\TextBeeService;
@@ -242,4 +242,26 @@ test('OTP SMS queues a retry after immediate delivery fails', function () {
     app(SecurityOtpService::class)->sendOtpSms($user, 'new_device_login', '123456');
 
     Queue::assertPushed(SendSmsJob::class, fn (SendSmsJob $job) => $job->phone === '09761729700');
+});
+
+test('verification SMS to an unverified phone number sends inline', function () {
+    $user = User::factory()->create();
+    $sms = mock(TextBeeService::class);
+    $sms->shouldReceive('isEnabled')->once()->andReturn(true);
+    $sms->shouldReceive('send')
+        ->once()
+        ->with('09171234567', 'Phone verification test code')
+        ->andReturn(true);
+    app()->instance(TextBeeService::class, $sms);
+    Queue::fake();
+
+    app(SecurityOtpService::class)->sendOtpSmsToPhone(
+        $user,
+        '09171234567',
+        'phone_verification',
+        '123456',
+        'Phone verification test code'
+    );
+
+    Queue::assertNothingPushed();
 });

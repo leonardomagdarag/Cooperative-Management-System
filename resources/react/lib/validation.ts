@@ -180,8 +180,10 @@ const GENDER_SCHEMA = enumFrom(['male', 'female', 'other'], 'Select a valid gend
 const CIVIL_STATUS_SCHEMA = enumFrom(['single', 'married', 'widowed', 'separated'], 'Select a valid civil status');
 
 const TITLE_SCHEMA = enumFrom(PERSON_TITLES, 'Select a valid title');
+const OPTIONAL_TITLE_SCHEMA = TITLE_SCHEMA.optional().or(z.literal(''));
 
 const EMPLOYMENT_TYPE_SCHEMA = enumFrom(EMPLOYMENT_TYPES, 'Select a valid employment type');
+const OPTIONAL_EMPLOYMENT_TYPE_SCHEMA = EMPLOYMENT_TYPE_SCHEMA.optional().or(z.literal(''));
 
 const POSTAL_CODE_SCHEMA = stringMax(MAX_POSTAL, undefined, POSTAL_CODE_PATTERN, `Postal code must be ${MAX_POSTAL} digits`);
 
@@ -225,7 +227,7 @@ export const memberStepSchemas: Record<string, z.ZodTypeAny> = {
         civil_status: CIVIL_STATUS_SCHEMA,
         birthplace: textString(MAX_TEXT),
         religion: nameString(undefined, 64),
-        title: TITLE_SCHEMA.optional(),
+        title: OPTIONAL_TITLE_SCHEMA,
     }),
     address: z.object({
         country: textString(100),
@@ -249,7 +251,7 @@ export const memberStepSchemas: Record<string, z.ZodTypeAny> = {
         barangay_id: stringMax(MAX_GOV_ID, undefined, LOCAL_ID_PATTERN, 'Barangay ID may only contain letters, numbers and hyphens'),
     }),
     employment: z.object({
-        employment_type: EMPLOYMENT_TYPE_SCHEMA.optional(),
+        employment_type: OPTIONAL_EMPLOYMENT_TYPE_SCHEMA,
         employer_name: textString(MAX_TEXT),
         position: textString(100),
         monthly_income: INCOME_SCHEMA,
@@ -298,7 +300,7 @@ export const memberEditStepSchemas: Record<string, z.ZodTypeAny> = {
         civil_status: CIVIL_STATUS_SCHEMA.optional(),
         birthplace: textString(MAX_TEXT),
         religion: nameString(undefined, 64),
-        title: TITLE_SCHEMA.optional(),
+        title: OPTIONAL_TITLE_SCHEMA,
     }),
 };
 
@@ -310,7 +312,7 @@ export const officerStepSchemas: z.ZodTypeAny[] = [
         birth_date: birthDateString(),
         gender: GENDER_SCHEMA.optional(),
         civil_status: CIVIL_STATUS_SCHEMA.optional(),
-        title: TITLE_SCHEMA.optional(),
+        title: OPTIONAL_TITLE_SCHEMA,
     }),
     z.object({
         email: EMAIL_SCHEMA,
@@ -340,7 +342,7 @@ export const officerEditSchema = z.object({
     birth_date: birthDateString(),
     gender: GENDER_SCHEMA.optional(),
     civil_status: CIVIL_STATUS_SCHEMA.optional(),
-    title: TITLE_SCHEMA.optional(),
+    title: OPTIONAL_TITLE_SCHEMA,
     email: EMAIL_SCHEMA,
     phone_number: phoneString(false),
     street: textString(MAX_TEXT),
@@ -359,7 +361,7 @@ export const officerSchema = z.object({
     birth_date: birthDateString(),
     gender: GENDER_SCHEMA.optional(),
     civil_status: CIVIL_STATUS_SCHEMA.optional(),
-    title: TITLE_SCHEMA.optional(),
+    title: OPTIONAL_TITLE_SCHEMA,
     email: EMAIL_SCHEMA,
     phone_number: phoneString(true),
     street: textString(MAX_TEXT),

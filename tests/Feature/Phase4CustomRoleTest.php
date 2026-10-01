@@ -37,7 +37,10 @@ test('admin can assign a custom dynamic role to a user', function () {
         'role' => 'compliance_officer',
     ];
 
-    $response = $this->postJson('/api/members', $payload)
+    $response = $this->withSession([
+        'verified_officer_email' => $payload['email'],
+        'verified_officer_phone' => $payload['phone_number'],
+    ])->postJson('/api/members', $payload)
         ->assertStatus(201);
 
     $createdUser = User::where('email', 'carlos.compliance@example.com')->firstOrFail();

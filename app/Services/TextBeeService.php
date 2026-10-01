@@ -18,6 +18,7 @@ class TextBeeService
     private function deviceId(): ?string
     {
         $id = (string) SystemSetting::get('textbee_device_id', '');
+
         return $id !== '' ? $id : null;
     }
 
@@ -43,11 +44,12 @@ class TextBeeService
     {
         $stripped = preg_replace('/\D/', '', $phone);
         if (str_starts_with($stripped, '0')) {
-            $stripped = '63' . substr($stripped, 1);
+            $stripped = '63'.substr($stripped, 1);
         } elseif (str_starts_with($stripped, '9') && strlen($stripped) === 10) {
-            $stripped = '63' . $stripped;
+            $stripped = '63'.$stripped;
         }
-        return '+' . $stripped;
+
+        return '+'.$stripped;
     }
 
     /**
@@ -57,6 +59,7 @@ class TextBeeService
     {
         if (! $this->isEnabled()) {
             Log::info('TextBee: SMS skipped — service disabled or unconfigured.');
+
             return false;
         }
 
@@ -74,17 +77,20 @@ class TextBeeService
             $response = Http::withHeaders([
                 'x-api-key' => $this->apiKey(),
                 'Content-Type' => 'application/json',
-            ])->timeout(10)->post('https://api.textbee.dev/api/v1/gateway/send-sms', $payload);
+            ])->connectTimeout(2)->timeout(3)->post('https://api.textbee.dev/api/v1/gateway/send-sms', $payload);
 
             if ($response->successful()) {
                 Log::info("TextBee: SMS sent to {$normalized}.");
+
                 return true;
             }
 
             Log::warning("TextBee: HTTP {$response->status()} for {$normalized} — {$response->body()}");
+
             return false;
         } catch (\Throwable $e) {
             Log::error("TextBee: Exception for {$normalized}: {$e->getMessage()}");
+
             return false;
         }
     }

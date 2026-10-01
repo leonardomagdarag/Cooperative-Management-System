@@ -81,3 +81,22 @@ test('members cannot use the email settings tester', function () {
         ->postJson('/api/settings/email/test', ['email' => 'delivery-test@example.com'])
         ->assertForbidden();
 });
+
+test('non-admin users with settings permissions cannot access SMS configuration', function () {
+    $officer = User::factory()->create(['role' => 'secretary']);
+    $officer->assignRole('secretary');
+    $officer->givePermissionTo('settings.view');
+    $officer->givePermissionTo('settings.update');
+
+    $this->actingAs($officer)
+        ->getJson('/api/settings/sms')
+        ->assertForbidden();
+
+    $this->actingAs($officer)
+        ->putJson('/api/settings/sms', ['sms_service_enabled' => false])
+        ->assertForbidden();
+
+    $this->actingAs($officer)
+        ->postJson('/api/settings/sms/test', ['phone_number' => '09761729700'])
+        ->assertForbidden();
+});

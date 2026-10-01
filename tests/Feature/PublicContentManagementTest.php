@@ -77,7 +77,9 @@ test('admin user payload includes the public content management permission', fun
 });
 
 test('non-admin users see can_manage false when reading public content', function () {
+    $this->seed(SpatieRolePermissionSeeder::class);
     $user = makeUnauthorizedUser();
+    $user->givePermissionTo('settings.update');
 
     actingAs($user)
         ->getJson('/api/public-content')
@@ -189,7 +191,9 @@ test('board visibility toggle is reflected back through the api', function () {
 });
 
 test('non-admin users cannot save public content', function () {
+    $this->seed(SpatieRolePermissionSeeder::class);
     $user = makeUnauthorizedUser();
+    $user->givePermissionTo('settings.update');
 
     actingAs($user)
         ->putJson('/api/public-content', ['form' => fullForm()])

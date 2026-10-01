@@ -214,9 +214,10 @@ class SecurityOtpService
             ->exists();
     }
 
-    public function sendOtpMail(User $user, string $purpose, string $otpCode): void
+    public function sendOtpMail(User $user, string $purpose, string $otpCode, ?string $recipient = null): void
     {
-        if (! $user->email) {
+        $recipient ??= $user->email;
+        if (! $recipient) {
             return;
         }
 
@@ -237,7 +238,7 @@ class SecurityOtpService
         // not land before the code expired anyway. One SMTP round trip is
         // cheap next to losing the code to a worker gap.
         try {
-            Mail::to($user->email)->send(new OtpCodeMail($user, $purpose, $otpCode));
+            Mail::to($recipient)->send(new OtpCodeMail($user, $purpose, $otpCode));
         } catch (Throwable $e) {
             // A mail blip must not fail the sign-in, so this is logged and
             // swallowed. The user can request a new code.
@@ -262,7 +263,7 @@ class SecurityOtpService
             // Hand off to the queue as a second attempt. This only runs on the
             // failure path, so it costs nothing when SMTP is healthy.
             try {
-                SendOtpEmailJob::dispatch($user->id, $purpose, $otpCode);
+                SendOtpEmailJob::dispatch($user->id, $purpose, $otpCode, $recipient);
             } catch (Throwable $e2) {
                 Log::error("OTP email retry dispatch failed for user {$user->id}: {$e2->getMessage()}");
             }
@@ -276,23 +277,17 @@ class SecurityOtpService
             return;
         }
 
+        $this->sendOtpSmsToPhone($user, $phone, $purpose, $otpCode);
+    }
+
+    public function sendOtpSmsToPhone(User $user, string $phone, string $purpose, string $otpCode, ?string $message = null): void
+    {
         $sms = app(TextBeeService::class);
         if (! $sms->isEnabled()) {
             return;
         }
 
-        $label = match ($purpose) {
-            'new_device_login' => 'new device login',
-            'withdrawal_approval' => 'withdrawal approval',
-            'password_change' => 'password change',
-            'email_change' => 'email address change',
-            'member_password_change' => 'password reset',
-            'officer_phone_verify' => 'phone verification',
-            'phone_verification' => 'phone verification',
-            default => 'security verification',
-        };
-
-        $message = "Settlers CC: Your {$label} OTP is {$otpCode}. Valid for 10 mins. Never share this.";
+        $message ??= $this->otpSmsMessage($purpose, $otpCode);
 
         try {
             if ($sms->send($phone, $message)) {
@@ -309,6 +304,21 @@ class SecurityOtpService
         } catch (Throwable $e) {
             Log::error("OTP SMS retry dispatch failed for user {$user->id}: {$e->getMessage()}");
         }
+    }
+
+    private function otpSmsMessage(string $purpose, string $otpCode): string
+    {
+        $label = match ($purpose) {
+            'new_device_login' => 'new device login',
+            'withdrawal_approval' => 'withdrawal approval',
+            'password_change' => 'password change',
+            'email_change' => 'email address change',
+            'member_password_change' => 'password reset',
+            'officer_phone_verify', 'phone_verification' => 'phone verification',
+            default => 'security verification',
+        };
+
+        return "Settlers CC: Your {$label} OTP is {$otpCode}. Valid for 10 mins. Never share this.";
     }
 
     public function userCanReceiveSms(User $user): bool

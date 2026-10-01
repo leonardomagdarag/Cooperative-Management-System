@@ -20,7 +20,7 @@ const NAV_ITEMS: NavItem[] = [
     { label: 'Loans', path: '/dashboard/loans', icon: 'fas fa-hand-holding-usd', permission: 'loans.view' },
     { label: 'Ledger', path: '/dashboard/ledger', icon: 'fas fa-book', permission: 'transactions.view' },
     { label: 'Expenses', path: '/dashboard/expenses', icon: 'fas fa-receipt', permission: 'transactions.view' },
-    { label: 'History', path: '/dashboard/history', icon: 'fas fa-history' },
+    { label: 'History', path: '/dashboard/history', icon: 'fas fa-history', roles: ['member'] },
     { label: 'Announcements', path: '/dashboard/announcements', icon: 'fas fa-bullhorn', permission: 'announcements.view' },
     { label: 'Notifications', path: '/dashboard/notifications', icon: 'fas fa-bell' },
     { label: 'Tickets', path: '/dashboard/tickets', icon: 'fas fa-ticket-alt', roles: ['admin', 'manager', 'accountant'] },

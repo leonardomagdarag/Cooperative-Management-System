@@ -155,7 +155,7 @@ class SettingsController extends Controller
 
     public function getServiceAvailability(): JsonResponse
     {
-        abort_unless(Auth::user()?->can('settings.view'), 403);
+        abort_unless(Auth::user()?->hasRole('admin'), 403);
 
         $services = ['deposit', 'withdrawal', 'loan_application', 'loan_payment'];
         $result = [];
@@ -196,7 +196,7 @@ class SettingsController extends Controller
 
     public function updateServiceAvailability(Request $request): JsonResponse
     {
-        abort_unless(Auth::user()?->can('settings.update'), 403);
+        abort_unless(Auth::user()?->hasRole('admin'), 403);
 
         $validated = $request->validate([
             'services' => 'required|array',
@@ -407,7 +407,7 @@ class SettingsController extends Controller
 
     public function getSmsSettings(): JsonResponse
     {
-        abort_unless(Auth::user()?->can('settings.view'), 403);
+        abort_unless(Auth::user()?->hasRole('admin'), 403);
 
         return response()->json([
             'data' => [
@@ -420,7 +420,7 @@ class SettingsController extends Controller
 
     public function updateSmsSettings(Request $request): JsonResponse
     {
-        abort_unless(Auth::user()?->can('settings.update'), 403);
+        abort_unless(Auth::user()?->hasRole('admin'), 403);
 
         $validated = $request->validate([
             'sms_service_enabled' => 'boolean',
@@ -443,7 +443,7 @@ class SettingsController extends Controller
 
     public function testSms(Request $request): JsonResponse
     {
-        abort_unless(Auth::user()?->can('settings.update'), 403);
+        abort_unless(Auth::user()?->hasRole('admin'), 403);
 
         $validated = $request->validate([
             'phone_number' => 'required|string|max:20',

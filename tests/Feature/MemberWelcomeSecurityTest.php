@@ -48,6 +48,7 @@ test('admin creating member does not leak plaintext password in welcome email jo
     ];
 
     $response = $this->actingAs($admin)
+        ->withSession(['verified_officer_email' => $payload['email']])
         ->postJson('/api/members', $payload);
 
     $response->assertStatus(201);

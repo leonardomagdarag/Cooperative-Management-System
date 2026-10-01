@@ -44,13 +44,13 @@ export default function SettingsPage() {
     const tabs: SettingsTab[] = [
         { key: 'account', label: 'My Account', icon: 'fas fa-user-cog', visible: true },
         { key: 'help-support', label: 'Help & Support', icon: 'fas fa-life-ring', visible: true },
-        { key: 'public-content', label: 'Public Page', icon: 'fas fa-globe', visible: !isMember && canViewSettings },
+        { key: 'public-content', label: 'Public Page', icon: 'fas fa-globe', visible: isAdmin },
         { key: 'loan-products', label: 'Loan Products', icon: 'fa-solid fa-hand-holding-dollar', visible: !isMember && canViewLoans },
         { key: 'role-permissions', label: 'Roles & Permissions', icon: 'fas fa-user-shield', visible: !isMember && canManagePermissions },
-        { key: 'service-availability', label: 'Service Availability', icon: 'fas fa-toggle-on', visible: !isMember && canViewSettings },
-        { key: 'sms', label: 'SMS Service', icon: 'fas fa-comment-sms', visible: !isMember && canViewSettings },
+        { key: 'service-availability', label: 'Service Availability', icon: 'fas fa-toggle-on', visible: isAdmin },
+        { key: 'sms', label: 'SMS Service', icon: 'fas fa-comment-sms', visible: isAdmin },
         { key: 'email', label: 'Email Service', icon: 'fas fa-envelope', visible: !isMember && canManageSettings },
-        { key: 'paymongo', label: 'Payment Gateway', icon: 'fas fa-credit-card', visible: !isMember && canViewSettings },
+        { key: 'paymongo', label: 'Payment Gateway', icon: 'fas fa-credit-card', visible: isAdmin },
         { key: 'backups', label: 'Backup & Restore', icon: 'fas fa-hard-drive', visible: !isMember && canManageBackups },
     ];
 
@@ -308,6 +308,24 @@ function MemberSettings() {
                         </div>
                     </div>
                 )}
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <h3 className="font-semibold text-gray-900">Recent Activity</h3>
+                <p className="mt-1 text-sm text-gray-500 mb-4">A log of your recent account actions and security events.</p>
+                <div className="space-y-3">
+                    {!profileData?.data?.recent_logs || profileData.data.recent_logs.length === 0 ? (
+                        <p className="text-sm text-gray-500">No recent activity.</p>
+                    ) : profileData.data.recent_logs.map((log: any) => (
+                        <div key={log.id} className="flex items-start gap-3">
+                            <div className="mt-0.5"><i className="fas fa-circle-dot text-[10px] text-emerald-500"></i></div>
+                            <div>
+                                <p className="text-sm text-gray-700">{log.description}</p>
+                                <p className="text-xs text-gray-400">{new Date(log.created_at).toLocaleString()}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
 
             <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">

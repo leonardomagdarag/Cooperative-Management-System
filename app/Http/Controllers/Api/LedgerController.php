@@ -191,6 +191,9 @@ class LedgerController extends Controller
                 'loan_id' => $validated['loan_id'] ?? null,
                 'branch_id' => $validated['branch_id'] ?? $this->resolveTransactionBranch($validated),
                 'transaction_date' => now(),
+                // Ledger entries are posted immediately below, so they must
+                // never enter the pending approval flow as well.
+                'status' => 'completed',
                 'recorded_by' => Auth::id(),
             ]);
 

@@ -7,6 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
 import { validate, memberStepSchemas, memberEditStepSchemas, memberSchema, memberEditSchema, passwordStrength, onlyDigits, formatGroupedDigits, EMPLOYMENT_TYPES, type FieldErrors } from '../../lib/validation';
+import OtpVerifyField from '../../components/OtpVerifyField';
 
 const STEPS = ['personal', 'address', 'contact', 'ids', 'employment', 'login', 'beneficiaries', 'agreement', 'review'];
 
@@ -67,6 +68,8 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
     const isEdit = !!member;
     const [step, setStep] = useState(0);
     const [form, setForm] = useState(emptyForm);
+    const [isEmailVerified, setIsEmailVerified] = useState(false);
+    const [isPhoneVerified, setIsPhoneVerified] = useState(false);
     const [previews, setPreviews] = useState<Record<string, string>>({});
     const [errors, setErrors] = useState<FieldErrors>({});
     const { user } = useAuth();
@@ -185,8 +188,10 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
 
     const validateStep = (s: string) => {
         const schema = isEdit ? memberEditStepSchemas[s] : memberStepSchemas[s];
-        if (!schema) return true;
-        const errs = validate(schema, form);
+        const errs = schema ? validate(schema, form) : {};
+        if (s === 'contact' && !isEdit && !isEmailVerified && !isPhoneVerified) {
+            errs.contact_verification = 'Verify either the email address or phone number before continuing.';
+        }
         setErrors(errs);
         return Object.keys(errs).length === 0;
     };
@@ -348,12 +353,49 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
                     {currentStep === 'contact' && (
                         <div className="space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <Field label="Email Address" type="email" value={form.email} onChange={setClearing('email')} required error={errors.email} placeholder="email@example.com" helperText="Primary contact email" />
-                                <Field label="Phone Number" value={form.phone_number} onChange={setDigits('phone_number', PHONE_MAX)} required error={errors.phone_number} maxLength={PHONE_MAX} inputMode="tel" placeholder="09XXXXXXXXX" helperText="10 or 11 digits, numbers only" />
+                                {isEdit ? (
+                                    <>
+                                        <Field label="Email Address" type="email" value={form.email} onChange={setClearing('email')} required error={errors.email} placeholder="email@example.com" helperText="Primary contact email" />
+                                        <Field label="Phone Number" value={form.phone_number} onChange={setDigits('phone_number', PHONE_MAX)} required error={errors.phone_number} maxLength={PHONE_MAX} inputMode="tel" placeholder="09XXXXXXXXX" helperText="10 or 11 digits, numbers only" />
+                                    </>
+                                ) : (
+                                    <>
+                                        <OtpVerifyField
+                                            label="Email Address *"
+                                            value={form.email}
+                                            onChange={v => { setClearing('email')(v); setIsEmailVerified(false); }}
+                                            type="email"
+                                            error={errors.email}
+                                            isVerified={isEmailVerified}
+                                            onSendOtp={async email => (await api.post('/api/officers/verify-email/send', { email })).data}
+                                            onVerifyOtp={async (_email, otp) => {
+                                                const res = await api.post('/api/officers/verify-email', { otp_code: otp });
+                                                setIsEmailVerified(true);
+                                                return { success: true, message: res.data.message };
+                                            }}
+                                        />
+                                        <OtpVerifyField
+                                            label="Phone Number *"
+                                            value={form.phone_number}
+                                            onChange={v => { setDigits('phone_number', PHONE_MAX)(v); setIsPhoneVerified(false); }}
+                                            type="tel"
+                                            error={errors.phone_number}
+                                            isVerified={isPhoneVerified}
+                                            onSendOtp={async phone => (await api.post('/api/officers/verify-phone/send', { phone_no: phone })).data}
+                                            onVerifyOtp={async (_phone, otp) => {
+                                                const res = await api.post('/api/officers/verify-phone', { otp_code: otp });
+                                                setIsPhoneVerified(true);
+                                                return { success: true, message: res.data.message };
+                                            }}
+                                        />
+                                    </>
+                                )}
                                 <div className="md:col-span-3">
                                     <Field label="Facebook Profile" type="url" value={form.facebook_link} onChange={setClearing('facebook_link')} error={errors.facebook_link} maxLength={255} placeholder="https://facebook.com/username" helperText="Optional: Your Facebook profile URL" />
                                 </div>
                             </div>
+                            {errors.contact_verification && <p className="text-sm text-red-600">{errors.contact_verification}</p>}
+                            {!isEdit && <p className="text-sm text-gray-500">Email and phone are both required. Verify at least one contact method to continue.</p>}
                         </div>
                     )}
 

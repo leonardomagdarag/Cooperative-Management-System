@@ -275,16 +275,12 @@ class MemberController extends Controller
         $this->assertCanAssignRole($request->input('role'), 'officers.create');
 
         $role = $request->input('role');
-        if ($role && $role !== 'member') {
-            $email = $request->input('email');
-            $phone = $request->input('phone_number');
-            if ($request->session()->get('verified_officer_email') !== $email) {
-                return response()->json(['message' => 'Email must be verified via OTP first.'], 422);
-            }
-            if ($request->session()->get('verified_officer_phone') !== $phone) {
-                return response()->json(['message' => 'Phone number must be verified via OTP first.'], 422);
-            }
-        }
+        $email = $request->input('email');
+        $phone = $request->input('phone_number');
+        $verifiedEmail = is_string($email) && $email !== ''
+            && $request->session()->get('verified_officer_email') === $email;
+        $verifiedPhone = is_string($phone) && $phone !== ''
+            && $request->session()->get('verified_officer_phone') === $phone;
 
         $this->normalizeBeneficiaries($request);
 
@@ -341,16 +337,31 @@ class MemberController extends Controller
             'agreement_file' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
         ], PersonFieldRules::messages());
 
+        if ($role && $role !== 'member' && ! $verifiedEmail) {
+            return response()->json(['message' => 'Email must be verified via OTP first.'], 422);
+        }
+        if ($role && $role !== 'member' && ! $verifiedPhone) {
+            return response()->json(['message' => 'Phone number must be verified via OTP first.'], 422);
+        }
+        if ((! $role || $role === 'member') && ! $verifiedEmail && ! $verifiedPhone) {
+            return response()->json([
+                'message' => 'Verify the member email address or phone number before creating the account.',
+                'errors' => ['contact_verification' => ['Verify either the email address or phone number.']],
+            ], 422);
+        }
+
         $profilePhotoPath = $request->file('profile_photo')?->store('profile-photos', 'public');
         $idPhotoPaths = [];
         foreach (['national_id_photo', 'tin_photo', 'sss_photo', 'philhealth_photo', 'barangay_id_photo'] as $field) {
             $idPhotoPaths[$field] = $request->file($field)?->store('id-photos', 'public');
         }
 
-        $user = DB::transaction(function () use ($validated, $request, $profilePhotoPath, $idPhotoPaths) {
+        $user = DB::transaction(function () use ($validated, $request, $profilePhotoPath, $idPhotoPaths, $verifiedEmail, $verifiedPhone) {
             $contact = Contact::create([
                 'phone_no' => $validated['phone_number'] ?? null,
                 'email' => $validated['email'],
+                'phone_verified_at' => $verifiedPhone ? now() : null,
+                'email_verified_at' => $verifiedEmail ? now() : null,
                 'facebook' => $validated['facebook_link'] ?? null,
             ]);
 
@@ -413,6 +424,10 @@ class MemberController extends Controller
                 'profile_completion_required' => false,
             ]);
 
+            if ($verifiedEmail) {
+                $user->forceFill(['email_verified_at' => now()])->save();
+            }
+
             if ($request->file('agreement_file')) {
                 $agreementPath = $request->file('agreement_file')->store('member-agreements/'.$user->id, 'public');
                 if ($memberId) {
@@ -449,7 +464,9 @@ class MemberController extends Controller
             return $user;
         });
 
-        app(NotificationService::class)->sendEmailVerification($user);
+        if (! $verifiedEmail) {
+            app(NotificationService::class)->sendEmailVerification($user);
+        }
 
         if (config('mail.default') !== 'log') {
             $name = trim(($validated['first_name'] ?? '').' '.($validated['last_name'] ?? ''));

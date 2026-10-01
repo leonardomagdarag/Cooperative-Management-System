@@ -46,6 +46,13 @@ export interface ProfileData {
         other_income_source: string;
         other_income_amount: string;
     } | null;
+    member_id?: {
+        national_id: string;
+        tin: string;
+        sss: string;
+        philhealth: string;
+        barangay_id: string;
+    } | null;
     accounts: Array<{
         id: number;
         account_number: string;
@@ -65,6 +72,8 @@ export interface ProfileData {
     beneficiaries: Array<{
         id: number;
         name: string;
+        first_name?: string;
+        last_name?: string;
         relationship: string;
         percentage: number;
     }>;

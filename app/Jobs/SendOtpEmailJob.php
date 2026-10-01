@@ -26,6 +26,7 @@ class SendOtpEmailJob implements ShouldQueue
         public int $userId,
         public string $purpose,
         public string $otpCode,
+        public ?string $recipient = null,
     ) {
         $this->onQueue('emails');
     }
@@ -34,18 +35,19 @@ class SendOtpEmailJob implements ShouldQueue
     {
         $user = User::find($this->userId);
 
-        if (! $user || ! $user->email) {
+        $recipient = $this->recipient ?? $user?->email;
+        if (! $user || ! $recipient) {
             return;
         }
 
         if (config('mail.default') === 'log') {
-            Log::info("OTP email ({$this->purpose}) for {$user->email}: {$this->otpCode}");
+            Log::info("OTP email ({$this->purpose}) for {$recipient}: {$this->otpCode}");
 
             return;
         }
 
         try {
-            Mail::to($user->email)->send(new OtpCodeMail($user, $this->purpose, $this->otpCode));
+            Mail::to($recipient)->send(new OtpCodeMail($user, $this->purpose, $this->otpCode));
         } catch (Throwable $e) {
             app(AuditLogService::class)->log(
                 'email.failed',

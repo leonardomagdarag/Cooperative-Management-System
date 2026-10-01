@@ -34,14 +34,14 @@ class PublicContentController extends Controller
                     'officer' => (bool) SystemSetting::get('service_login_officer_enabled', true),
                 ],
             ],
-            'can_manage' => (bool) Auth::user()?->can('settings.update'),
+            'can_manage' => (bool) Auth::user()?->hasRole('admin'),
             'turnstile_site_key' => config('services.turnstile.site_key'),
         ]);
     }
 
     public function save(Request $request): JsonResponse
     {
-        abort_unless(Auth::user()?->can('settings.update'), 403);
+        abort_unless(Auth::user()?->hasRole('admin'), 403);
 
         $validated = $request->validate($this->rules());
 

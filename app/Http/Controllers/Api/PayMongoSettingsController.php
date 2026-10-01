@@ -21,7 +21,7 @@ class PayMongoSettingsController extends Controller
     public function index(): JsonResponse
     {
         $user = Auth::user();
-        abort_unless($user && ($user->hasRole('admin') || $user->can('settings.view') || $user->can('settings.update')), 403);
+        abort_unless($user?->hasRole('admin'), 403);
 
         return response()->json([
             'data' => $this->payMongoService->summary(),
@@ -31,7 +31,7 @@ class PayMongoSettingsController extends Controller
     public function updateSettings(Request $request): JsonResponse
     {
         $user = Auth::user();
-        abort_unless($user && ($user->hasRole('admin') || $user->can('settings.update')), 403);
+        abort_unless($user?->hasRole('admin'), 403);
 
         $validated = $request->validate([
             'enabled' => 'required|boolean',
@@ -79,7 +79,7 @@ class PayMongoSettingsController extends Controller
     public function updateCredentials(Request $request): JsonResponse
     {
         $user = Auth::user();
-        abort_unless($user && ($user->hasRole('admin') || $user->can('settings.update')), 403);
+        abort_unless($user?->hasRole('admin'), 403);
 
         $validated = $request->validate([
             'test_public_key' => 'nullable|string|max:255',
@@ -111,7 +111,7 @@ class PayMongoSettingsController extends Controller
     public function clearCredentials(): JsonResponse
     {
         $user = Auth::user();
-        abort_unless($user && ($user->hasRole('admin') || $user->can('settings.update')), 403);
+        abort_unless($user?->hasRole('admin'), 403);
 
         $this->payMongoService->clearCredentials();
 
@@ -132,7 +132,7 @@ class PayMongoSettingsController extends Controller
     public function testConnection(): JsonResponse
     {
         $user = Auth::user();
-        abort_unless($user && ($user->hasRole('admin') || $user->can('settings.update')), 403);
+        abort_unless($user?->hasRole('admin'), 403);
 
         try {
             $result = $this->payMongoService->testConnection();

@@ -5,6 +5,7 @@ use App\Models\Branch;
 use App\Models\Loan;
 use App\Models\Notification;
 use App\Models\SystemSetting;
+use App\Models\Transaction;
 use App\Models\User;
 use Database\Seeders\AccountSeeder;
 use Database\Seeders\SpatieRolePermissionSeeder;
@@ -40,11 +41,12 @@ test('F020-2: regular member without settings.view receives 403', function () {
     $this->putJson('/api/settings/service-availability', [])->assertForbidden();
 });
 
-test('F020-3: user without settings.update receives 403 on updating service availability', function () {
-    // Secretary role has settings.view but not settings.update
+test('F020-3: non-admin settings users cannot access or update service availability', function () {
+    // Secretary role has settings.view; explicitly grant update to ensure admin-only enforcement.
+    $this->secretary->givePermissionTo('settings.update');
     $this->actingAs($this->secretary);
 
-    $this->getJson('/api/settings/service-availability')->assertOk();
+    $this->getJson('/api/settings/service-availability')->assertForbidden();
     $this->putJson('/api/settings/service-availability', ['services' => []])->assertForbidden();
 });
 
@@ -237,7 +239,7 @@ test('F020-11: offline bank transfer deposit stays available when online payment
         'proof' => UploadedFile::fake()->create('transfer.jpg', 100, 'image/jpeg'),
     ])->assertCreated();
 
-    $txn = \App\Models\Transaction::query()
+    $txn = Transaction::query()
         ->where('account_id', $this->account->id)
         ->where('transaction_type', 'deposit')
         ->latest('id')
@@ -288,7 +290,7 @@ test('F020-12: offline bank transfer loan payment stays available when online pa
         'proof' => UploadedFile::fake()->create('transfer.jpg', 100, 'image/jpeg'),
     ])->assertCreated();
 
-    $payment = \App\Models\Transaction::query()
+    $payment = Transaction::query()
         ->where('loan_id', $loan->id)
         ->where('transaction_type', 'loan_payment')
         ->latest('id')

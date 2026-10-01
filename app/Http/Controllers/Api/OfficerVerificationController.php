@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\SecurityOtpService;
 use App\Services\TextBeeService;
@@ -25,7 +24,7 @@ class OfficerVerificationController extends Controller
         ]);
 
         $user = Auth::user();
-        if (! $user || ! $user->can('officers.create')) {
+        if (! $user || (! $user->can('officers.create') && ! $user->can('members.create'))) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
@@ -38,7 +37,7 @@ class OfficerVerificationController extends Controller
 
         $purpose = 'officer_email_verify';
         $issued = $this->securityOtpService->issueChallenge($user, $purpose);
-        
+
         $this->securityOtpService->sendOtpMail($user, $purpose, $issued['otp_code'], $email);
         $this->securityOtpService->stashDebugCode($request->session(), $issued['otp_code']);
 
@@ -82,7 +81,7 @@ class OfficerVerificationController extends Controller
         ]);
 
         $user = Auth::user();
-        if (! $user || ! $user->can('officers.create')) {
+        if (! $user || (! $user->can('officers.create') && ! $user->can('members.create'))) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
@@ -95,17 +94,11 @@ class OfficerVerificationController extends Controller
 
         $purpose = 'officer_phone_verify';
         $issued = $this->securityOtpService->issueChallenge($user, $purpose);
-        
+
         $message = "Settlers CC: Phone verification OTP for new officer account is {$issued['otp_code']}. Valid for 10 mins.";
-        
-        try {
-            \App\Jobs\SendSmsJob::dispatch($phoneNo, $message, 'otp.sms');
-            $this->securityOtpService->stashDebugCode($request->session(), $issued['otp_code']);
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning("Failed to dispatch phone verification SMS: {$e->getMessage()}");
-            $this->textBeeService->send($phoneNo, $message);
-            $this->securityOtpService->stashDebugCode($request->session(), $issued['otp_code']);
-        }
+
+        $this->securityOtpService->sendOtpSmsToPhone($user, $phoneNo, $purpose, $issued['otp_code'], $message);
+        $this->securityOtpService->stashDebugCode($request->session(), $issued['otp_code']);
 
         return response()->json([
             'message' => 'Verification code sent to phone.',

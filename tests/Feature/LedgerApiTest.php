@@ -53,8 +53,16 @@ test('ledger store deposit credits account balance', function () {
     expect($this->account->fresh()->balance)->toBe('1500.00');
 
     $transaction = Transaction::findOrFail($response->json('data.id'));
-    expect($transaction->recorded_by)->toBe($this->admin->id)
+    expect($transaction->status)->toBe('completed')
+        ->and($transaction->recorded_by)->toBe($this->admin->id)
         ->and($transaction->account_id)->toBe($this->account->id);
+
+    $this->postJson("/api/services/approve/{$transaction->id}", [
+        'action' => 'approve',
+    ])->assertStatus(422)
+        ->assertJson(['message' => 'Transaction is not pending.']);
+
+    expect($this->account->fresh()->balance)->toBe('1500.00');
 });
 
 test('ledger store withdrawal debits account balance and rejects insufficient funds', function () {

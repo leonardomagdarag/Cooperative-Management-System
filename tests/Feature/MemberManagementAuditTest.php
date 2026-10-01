@@ -1,12 +1,13 @@
 <?php
 
-use App\Models\Account;
+use App\Mail\OtpCodeMail;
 use App\Models\Branch;
-use App\Models\PersonalData;
 use App\Models\User;
 use Database\Seeders\AccountSeeder;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\UserSeeder;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use Illuminate\Support\Facades\Mail;
 use Spatie\Activitylog\Models\Activity;
 
 beforeEach(function () {
@@ -24,7 +25,7 @@ beforeEach(function () {
     $this->mainMember = User::where('user_number', 'USR000007')->firstOrFail();
     $this->officeMember = User::where('user_number', 'USR000012')->firstOrFail();
 
-    $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class);
+    $this->withoutMiddleware(ValidateCsrfToken::class);
 });
 
 test('F017-1: unauthenticated requests to member endpoints return 401', function () {
@@ -112,7 +113,8 @@ test('F017-6: admin creates new member with personal data, contact, address and 
         'role' => 'member',
     ];
 
-    $response = $this->postJson('/api/members', $payload);
+    $response = $this->withSession(['verified_officer_email' => $email])
+        ->postJson('/api/members', $payload);
     $response->assertStatus(201)
         ->assertJson(['message' => 'Member created successfully.']);
 
@@ -120,11 +122,81 @@ test('F017-6: admin creates new member with personal data, contact, address and 
     expect($createdUser)->not->toBeNull()
         ->and($createdUser->email)->toBe($email)
         ->and($createdUser->account_status)->toBe('active')
-        ->and($createdUser->hasRole('member'))->toBeTrue();
+        ->and($createdUser->hasRole('member'))->toBeTrue()
+        ->and($createdUser->hasVerifiedEmail())->toBeTrue()
+        ->and($createdUser->personalData->contact->email_verified_at)->not->toBeNull();
 
     // Verify savings and share-capital accounts created automatically
     expect($createdUser->accounts()->where('account_type', 'savings')->exists())->toBeTrue()
         ->and($createdUser->accounts()->where('account_type', 'share-capital')->exists())->toBeTrue();
+});
+
+test('F017-6a: admin cannot create a member until at least one contact method is verified', function () {
+    $this->actingAs($this->admin)
+        ->postJson('/api/members', [
+            'first_name' => 'Unverified',
+            'last_name' => 'Member',
+            'birth_date' => '1995-05-10',
+            'gender' => 'male',
+            'civil_status' => 'single',
+            'email' => 'unverified.member@example.com',
+            'phone_number' => '09191234568',
+            'password' => 'Password123!',
+            'password_confirmation' => 'Password123!',
+            'role' => 'member',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.contact_verification.0', 'Verify either the email address or phone number.');
+
+    expect(User::where('email', 'unverified.member@example.com')->exists())->toBeFalse();
+});
+
+test('F017-6b: phone verification is sufficient when creating a member and is stored on the contact', function () {
+    $payload = [
+        'first_name' => 'Phone',
+        'last_name' => 'Verified',
+        'birth_date' => '1995-05-10',
+        'gender' => 'male',
+        'civil_status' => 'single',
+        'email' => 'phone.verified@example.com',
+        'phone_number' => '09191234569',
+        'password' => 'Password123!',
+        'password_confirmation' => 'Password123!',
+        'role' => 'member',
+    ];
+
+    $this->actingAs($this->admin)
+        ->withSession(['verified_officer_phone' => $payload['phone_number']])
+        ->postJson('/api/members', $payload)
+        ->assertCreated();
+
+    $createdUser = User::where('email', $payload['email'])->firstOrFail();
+    expect($createdUser->hasVerifiedEmail())->toBeFalse()
+        ->and($createdUser->personalData->contact->phone_verified_at)->not->toBeNull()
+        ->and($createdUser->personalData->contact->email_verified_at)->toBeNull();
+});
+
+test('F017-6c: a member creator can verify a new email without officer permissions', function () {
+    Mail::fake();
+    $creator = User::factory()->create(['email_verified_at' => now()]);
+    $creator->givePermissionTo('members.create');
+    $newEmail = 'otp.member@example.com';
+
+    $this->actingAs($creator)
+        ->postJson('/api/officers/verify-email/send', ['email' => $newEmail])
+        ->assertOk();
+
+    $otpCode = null;
+    Mail::assertSent(OtpCodeMail::class, function (OtpCodeMail $mail) use (&$otpCode, $newEmail) {
+        $otpCode = $mail->otpCode;
+
+        return $mail->hasTo($newEmail);
+    });
+
+    $this->postJson('/api/officers/verify-email', ['otp_code' => $otpCode])
+        ->assertOk();
+
+    expect(session('verified_officer_email'))->toBe($newEmail);
 });
 
 test('F017-7: admin can update an existing member', function () {

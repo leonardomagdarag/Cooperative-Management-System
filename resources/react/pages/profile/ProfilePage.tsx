@@ -1,28 +1,85 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../../api/client';
 import { getProfile, updateProfile, type ProfileData } from '../../api/profile';
 import EmailChangeVerification from '../../components/EmailChangeVerification';
 import DatePicker from '../../components/DatePicker';
 import { useToast } from '../../contexts/ToastContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
-import { validate, profileSchema, type FieldErrors } from '../../lib/validation';
+import { z } from 'zod';
+import { toFieldErrors, type FieldErrors } from '../../lib/validation';
 
 type Tab = 'overview' | 'contact' | 'employment' | 'financial' | 'beneficiaries' | 'security' | 'privacy';
 
-const TABS: { key: Tab; icon: string; label: string }[] = [
+const TABS: { key: Tab; icon: string; label: string; hideForOfficers?: boolean }[] = [
     { key: 'overview', icon: 'fas fa-user', label: 'Overview' },
     { key: 'contact', icon: 'fas fa-address-book', label: 'Contact & Address' },
-    { key: 'employment', icon: 'fas fa-briefcase', label: 'Employment' },
-    { key: 'financial', icon: 'fas fa-wallet', label: 'Financial' },
-    { key: 'beneficiaries', icon: 'fas fa-users', label: 'Beneficiaries' },
+    { key: 'employment', icon: 'fas fa-briefcase', label: 'Employment', hideForOfficers: true },
+    { key: 'financial', icon: 'fas fa-wallet', label: 'Financial', hideForOfficers: true },
+    { key: 'beneficiaries', icon: 'fas fa-users', label: 'Beneficiaries', hideForOfficers: true },
     { key: 'security', icon: 'fas fa-shield-alt', label: 'Security' },
     { key: 'privacy', icon: 'fas fa-lock', label: 'Privacy' },
 ];
 
+function createProfileFormData(profile: ProfileData, overrides: Record<string, any> = {}, beneficiariesOverride?: any[]): FormData {
+    const data: Record<string, any> = {
+        title: profile.personal_data?.title || '',
+        first_name: profile.personal_data?.first_name || '',
+        mid_name: profile.personal_data?.mid_name || '',
+        last_name: profile.personal_data?.last_name || '',
+        suffix: profile.personal_data?.suffix || '',
+        birth_date: profile.personal_data?.birth_date || '',
+        birthplace: profile.personal_data?.birthplace || '',
+        gender: profile.personal_data?.gender || '',
+        education: profile.personal_data?.education || '',
+        civil_status: profile.personal_data?.civil_status || '',
+        religion: profile.personal_data?.religion || '',
+
+        email: profile.user.email,
+        phone_no: profile.contact?.phone_no || '',
+        facebook: profile.contact?.facebook || '',
+
+        country: profile.address?.country || '',
+        region: profile.address?.region || '',
+        province: profile.address?.province || '',
+        city_municipality: profile.address?.city_municipality || '',
+        barangay: profile.address?.barangay || '',
+        street: profile.address?.street || '',
+        zip_code: profile.address?.zip_code || '',
+
+        national_id: profile.member_id?.national_id || '',
+        tin: profile.member_id?.tin || '',
+        sss: profile.member_id?.sss || '',
+        philhealth: profile.member_id?.philhealth || '',
+        barangay_id: profile.member_id?.barangay_id || '',
+
+        employment_type: profile.employment?.employment_type || '',
+        employer_name: profile.employment?.company || '',
+        position: profile.employment?.position || '',
+        monthly_income: profile.employment?.monthly_income || '',
+    };
+
+    const finalData = { ...data, ...overrides };
+    const fd = new FormData();
+
+    for (const [key, value] of Object.entries(finalData)) {
+        if (value !== null && value !== undefined) {
+            fd.append(key, value as string);
+        }
+    }
+
+    const bens = beneficiariesOverride || profile.beneficiaries || [];
+    bens.forEach((b: any, index: number) => {
+        fd.append(`beneficiaries[${index}][first_name]`, b.first_name || b.name.split(' ')[0] || '');
+        fd.append(`beneficiaries[${index}][last_name]`, b.last_name || b.name.split(' ').slice(1).join(' ') || '');
+        fd.append(`beneficiaries[${index}][relationship]`, b.relationship || '');
+    });
+
+    return fd;
+}
+
 export default function ProfilePage() {
     const [activeTab, setActiveTab] = useState<Tab>('overview');
-    const [showEditModal, setShowEditModal] = useState(false);
+    const [editModal, setEditModal] = useState<'personal'|'contact'|'address'|'ids'|'employment'|'beneficiaries'|'photo'|null>(null);
     const queryClient = useQueryClient();
     const { addToast } = useToast();
 
@@ -37,7 +94,7 @@ export default function ProfilePage() {
         mutationFn: updateProfile,
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['profile'] });
-            setShowEditModal(false);
+            setEditModal(null);
             addToast('Profile updated successfully', 'success');
         },
         onError: () => addToast('Failed to update profile', 'error'),
@@ -55,35 +112,42 @@ export default function ProfilePage() {
 
     if (!profile) return null;
 
-    const { user, personal_data, address, contact, employment, accounts, loans, beneficiaries, recent_logs, trusted_devices } = profile;
+    const { user, personal_data, address, contact, employment, member_id, accounts, beneficiaries, recent_logs, trusted_devices } = profile;
 
     return (
         <div className="space-y-6">
             <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-                <div className="h-20 bg-gradient-to-r from-emerald-500 to-cyan-600"></div>
+                <div className="h-20 bg-gradient-to-r from-emerald-500 to-cyan-600 relative group cursor-pointer" onClick={() => setEditModal('photo')}>
+                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-sm font-medium">
+                        <i className="fas fa-camera mr-2"></i> Update Photo
+                    </div>
+                </div>
                 <div className="px-6 pb-6">
-                    <div className="flex items-end gap-4 -mt-8">
-                        <div className="h-16 w-16 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-2xl font-bold text-white ring-4 ring-white shadow">
-                            {personal_data?.first_name?.charAt(0)}{personal_data?.last_name?.charAt(0)}
+                    <div className="flex items-end gap-4 -mt-8 relative z-10">
+                        <div
+                            className="h-20 w-20 rounded-full bg-white flex items-center justify-center ring-4 ring-white shadow-lg overflow-hidden cursor-pointer group"
+                            onClick={() => setEditModal('photo')}
+                        >
+                            {personal_data?.profile_picture ? (
+                                <img src={personal_data.profile_picture} alt="Profile" className="h-full w-full object-cover group-hover:opacity-75 transition-opacity" />
+                            ) : (
+                                <div className="h-full w-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-2xl font-bold text-white group-hover:opacity-90 transition-opacity">
+                                    {personal_data?.first_name?.charAt(0)}{personal_data?.last_name?.charAt(0)}
+                                </div>
+                            )}
                         </div>
-                        <div className="flex-1">
+                        <div className="flex-1 pb-1">
                             <h2 className="text-xl font-bold text-gray-900">
                                 {personal_data?.first_name} {personal_data?.last_name}
                             </h2>
                             <p className="text-sm text-gray-500">{user.email}</p>
                         </div>
-                        <button
-                            onClick={() => setShowEditModal(true)}
-                            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-                        >
-                            <i className="fas fa-edit mr-1"></i> Edit Personal Info
-                        </button>
                     </div>
                 </div>
             </div>
 
             <div className="flex gap-1 overflow-x-auto rounded-xl border border-gray-200 bg-white p-1 shadow-sm">
-                {TABS.map(tab => (
+                {TABS.filter(tab => !user.is_officer || !tab.hideForOfficers).map(tab => (
                     <button
                         key={tab.key}
                         onClick={() => setActiveTab(tab.key)}
@@ -101,55 +165,85 @@ export default function ProfilePage() {
 
             <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
                 {activeTab === 'overview' && (
-                    <div className="space-y-6">
-                        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                            <InfoCard label="Member ID" value={user.user_number || '\u2014'} />
-                            <StatChip label="Role" value={user.primary_role} color="emerald" />
-                            <StatChip label="Status" value={user.account_status} color="emerald" />
-                            <InfoCard label="Gender" value={personal_data?.gender || '\u2014'} />
-                            <InfoCard label="Civil Status" value={personal_data?.civil_status || '\u2014'} />
-                            <InfoCard label="Birth Date" value={personal_data?.birth_date || '\u2014'} />
-                            <StatChip label="Active Loans" value={String(profile.active_loans_count || 0)} color="amber" />
-                            <StatChip label="Beneficiaries" value={String(beneficiaries?.length || 0)} color="cyan" />
+                    <div className="space-y-8">
+                        <div>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-semibold text-gray-900">Personal Information</h3>
+                                <button onClick={() => setEditModal('personal')} className="text-sm font-medium text-emerald-600 hover:text-emerald-700"><i className="fas fa-edit mr-1"></i>Edit</button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                                <InfoCard label="First Name" value={personal_data?.first_name || '\u2014'} />
+                                <InfoCard label="Middle Name" value={personal_data?.mid_name || '\u2014'} />
+                                <InfoCard label="Last Name" value={personal_data?.last_name || '\u2014'} />
+                                <InfoCard label="Suffix" value={personal_data?.suffix || '\u2014'} />
+                                <InfoCard label="Gender" value={personal_data?.gender || '\u2014'} />
+                                <InfoCard label="Civil Status" value={personal_data?.civil_status || '\u2014'} />
+                                <InfoCard label="Birth Date" value={personal_data?.birth_date || '\u2014'} />
+                                <InfoCard label="Birthplace" value={personal_data?.birthplace || '\u2014'} />
+                                <InfoCard label="Religion" value={personal_data?.religion || '\u2014'} />
+                                <InfoCard label="Education" value={personal_data?.education || '\u2014'} />
+                            </div>
+                        </div>
+
+                        <div>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-semibold text-gray-900">Government IDs</h3>
+                                <button onClick={() => setEditModal('ids')} className="text-sm font-medium text-emerald-600 hover:text-emerald-700"><i className="fas fa-edit mr-1"></i>Edit</button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                                <InfoCard label="National ID" value={member_id?.national_id || '\u2014'} />
+                                <InfoCard label="TIN" value={member_id?.tin || '\u2014'} />
+                                <InfoCard label="SSS" value={member_id?.sss || '\u2014'} />
+                                <InfoCard label="PhilHealth" value={member_id?.philhealth || '\u2014'} />
+                            </div>
                         </div>
                     </div>
                 )}
 
                 {activeTab === 'contact' && (
-                    <div className="space-y-4">
-                        <h3 className="font-semibold text-gray-900">Contact Information</h3>
-                        <div className="grid grid-cols-2 gap-4">
-                            <InfoCard label="Phone" value={contact?.phone_no || '\u2014'} />
-                            <InfoCard label="Email" value={contact?.email || user.email} />
-                            <InfoCard label="Facebook" value={contact?.facebook || '\u2014'} />
+                    <div className="space-y-8">
+                        <div>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-semibold text-gray-900">Contact Information</h3>
+                                <button onClick={() => setEditModal('contact')} className="text-sm font-medium text-emerald-600 hover:text-emerald-700"><i className="fas fa-edit mr-1"></i>Edit</button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <InfoCard label="Phone" value={contact?.phone_no || '\u2014'} />
+                                <InfoCard label="Email" value={contact?.email || user.email} />
+                                <InfoCard label="Facebook" value={contact?.facebook || '\u2014'} />
+                            </div>
                         </div>
-                        <h3 className="mt-6 font-semibold text-gray-900">Address</h3>
-                        <div className="grid grid-cols-2 gap-4">
-                            <InfoCard label="Country" value={address?.country || '\u2014'} />
-                            <InfoCard label="Province" value={address?.province || '\u2014'} />
-                            <InfoCard label="City/Municipality" value={address?.city_municipality || '\u2014'} />
-                            <InfoCard label="Barangay" value={address?.barangay || '\u2014'} />
-                            <InfoCard label="Street" value={address?.street || '\u2014'} />
-                            <InfoCard label="ZIP Code" value={address?.zip_code || '\u2014'} />
+
+                        <div>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-semibold text-gray-900">Address</h3>
+                                <button onClick={() => setEditModal('address')} className="text-sm font-medium text-emerald-600 hover:text-emerald-700"><i className="fas fa-edit mr-1"></i>Edit</button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <InfoCard label="Country" value={address?.country || '\u2014'} />
+                                <InfoCard label="Region" value={address?.region || '\u2014'} />
+                                <InfoCard label="Province" value={address?.province || '\u2014'} />
+                                <InfoCard label="City/Municipality" value={address?.city_municipality || '\u2014'} />
+                                <InfoCard label="Barangay" value={address?.barangay || '\u2014'} />
+                                <InfoCard label="Street" value={address?.street || '\u2014'} />
+                                <InfoCard label="ZIP Code" value={address?.zip_code || '\u2014'} />
+                            </div>
                         </div>
                     </div>
                 )}
 
                 {activeTab === 'employment' && (
                     <div className="space-y-4">
-                        <h3 className="font-semibold text-gray-900">Employment Information</h3>
-                        {employment ? (
-                            <div className="grid grid-cols-2 gap-4">
-                                <InfoCard label="Employment Type" value={employment.employment_type || '\u2014'} />
-                                <InfoCard label="Company / Employer" value={employment.company || '\u2014'} />
-                                <InfoCard label="Position" value={employment.position || '\u2014'} />
-                                <InfoCard label="Monthly Income" value={employment.monthly_income ? `\u20B1${Number(employment.monthly_income).toLocaleString()}` : '\u2014'} />
-                                {employment.other_income_source && <InfoCard label="Other Income Source" value={employment.other_income_source} />}
-                                {employment.other_income_amount ? <InfoCard label="Other Income Amount" value={`\u20B1${Number(employment.other_income_amount).toLocaleString()}`} /> : null}
-                            </div>
-                        ) : (
-                            <p className="text-sm text-gray-500">No employment details on record.</p>
-                        )}
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-semibold text-gray-900">Employment Information</h3>
+                            <button onClick={() => setEditModal('employment')} className="text-sm font-medium text-emerald-600 hover:text-emerald-700"><i className="fas fa-edit mr-1"></i>Edit</button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <InfoCard label="Employment Type" value={employment?.employment_type || '\u2014'} />
+                            <InfoCard label="Company / Employer" value={employment?.company || '\u2014'} />
+                            <InfoCard label="Position" value={employment?.position || '\u2014'} />
+                            <InfoCard label="Monthly Income" value={employment?.monthly_income ? `\u20B1${Number(employment.monthly_income).toLocaleString()}` : '\u2014'} />
+                        </div>
                     </div>
                 )}
 
@@ -159,30 +253,39 @@ export default function ProfilePage() {
                         <div className="grid gap-4 md:grid-cols-2">
                             {accounts.map(a => (
                                 <div key={a.id} className="rounded-xl border border-gray-200 p-4 shadow-sm">
-                                    <p className="text-sm text-gray-500">{a.account_type}</p>
+                                    <p className="text-sm text-gray-500 capitalize">{a.account_type}</p>
                                     <p className="text-lg font-bold text-gray-900">&#8369;{Number(a.balance).toLocaleString()}</p>
                                     <p className="text-xs text-gray-400">{a.account_number}</p>
                                 </div>
                             ))}
                         </div>
-                        <h3 className="font-semibold text-gray-900">Active Loans: {profile.active_loans_count}</h3>
+                        <h3 className="font-semibold text-gray-900 mt-6">Active Loans: {profile.active_loans_count}</h3>
                     </div>
                 )}
 
                 {activeTab === 'beneficiaries' && (
                     <div className="space-y-4">
-                        <h3 className="font-semibold text-gray-900">Beneficiaries</h3>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-semibold text-gray-900">Beneficiaries</h3>
+                            <button onClick={() => setEditModal('beneficiaries')} className="text-sm font-medium text-emerald-600 hover:text-emerald-700"><i className="fas fa-edit mr-1"></i>Manage</button>
+                        </div>
                         {beneficiaries.length === 0 ? (
-                            <p className="text-sm text-gray-500">No beneficiaries listed.</p>
+                            <div className="rounded-xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500">
+                                No beneficiaries listed. Click manage to add.
+                            </div>
                         ) : (
                             <div className="space-y-3">
-                                {beneficiaries.map(b => (
-                                    <div key={b.id} className="flex items-center justify-between rounded-xl border border-gray-200 p-3">
-                                        <div>
-                                            <p className="font-medium text-gray-900">{b.name}</p>
-                                            <p className="text-xs text-gray-500">{b.relationship}</p>
+                                {beneficiaries.map((b, i) => (
+                                    <div key={b.id || i} className="flex items-center justify-between rounded-xl border border-gray-200 p-4 bg-gray-50/50">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-10 w-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                                                {b.first_name?.charAt(0) || b.name?.charAt(0)}{b.last_name?.charAt(0)}
+                                            </div>
+                                            <div>
+                                                <p className="font-medium text-gray-900">{b.name || (b.first_name + ' ' + b.last_name)}</p>
+                                                <p className="text-xs text-gray-500 uppercase tracking-wider">{b.relationship}</p>
+                                            </div>
                                         </div>
-                                        {b.percentage != null && <span className="text-sm font-medium text-emerald-600">{b.percentage}%</span>}
                                     </div>
                                 ))}
                             </div>
@@ -200,21 +303,21 @@ export default function ProfilePage() {
                                 {trusted_devices.map(d => (
                                     <div key={d.id} className="flex items-center justify-between rounded-xl border border-gray-100 p-3">
                                         <div>
-                                            <p className="text-sm text-gray-700">{d.device_label || 'Unknown device'}</p>
-                                            <p className="text-xs text-gray-400">{d.last_ip_address}{d.last_used_at ? ` · last used ${new Date(d.last_used_at).toLocaleString()}` : ''}</p>
+                                            <p className="text-sm font-medium text-gray-700">{d.device_label || 'Unknown device'}</p>
+                                            <p className="text-xs text-gray-500">{d.last_ip_address} &middot; {d.last_used_at ? `last used ${new Date(d.last_used_at).toLocaleString()}` : ''}</p>
                                         </div>
-                                        <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${d.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{d.is_active ? 'Active' : 'Inactive'}</span>
+                                        <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${d.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{d.is_active ? 'Active' : 'Inactive'}</span>
                                     </div>
                                 ))}
                             </div>
                         )}
-                        <h3 className="font-semibold text-gray-900 pt-2">Recent Activity</h3>
-                        <div className="space-y-2">
+                        <h3 className="font-semibold text-gray-900 pt-4 border-t border-gray-100">Recent Activity</h3>
+                        <div className="space-y-3">
                             {recent_logs.length === 0 ? (
                                 <p className="text-sm text-gray-500">No recent activity.</p>
                             ) : recent_logs.map(log => (
-                                <div key={log.id} className="flex items-center gap-3 rounded-xl border border-gray-100 p-3">
-                                    <i className="fas fa-clock text-gray-400"></i>
+                                <div key={log.id} className="flex items-start gap-3">
+                                    <div className="mt-0.5"><i className="fas fa-circle-dot text-[10px] text-gray-300"></i></div>
                                     <div>
                                         <p className="text-sm text-gray-700">{log.description}</p>
                                         <p className="text-xs text-gray-400">{new Date(log.created_at).toLocaleString()}</p>
@@ -239,11 +342,137 @@ export default function ProfilePage() {
                 )}
             </div>
 
-            {showEditModal && (
-                <EditProfileModal
+            {editModal === 'personal' && (
+                <EditModal
+                    title="Edit Personal Info"
+                    onClose={() => setEditModal(null)}
+                    onSave={(data) => updateMutation.mutate(createProfileFormData(profile, data))}
+                    isSaving={updateMutation.isPending}
+                >
+                    {(state, handleChange, errors) => (
+                        <div className="grid grid-cols-2 gap-4">
+                            <Field label="First Name" name="first_name" value={state.first_name ?? profile.personal_data?.first_name} onChange={handleChange} required error={errors.first_name} />
+                            <Field label="Middle Name" name="mid_name" value={state.mid_name ?? profile.personal_data?.mid_name} onChange={handleChange} />
+                            <Field label="Last Name" name="last_name" value={state.last_name ?? profile.personal_data?.last_name} onChange={handleChange} required error={errors.last_name} />
+                            <Field label="Suffix" name="suffix" value={state.suffix ?? profile.personal_data?.suffix} onChange={handleChange} />
+                            <Field label="Birth Date" name="birth_date" type="date" value={state.birth_date ?? profile.personal_data?.birth_date} onChange={handleChange} />
+                            <Field label="Gender" name="gender" value={state.gender ?? profile.personal_data?.gender} onChange={handleChange} />
+                            <Field label="Civil Status" name="civil_status" value={state.civil_status ?? profile.personal_data?.civil_status} onChange={handleChange} />
+                            <Field label="Birthplace" name="birthplace" value={state.birthplace ?? profile.personal_data?.birthplace} onChange={handleChange} />
+                            <Field label="Religion" name="religion" value={state.religion ?? profile.personal_data?.religion} onChange={handleChange} />
+                            <Field label="Education" name="education" value={state.education ?? profile.personal_data?.education} onChange={handleChange} />
+                        </div>
+                    )}
+                </EditModal>
+            )}
+
+            {editModal === 'contact' && (
+                <EditModal
+                    title="Edit Contact Info"
+                    onClose={() => setEditModal(null)}
+                    onSave={(data) => updateMutation.mutate(createProfileFormData(profile, data))}
+                    isSaving={updateMutation.isPending}
+                >
+                    {(state, handleChange, errors) => (
+                        <div className="space-y-4">
+                            <Field label="Phone Number" name="phone_no" value={state.phone_no ?? profile.contact?.phone_no} onChange={handleChange} required error={errors.phone_no} />
+                            <div>
+                                <Field label="Email Address" name="email" type="email" value={state.email ?? profile.user.email} onChange={handleChange} required error={errors.email} />
+                                <EmailChangeVerification originalEmail={profile.user.email} email={state.email ?? profile.user.email} />
+                            </div>
+                            <Field label="Facebook Link" name="facebook" value={state.facebook ?? profile.contact?.facebook} onChange={handleChange} />
+                        </div>
+                    )}
+                </EditModal>
+            )}
+
+            {editModal === 'address' && (
+                <EditModal
+                    title="Edit Address"
+                    onClose={() => setEditModal(null)}
+                    onSave={(data) => updateMutation.mutate(createProfileFormData(profile, data))}
+                    isSaving={updateMutation.isPending}
+                >
+                    {(state, handleChange, errors) => (
+                        <div className="grid grid-cols-2 gap-4">
+                            <Field label="Country" name="country" value={state.country ?? profile.address?.country} onChange={handleChange} />
+                            <Field label="Region" name="region" value={state.region ?? profile.address?.region} onChange={handleChange} />
+                            <Field label="Province" name="province" value={state.province ?? profile.address?.province} onChange={handleChange} />
+                            <Field label="City/Municipality" name="city_municipality" value={state.city_municipality ?? profile.address?.city_municipality} onChange={handleChange} required error={errors.city_municipality} />
+                            <Field label="Barangay" name="barangay" value={state.barangay ?? profile.address?.barangay} onChange={handleChange} />
+                            <Field label="Street" name="street" value={state.street ?? profile.address?.street} onChange={handleChange} required error={errors.street} />
+                            <Field label="ZIP Code" name="zip_code" value={state.zip_code ?? profile.address?.zip_code} onChange={handleChange} />
+                        </div>
+                    )}
+                </EditModal>
+            )}
+
+            {editModal === 'ids' && (
+                <EditModal
+                    title="Edit Government IDs"
+                    onClose={() => setEditModal(null)}
+                    onSave={(data) => updateMutation.mutate(createProfileFormData(profile, data))}
+                    isSaving={updateMutation.isPending}
+                >
+                    {(state, handleChange) => (
+                        <div className="grid grid-cols-2 gap-4">
+                            <Field label="National ID" name="national_id" value={state.national_id ?? profile.member_id?.national_id} onChange={handleChange} />
+                            <Field label="TIN" name="tin" value={state.tin ?? profile.member_id?.tin} onChange={handleChange} />
+                            <Field label="SSS" name="sss" value={state.sss ?? profile.member_id?.sss} onChange={handleChange} />
+                            <Field label="PhilHealth" name="philhealth" value={state.philhealth ?? profile.member_id?.philhealth} onChange={handleChange} />
+                        </div>
+                    )}
+                </EditModal>
+            )}
+
+            {editModal === 'employment' && (
+                <EditModal
+                    title="Edit Employment Info"
+                    onClose={() => setEditModal(null)}
+                    onSave={(data) => updateMutation.mutate(createProfileFormData(profile, data))}
+                    isSaving={updateMutation.isPending}
+                >
+                    {(state, handleChange) => (
+                        <div className="grid grid-cols-2 gap-4">
+                            <Field label="Employment Type" name="employment_type" value={state.employment_type ?? profile.employment?.employment_type} onChange={handleChange} />
+                            <Field label="Company/Employer" name="employer_name" value={state.employer_name ?? profile.employment?.company} onChange={handleChange} />
+                            <Field label="Position" name="position" value={state.position ?? profile.employment?.position} onChange={handleChange} />
+                            <Field label="Monthly Income" name="monthly_income" type="number" value={state.monthly_income ?? profile.employment?.monthly_income} onChange={handleChange} />
+                        </div>
+                    )}
+                </EditModal>
+            )}
+
+            {editModal === 'photo' && (
+                <EditModal
+                    title="Update Profile Photo"
+                    onClose={() => setEditModal(null)}
+                    onSave={(data) => {
+                        const fd = createProfileFormData(profile, {});
+                        if (data.profile_photo) fd.append('profile_photo', data.profile_photo);
+                        updateMutation.mutate(fd);
+                    }}
+                    isSaving={updateMutation.isPending}
+                >
+                    {(state, handleChange) => (
+                        <div className="space-y-4">
+                            <input
+                                type="file"
+                                name="profile_photo"
+                                accept="image/*"
+                                onChange={(e) => handleChange('profile_photo', e.target.files?.[0])}
+                                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                            />
+                        </div>
+                    )}
+                </EditModal>
+            )}
+
+            {editModal === 'beneficiaries' && (
+                <BeneficiariesEditModal
                     profile={profile}
-                    onClose={() => setShowEditModal(false)}
-                    onSave={(formData) => updateMutation.mutate(formData)}
+                    onClose={() => setEditModal(null)}
+                    onSave={(bens) => updateMutation.mutate(createProfileFormData(profile, {}, bens))}
                     isSaving={updateMutation.isPending}
                 />
             )}
@@ -254,118 +483,74 @@ export default function ProfilePage() {
 function InfoCard({ label, value }: { label: string; value: string }) {
     return (
         <div>
-            <p className="text-xs font-medium text-gray-500">{label}</p>
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">{label}</p>
             <p className="text-sm font-medium text-gray-900">{value}</p>
         </div>
     );
 }
 
-function StatChip({ label, value, color }: { label: string; value: string; color: 'emerald' | 'cyan' | 'amber' }) {
-    const colors = {
-        emerald: 'bg-emerald-50 text-emerald-700',
-        cyan: 'bg-cyan-50 text-cyan-700',
-        amber: 'bg-amber-50 text-amber-700',
-    };
+function Field({ label, name, required, type, value, onChange, error }: { label: string; name: string; required?: boolean; type?: string; value?: string; onChange: (name: string, v: string) => void; error?: string }) {
     return (
-        <div className={`rounded-xl ${colors[color]} p-3 text-center`}>
-            <p className="text-xs font-medium opacity-75">{label}</p>
-            <p className="text-lg font-bold">{value}</p>
+        <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">{label}</label>
+            {type === 'date' ? (
+                <>
+                    <DatePicker value={value ?? ''} onChange={(v) => onChange(name, v)} fromYear={new Date().getFullYear() - 100} toYear={new Date().getFullYear()} className={`w-full rounded-lg border bg-white px-3 py-2 text-sm ${error ? 'border-red-400' : 'border-gray-200'}`} />
+                </>
+            ) : (
+                <input
+                    type={type || 'text'}
+                    value={value ?? ''}
+                    onChange={(e) => onChange(name, e.target.value)}
+                    className={`w-full rounded-lg border bg-white px-3 py-2 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 ${error ? 'border-red-400' : 'border-gray-200'}`}
+                />
+            )}
+            {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
         </div>
     );
 }
 
-function EditProfileModal({ profile, onClose, onSave, isSaving }: {
-    profile: ProfileData;
+function EditModal({ title, children, onClose, onSave, isSaving }: {
+    title: string;
+    children: (state: any, handleChange: (name: string, v: any) => void, errors: FieldErrors) => React.ReactNode;
     onClose: () => void;
-    onSave: (data: FormData) => void;
+    onSave: (data: any) => void;
     isSaving: boolean;
 }) {
-    const pd = profile.personal_data;
-    const addr = profile.address;
-    const cont = profile.contact;
-    const user = profile.user;
-
+    const [state, setState] = useState<any>({});
     const [errors, setErrors] = useState<FieldErrors>({});
-    const [first_name, setFirstName] = useState(pd?.first_name || '');
-    const [last_name, setLastName] = useState(pd?.last_name || '');
-    const [email, setEmail] = useState(user.email);
-    const [birth_date, setBirthDate] = useState(pd?.birth_date || '');
     const { markDirty, requestClose, renderDialog } = useDiscardGuard();
 
-    const setFirstNameD = (v: string) => { markDirty(); setFirstName(v); };
-    const setLastNameD = (v: string) => { markDirty(); setLastName(v); };
-    const setEmailD = (v: string) => { markDirty(); setEmail(v); };
-    const setBirthDateD = (v: string) => { markDirty(); setBirthDate(v); };
+    const handleChange = (name: string, v: any) => {
+        markDirty();
+        setState((s: any) => ({ ...s, [name]: v }));
+        if (errors[name]) setErrors(e => ({ ...e, [name]: undefined }));
+    };
+
     const requestCloseGuard = () => requestClose(onClose);
 
-    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        const errs = validate(profileSchema, { first_name, last_name, email, phone_number: cont?.phone_no || '' });
-        if (Object.keys(errs).length > 0) {
-            setErrors(errs);
-            return;
-        }
-        setErrors({});
-        const form = new FormData(e.currentTarget);
-        onSave(form);
+        onSave(state);
     };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={requestCloseGuard}>
-            <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-                <div className="bg-gradient-to-r from-emerald-600 to-cyan-600 px-6 py-5 text-white shrink-0">
-                    <div className="flex items-center justify-between">
-                        <h2 className="text-lg font-bold">Edit Profile</h2>
-                        <button onClick={requestCloseGuard} className="rounded-full p-1 text-white/70 hover:bg-white/20 hover:text-white transition-colors"><i className="fas fa-times"></i></button>
-                    </div>
+            <div className="w-full max-w-xl max-h-[90vh] flex flex-col rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 shrink-0">
+                    <h2 className="text-lg font-bold text-gray-900">{title}</h2>
+                    <button onClick={requestCloseGuard} className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"><i className="fas fa-times"></i></button>
                 </div>
-                <div className="p-6">
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    <div>
-                        <h3 className="mb-3 text-sm font-semibold text-gray-900 border-b border-gray-100 pb-2">Personal Info</h3>
-                        <div className="grid grid-cols-2 gap-4">
-                            <Field label="Title" name="title" defaultValue={pd?.title || ''} />
-                            <Field label="First Name" name="first_name" value={first_name} onChange={setFirstNameD} required error={errors.first_name} />
-                            <Field label="Middle Name" name="mid_name" defaultValue={pd?.mid_name || ''} />
-                            <Field label="Last Name" name="last_name" value={last_name} onChange={setLastNameD} required error={errors.last_name} />
-                            <Field label="Suffix" name="suffix" defaultValue={pd?.suffix || ''} />
-                            <Field label="Birth Date" name="birth_date" type="date" value={birth_date} onChange={setBirthDateD} />
-                            <Field label="Birthplace" name="birthplace" defaultValue={pd?.birthplace || ''} />
-                            <Field label="Gender" name="gender" defaultValue={pd?.gender || ''} />
-                            <Field label="Civil Status" name="civil_status" defaultValue={pd?.civil_status || ''} />
-                            <Field label="Education" name="education" defaultValue={pd?.education || ''} />
-                            <Field label="Religion" name="religion" defaultValue={pd?.religion || ''} />
-                            <Field label="Contact Phone" name="phone_no" defaultValue={cont?.phone_no || ''} />
-                            <Field label="Facebook" name="facebook" defaultValue={cont?.facebook || ''} />
-                            <div className="col-span-2">
-                                <Field label="Email" name="email" type="email" value={email} onChange={setEmailD} required error={errors.email} />
-                                <EmailChangeVerification originalEmail={user.email} email={email} />
-                            </div>
-                        </div>
-                    </div>
-                    <div>
-                        <h3 className="mb-3 text-sm font-semibold text-gray-900 border-b border-gray-100 pb-2">Address</h3>
-                        <div className="grid grid-cols-2 gap-4">
-                            <Field label="Country" name="country" defaultValue={addr?.country || ''} />
-                            <Field label="Region" name="region" defaultValue={addr?.region || ''} />
-                            <Field label="Province" name="province" defaultValue={addr?.province || ''} />
-                            <Field label="City / Municipality" name="city_municipality" defaultValue={addr?.city_municipality || ''} />
-                            <Field label="Barangay" name="barangay" defaultValue={addr?.barangay || ''} />
-                            <Field label="Street" name="street" defaultValue={addr?.street || ''} />
-                            <Field label="ZIP Code" name="zip_code" defaultValue={addr?.zip_code || ''} />
-                        </div>
-                    </div>
-                    <div>
-                        <h3 className="mb-3 text-sm font-semibold text-gray-900 border-b border-gray-100 pb-2">Profile Photo</h3>
-                        <input type="file" name="profile_photo" accept="image/*" onChange={() => markDirty()} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
-                    </div>
-                    <div className="flex justify-end gap-3">
-                        <button type="button" onClick={requestCloseGuard} className="rounded-lg border border-gray-200 px-4 py-2 text-sm hover:bg-gray-50">Cancel</button>
-                        <button type="submit" disabled={isSaving} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
-                            {isSaving ? 'Saving...' : 'Save Changes'}
-                        </button>
-                    </div>
-                </form>
+                <div className="p-6 overflow-y-auto">
+                    <form id="edit-form" onSubmit={handleSubmit}>
+                        {children(state, handleChange, errors)}
+                    </form>
+                </div>
+                <div className="border-t border-gray-100 bg-gray-50 px-6 py-4 flex justify-end gap-3 shrink-0">
+                    <button type="button" onClick={requestCloseGuard} className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                    <button type="submit" form="edit-form" disabled={isSaving} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+                        {isSaving ? 'Saving...' : 'Save Changes'}
+                    </button>
                 </div>
             </div>
             {renderDialog()}
@@ -373,27 +558,67 @@ function EditProfileModal({ profile, onClose, onSave, isSaving }: {
     );
 }
 
-function Field({ label, name, defaultValue, required, type, value, onChange, error }: { label: string; name: string; defaultValue?: string; required?: boolean; type?: string; value?: string; onChange?: (v: string) => void; error?: string }) {
+function BeneficiariesEditModal({ profile, onClose, onSave, isSaving }: { profile: ProfileData, onClose: () => void, onSave: (b: any[]) => void, isSaving: boolean }) {
+    const { markDirty, requestClose, renderDialog } = useDiscardGuard();
+    const [bens, setBens] = useState<any[]>(
+        profile.beneficiaries?.length > 0
+            ? profile.beneficiaries.map(b => ({ first_name: b.first_name || b.name.split(' ')[0], last_name: b.last_name || b.name.split(' ').slice(1).join(' '), relationship: b.relationship }))
+            : [{ first_name: '', last_name: '', relationship: '' }]
+    );
+    const [errors, setErrors] = useState<string>('');
+
+    const requestCloseGuard = () => requestClose(onClose);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const valid = bens.every(b => b.first_name?.trim() && b.last_name?.trim() && b.relationship?.trim());
+        if (!valid) {
+            setErrors('Please fill out all fields for all beneficiaries');
+            return;
+        }
+        onSave(bens);
+    };
+
     return (
-        <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">{label}</label>
-            {type === 'date' ? (
-                <>
-                    <DatePicker value={value ?? defaultValue ?? ''} onChange={onChange || (() => {})} fromYear={new Date().getFullYear() - 100} toYear={new Date().getFullYear()} className={`w-full rounded-lg border bg-white px-3 py-2 text-sm ${error ? 'border-red-400' : 'border-gray-200'}`} />
-                    <input type="hidden" name={name} value={value ?? defaultValue ?? ''} />
-                </>
-            ) : (
-                <input
-                    type={type || 'text'}
-                    name={name}
-                    defaultValue={defaultValue}
-                    value={value}
-                    onChange={onChange ? e => onChange(e.target.value) : undefined}
-                    required={required}
-                    className={`w-full rounded-lg border bg-white px-3 py-2 text-sm ${error ? 'border-red-400' : 'border-gray-200'}`}
-                />
-            )}
-            {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={requestCloseGuard}>
+            <div className="w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 shrink-0">
+                    <h2 className="text-lg font-bold text-gray-900">Manage Beneficiaries</h2>
+                    <button onClick={requestCloseGuard} className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"><i className="fas fa-times"></i></button>
+                </div>
+                <div className="p-6 overflow-y-auto">
+                    <form id="bens-form" onSubmit={handleSubmit} className="space-y-4">
+                        {errors && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-100">{errors}</div>}
+                        {bens.map((b, i) => (
+                            <div key={i} className="flex gap-3 items-end p-4 bg-gray-50 rounded-xl border border-gray-200">
+                                <div className="flex-1 grid grid-cols-3 gap-3">
+                                    <div>
+                                        <label className="mb-1 block text-xs font-medium text-gray-500">First Name</label>
+                                        <input type="text" value={b.first_name} onChange={e => { markDirty(); const n = [...bens]; n[i].first_name = e.target.value; setBens(n); setErrors(''); }} className="w-full rounded-lg border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" required />
+                                    </div>
+                                    <div>
+                                        <label className="mb-1 block text-xs font-medium text-gray-500">Last Name</label>
+                                        <input type="text" value={b.last_name} onChange={e => { markDirty(); const n = [...bens]; n[i].last_name = e.target.value; setBens(n); setErrors(''); }} className="w-full rounded-lg border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" required />
+                                    </div>
+                                    <div>
+                                        <label className="mb-1 block text-xs font-medium text-gray-500">Relationship</label>
+                                        <input type="text" value={b.relationship} onChange={e => { markDirty(); const n = [...bens]; n[i].relationship = e.target.value; setBens(n); setErrors(''); }} className="w-full rounded-lg border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" required />
+                                    </div>
+                                </div>
+                                <button type="button" onClick={() => { markDirty(); setBens(bens.filter((_, idx) => idx !== i)) }} className="h-[38px] px-3 text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"><i className="fas fa-trash"></i></button>
+                            </div>
+                        ))}
+                        <button type="button" onClick={() => { markDirty(); setBens([...bens, { first_name: '', last_name: '', relationship: '' }]) }} className="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-sm font-medium text-emerald-600 hover:border-emerald-200 hover:bg-emerald-50 transition-colors"><i className="fas fa-plus mr-2"></i>Add Beneficiary</button>
+                    </form>
+                </div>
+                <div className="border-t border-gray-100 bg-gray-50 px-6 py-4 flex justify-end gap-3 shrink-0">
+                    <button type="button" onClick={requestCloseGuard} className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                    <button type="submit" form="bens-form" disabled={isSaving} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+                        {isSaving ? 'Saving...' : 'Save Beneficiaries'}
+                    </button>
+                </div>
+            </div>
+            {renderDialog()}
         </div>
     );
 }

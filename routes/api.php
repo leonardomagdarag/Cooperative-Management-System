@@ -14,9 +14,11 @@ use App\Http\Controllers\Api\LoanProductController;
 use App\Http\Controllers\Api\LogController;
 use App\Http\Controllers\Api\MemberController;
 use App\Http\Controllers\Api\OfficerPermissionController;
+use App\Http\Controllers\Api\OfficerVerificationController;
 use App\Http\Controllers\Api\PayMongoPaymentController;
 use App\Http\Controllers\Api\PayMongoSettingsController;
 use App\Http\Controllers\Api\PayMongoWebhookController;
+use App\Http\Controllers\Api\PhoneVerificationController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\PublicContentController;
 use App\Http\Controllers\Api\ReportController;
@@ -112,8 +114,8 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     Route::put('/profile', [ProfileController::class, 'update']);
     Route::post('/profile/email/send-otp', [ProfileController::class, 'sendEmailChangeOtp']);
     Route::get('/profile/completion', [ProfileController::class, 'completion']);
-    Route::post('/profile/phone/send-otp', [\App\Http\Controllers\Api\PhoneVerificationController::class, 'sendOtp']);
-    Route::post('/profile/phone/verify', [\App\Http\Controllers\Api\PhoneVerificationController::class, 'verifyOtp']);
+    Route::post('/profile/phone/send-otp', [PhoneVerificationController::class, 'sendOtp']);
+    Route::post('/profile/phone/verify', [PhoneVerificationController::class, 'verifyOtp']);
 
     // Settings
     Route::put('/settings/password', [SettingsController::class, 'changePassword']);
@@ -251,12 +253,12 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     // Officer permission overrides (admin)
     Route::get('/officers/{user}/permissions', [OfficerPermissionController::class, 'index']);
     Route::put('/officers/{user}/permissions', [OfficerPermissionController::class, 'update']);
-    
-    // Officer creation verification
-    Route::post('/officers/verify-email/send', [\App\Http\Controllers\Api\OfficerVerificationController::class, 'sendEmailOtp']);
-    Route::post('/officers/verify-email', [\App\Http\Controllers\Api\OfficerVerificationController::class, 'verifyEmailOtp']);
-    Route::post('/officers/verify-phone/send', [\App\Http\Controllers\Api\OfficerVerificationController::class, 'sendPhoneOtp']);
-    Route::post('/officers/verify-phone', [\App\Http\Controllers\Api\OfficerVerificationController::class, 'verifyPhoneOtp']);
+
+    // Contact verification for newly created member and officer accounts
+    Route::post('/officers/verify-email/send', [OfficerVerificationController::class, 'sendEmailOtp'])->middleware('throttle:2,1');
+    Route::post('/officers/verify-email', [OfficerVerificationController::class, 'verifyEmailOtp']);
+    Route::post('/officers/verify-phone/send', [OfficerVerificationController::class, 'sendPhoneOtp'])->middleware('throttle:2,1');
+    Route::post('/officers/verify-phone', [OfficerVerificationController::class, 'verifyPhoneOtp']);
 
     // Services
     Route::get('/services', [ServiceController::class, 'index']);

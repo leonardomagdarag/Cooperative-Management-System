@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Contact;
-use App\Models\SystemSetting;
 use App\Services\AuditLogService;
 use App\Services\SecurityOtpService;
 use App\Services\TextBeeService;
@@ -36,7 +35,7 @@ class PhoneVerificationController extends Controller
         $exists = Contact::where('phone_no', $phoneNo)
             ->where('id', '!=', $user->contact?->id)
             ->exists();
-        
+
         if ($exists) {
             return response()->json(['message' => 'This phone number is already registered to another account.'], 422);
         }
@@ -46,17 +45,11 @@ class PhoneVerificationController extends Controller
 
         $purpose = 'phone_verification';
         $issued = $this->securityOtpService->issueChallenge($user, $purpose);
-        
+
         $message = "Settlers CC: Your phone verification OTP is {$issued['otp_code']}. Valid for 10 mins. Never share this.";
-        
-        try {
-            \App\Jobs\SendSmsJob::dispatch($phoneNo, $message, 'otp.sms');
-            $this->securityOtpService->stashDebugCode($request->session(), $issued['otp_code']);
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning("Failed to dispatch phone verification SMS: {$e->getMessage()}");
-            $this->textBeeService->send($phoneNo, $message);
-            $this->securityOtpService->stashDebugCode($request->session(), $issued['otp_code']);
-        }
+
+        $this->securityOtpService->sendOtpSmsToPhone($user, $phoneNo, $purpose, $issued['otp_code'], $message);
+        $this->securityOtpService->stashDebugCode($request->session(), $issued['otp_code']);
 
         return response()->json([
             'message' => 'Verification code sent to your phone.',
