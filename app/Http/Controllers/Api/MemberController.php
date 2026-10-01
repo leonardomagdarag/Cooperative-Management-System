@@ -21,6 +21,7 @@ use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
 use App\Support\BranchScope;
 use App\Support\PermissionCatalog;
+use App\Support\PersonFieldRules;
 use App\Support\PersonPasswordPolicy;
 use App\Support\SearchFilter;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -288,39 +289,38 @@ class MemberController extends Controller
         $this->normalizeBeneficiaries($request);
 
         $minimumAge = max((int) config('settings.requirement.age', 18), 18);
-        $oldestAllowedBirthDate = now()->subYears($minimumAge)->toDateString();
 
         $validated = $request->validate([
-            'first_name' => 'required|string|max:100',
-            'last_name' => 'required|string|max:100',
-            'mid_name' => 'nullable|string|max:100',
-            'suffix' => 'nullable|string|max:50',
-            'birth_date' => 'required|date|before:today|before_or_equal:'.$oldestAllowedBirthDate,
-            'birthplace' => 'nullable|string|max:255',
+            'first_name' => PersonFieldRules::name(true),
+            'last_name' => PersonFieldRules::name(true),
+            'mid_name' => PersonFieldRules::name(false),
+            'suffix' => PersonFieldRules::name(false, PersonFieldRules::SUFFIX_MAX),
+            'birth_date' => PersonFieldRules::birthDate(true, $minimumAge),
+            'birthplace' => PersonFieldRules::text(false, PersonFieldRules::TEXT_MAX),
             'gender' => 'required|in:male,female,other',
             'civil_status' => 'required|in:single,married,widowed,separated',
-            'religion' => 'nullable|string|max:64',
-            'title' => 'nullable|string|max:50',
+            'religion' => PersonFieldRules::name(false, 64),
+            'title' => PersonFieldRules::title(),
             'branch_id' => 'nullable|exists:branches,id',
-            'country' => 'nullable|string|max:100',
-            'region' => 'nullable|string|max:100',
-            'province' => 'nullable|string|max:100',
-            'city' => 'nullable|string|max:100',
-            'barangay' => 'nullable|string|max:100',
-            'street' => 'nullable|string|max:255',
-            'postal_code' => 'nullable|string|max:20',
-            'email' => 'required|email|unique:users,email|unique:contacts,email',
-            'phone_number' => 'required|string|max:11',
-            'facebook_link' => 'nullable|string|max:255',
-            'national_id' => 'nullable|string|max:64',
-            'tin' => 'nullable|string|max:64',
-            'sss' => 'nullable|string|max:64',
-            'philhealth' => 'nullable|string|max:64',
-            'barangay_id' => 'nullable|string|max:64',
-            'employment_type' => 'nullable|string|max:50',
-            'employer_name' => 'nullable|string|max:255',
-            'position' => 'nullable|string|max:100',
-            'monthly_income' => 'nullable|numeric|min:0',
+            'country' => PersonFieldRules::text(false, 100),
+            'region' => PersonFieldRules::text(false, 100),
+            'province' => PersonFieldRules::text(false, 100),
+            'city' => PersonFieldRules::text(false, 100),
+            'barangay' => PersonFieldRules::text(false, 100),
+            'street' => PersonFieldRules::text(false, PersonFieldRules::TEXT_MAX),
+            'postal_code' => PersonFieldRules::postalCode(),
+            'email' => PersonFieldRules::email(true, ['unique:users,email', 'unique:contacts,email']),
+            'phone_number' => PersonFieldRules::phone(true),
+            'facebook_link' => PersonFieldRules::facebookLink(),
+            'national_id' => PersonFieldRules::nationalId(),
+            'tin' => PersonFieldRules::tin(),
+            'sss' => PersonFieldRules::sss(),
+            'philhealth' => PersonFieldRules::philhealth(),
+            'barangay_id' => PersonFieldRules::localId(),
+            'employment_type' => PersonFieldRules::employmentType(),
+            'employer_name' => PersonFieldRules::text(false, PersonFieldRules::TEXT_MAX),
+            'position' => PersonFieldRules::text(false, 100),
+            'monthly_income' => PersonFieldRules::income(),
             'password' => PersonPasswordPolicy::passwordRules(false, PersonPasswordPolicy::normalizedNameTokens([
                 $request->input('first_name'),
                 $request->input('mid_name'),
@@ -328,10 +328,10 @@ class MemberController extends Controller
             ])),
             'password_confirmation' => 'required|string|same:password',
             'role' => ['nullable', 'string', Rule::exists('roles', 'name')->where('guard_name', 'web')],
-            'beneficiaries' => 'nullable|array',
-            'beneficiaries.*.first_name' => 'required|string|max:100',
-            'beneficiaries.*.last_name' => 'required|string|max:100',
-            'beneficiaries.*.relationship' => 'required|string|max:50',
+            'beneficiaries' => 'nullable|array|max:5',
+            'beneficiaries.*.first_name' => PersonFieldRules::name(true),
+            'beneficiaries.*.last_name' => PersonFieldRules::name(true),
+            'beneficiaries.*.relationship' => PersonFieldRules::name(true, 50),
             'profile_photo' => 'nullable|file|mimes:jpg,jpeg,png,gif,webp|max:2048',
             'national_id_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:5120',
             'tin_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:5120',
@@ -339,7 +339,7 @@ class MemberController extends Controller
             'philhealth_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:5120',
             'barangay_id_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:5120',
             'agreement_file' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
-        ]);
+        ], PersonFieldRules::messages());
 
         $profilePhotoPath = $request->file('profile_photo')?->store('profile-photos', 'public');
         $idPhotoPaths = [];
@@ -474,39 +474,38 @@ class MemberController extends Controller
         $this->normalizeBeneficiaries($request);
 
         $minimumAge = max((int) config('settings.requirement.age', 18), 18);
-        $oldestAllowedBirthDate = now()->subYears($minimumAge)->toDateString();
 
         $validated = $request->validate([
-            'first_name' => 'required|string|max:100',
-            'last_name' => 'required|string|max:100',
-            'mid_name' => 'nullable|string|max:100',
-            'suffix' => 'nullable|string|max:50',
-            'birth_date' => 'nullable|date|before:today|before_or_equal:'.$oldestAllowedBirthDate,
-            'birthplace' => 'nullable|string|max:255',
+            'first_name' => PersonFieldRules::name(true),
+            'last_name' => PersonFieldRules::name(true),
+            'mid_name' => PersonFieldRules::name(false),
+            'suffix' => PersonFieldRules::name(false, PersonFieldRules::SUFFIX_MAX),
+            'birth_date' => PersonFieldRules::birthDate(false, $minimumAge),
+            'birthplace' => PersonFieldRules::text(false, PersonFieldRules::TEXT_MAX),
             'gender' => 'nullable|in:male,female,other',
             'civil_status' => 'nullable|in:single,married,widowed,separated',
-            'religion' => 'nullable|string|max:64',
-            'title' => 'nullable|string|max:50',
+            'religion' => PersonFieldRules::name(false, 64),
+            'title' => PersonFieldRules::title(),
             'branch_id' => 'nullable|exists:branches,id',
-            'country' => 'nullable|string|max:100',
-            'region' => 'nullable|string|max:100',
-            'province' => 'nullable|string|max:100',
-            'city' => 'nullable|string|max:100',
-            'barangay' => 'nullable|string|max:100',
-            'street' => 'nullable|string|max:255',
-            'postal_code' => 'nullable|string|max:20',
-            'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($user->id)],
-            'phone_number' => 'nullable|string|max:11',
-            'facebook_link' => 'nullable|string|max:255',
-            'national_id' => 'nullable|string|max:64',
-            'tin' => 'nullable|string|max:64',
-            'sss' => 'nullable|string|max:64',
-            'philhealth' => 'nullable|string|max:64',
-            'barangay_id' => 'nullable|string|max:64',
-            'employment_type' => 'nullable|string|max:50',
-            'employer_name' => 'nullable|string|max:255',
-            'position' => 'nullable|string|max:100',
-            'monthly_income' => 'nullable|numeric|min:0',
+            'country' => PersonFieldRules::text(false, 100),
+            'region' => PersonFieldRules::text(false, 100),
+            'province' => PersonFieldRules::text(false, 100),
+            'city' => PersonFieldRules::text(false, 100),
+            'barangay' => PersonFieldRules::text(false, 100),
+            'street' => PersonFieldRules::text(false, PersonFieldRules::TEXT_MAX),
+            'postal_code' => PersonFieldRules::postalCode(),
+            'email' => PersonFieldRules::email(true, [Rule::unique('users', 'email')->ignore($user->id)]),
+            'phone_number' => PersonFieldRules::phone(false),
+            'facebook_link' => PersonFieldRules::facebookLink(),
+            'national_id' => PersonFieldRules::nationalId(),
+            'tin' => PersonFieldRules::tin(),
+            'sss' => PersonFieldRules::sss(),
+            'philhealth' => PersonFieldRules::philhealth(),
+            'barangay_id' => PersonFieldRules::localId(),
+            'employment_type' => PersonFieldRules::employmentType(),
+            'employer_name' => PersonFieldRules::text(false, PersonFieldRules::TEXT_MAX),
+            'position' => PersonFieldRules::text(false, 100),
+            'monthly_income' => PersonFieldRules::income(),
             'role' => ['nullable', 'string', Rule::exists('roles', 'name')->where('guard_name', 'web')],
             'password' => PersonPasswordPolicy::passwordRules(true, PersonPasswordPolicy::normalizedNameTokens([
                 $request->input('first_name'),
@@ -514,10 +513,10 @@ class MemberController extends Controller
                 $request->input('last_name'),
             ])),
             'otp_code' => ['nullable', 'required_with:password', 'string', 'digits:6'],
-            'beneficiaries' => 'nullable|array',
-            'beneficiaries.*.first_name' => 'required|string|max:100',
-            'beneficiaries.*.last_name' => 'required|string|max:100',
-            'beneficiaries.*.relationship' => 'required|string|max:50',
+            'beneficiaries' => 'nullable|array|max:5',
+            'beneficiaries.*.first_name' => PersonFieldRules::name(true),
+            'beneficiaries.*.last_name' => PersonFieldRules::name(true),
+            'beneficiaries.*.relationship' => PersonFieldRules::name(true, 50),
             'profile_photo' => 'nullable|file|mimes:jpg,jpeg,png,gif,webp|max:2048',
             'national_id_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:5120',
             'tin_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:5120',
@@ -525,7 +524,7 @@ class MemberController extends Controller
             'philhealth_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:5120',
             'barangay_id_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:5120',
             'agreement_file' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
-        ]);
+        ], PersonFieldRules::messages());
 
         if (! empty($validated['password'])) {
             $actor = Auth::user();

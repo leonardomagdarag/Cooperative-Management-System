@@ -4,15 +4,98 @@ export type FieldErrors = Record<string, string>;
 
 const MAX_NAME = 100;
 const MAX_EMAIL = 191;
+const MIN_PHONE = 10;
 const MAX_PHONE = 11;
+const MAX_POSTAL = 4;
+const MAX_GOV_ID = 64;
+const MAX_TEXT = 255;
+export const MIN_PERSON_AGE = 18;
+
+/**
+ * Character/format rules mirroring app/Support/PersonFieldRules.php. Keep the
+ * two in sync -- the backend is the real gate, but the modals should not let
+ * an operator reach submit with a value the server would reject.
+ */
+export const NAME_PATTERN = /^[\p{L}\p{M}\p{Zs}][\p{L}\p{M}\p{Zs}'’\u2013.-]*$/u;
+export const TEXT_PATTERN = /^[\p{L}\p{N}\p{M}\p{Zs}.,'’&()\/#+\u2013-]+$/u;
+export const PHONE_PATTERN = /^[0-9]{10,11}$/;
+export const POSTAL_CODE_PATTERN = /^[0-9]{4}$/;
+export const NATIONAL_ID_PATTERN = /^[0-9]{4}-?[0-9]{4}-?[0-9]{4}-?[0-9]{4}$/;
+export const TIN_PATTERN = /^[0-9]{3}-?[0-9]{3}-?[0-9]{3}-?[0-9]{3}$/;
+export const SSS_PATTERN = /^[0-9]{2}-?[0-9]{7}-?[0-9]$/;
+export const PHILHEALTH_PATTERN = /^[0-9]{2}-?[0-9]{9}-?[0-9]$/;
+export const LOCAL_ID_PATTERN = /^[A-Za-z0-9-]+$/;
+export const URL_PATTERN = /^https?:\/\/[^\s/$.?#].[^\s]*$/i;
+
+export const PERSON_TITLES = ['Chairman', 'Vice Chairman', 'Secretary', 'Treasurer', 'Loan Officer', 'Accountant', 'Member'];
+export const EMPLOYMENT_TYPES = ['full-time', 'part-time', 'self-employed', 'freelancer', 'government', 'private', 'ofw', 'retired', 'unemployed', 'student', 'homemaker'];
+
+const NAME_MSG = 'may only contain letters, spaces, apostrophes and hyphens';
+const TEXT_MSG = 'may only contain letters, numbers and basic punctuation';
+const PHONE_MSG = `must be ${MIN_PHONE}-${MAX_PHONE} digits using numbers only`;
 
 const passwordRegex = /^(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9]).{8,128}$/;
 
-const stringMax = (max: number, msg?: string) => z.string().max(max, msg ?? `Maximum of ${max} characters`).optional().or(z.literal(''));
+const stringMax = (max: number, msg?: string, pattern?: RegExp, patternMsg?: string) => {
+    let s = z.string().max(max, msg ?? `Maximum of ${max} characters`);
+    if (pattern) s = s.regex(pattern, patternMsg);
+    return s.optional().or(z.literal(''));
+};
 
 const requiredString = (msg: string, max = 255) => z.string().trim().min(1, msg).max(max, `Maximum of ${max} characters`);
 
 const optionalString = (max: number) => stringMax(max);
+
+/** Personal names: letters only (plus spaces, apostrophes, hyphens, periods). No digits, no symbols. */
+const nameString = (requiredMsg?: string, max = MAX_NAME) => {
+    if (requiredMsg) return requiredString(requiredMsg, max).regex(NAME_PATTERN, `Name ${NAME_MSG}`);
+    return stringMax(max, undefined, NAME_PATTERN, `Name ${NAME_MSG}`);
+};
+
+/** Free text: adds digits and the punctuation real addresses and job titles use. */
+const textString = (max: number) => stringMax(max, undefined, TEXT_PATTERN, `Value ${TEXT_MSG}`);
+
+const phoneString = (required: boolean) => {
+    const base = required
+        ? z.string().trim().min(1, 'Phone number is required')
+        : z.string().trim();
+
+    return base
+        .max(MAX_PHONE, `Phone number must be at most ${MAX_PHONE} digits`)
+        .refine(v => v === '' || PHONE_PATTERN.test(v), { message: `Phone number ${PHONE_MSG}` });
+};
+
+const govIdString = (pattern: RegExp, msg: string) =>
+    stringMax(MAX_GOV_ID, undefined, pattern, msg);
+
+const startOfToday = () => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+};
+
+const parseDate = (value: string): Date | null => {
+    const normalized = /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00` : value;
+    const ts = Date.parse(normalized);
+    return Number.isNaN(ts) ? null : new Date(ts);
+};
+
+const ageOn = (dob: Date): number => {
+    const now = new Date();
+    let age = now.getFullYear() - dob.getFullYear();
+    const monthDelta = now.getMonth() - dob.getMonth();
+    if (monthDelta < 0 || (monthDelta === 0 && now.getDate() < dob.getDate())) age -= 1;
+    return age;
+};
+
+/** Birth date must parse, be in the past, and put the person over the minimum age. */
+const birthDateString = (requiredMsg?: string) => {
+    const base = requiredMsg ? requiredString(requiredMsg) : dateOrEmpty.optional();
+
+    return base
+        .refine(v => v === '' || parseDate(v) !== null, { message: 'Enter a valid date' })
+        .refine(v => v === '' || parseDate(v)!.getTime() < startOfToday(), { message: 'Birth date cannot be in the future' })
+        .refine(v => v === '' || ageOn(parseDate(v)!) >= MIN_PERSON_AGE, { message: `Must be at least ${MIN_PERSON_AGE} years old` });
+};
 
 const amount = (min: number, label = 'Amount') =>
     z.coerce.number({ invalid_type_error: 'Enter a valid ' + label })
@@ -26,6 +109,23 @@ export const optionalId = z.coerce.number({ invalid_type_error: 'Select a valid 
 
 export const enumFrom = (values: readonly string[], msg: string) =>
     z.string().refine(v => values.includes(v), { message: msg });
+
+/** Strips characters the field cannot accept. Used by the modals while typing. */
+export const onlyDigits = (value: string, max = MAX_PHONE) => value.replace(/\D/g, '').slice(0, max);
+
+/** Inserts the dashes of a grouped Philippine ID (e.g. 1234567890123456 -> 1234-5678-9012-3456). */
+export const formatGroupedDigits = (value: string, groups: number[]) => {
+    const digits = value.replace(/\D/g, '');
+    const total = groups.reduce((a, b) => a + b, 0);
+    let out = '';
+    let offset = 0;
+    for (const size of groups) {
+        if (offset > 0) out += '-';
+        out += digits.slice(offset, offset + size);
+        offset += size;
+    }
+    return out.slice(0, total + groups.length - 1);
+};
 
 export const passwordPolicy = z.string()
     .min(8, 'Password must be at least 8 characters')
@@ -73,25 +173,41 @@ export function passwordStrength(pw: string): PasswordStrength {
     return { score, label, checks };
 }
 
+const EMAIL_SCHEMA = z.string().trim().min(1, 'Email is required').max(MAX_EMAIL, 'Email is too long').email('Enter a valid email');
+
+const GENDER_SCHEMA = enumFrom(['male', 'female', 'other'], 'Select a valid gender');
+
+const CIVIL_STATUS_SCHEMA = enumFrom(['single', 'married', 'widowed', 'separated'], 'Select a valid civil status');
+
+const TITLE_SCHEMA = enumFrom(PERSON_TITLES, 'Select a valid title');
+
+const EMPLOYMENT_TYPE_SCHEMA = enumFrom(EMPLOYMENT_TYPES, 'Select a valid employment type');
+
+const POSTAL_CODE_SCHEMA = stringMax(MAX_POSTAL, undefined, POSTAL_CODE_PATTERN, `Postal code must be ${MAX_POSTAL} digits`);
+
+const FACEBOOK_LINK_SCHEMA = stringMax(MAX_TEXT, undefined, URL_PATTERN, 'Enter a valid link starting with http:// or https://');
+
+const INCOME_SCHEMA = z.coerce.number().min(0, 'Monthly income cannot be negative').max(9999999999, 'Monthly income is too large').optional().or(z.literal(''));
+
 const beneficiarySchema = z.object({
-    first_name: requiredString('First name is required', MAX_NAME),
-    last_name: requiredString('Last name is required', MAX_NAME),
-    relationship: requiredString('Relationship is required', 50),
+    first_name: nameString('First name is required'),
+    last_name: nameString('Last name is required'),
+    relationship: nameString('Relationship is required', 50),
 });
 
 export const memberSchema = z.object({
-    first_name: requiredString('First name is required', MAX_NAME),
-    mid_name: optionalString(MAX_NAME),
-    last_name: requiredString('Last name is required', MAX_NAME),
-    suffix: optionalString(50),
-    birth_date: requiredString('Birth date is required'),
-    gender: enumFrom(['male', 'female', 'other'], 'Select a valid gender'),
-    civil_status: enumFrom(['single', 'married', 'widowed', 'separated'], 'Select a valid civil status'),
-    email: z.string().trim().min(1, 'Email is required').max(MAX_EMAIL, 'Email is too long').email('Enter a valid email'),
-    phone_number: z.string().trim().min(1, 'Phone number is required').max(MAX_PHONE, `Phone number must be at most ${MAX_PHONE} digits`).regex(/^[0-9]+$/, 'Phone number must contain only digits'),
+    first_name: nameString('First name is required'),
+    mid_name: nameString(),
+    last_name: nameString('Last name is required'),
+    suffix: nameString(undefined, 50),
+    birth_date: birthDateString('Birth date is required'),
+    gender: GENDER_SCHEMA,
+    civil_status: CIVIL_STATUS_SCHEMA,
+    email: EMAIL_SCHEMA,
+    phone_number: phoneString(true),
     password: passwordPolicy,
     password_confirmation: z.string(),
-    monthly_income: z.coerce.number().min(0, 'Monthly income cannot be negative').optional().or(z.literal('')),
+    monthly_income: INCOME_SCHEMA,
     branch_id: optionalId,
 }).refine(d => d.password === d.password_confirmation, {
     message: 'Passwords do not match',
@@ -100,42 +216,43 @@ export const memberSchema = z.object({
 
 export const memberStepSchemas: Record<string, z.ZodTypeAny> = {
     personal: z.object({
-        first_name: requiredString('First name is required', MAX_NAME),
-        mid_name: optionalString(MAX_NAME),
-        last_name: requiredString('Last name is required', MAX_NAME),
-        suffix: optionalString(50),
-        birth_date: requiredString('Birth date is required'),
-        gender: enumFrom(['male', 'female', 'other'], 'Select a valid gender'),
-        civil_status: enumFrom(['single', 'married', 'widowed', 'separated'], 'Select a valid civil status'),
-        religion: optionalString(64),
-        title: optionalString(50),
+        first_name: nameString('First name is required'),
+        mid_name: nameString(),
+        last_name: nameString('Last name is required'),
+        suffix: nameString(undefined, 50),
+        birth_date: birthDateString('Birth date is required'),
+        gender: GENDER_SCHEMA,
+        civil_status: CIVIL_STATUS_SCHEMA,
+        birthplace: textString(MAX_TEXT),
+        religion: nameString(undefined, 64),
+        title: TITLE_SCHEMA.optional(),
     }),
     address: z.object({
-        country: optionalString(100),
-        region: optionalString(100),
-        province: optionalString(100),
-        city: optionalString(100),
-        barangay: optionalString(100),
-        street: optionalString(255),
-        postal_code: optionalString(20),
+        country: textString(100),
+        region: textString(100),
+        province: textString(100),
+        city: textString(100),
+        barangay: textString(100),
+        street: textString(MAX_TEXT),
+        postal_code: POSTAL_CODE_SCHEMA,
     }),
     contact: z.object({
-        email: z.string().trim().min(1, 'Email is required').max(MAX_EMAIL, 'Email is too long').email('Enter a valid email'),
-        phone_number: z.string().trim().min(1, 'Phone number is required').max(MAX_PHONE, `Phone number must be at most ${MAX_PHONE} digits`).regex(/^[0-9]+$/, 'Phone number must contain only digits'),
-        facebook_link: optionalString(255),
+        email: EMAIL_SCHEMA,
+        phone_number: phoneString(true),
+        facebook_link: FACEBOOK_LINK_SCHEMA,
     }),
     ids: z.object({
-        national_id: optionalString(64),
-        tin: optionalString(64),
-        sss: optionalString(64),
-        philhealth: optionalString(64),
-        barangay_id: optionalString(64),
+        national_id: govIdString(NATIONAL_ID_PATTERN, 'National ID must be 16 digits, optionally grouped as XXXX-XXXX-XXXX-XXXX'),
+        tin: govIdString(TIN_PATTERN, 'TIN must be 12 digits, optionally grouped as XXX-XXX-XXX-XXX'),
+        sss: govIdString(SSS_PATTERN, 'SSS must be 10 digits, optionally grouped as XX-XXXXXXX-X'),
+        philhealth: govIdString(PHILHEALTH_PATTERN, 'PhilHealth number must be 12 digits, optionally grouped as XX-XXXXXXXXX-X'),
+        barangay_id: stringMax(MAX_GOV_ID, undefined, LOCAL_ID_PATTERN, 'Barangay ID may only contain letters, numbers and hyphens'),
     }),
     employment: z.object({
-        employment_type: optionalString(50),
-        employer_name: optionalString(255),
-        position: optionalString(100),
-        monthly_income: z.coerce.number().min(0, 'Monthly income cannot be negative').optional().or(z.literal('')),
+        employment_type: EMPLOYMENT_TYPE_SCHEMA.optional(),
+        employer_name: textString(MAX_TEXT),
+        position: textString(100),
+        monthly_income: INCOME_SCHEMA,
         branch_id: optionalId,
     }),
     login: z.object({
@@ -146,7 +263,7 @@ export const memberStepSchemas: Record<string, z.ZodTypeAny> = {
         path: ['password_confirmation'],
     }),
     beneficiaries: z.object({
-        beneficiaries: z.array(beneficiarySchema),
+        beneficiaries: z.array(beneficiarySchema).max(5, 'A member may have at most 5 beneficiaries'),
     }),
     agreement: z.object({
         agreement: z.boolean().refine(v => v === true, { message: 'You must accept the agreement to continue' }),
@@ -155,16 +272,16 @@ export const memberStepSchemas: Record<string, z.ZodTypeAny> = {
 };
 
 export const memberEditSchema = z.object({
-    first_name: requiredString('First name is required', MAX_NAME),
-    mid_name: optionalString(MAX_NAME),
-    last_name: requiredString('Last name is required', MAX_NAME),
-    suffix: optionalString(50),
-    birth_date: dateOrEmpty.optional(),
-    gender: enumFrom(['male', 'female', 'other'], 'Select a valid gender').optional(),
-    civil_status: enumFrom(['single', 'married', 'widowed', 'separated'], 'Select a valid civil status').optional(),
-    email: z.string().trim().min(1, 'Email is required').max(MAX_EMAIL, 'Email is too long').email('Enter a valid email'),
-    phone_number: optionalString(MAX_PHONE),
-    facebook_link: optionalString(255),
+    first_name: nameString('First name is required'),
+    mid_name: nameString(),
+    last_name: nameString('Last name is required'),
+    suffix: nameString(undefined, 50),
+    birth_date: birthDateString(),
+    gender: GENDER_SCHEMA.optional(),
+    civil_status: CIVIL_STATUS_SCHEMA.optional(),
+    email: EMAIL_SCHEMA,
+    phone_number: phoneString(false),
+    facebook_link: FACEBOOK_LINK_SCHEMA,
     password: optionalPassword,
     branch_id: optionalId,
 });
@@ -172,35 +289,36 @@ export const memberEditSchema = z.object({
 export const memberEditStepSchemas: Record<string, z.ZodTypeAny> = {
     ...memberStepSchemas,
     personal: z.object({
-        first_name: requiredString('First name is required', MAX_NAME),
-        mid_name: optionalString(MAX_NAME),
-        last_name: requiredString('Last name is required', MAX_NAME),
-        suffix: optionalString(50),
-        birth_date: dateOrEmpty.optional(),
-        gender: enumFrom(['male', 'female', 'other'], 'Select a valid gender').optional(),
-        civil_status: enumFrom(['single', 'married', 'widowed', 'separated'], 'Select a valid civil status').optional(),
-        religion: optionalString(64),
-        title: optionalString(50),
+        first_name: nameString('First name is required'),
+        mid_name: nameString(),
+        last_name: nameString('Last name is required'),
+        suffix: nameString(undefined, 50),
+        birth_date: birthDateString(),
+        gender: GENDER_SCHEMA.optional(),
+        civil_status: CIVIL_STATUS_SCHEMA.optional(),
+        birthplace: textString(MAX_TEXT),
+        religion: nameString(undefined, 64),
+        title: TITLE_SCHEMA.optional(),
     }),
 };
 
 export const officerStepSchemas: z.ZodTypeAny[] = [
     z.object({
-        first_name: requiredString('First name is required', MAX_NAME),
-        mid_name: optionalString(MAX_NAME),
-        last_name: requiredString('Last name is required', MAX_NAME),
-        birth_date: dateOrEmpty.optional(),
-        gender: enumFrom(['male', 'female', 'other'], 'Select a valid gender').optional(),
-        civil_status: enumFrom(['single', 'married', 'widowed', 'separated'], 'Select a valid civil status').optional(),
-        title: optionalString(50),
+        first_name: nameString('First name is required'),
+        mid_name: nameString(),
+        last_name: nameString('Last name is required'),
+        birth_date: birthDateString(),
+        gender: GENDER_SCHEMA.optional(),
+        civil_status: CIVIL_STATUS_SCHEMA.optional(),
+        title: TITLE_SCHEMA.optional(),
     }),
     z.object({
-        email: z.string().trim().min(1, 'Email is required').max(MAX_EMAIL, 'Email is too long').email('Enter a valid email'),
-        phone_number: optionalString(MAX_PHONE),
-        street: optionalString(255),
-        barangay: optionalString(100),
-        city: optionalString(100),
-        postal_code: optionalString(20),
+        email: EMAIL_SCHEMA,
+        phone_number: phoneString(false),
+        street: textString(MAX_TEXT),
+        barangay: textString(100),
+        city: textString(100),
+        postal_code: POSTAL_CODE_SCHEMA,
     }),
     z.object({
         role: enumFrom(['admin', 'manager', 'accountant', 'secretary', 'loan'], 'Select a role'),
@@ -216,38 +334,38 @@ export const officerStepSchemas: z.ZodTypeAny[] = [
 ];
 
 export const officerEditSchema = z.object({
-    first_name: requiredString('First name is required', MAX_NAME),
-    mid_name: optionalString(MAX_NAME),
-    last_name: requiredString('Last name is required', MAX_NAME),
-    birth_date: dateOrEmpty.optional(),
-    gender: enumFrom(['male', 'female', 'other'], 'Select a valid gender').optional(),
-    civil_status: enumFrom(['single', 'married', 'widowed', 'separated'], 'Select a valid civil status').optional(),
-    title: optionalString(50),
-    email: z.string().trim().min(1, 'Email is required').max(MAX_EMAIL, 'Email is too long').email('Enter a valid email'),
-    phone_number: z.string().trim().max(MAX_PHONE, `Phone number must be at most ${MAX_PHONE} digits`).regex(/^[0-9]+$/, 'Phone number must contain only digits').optional().or(z.literal('')),
-    street: optionalString(255),
-    barangay: optionalString(100),
-    city: optionalString(100),
-    postal_code: optionalString(20),
+    first_name: nameString('First name is required'),
+    mid_name: nameString(),
+    last_name: nameString('Last name is required'),
+    birth_date: birthDateString(),
+    gender: GENDER_SCHEMA.optional(),
+    civil_status: CIVIL_STATUS_SCHEMA.optional(),
+    title: TITLE_SCHEMA.optional(),
+    email: EMAIL_SCHEMA,
+    phone_number: phoneString(false),
+    street: textString(MAX_TEXT),
+    barangay: textString(100),
+    city: textString(100),
+    postal_code: POSTAL_CODE_SCHEMA,
     role: enumFrom(['admin', 'manager', 'accountant', 'secretary', 'loan'], 'Select a role'),
     password: optionalPassword,
     branch_id: optionalId,
 });
 
 export const officerSchema = z.object({
-    first_name: requiredString('First name is required', MAX_NAME),
-    mid_name: optionalString(MAX_NAME),
-    last_name: requiredString('Last name is required', MAX_NAME),
-    birth_date: dateOrEmpty.optional(),
-    gender: enumFrom(['male', 'female', 'other'], 'Select a valid gender').optional(),
-    civil_status: enumFrom(['single', 'married', 'widowed', 'separated'], 'Select a valid civil status').optional(),
-    title: optionalString(50),
-    email: z.string().trim().min(1, 'Email is required').max(MAX_EMAIL, 'Email is too long').email('Enter a valid email'),
-    phone_number: z.string().trim().min(1, 'Phone number is required').max(MAX_PHONE, `Phone number must be at most ${MAX_PHONE} digits`).regex(/^[0-9]+$/, 'Phone number must contain only digits').optional(),
-    street: optionalString(255),
-    barangay: optionalString(100),
-    city: optionalString(100),
-    postal_code: optionalString(20),
+    first_name: nameString('First name is required'),
+    mid_name: nameString(),
+    last_name: nameString('Last name is required'),
+    birth_date: birthDateString(),
+    gender: GENDER_SCHEMA.optional(),
+    civil_status: CIVIL_STATUS_SCHEMA.optional(),
+    title: TITLE_SCHEMA.optional(),
+    email: EMAIL_SCHEMA,
+    phone_number: phoneString(true),
+    street: textString(MAX_TEXT),
+    barangay: textString(100),
+    city: textString(100),
+    postal_code: POSTAL_CODE_SCHEMA,
     role: enumFrom(['admin', 'manager', 'accountant', 'secretary', 'loan'], 'Select a role'),
     password: passwordPolicy,
     password_confirmation: z.string(),

@@ -6,7 +6,7 @@ import BranchSelect from '../../components/BranchSelect';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
-import { validate, memberStepSchemas, memberEditStepSchemas, memberSchema, memberEditSchema, passwordStrength, type FieldErrors } from '../../lib/validation';
+import { validate, memberStepSchemas, memberEditStepSchemas, memberSchema, memberEditSchema, passwordStrength, onlyDigits, formatGroupedDigits, EMPLOYMENT_TYPES, type FieldErrors } from '../../lib/validation';
 
 const STEPS = ['personal', 'address', 'contact', 'ids', 'employment', 'login', 'beneficiaries', 'agreement', 'review'];
 
@@ -31,13 +31,17 @@ const FILE_FIELDS = [
     'agreement_file',
 ];
 
-const ID_CARDS = [
-    { key: 'national_id', label: 'National ID', photo: 'national_id_photo', placeholder: 'XXXX-XXXX-XXXX-XXXX' },
-    { key: 'tin', label: 'TIN', photo: 'tin_photo', placeholder: 'XXX-XXX-XXX-XXX' },
-    { key: 'sss', label: 'SSS', photo: 'sss_photo', placeholder: 'XX-XXXXXXX-X' },
-    { key: 'philhealth', label: 'PhilHealth', photo: 'philhealth_photo', placeholder: 'XX-XXXXXXXXX-X' },
-    { key: 'barangay_id', label: 'Barangay ID', photo: 'barangay_id_photo', placeholder: 'Enter barangay ID' },
+const ID_CARDS: { key: string; label: string; photo: string; placeholder: string; groups?: number[]; maxLength?: number; helperText?: string }[] = [
+    { key: 'national_id', label: 'National ID', photo: 'national_id_photo', placeholder: 'XXXX-XXXX-XXXX-XXXX', groups: [4, 4, 4, 4], maxLength: 19, helperText: '16 digits' },
+    { key: 'tin', label: 'TIN', photo: 'tin_photo', placeholder: 'XXX-XXX-XXX-XXX', groups: [3, 3, 3, 3], maxLength: 15, helperText: '12 digits' },
+    { key: 'sss', label: 'SSS', photo: 'sss_photo', placeholder: 'XX-XXXXXXX-X', groups: [2, 7, 1], maxLength: 11, helperText: '10 digits' },
+    { key: 'philhealth', label: 'PhilHealth', photo: 'philhealth_photo', placeholder: 'XX-XXXXXXXXX-X', groups: [2, 9, 1], maxLength: 13, helperText: '12 digits' },
+    { key: 'barangay_id', label: 'Barangay ID', photo: 'barangay_id_photo', placeholder: 'Enter barangay ID', maxLength: 64, helperText: 'Letters, numbers and hyphens only' },
 ];
+
+const PHONE_MAX = 11;
+const POSTAL_MAX = 4;
+const NAME_MAX = 100;
 
 const emptyForm = {
     first_name: '', mid_name: '', last_name: '', suffix: '', birth_date: '', birthplace: '',
@@ -199,6 +203,23 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
         return next;
     });
 
+    /** Digit-only fields (phone, postal code): strip everything else as the operator types. */
+    const setDigits = (key: string, max: number) => (raw: string) => {
+        set(key, onlyDigits(raw, max));
+        clearError(key);
+    };
+
+    /** Grouped Philippine IDs: keep digits only, re-insert the canonical dashes. */
+    const setGroupedId = (key: string, groups: number[]) => (raw: string) => {
+        set(key, formatGroupedDigits(raw, groups));
+        clearError(key);
+    };
+
+    const setClearing = (key: string) => (raw: string) => {
+        set(key, raw);
+        clearError(key);
+    };
+
     const goBack = () => {
         if (step > 0) setStep(step - 1);
         setErrors({});
@@ -279,15 +300,15 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
                     {!(isEdit && detailLoading) && currentStep === 'personal' && (
                         <div className="space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <Field label="First Name" value={form.first_name} onChange={v => { set('first_name', v); clearError('first_name'); }} required error={errors.first_name} helperText="Legal first name as it appears on ID" />
-                                <Field label="Middle Name" value={form.mid_name} onChange={v => set('mid_name', v)} />
-                                <Field label="Last Name" value={form.last_name} onChange={v => { set('last_name', v); clearError('last_name'); }} required error={errors.last_name} />
-                                <Field label="Suffix" value={form.suffix} onChange={v => set('suffix', v)} placeholder="Jr., Sr., III, etc." />
-                                <Field label="Date of Birth" type="date" value={form.birth_date} onChange={v => { set('birth_date', v); clearError('birth_date'); }} required error={errors.birth_date} helperText="Must be at least 18 years old" />
-                                <Field label="Place of Birth" value={form.birthplace} onChange={v => set('birthplace', v)} placeholder="City, Province" />
-                                <Select label="Gender" value={form.gender} onChange={v => { set('gender', v); clearError('gender'); }} options={['male', 'female', 'other']} required error={errors.gender} />
-                                <Select label="Civil Status" value={form.civil_status} onChange={v => { set('civil_status', v); clearError('civil_status'); }} options={['single', 'married', 'widowed', 'separated']} required error={errors.civil_status} />
-                                <Field label="Religion" value={form.religion} onChange={v => set('religion', v)} />
+                                <Field label="First Name" value={form.first_name} onChange={setClearing('first_name')} required error={errors.first_name} maxLength={NAME_MAX} helperText="Legal first name as it appears on ID" />
+                                <Field label="Middle Name" value={form.mid_name} onChange={setClearing('mid_name')} error={errors.mid_name} maxLength={NAME_MAX} />
+                                <Field label="Last Name" value={form.last_name} onChange={setClearing('last_name')} required error={errors.last_name} maxLength={NAME_MAX} />
+                                <Field label="Suffix" value={form.suffix} onChange={setClearing('suffix')} error={errors.suffix} maxLength={50} placeholder="Jr., Sr., III, etc." />
+                                <Field label="Date of Birth" type="date" value={form.birth_date} onChange={setClearing('birth_date')} required error={errors.birth_date} helperText="Must be at least 18 years old" />
+                                <Field label="Place of Birth" value={form.birthplace} onChange={setClearing('birthplace')} error={errors.birthplace} maxLength={255} placeholder="City, Province" />
+                                <Select label="Gender" value={form.gender} onChange={setClearing('gender')} options={['male', 'female', 'other']} required error={errors.gender} />
+                                <Select label="Civil Status" value={form.civil_status} onChange={setClearing('civil_status')} options={['single', 'married', 'widowed', 'separated']} required error={errors.civil_status} />
+                                <Field label="Religion" value={form.religion} onChange={setClearing('religion')} error={errors.religion} maxLength={64} />
                             </div>
 
                             {/* Profile photo upload with preview */}
@@ -313,13 +334,13 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
                     {currentStep === 'address' && (
                         <div className="space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <Field label="Street Address" value={form.street} onChange={v => set('street', v)} placeholder="House No., Street Name" />
-                                <Field label="Barangay" value={form.barangay} onChange={v => set('barangay', v)} />
-                                <Field label="City/Municipality" value={form.city} onChange={v => set('city', v)} />
-                                <Field label="Province" value={form.province} onChange={v => set('province', v)} />
-                                <Field label="Region" value={form.region} onChange={v => set('region', v)} placeholder="e.g., Region IV-A" />
-                                <Field label="Postal/ZIP Code" value={form.postal_code} onChange={v => set('postal_code', v)} />
-                                <Field label="Country" value={form.country} onChange={v => set('country', v)} placeholder="Philippines" />
+                                <Field label="Street Address" value={form.street} onChange={setClearing('street')} error={errors.street} maxLength={255} placeholder="House No., Street Name" />
+                                <Field label="Barangay" value={form.barangay} onChange={setClearing('barangay')} error={errors.barangay} maxLength={100} />
+                                <Field label="City/Municipality" value={form.city} onChange={setClearing('city')} error={errors.city} maxLength={100} />
+                                <Field label="Province" value={form.province} onChange={setClearing('province')} error={errors.province} maxLength={100} />
+                                <Field label="Region" value={form.region} onChange={setClearing('region')} error={errors.region} maxLength={100} placeholder="e.g., Region IV-A" />
+                                <Field label="Postal/ZIP Code" value={form.postal_code} onChange={setDigits('postal_code', POSTAL_MAX)} error={errors.postal_code} maxLength={POSTAL_MAX} inputMode="numeric" helperText="4 digits" />
+                                <Field label="Country" value={form.country} onChange={setClearing('country')} error={errors.country} maxLength={100} placeholder="Philippines" />
                             </div>
                         </div>
                     )}
@@ -327,10 +348,10 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
                     {currentStep === 'contact' && (
                         <div className="space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <Field label="Email Address" type="email" value={form.email} onChange={v => { set('email', v); clearError('email'); }} required error={errors.email} placeholder="email@example.com" helperText="Primary contact email" />
-                                <Field label="Phone Number" value={form.phone_number} onChange={v => { set('phone_number', v); clearError('phone_number'); }} required error={errors.phone_number} placeholder="09XX XXX XXXX" helperText="11-digit mobile number" />
+                                <Field label="Email Address" type="email" value={form.email} onChange={setClearing('email')} required error={errors.email} placeholder="email@example.com" helperText="Primary contact email" />
+                                <Field label="Phone Number" value={form.phone_number} onChange={setDigits('phone_number', PHONE_MAX)} required error={errors.phone_number} maxLength={PHONE_MAX} inputMode="tel" placeholder="09XXXXXXXXX" helperText="10 or 11 digits, numbers only" />
                                 <div className="md:col-span-3">
-                                    <Field label="Facebook Profile" type="url" value={form.facebook_link} onChange={v => set('facebook_link', v)} placeholder="https://facebook.com/username" helperText="Optional: Your Facebook profile URL" />
+                                    <Field label="Facebook Profile" type="url" value={form.facebook_link} onChange={setClearing('facebook_link')} error={errors.facebook_link} maxLength={255} placeholder="https://facebook.com/username" helperText="Optional: Your Facebook profile URL" />
                                 </div>
                             </div>
                         </div>
@@ -341,7 +362,7 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
                             {ID_CARDS.map(card => (
                                 <div key={card.key} className="grid grid-cols-2 gap-4 items-start p-3 rounded-xl bg-gray-50 border border-gray-100">
                                     <div>
-                                        <Field label={`${card.label} Number`} value={form[card.key as keyof typeof form] as string} onChange={v => set(card.key, v)} placeholder={card.placeholder} />
+                                        <Field label={`${card.label} Number`} value={form[card.key as keyof typeof form] as string} onChange={card.groups ? setGroupedId(card.key, card.groups) : setClearing(card.key)} error={errors[card.key]} maxLength={card.maxLength} inputMode={card.groups ? 'numeric' : undefined} placeholder={card.placeholder} helperText={card.helperText} />
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">{card.label} Photo</label>
@@ -366,10 +387,10 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
                     {currentStep === 'employment' && (
                         <div className="space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <Select label="Employment Type" value={form.employment_type} onChange={v => set('employment_type', v)} options={['full-time', 'part-time', 'self-employed', 'freelancer', 'government', 'private', 'ofw', 'retired', 'unemployed', 'student', 'homemaker']} />
-                                <Field label="Company/Employer Name" value={form.employer_name} onChange={v => set('employer_name', v)} />
-                                <Field label="Position" value={form.position} onChange={v => set('position', v)} />
-                                <Field label="Monthly Income" type="number" value={form.monthly_income} onChange={v => { set('monthly_income', v); clearError('monthly_income'); }} error={errors.monthly_income} placeholder="0.00" />
+                                <Select label="Employment Type" value={form.employment_type} onChange={setClearing('employment_type')} options={EMPLOYMENT_TYPES} error={errors.employment_type} />
+                                <Field label="Company/Employer Name" value={form.employer_name} onChange={setClearing('employer_name')} error={errors.employer_name} maxLength={255} />
+                                <Field label="Position" value={form.position} onChange={setClearing('position')} error={errors.position} maxLength={100} />
+                                <Field label="Monthly Income" type="number" value={form.monthly_income} onChange={setClearing('monthly_income')} error={errors.monthly_income} inputMode="decimal" min="0" max="9999999999" placeholder="0.00" />
                                 {canAssignBranch && (
                                     <BranchSelect value={form.branch_id} onChange={v => { set('branch_id', v); clearError('branch_id'); }} error={errors.branch_id} />
                                 )}
@@ -421,7 +442,7 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
                         <div className="space-y-6">
                             <div className="flex items-center justify-between">
                                 <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Beneficiaries</h4>
-                                <button type="button" onClick={() => set('beneficiaries', [...form.beneficiaries, { first_name: '', last_name: '', relationship: '' }])} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm font-medium text-cyan-700 hover:border-cyan-300 hover:bg-cyan-50"><i className="fas fa-plus text-xs"></i> Add Beneficiary</button>
+                                <button type="button" onClick={() => set('beneficiaries', [...form.beneficiaries, { first_name: '', last_name: '', relationship: '' }])} disabled={form.beneficiaries.length >= 5} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm font-medium text-cyan-700 hover:border-cyan-300 hover:bg-cyan-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:bg-gray-50"><i className="fas fa-plus text-xs"></i> Add Beneficiary</button>
                             </div>
                             {form.beneficiaries.length === 0 && <p className="text-sm text-gray-500">No beneficiaries added.</p>}
                             {form.beneficiaries.map((b: any, i: number) => (
@@ -602,14 +623,14 @@ function ReviewSection({ icon, title, rows }: { icon: string; title: string; row
     );
 }
 
-function Field({ label, value, onChange, type = 'text', required, error, helperText, placeholder }: { label: string; value: any; onChange: (v: any) => void; type?: string; required?: boolean; error?: string; helperText?: string; placeholder?: string }) {
+function Field({ label, value, onChange, type = 'text', required, error, helperText, placeholder, maxLength, inputMode, min, max }: { label: string; value: any; onChange: (v: any) => void; type?: string; required?: boolean; error?: string; helperText?: string; placeholder?: string; maxLength?: number; inputMode?: 'numeric' | 'tel' | 'text' | 'decimal'; min?: string; max?: string }) {
     return (
         <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
             {type === 'date' ? (
                 <DatePicker value={value || ''} onChange={onChange} fromYear={BIRTH_FROM_YEAR} toYear={BIRTH_TO_YEAR} className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-cyan-500 focus:ring-cyan-500 ${error ? 'border-red-400' : ''}`} />
             ) : (
-                <input type={type} value={value || ''} onChange={e => onChange(e.target.value)} required={required} placeholder={placeholder} className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-cyan-500 focus:ring-cyan-500 ${error ? 'border-red-400' : ''}`} />
+                <input type={type} value={value || ''} onChange={e => onChange(e.target.value)} required={required} placeholder={placeholder} maxLength={maxLength} inputMode={inputMode} min={min} max={max} className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-cyan-500 focus:ring-cyan-500 ${error ? 'border-red-400' : ''}`} />
             )}
             {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
             {helperText && !error && <p className="mt-1 text-xs text-gray-400">{helperText}</p>}

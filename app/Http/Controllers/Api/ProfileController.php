@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
+use App\Support\PersonFieldRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -206,44 +207,46 @@ class ProfileController extends Controller
             'personalData.contact',
         ]);
 
+        $minimumAge = max((int) config('settings.requirement.age', 18), 18);
+
         $validated = $request->validate([
-            'title' => ['nullable', 'string', 'max:100'],
-            'first_name' => ['required', 'string', 'max:100'],
-            'mid_name' => ['nullable', 'string', 'max:100'],
-            'last_name' => ['required', 'string', 'max:100'],
-            'suffix' => ['nullable', 'string', 'max:20'],
-            'birth_date' => ['nullable', 'date'],
-            'birthplace' => ['nullable', 'string', 'max:150'],
-            'gender' => ['nullable', 'string', 'max:20'],
-            'education' => ['nullable', 'string', 'max:150'],
-            'civil_status' => ['nullable', 'string', 'max:50'],
-            'religion' => ['nullable', 'string', 'max:100'],
-            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+            'title' => PersonFieldRules::title(),
+            'first_name' => PersonFieldRules::name(true),
+            'mid_name' => PersonFieldRules::name(false),
+            'last_name' => PersonFieldRules::name(true),
+            'suffix' => PersonFieldRules::name(false, PersonFieldRules::SUFFIX_MAX),
+            'birth_date' => PersonFieldRules::birthDate(false, $minimumAge),
+            'birthplace' => PersonFieldRules::text(false, PersonFieldRules::SHORT_TEXT_MAX),
+            'gender' => 'nullable|in:male,female,other',
+            'education' => PersonFieldRules::text(false, PersonFieldRules::SHORT_TEXT_MAX),
+            'civil_status' => 'nullable|in:single,married,widowed,separated',
+            'religion' => PersonFieldRules::name(false, 100),
+            'email' => PersonFieldRules::email(true, [Rule::unique('users', 'email')->ignore($user->id)]),
             'email_otp_code' => ['nullable', 'string', 'digits:6'],
-            'phone_no' => ['nullable', 'string', 'max:20'],
-            'facebook' => ['nullable', 'string', 'max:255'],
-            'country' => ['nullable', 'string', 'max:100'],
-            'region' => ['nullable', 'string', 'max:100'],
-            'province' => ['nullable', 'string', 'max:100'],
-            'city_municipality' => ['nullable', 'string', 'max:100'],
-            'barangay' => ['nullable', 'string', 'max:100'],
-            'street' => ['nullable', 'string', 'max:150'],
-            'zip_code' => ['nullable', 'string', 'max:20'],
+            'phone_no' => PersonFieldRules::phone(false),
+            'facebook' => PersonFieldRules::facebookLink(),
+            'country' => PersonFieldRules::text(false, 100),
+            'region' => PersonFieldRules::text(false, 100),
+            'province' => PersonFieldRules::text(false, 100),
+            'city_municipality' => PersonFieldRules::text(false, 100),
+            'barangay' => PersonFieldRules::text(false, 100),
+            'street' => PersonFieldRules::text(false, PersonFieldRules::SHORT_TEXT_MAX),
+            'zip_code' => PersonFieldRules::postalCode(),
             'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,gif', 'max:2048'],
-            'national_id' => ['nullable', 'string', 'max:64'],
-            'tin' => ['nullable', 'string', 'max:64'],
-            'sss' => ['nullable', 'string', 'max:64'],
-            'philhealth' => ['nullable', 'string', 'max:64'],
-            'barangay_id' => ['nullable', 'string', 'max:64'],
-            'employment_type' => ['nullable', 'string', 'max:50'],
-            'employer_name' => ['nullable', 'string', 'max:150'],
-            'position' => ['nullable', 'string', 'max:100'],
-            'monthly_income' => ['nullable', 'numeric', 'min:0', 'max:9999999999'],
-            'beneficiaries' => ['nullable', 'array', 'max:5'],
-            'beneficiaries.*.first_name' => ['required', 'string', 'max:100'],
-            'beneficiaries.*.last_name' => ['required', 'string', 'max:100'],
-            'beneficiaries.*.relationship' => ['required', 'string', 'max:50'],
-        ]);
+            'national_id' => PersonFieldRules::nationalId(),
+            'tin' => PersonFieldRules::tin(),
+            'sss' => PersonFieldRules::sss(),
+            'philhealth' => PersonFieldRules::philhealth(),
+            'barangay_id' => PersonFieldRules::localId(),
+            'employment_type' => PersonFieldRules::employmentType(),
+            'employer_name' => PersonFieldRules::text(false, PersonFieldRules::SHORT_TEXT_MAX),
+            'position' => PersonFieldRules::text(false, 100),
+            'monthly_income' => PersonFieldRules::income(),
+            'beneficiaries' => 'nullable|array|max:5',
+            'beneficiaries.*.first_name' => PersonFieldRules::name(true),
+            'beneficiaries.*.last_name' => PersonFieldRules::name(true),
+            'beneficiaries.*.relationship' => PersonFieldRules::name(true, 50),
+        ], PersonFieldRules::messages());
 
         $emailChanged = Str::lower(trim($user->email)) !== Str::lower(trim($validated['email']));
 

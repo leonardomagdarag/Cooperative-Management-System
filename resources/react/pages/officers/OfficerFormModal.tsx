@@ -6,19 +6,18 @@ import BranchSelect from '../../components/BranchSelect';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
-import { validate, officerSchema, officerEditSchema, officerStepSchemas, passwordStrength, type FieldErrors } from '../../lib/validation';
+import { validate, officerSchema, officerEditSchema, officerStepSchemas, passwordStrength, onlyDigits, PERSON_TITLES, type FieldErrors } from '../../lib/validation';
 import OtpVerifyField from '../../components/OtpVerifyField';
+
+const PHONE_MAX = 11;
+const POSTAL_MAX = 4;
+const NAME_MAX = 100;
 
 const steps = [
     { title: 'Personal Information', icon: 'fas fa-user' },
     { title: 'Contact Details', icon: 'fas fa-address-book' },
     { title: 'Role Assignment', icon: 'fas fa-shield-alt' },
     { title: 'Login Credentials', icon: 'fas fa-lock' },
-];
-
-const titleOptions = [
-    'Chairman', 'Vice Chairman', 'Secretary', 'Treasurer',
-    'Loan Officer', 'Accountant', 'Member',
 ];
 
 const roleOptions = [
@@ -90,6 +89,11 @@ export default function OfficerFormModal({ officer, onClose }: { officer?: any; 
         delete next[key];
         return next;
     });
+
+    const setClearing = (key: string) => (v: string) => { set(key, v); clearError(key); };
+
+    /** Digit-only fields: strip formatting characters so the OTP-verified value matches what the API stores. */
+    const setDigits = (key: string, max: number) => (v: string) => { set(key, onlyDigits(v, max)); clearError(key); };
 
     const goNext = () => {
         const schema = isEdit && step === 3 ? null : officerStepSchemas[step];
@@ -192,9 +196,9 @@ export default function OfficerFormModal({ officer, onClose }: { officer?: any; 
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div><label className="block text-xs font-medium text-gray-500 mb-1">First Name *</label><input value={form.first_name} onChange={e => { set('first_name', e.target.value); clearError('first_name'); }} className={`w-full rounded-lg border p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 ${errors.first_name ? 'border-red-400' : 'border-gray-300'}`} />{errors.first_name && <p className="mt-1 text-xs text-red-600">{errors.first_name}</p>}</div>
-                                    <div><label className="block text-xs font-medium text-gray-500 mb-1">Middle Name</label><input value={form.mid_name} onChange={e => set('mid_name', e.target.value)} className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-emerald-500" /></div>
-                                    <div><label className="block text-xs font-medium text-gray-500 mb-1">Last Name *</label><input value={form.last_name} onChange={e => { set('last_name', e.target.value); clearError('last_name'); }} className={`w-full rounded-lg border p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 ${errors.last_name ? 'border-red-400' : 'border-gray-300'}`} />{errors.last_name && <p className="mt-1 text-xs text-red-600">{errors.last_name}</p>}</div>
+                                    <div><label className="block text-xs font-medium text-gray-500 mb-1">First Name *</label><input value={form.first_name} onChange={e => setClearing('first_name')(e.target.value)} maxLength={NAME_MAX} className={`w-full rounded-lg border p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 ${errors.first_name ? 'border-red-400' : 'border-gray-300'}`} />{errors.first_name && <p className="mt-1 text-xs text-red-600">{errors.first_name}</p>}</div>
+                                    <div><label className="block text-xs font-medium text-gray-500 mb-1">Middle Name</label><input value={form.mid_name} onChange={e => setClearing('mid_name')(e.target.value)} maxLength={NAME_MAX} className={`w-full rounded-lg border p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 ${errors.mid_name ? 'border-red-400' : 'border-gray-300'}`} />{errors.mid_name && <p className="mt-1 text-xs text-red-600">{errors.mid_name}</p>}</div>
+                                    <div><label className="block text-xs font-medium text-gray-500 mb-1">Last Name *</label><input value={form.last_name} onChange={e => setClearing('last_name')(e.target.value)} maxLength={NAME_MAX} className={`w-full rounded-lg border p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 ${errors.last_name ? 'border-red-400' : 'border-gray-300'}`} />{errors.last_name && <p className="mt-1 text-xs text-red-600">{errors.last_name}</p>}</div>
                                     <div><label className="block text-xs font-medium text-gray-500 mb-1">Birth Date</label><DatePicker value={form.birth_date} onChange={v => { set('birth_date', v); clearError('birth_date'); }} fromYear={new Date().getFullYear() - 100} toYear={new Date().getFullYear()} className={`w-full rounded-lg border p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 ${errors.birth_date ? 'border-red-400' : 'border-gray-300'}`} />{errors.birth_date && <p className="mt-1 text-xs text-red-600">{errors.birth_date}</p>}</div>
                                     <div>
                                         <label className="block text-xs font-medium text-gray-500 mb-1">Gender *</label>
@@ -217,13 +221,14 @@ export default function OfficerFormModal({ officer, onClose }: { officer?: any; 
                                         </select>
                                         {errors.civil_status && <p className="mt-1 text-xs text-red-600">{errors.civil_status}</p>}
                                     </div>
-                                    <div className="col-span-2">
-                                        <label className="block text-xs font-medium text-gray-500 mb-1">Title / Position</label>
-                                        <select value={form.title} onChange={e => set('title', e.target.value)} className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-emerald-500">
-                                            <option value="">Select Title</option>
-                                            {titleOptions.map(t => <option key={t} value={t}>{t}</option>)}
-                                        </select>
-                                    </div>
+<div className="col-span-2">
+                                            <label className="block text-xs font-medium text-gray-500 mb-1">Title / Position</label>
+                                            <select value={form.title} onChange={e => setClearing('title')(e.target.value)} className={`w-full rounded-lg border p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 ${errors.title ? 'border-red-400' : 'border-gray-300'}`}>
+                                                <option value="">Select Title</option>
+                                                {PERSON_TITLES.map(t => <option key={t} value={t}>{t}</option>)}
+                                            </select>
+                                            {errors.title && <p className="mt-1 text-xs text-red-600">{errors.title}</p>}
+                                        </div>
                                 </div>
                             </>
                         )}
@@ -235,14 +240,14 @@ export default function OfficerFormModal({ officer, onClose }: { officer?: any; 
                                     {isEdit ? (
                                         <>
                                             <div><label className="block text-xs font-medium text-gray-500 mb-1">Email *</label><input type="email" value={form.email} onChange={e => { set('email', e.target.value); clearError('email'); }} className={`w-full rounded-lg border p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 ${errors.email ? 'border-red-400' : 'border-gray-300'}`} disabled />{errors.email && <p className="mt-1 text-xs text-red-600">{errors.email}</p>}</div>
-                                            <div><label className="block text-xs font-medium text-gray-500 mb-1">Phone Number *</label><input value={form.phone_number} onChange={e => { set('phone_number', e.target.value); clearError('phone_number'); }} className={`w-full rounded-lg border p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 ${errors.phone_number ? 'border-red-400' : 'border-gray-300'}`} />{errors.phone_number && <p className="mt-1 text-xs text-red-600">{errors.phone_number}</p>}</div>
+                                            <div><label className="block text-xs font-medium text-gray-500 mb-1">Phone Number *</label><input value={form.phone_number} onChange={e => setDigits('phone_number', PHONE_MAX)(e.target.value)} maxLength={PHONE_MAX} inputMode="tel" className={`w-full rounded-lg border p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 ${errors.phone_number ? 'border-red-400' : 'border-gray-300'}`} />{errors.phone_number && <p className="mt-1 text-xs text-red-600">{errors.phone_number}</p>}</div>
                                         </>
                                     ) : (
                                         <>
                                             <OtpVerifyField
                                                 label="Email *"
                                                 value={form.email}
-                                                onChange={v => { set('email', v); clearError('email'); setIsEmailVerified(false); }}
+                                                onChange={v => { setClearing('email')(v); setIsEmailVerified(false); }}
                                                 type="email"
                                                 error={errors.email}
                                                 isVerified={isEmailVerified}
@@ -261,7 +266,7 @@ export default function OfficerFormModal({ officer, onClose }: { officer?: any; 
                                             <OtpVerifyField
                                                 label="Phone Number *"
                                                 value={form.phone_number}
-                                                onChange={v => { set('phone_number', v); clearError('phone_number'); setIsPhoneVerified(false); }}
+                                                onChange={v => { setDigits('phone_number', PHONE_MAX)(v); setIsPhoneVerified(false); }}
                                                 type="tel"
                                                 error={errors.phone_number}
                                                 isVerified={isPhoneVerified}
@@ -279,10 +284,10 @@ export default function OfficerFormModal({ officer, onClose }: { officer?: any; 
                                             />
                                         </>
                                     )}
-                                    <div className="col-span-2"><label className="block text-xs font-medium text-gray-500 mb-1">Street</label><input value={form.street} onChange={e => set('street', e.target.value)} className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-emerald-500" /></div>
-                                    <div><label className="block text-xs font-medium text-gray-500 mb-1">Barangay</label><input value={form.barangay} onChange={e => set('barangay', e.target.value)} className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-emerald-500" /></div>
-                                    <div><label className="block text-xs font-medium text-gray-500 mb-1">City</label><input value={form.city} onChange={e => set('city', e.target.value)} className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-emerald-500" /></div>
-                                    <div><label className="block text-xs font-medium text-gray-500 mb-1">Postal Code</label><input value={form.postal_code} onChange={e => set('postal_code', e.target.value)} className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-emerald-500" /></div>
+                                    <div className="col-span-2"><label className="block text-xs font-medium text-gray-500 mb-1">Street</label><input value={form.street} onChange={e => setClearing('street')(e.target.value)} maxLength={255} className={`w-full rounded-lg border p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 ${errors.street ? 'border-red-400' : 'border-gray-300'}`} />{errors.street && <p className="mt-1 text-xs text-red-600">{errors.street}</p>}</div>
+                                    <div><label className="block text-xs font-medium text-gray-500 mb-1">Barangay</label><input value={form.barangay} onChange={e => setClearing('barangay')(e.target.value)} maxLength={100} className={`w-full rounded-lg border p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 ${errors.barangay ? 'border-red-400' : 'border-gray-300'}`} />{errors.barangay && <p className="mt-1 text-xs text-red-600">{errors.barangay}</p>}</div>
+                                    <div><label className="block text-xs font-medium text-gray-500 mb-1">City</label><input value={form.city} onChange={e => setClearing('city')(e.target.value)} maxLength={100} className={`w-full rounded-lg border p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 ${errors.city ? 'border-red-400' : 'border-gray-300'}`} />{errors.city && <p className="mt-1 text-xs text-red-600">{errors.city}</p>}</div>
+                                    <div><label className="block text-xs font-medium text-gray-500 mb-1">Postal Code</label><input value={form.postal_code} onChange={e => setDigits('postal_code', POSTAL_MAX)(e.target.value)} maxLength={POSTAL_MAX} inputMode="numeric" className={`w-full rounded-lg border p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 ${errors.postal_code ? 'border-red-400' : 'border-gray-300'}`} />{errors.postal_code && <p className="mt-1 text-xs text-red-600">{errors.postal_code}</p>}</div>
                                 </div>
                             </>
                         )}
