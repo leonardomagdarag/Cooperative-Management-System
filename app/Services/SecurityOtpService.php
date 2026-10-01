@@ -276,7 +276,8 @@ class SecurityOtpService
             return;
         }
 
-        if (! app(TextBeeService::class)->isEnabled()) {
+        $sms = app(TextBeeService::class);
+        if (! $sms->isEnabled()) {
             return;
         }
 
@@ -294,10 +295,19 @@ class SecurityOtpService
         $message = "Settlers CC: Your {$label} OTP is {$otpCode}. Valid for 10 mins. Never share this.";
 
         try {
+            if ($sms->send($phone, $message)) {
+                return;
+            }
+
+            Log::warning("Immediate OTP SMS delivery failed for user {$user->id}; queuing a retry.");
+        } catch (Throwable $e) {
+            Log::warning("Immediate OTP SMS delivery threw for user {$user->id}: {$e->getMessage()}");
+        }
+
+        try {
             SendSmsJob::dispatch($phone, $message, 'otp.sms');
         } catch (Throwable $e) {
-            Log::warning("OTP SMS job dispatch failed for user {$user->id}: {$e->getMessage()}");
-            app(TextBeeService::class)->send($phone, $message);
+            Log::error("OTP SMS retry dispatch failed for user {$user->id}: {$e->getMessage()}");
         }
     }
 

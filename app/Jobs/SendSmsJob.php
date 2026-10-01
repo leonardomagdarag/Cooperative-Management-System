@@ -9,6 +9,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 
 class SendSmsJob implements ShouldQueue
 {
@@ -29,7 +30,7 @@ class SendSmsJob implements ShouldQueue
     {
         if (! $sms->send($this->phone, $this->message)) {
             Log::warning("SendSmsJob failed ({$this->tag}): {$this->phone}");
-            $this->fail('SMS delivery returned false.');
+            throw new RuntimeException('SMS delivery returned false.');
         }
     }
 }

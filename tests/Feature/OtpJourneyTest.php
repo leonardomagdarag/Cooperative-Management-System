@@ -2,11 +2,14 @@
 
 use App\Mail\EmailVerificationMail;
 use App\Mail\OtpCodeMail;
+use App\Jobs\SendSmsJob;
 use App\Models\User;
 use App\Services\SecurityOtpService;
+use App\Services\TextBeeService;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
 
 function otpJourneyCode(): string
 {
@@ -197,4 +200,46 @@ test('active database OTP challenge gates user even if session pending flag was 
         ->withSession(['security.pending_otp' => false])
         ->get('/dashboard')
         ->assertRedirect(route('otp.challenge.show'));
+});
+
+test('OTP SMS sends inline and queues only a failed delivery for retry', function () {
+    $user = User::factory()->create();
+    $user->personalData->contact->forceFill([
+        'phone_no' => '09761729700',
+        'phone_verified_at' => now(),
+    ])->save();
+
+    $sms = mock(TextBeeService::class);
+    $sms->shouldReceive('isEnabled')->once()->andReturn(true);
+    $sms->shouldReceive('send')
+        ->once()
+        ->with('09761729700', Mockery::type('string'))
+        ->andReturn(true);
+    app()->instance(TextBeeService::class, $sms);
+    Queue::fake();
+
+    app(SecurityOtpService::class)->sendOtpSms($user, 'new_device_login', '123456');
+
+    Queue::assertNothingPushed();
+});
+
+test('OTP SMS queues a retry after immediate delivery fails', function () {
+    $user = User::factory()->create();
+    $user->personalData->contact->forceFill([
+        'phone_no' => '09761729700',
+        'phone_verified_at' => now(),
+    ])->save();
+
+    $sms = mock(TextBeeService::class);
+    $sms->shouldReceive('isEnabled')->once()->andReturn(true);
+    $sms->shouldReceive('send')
+        ->once()
+        ->with('09761729700', Mockery::type('string'))
+        ->andReturn(false);
+    app()->instance(TextBeeService::class, $sms);
+    Queue::fake();
+
+    app(SecurityOtpService::class)->sendOtpSms($user, 'new_device_login', '123456');
+
+    Queue::assertPushed(SendSmsJob::class, fn (SendSmsJob $job) => $job->phone === '09761729700');
 });
