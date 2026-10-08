@@ -64,6 +64,7 @@ class ArchiveOldTransactions extends Command
                 foreach ($transactions as $transaction) {
                     ArchivedTransaction::create([
                         'original_id' => $transaction->id,
+                        'reversal_of_id' => $transaction->reversal_of_id,
                         'transaction_number' => $transaction->transaction_number,
                         'transaction_type' => $transaction->transaction_type,
                         'account_id' => $transaction->account_id,

@@ -33,6 +33,7 @@ class Transaction extends Model
         'paymongo_payment_intent_id',
         'paymongo_payment_id',
         'paymongo_fee',
+        'reversal_of_id',
     ];
 
     protected $casts = [
@@ -88,6 +89,16 @@ class Transaction extends Model
     public function loan()
     {
         return $this->belongsTo(Loan::class);
+    }
+
+    public function reversalOf()
+    {
+        return $this->belongsTo(self::class, 'reversal_of_id');
+    }
+
+    public function reversal()
+    {
+        return $this->hasOne(self::class, 'reversal_of_id');
     }
 
     public function branch()

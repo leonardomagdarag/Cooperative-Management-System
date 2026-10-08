@@ -8,6 +8,7 @@ class ArchivedTransaction extends Model
 {
     protected $fillable = [
         'original_id',
+        'reversal_of_id',
         'transaction_number',
         'transaction_type',
         'account_id',

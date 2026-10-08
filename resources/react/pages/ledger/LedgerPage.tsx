@@ -11,6 +11,8 @@ import { useDiscardGuard } from '../../hooks/useDiscardGuard';
 import { validate, ledgerSchema, type FieldErrors } from '../../lib/validation';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Pagination from '../../components/ui/Pagination';
+import Modal from '../../components/ui/Modal';
+import Button from '../../components/ui/Button';
 
 export default function LedgerPage() {
     const [category, setCategory] = useState('all');
@@ -19,6 +21,8 @@ export default function LedgerPage() {
     const [page, setPage] = useState(1);
     const [showAddModal, setShowAddModal] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
+    const [reversalTarget, setReversalTarget] = useState<{ id: number; transactionNumber: string } | null>(null);
+    const [reversalOtp, setReversalOtp] = useState('');
     const [form, setForm] = useState({ transaction_type: 'deposit', amount: '', note: '', account_id: '', loan_id: '', branch_id: '' as number | '', transaction_date: new Date().toISOString().slice(0, 10) });
     const [formErrors, setFormErrors] = useState<FieldErrors>({});
     const [confirmState, setConfirmState] = useState<{
@@ -34,13 +38,14 @@ export default function LedgerPage() {
     const { addToast } = useToast();
     const { user } = useAuth();
     const canAssignBranch = !!user?.permissions?.includes('branches.view');
+    const canReverse = !!user?.permissions?.includes('transactions.reversal');
 
     const setFormD = (updater: (f: typeof form) => typeof form) => { markDirty(); setForm(updater); };
     const requestCloseGuard = () => requestClose(() => setShowAddModal(false));
 
     const { data, isLoading } = useQuery({
         queryKey: ['ledger', category, search, page, branchFilter],
-        queryFn: () => api.get('/api/ledger', { params: { category: category === 'all' ? undefined : category, search: search || undefined, branch_id: branchFilter || undefined, page, per_page: 10 } }),
+        queryFn: () => api.get('/api/ledger', { params: { category: category === 'all' || category === 'corrections' ? undefined : category, corrections: category === 'corrections' ? 1 : undefined, search: search || undefined, branch_id: branchFilter || undefined, page, per_page: 10 } }),
     });
 
     const { data: summaryData } = useQuery({
@@ -59,6 +64,28 @@ export default function LedgerPage() {
     const deleteMutation = useMutation({
         mutationFn: (id: number) => api.delete(`/api/ledger/${id}`),
         onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['ledger'] }); addToast('Deleted', 'success'); },
+    });
+
+    const sendReversalOtpMutation = useMutation({
+        mutationFn: (transactionId: number) => api.post(`/api/ledger/${transactionId}/reverse/send-otp`),
+        onSuccess: (_response, transactionId) => {
+            const transaction = transactions.find((item: any) => item.id === transactionId);
+            setReversalTarget({ id: transactionId, transactionNumber: transaction?.transaction_number || String(transactionId) });
+            setReversalOtp('');
+            addToast('A one-time verification code was sent to your email.', 'info');
+        },
+        onError: (err: any) => addToast(err.response?.data?.message || 'Could not send the verification code.', 'error'),
+    });
+
+    const reverseMutation = useMutation({
+        mutationFn: () => api.post(`/api/ledger/${reversalTarget!.id}/reverse`, { otp_code: reversalOtp }),
+        onSuccess: (response) => {
+            queryClient.invalidateQueries({ queryKey: ['ledger'] });
+            setReversalTarget(null);
+            setReversalOtp('');
+            addToast(response.data.message, 'success');
+        },
+        onError: (err: any) => addToast(err.response?.data?.message || 'Reversal failed', 'error'),
     });
 
     const transactions = data?.data?.data ?? [];
@@ -82,7 +109,7 @@ export default function LedgerPage() {
     const exportCsv = async () => {
         try {
             const res = await api.get('/api/ledger/export', {
-                params: { category: category === 'all' ? undefined : category, search: search || undefined },
+                params: { category: category === 'all' || category === 'corrections' ? undefined : category, corrections: category === 'corrections' ? 1 : undefined, search: search || undefined },
                 responseType: 'blob',
             });
             const url = URL.createObjectURL(res.data);
@@ -143,9 +170,9 @@ export default function LedgerPage() {
 
                 {/* Tab filters */}
                 <div className="flex gap-2 mb-3 border-b border-gray-200">
-                    {['all', 'deposit', 'withdrawal', 'loan_payment', 'loan_disbursement', 'fee'].map(c => (
+                    {['all', 'deposit', 'withdrawal', 'loan_payment', 'loan_disbursement', 'fee', 'corrections'].map(c => (
                         <button key={c} onClick={() => { setCategory(c); setPage(1); }} className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${category === c ? 'border-b-2 border-emerald-600 text-emerald-600 font-semibold' : 'text-gray-500 hover:text-gray-700 border-transparent'}`}>
-                            {c === 'all' ? 'All' : c.replace(/_/g, ' ')}
+                            {c === 'all' ? 'All' : c === 'corrections' ? 'Corrections' : c.replace(/_/g, ' ')}
                         </button>
                     ))}
                 </div>
@@ -193,27 +220,78 @@ export default function LedgerPage() {
                                     <tr key={t.id} className="hover:bg-gray-50">
                                         <td className="p-4 text-sm font-medium text-gray-900 truncate" title={t.transaction_number}>{t.transaction_number}</td>
                                         <td className="p-4 text-sm text-gray-900 truncate" title={t.account_holder || '—'}>{t.account_holder || '—'}{t.user_number && <div className="text-xs text-gray-500">{t.user_number}</div>}</td>
-                                        <td className="p-4"><span className={`px-2.5 py-0.5 text-xs font-medium rounded ${getTypeColor(t.transaction_type)}`}>{getTypeLabel(t.transaction_type)}</span></td>
-                                        <td className={`p-4 text-sm font-semibold whitespace-nowrap ${t.transaction_type === 'withdrawal' || t.transaction_type === 'fee' ? 'text-red-600' : 'text-green-600'}`}>{(t.transaction_type === 'withdrawal' || t.transaction_type === 'fee') ? '-' : '+'}₱{Number(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                        <td className="p-4"><span className={`px-2.5 py-0.5 text-xs font-medium rounded ${getTypeColor(t.transaction_type)}`}>{t.reversal_of_id ? `Reversal · ${getTypeLabel(t.transaction_type)}` : getTypeLabel(t.transaction_type)}</span>{t.reversal_of_id && <div className="text-xs text-gray-500 mt-1">Reverses {t.reversal_of_transaction_number || `transaction #${t.reversal_of_id}`}</div>}</td>
+                                        <td className={`p-4 text-sm font-semibold whitespace-nowrap ${(['withdrawal', 'fee'].includes(t.transaction_type) !== !!t.reversal_of_id) ? 'text-red-600' : 'text-green-600'}`}>{(['withdrawal', 'fee'].includes(t.transaction_type) !== !!t.reversal_of_id) ? '-' : '+'}₱{Number(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                         <td className="p-4"><span className={`text-xs font-medium ${t.status === 'completed' ? 'text-emerald-600' : 'text-amber-600'}`}>{t.status}</span></td>
                                         {canAssignBranch && <td className="p-4 truncate" title={t.branch_name}><BranchBadge name={t.branch_name} /></td>}
                                         <td className="p-4 text-sm text-gray-500">{t.note || '—'}</td>
                                         <td className="p-4 text-sm text-gray-500">{t.transaction_date || '—'}</td>
-                                        {canEdit && (
-                                            <td className="p-4">
-                                                <div className="flex gap-1">
-                                                    <button onClick={() => openEdit(t)} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"><i className="fas fa-edit text-xs"></i></button>
+                                        <td className="p-4">
+                                            <div className="flex gap-1 items-center">
+                                                {t.status === 'completed' && (
+                                                    <>
+                                                        <button
+                                                            onClick={async () => {
+                                                                try {
+                                                                    const res = await api.post(`/transactions/${t.id}/receipts/reprint`);
+                                                                    addToast(res.data.message, 'success');
+                                                                } catch (err: any) {
+                                                                    addToast(err.response?.data?.message || 'Failed to reprint', 'error');
+                                                                }
+                                                            }}
+                                                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                            title="Reprint Receipt"
+                                                        >
+                                                            <i className="fas fa-print text-xs"></i>
+                                                        </button>
+                                                        {user?.permissions?.includes('receipts.reissue') && (
+                                                            <button
+                                                                onClick={async () => {
+                                                                    const note = prompt('Reason for certified reissue:');
+                                                                    if (note) {
+                                                                        try {
+                                                                            const res = await api.post(`/transactions/${t.id}/receipts/reissue`, { note });
+                                                                            addToast(res.data.message, 'success');
+                                                                        } catch (err: any) {
+                                                                            addToast(err.response?.data?.message || 'Failed to reissue', 'error');
+                                                                        }
+                                                                    }
+                                                                }}
+                                                                className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                                                                title="Issue Certified Replacement"
+                                                            >
+                                                                <i className="fas fa-certificate text-xs"></i>
+                                                            </button>
+                                                        )}
+                                                    </>
+                                                )}
+                                                {canEdit && (
+                                                    <>
+                                                        <button onClick={() => openEdit(t)} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"><i className="fas fa-edit text-xs"></i></button>
+                                                        <button onClick={() => setConfirmState({
+                                                            isOpen: true,
+                                                            title: 'Delete Transaction',
+                                                            message: `Are you sure you want to delete transaction "${t.transaction_number}"? This action cannot be undone.`,
+                                                            confirmText: 'Delete',
+                                                            variant: 'danger',
+                                                            onConfirm: () => deleteMutation.mutate(t.id)
+                                                        })} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><i className="fas fa-trash text-xs"></i></button>
+                                                    </>
+                                                )}
+                                                {canReverse && t.status === 'completed' && !t.reversal_of_id && (
                                                     <button onClick={() => setConfirmState({
                                                         isOpen: true,
-                                                        title: 'Delete Transaction',
-                                                        message: `Are you sure you want to delete transaction "${t.transaction_number}"? This action cannot be undone.`,
-                                                        confirmText: 'Delete',
+                                                        title: 'Reverse Transaction',
+                                                        message: `Post a linked reversing entry for transaction "${t.transaction_number}"?`,
+                                                        confirmText: 'Post reversal',
                                                         variant: 'danger',
-                                                        onConfirm: () => deleteMutation.mutate(t.id)
-                                                    })} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><i className="fas fa-trash text-xs"></i></button>
-                                                </div>
-                                            </td>
-                                        )}
+                                                        onConfirm: () => sendReversalOtpMutation.mutate(t.id),
+                                                    })} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg" title="Post reversing entry">
+                                                        <i className="fas fa-rotate-left text-xs"></i>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -302,6 +380,19 @@ export default function LedgerPage() {
                 }}
                 onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
             />
+            <Modal
+                open={!!reversalTarget}
+                onClose={() => !reverseMutation.isPending && setReversalTarget(null)}
+                title="Verify transaction reversal"
+                footer={<div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setReversalTarget(null)} disabled={reverseMutation.isPending}>Cancel</Button><Button onClick={() => reverseMutation.mutate()} disabled={reversalOtp.length !== 6 || reverseMutation.isPending}>{reverseMutation.isPending ? 'Posting…' : 'Verify and reverse'}</Button></div>}
+            >
+                <div className="space-y-3">
+                    <p className="text-sm text-slate-600">Enter the one-time code sent to your account email to post a reversing entry for transaction <strong>{reversalTarget?.transactionNumber}</strong>.</p>
+                    <label className="block text-sm font-medium text-slate-700">Verification code
+                        <input autoComplete="one-time-code" inputMode="numeric" value={reversalOtp} onChange={event => setReversalOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} maxLength={6} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-center tracking-[0.4em] focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200" />
+                    </label>
+                </div>
+            </Modal>
         </>
     );
 }

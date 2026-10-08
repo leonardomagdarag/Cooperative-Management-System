@@ -7,6 +7,7 @@ use App\Models\Account;
 use App\Models\Loan;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\SecurityOtpService;
 use App\Support\BranchScope;
 use App\Support\SearchFilter;
 use Illuminate\Http\JsonResponse;
@@ -20,7 +21,7 @@ class LedgerController extends Controller
     {
         abort_unless(Auth::user()?->can('transactions.view'), 403);
 
-        $query = Transaction::with(['branch', 'account.user.personalData', 'loan.user.personalData', 'recordedBy']);
+        $query = Transaction::with(['branch', 'account.user.personalData', 'loan.user.personalData', 'recordedBy', 'reversalOf']);
 
         BranchScope::applyToTransactions($query, Auth::user(), $request->input('branch_id'));
 
@@ -28,6 +29,10 @@ class LedgerController extends Controller
         $category = $request->string('category')->toString();
         if ($category !== '' && $category !== 'all') {
             $query->where('transaction_type', $category);
+        }
+
+        if ($request->boolean('corrections')) {
+            $query->whereNotNull('reversal_of_id');
         }
 
         // Search
@@ -61,6 +66,8 @@ class LedgerController extends Controller
                 'id' => $t->id,
                 'transaction_number' => $t->transaction_number,
                 'transaction_type' => $t->transaction_type,
+                'reversal_of_id' => $t->reversal_of_id,
+                'reversal_of_transaction_number' => $t->reversalOf?->transaction_number,
                 'amount' => $t->amount,
                 'status' => $t->status,
                 'note' => $t->note,
@@ -119,13 +126,17 @@ class LedgerController extends Controller
     {
         abort_unless(Auth::user()?->can('transactions.export') || Auth::user()?->can('transactions.view'), 403);
 
-        $query = Transaction::with(['account.user.personalData', 'loan', 'recordedBy']);
+        $query = Transaction::with(['account.user.personalData', 'loan', 'recordedBy', 'reversalOf']);
 
         BranchScope::applyToTransactions($query, Auth::user(), $request->input('branch_id'));
 
         $category = $request->string('category')->toString();
         if ($category !== '' && $category !== 'all') {
             $query->where('transaction_type', $category);
+        }
+
+        if ($request->boolean('corrections')) {
+            $query->whereNotNull('reversal_of_id');
         }
 
         if ($search = SearchFilter::escapeLike($request->string('search')->toString())) {
@@ -147,7 +158,7 @@ class LedgerController extends Controller
 
         return response()->streamDownload(function () use ($transactions) {
             $out = fopen('php://output', 'w');
-            fputcsv($out, ['Transaction #', 'Type', 'Amount', 'Status', 'Mode', 'Member', 'User #', 'Loan #', 'Note', 'Date', 'Recorded By']);
+            fputcsv($out, ['Transaction #', 'Type', 'Amount', 'Status', 'Mode', 'Member', 'User #', 'Loan #', 'Reversal Of', 'Note', 'Date', 'Recorded By']);
 
             foreach ($transactions as $t) {
                 fputcsv($out, [
@@ -159,6 +170,7 @@ class LedgerController extends Controller
                     $t->account?->user ? trim(($t->account->user->personalData->first_name ?? '').' '.($t->account->user->personalData->last_name ?? '')) : '',
                     $t->account?->user?->user_number,
                     $t->loan?->loan_number,
+                    $t->reversalOf?->transaction_number,
                     $t->note,
                     $t->transaction_date?->format('Y-m-d'),
                     $t->recordedBy ? trim(($t->recordedBy->personalData->first_name ?? '').' '.($t->recordedBy->personalData->last_name ?? '')) : '',
@@ -171,7 +183,8 @@ class LedgerController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        abort_unless(Auth::user()?->can('transactions.create') || Auth::user()?->can('transactions.update'), 403);
+        $user = Auth::user();
+        abort_unless($user?->can('transactions.create') || $user?->can('transactions.update'), 403);
 
         $validated = $request->validate([
             'transaction_type' => 'required|in:deposit,withdrawal,loan_payment,loan_disbursement,fee',
@@ -182,32 +195,34 @@ class LedgerController extends Controller
             'branch_id' => 'nullable|exists:branches,id',
         ]);
 
-        $transaction = DB::transaction(function () use ($validated) {
-            $transaction = Transaction::create([
-                'transaction_type' => $validated['transaction_type'],
-                'amount' => $validated['amount'],
-                'note' => $validated['note'] ?? null,
-                'account_id' => $validated['account_id'] ?? null,
-                'loan_id' => $validated['loan_id'] ?? null,
-                'branch_id' => $validated['branch_id'] ?? $this->resolveTransactionBranch($validated),
-                'transaction_date' => now(),
-                // Ledger entries are posted immediately below, so they must
-                // never enter the pending approval flow as well.
-                'status' => 'completed',
-                'recorded_by' => Auth::id(),
-            ]);
+        $type = $validated['transaction_type'];
+        if ($type === 'deposit') abort_unless($user?->can('deposits.create'), 403, 'Missing deposits.create permission.');
+        if ($type === 'withdrawal') abort_unless($user?->can('withdrawals.create'), 403, 'Missing withdrawals.create permission.');
+        if (in_array($type, ['loan_payment', 'loan_disbursement'])) abort_unless($user?->can('loans.create') || $user?->can('loans.encode') || $user?->can('loans.update'), 403, 'Missing loan management permission.');
 
-            $this->applyBalanceEffect($transaction);
-
-            return $transaction;
-        });
+        $transaction = Transaction::create([
+            'transaction_type' => $validated['transaction_type'],
+            'amount' => $validated['amount'],
+            'note' => $validated['note'] ?? null,
+            'account_id' => $validated['account_id'] ?? null,
+            'loan_id' => $validated['loan_id'] ?? null,
+            'branch_id' => $validated['branch_id'] ?? $this->resolveTransactionBranch($validated),
+            'transaction_date' => now(),
+            'status' => 'pending',
+            'recorded_by' => Auth::id(),
+        ]);
 
         return response()->json(['message' => 'Transaction created.', 'data' => $transaction], 201);
     }
 
     public function update(Request $request, Transaction $transaction): JsonResponse
     {
-        abort_unless(Auth::user()?->can('transactions.update'), 403);
+        $user = Auth::user();
+        abort_unless($user?->can('transactions.update'), 403);
+
+        if ($transaction->status !== 'pending') {
+            abort(409, 'Only pending transactions can be edited.');
+        }
 
         $validated = $request->validate([
             'transaction_type' => 'required|in:deposit,withdrawal,loan_payment,loan_disbursement,fee',
@@ -218,35 +233,124 @@ class LedgerController extends Controller
             'branch_id' => 'nullable|exists:branches,id',
         ]);
 
-        DB::transaction(function () use ($transaction, $validated) {
-            // Reverse the previous balance effect before applying the new one.
-            $this->applyBalanceEffect($transaction, reverse: true);
+        $type = $validated['transaction_type'];
+        if ($type === 'deposit') abort_unless($user?->can('deposits.create') || $user?->can('deposits.approve'), 403, 'Missing deposits permission.');
+        if ($type === 'withdrawal') abort_unless($user?->can('withdrawals.create') || $user?->can('withdrawals.approve'), 403, 'Missing withdrawals permission.');
+        if (in_array($type, ['loan_payment', 'loan_disbursement'])) abort_unless($user?->can('loans.create') || $user?->can('loans.encode') || $user?->can('loans.update') || $user?->can('loans.approve'), 403, 'Missing loan management permission.');
 
-            $transaction->update([
-                'transaction_type' => $validated['transaction_type'],
-                'amount' => $validated['amount'],
-                'note' => $validated['note'] ?? null,
-                'account_id' => $validated['account_id'] ?? null,
-                'loan_id' => $validated['loan_id'] ?? null,
-                'branch_id' => $validated['branch_id'] ?? $this->resolveTransactionBranch($validated),
-            ]);
-
-            $this->applyBalanceEffect($transaction->fresh());
-        });
+        $transaction->update([
+            'transaction_type' => $validated['transaction_type'],
+            'amount' => $validated['amount'],
+            'note' => $validated['note'] ?? null,
+            'account_id' => $validated['account_id'] ?? null,
+            'loan_id' => $validated['loan_id'] ?? null,
+            'branch_id' => $validated['branch_id'] ?? $this->resolveTransactionBranch($validated),
+        ]);
 
         return response()->json(['message' => 'Transaction updated.', 'data' => $transaction->fresh()]);
     }
 
     public function destroy(Transaction $transaction): JsonResponse
     {
-        abort_unless(Auth::user()?->can('transactions.void') || Auth::user()?->can('transactions.update'), 403);
+        $user = Auth::user();
+        abort_unless($user?->can('transactions.update'), 403);
 
-        DB::transaction(function () use ($transaction) {
-            $this->applyBalanceEffect($transaction, reverse: true);
-            $transaction->delete();
-        });
+        $type = $transaction->transaction_type;
+        if ($type === 'deposit') abort_unless($user?->can('deposits.create') || $user?->can('deposits.approve'), 403, 'Missing deposits permission.');
+        if ($type === 'withdrawal') abort_unless($user?->can('withdrawals.create') || $user?->can('withdrawals.approve'), 403, 'Missing withdrawals permission.');
+        if (in_array($type, ['loan_payment', 'loan_disbursement'])) abort_unless($user?->can('loans.create') || $user?->can('loans.encode') || $user?->can('loans.update') || $user?->can('loans.approve'), 403, 'Missing loan management permission.');
+
+        if ($transaction->status !== 'pending') {
+            abort(409, 'Only pending transactions can be deleted.');
+        }
+
+        $transaction->delete();
 
         return response()->json(['message' => 'Transaction deleted.']);
+    }
+
+    public function sendReversalOtp(Request $request, Transaction $transaction, SecurityOtpService $otp): JsonResponse
+    {
+        $user = Auth::user();
+        $this->authorizeReversal($user, $transaction);
+
+        $challenge = $otp->issueChallenge($user, $otp->ledgerReversalPurpose(), ['transaction_id' => $transaction->id]);
+        $otp->sendOtpMail($user, $otp->ledgerReversalPurpose(), $challenge['otp_code']);
+
+        return response()->json([
+            'message' => 'A verification code was sent to your account email.',
+            'expires_at' => $challenge['challenge']->expires_at->toISOString(),
+        ]);
+    }
+
+    public function reverse(Request $request, Transaction $transaction, SecurityOtpService $otp): JsonResponse
+    {
+        $user = Auth::user();
+        $this->authorizeReversal($user, $transaction);
+
+        $validated = $request->validate(['otp_code' => ['required', 'digits:6']]);
+        abort_unless(
+            $otp->verifyChallenge($user, $otp->ledgerReversalPurpose(), $validated['otp_code'], ['transaction_id' => $transaction->id]),
+            422,
+            'Invalid or expired verification code.'
+        );
+
+        $reversal = DB::transaction(function () use ($transaction, $user) {
+            $transaction = Transaction::whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+            if ($transaction->status !== 'completed') {
+                abort(409, 'Only completed transactions can be reversed.');
+            }
+            abort_if($transaction->reversal_of_id !== null, 409, 'A reversal cannot itself be reversed.');
+            abort_if($transaction->reversal()->exists(), 409, 'This transaction has already been reversed.');
+
+            // Roll back account balance
+            if ($transaction->account_id) {
+                $account = Account::whereKey($transaction->account_id)->lockForUpdate()->firstOrFail();
+                if (in_array($transaction->transaction_type, ['deposit', 'loan_disbursement'], true)) {
+                    abort_if((float) $account->balance < (float) $transaction->amount, 422, 'Cannot reverse credit: insufficient current balance.');
+                    $account->decrement('balance', $transaction->amount);
+                } elseif (in_array($transaction->transaction_type, ['withdrawal', 'loan_payment'], true)) {
+                    $account->increment('balance', $transaction->amount);
+                }
+            }
+
+            $reversal = Transaction::create([
+                'transaction_type' => $transaction->transaction_type,
+                'transaction_mode' => $transaction->transaction_mode,
+                'account_id' => $transaction->account_id,
+                'loan_id' => $transaction->loan_id,
+                'amount' => $transaction->amount,
+                'transaction_date' => now(),
+                'status' => 'completed',
+                'approved_by' => $user->id,
+                'approved_at' => now(),
+                'recorded_by' => $user->id,
+                'branch_id' => $transaction->branch_id,
+                'note' => 'Reversal of '.$transaction->transaction_number,
+                'reversal_of_id' => $transaction->id,
+            ]);
+
+            if ($transaction->loan_id && $transaction->transaction_type === 'loan_payment') {
+                $loan = \App\Models\Loan::whereKey($transaction->loan_id)->lockForUpdate()->firstOrFail();
+                if ($loan->loan_status === 'paid_off' && $loan->remainingBalance() > 0) {
+                    $loan->update(['loan_status' => 'active']);
+                }
+            }
+
+            app(\App\Services\AuditLogService::class)->log('transaction.reversed', 'Reversal entry posted.', 'transaction', $reversal, $user, ['reversal_of_id' => $transaction->id]);
+
+            return $reversal;
+        });
+
+        return response()->json(['message' => 'Transaction reversed successfully.', 'data' => $reversal]);
+    }
+
+    private function authorizeReversal(?User $user, Transaction $transaction): void
+    {
+        abort_unless($user?->can('transactions.reversal'), 403, 'Missing transactions.reversal permission.');
+        abort_unless(BranchScope::isUnrestricted($user) || (int) $transaction->branch_id === (int) $user->branch_id, 403);
+        abort_unless($transaction->status === 'completed', 409, 'Only completed transactions can be reversed.');
+        abort_if($transaction->reversal_of_id !== null || $transaction->reversal()->exists(), 409, 'This transaction has already been reversed.');
     }
 
     /**

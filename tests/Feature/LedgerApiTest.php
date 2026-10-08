@@ -1,8 +1,10 @@
 <?php
 
 use App\Models\Account;
+use App\Models\Loan;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\SecurityOtpService;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\UserSeeder;
 
@@ -10,7 +12,7 @@ beforeEach(function () {
     $this->seed(SpatieRolePermissionSeeder::class);
     $this->seed(UserSeeder::class);
 
-    $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
+    $this->manager = User::where('email', 'manager@example.com')->firstOrFail();
 
     $this->member = User::factory()->create();
     $this->member->assignRole('member');
@@ -36,8 +38,8 @@ test('users without transactions permissions cannot access ledger api', function
     ])->assertForbidden();
 });
 
-test('ledger store deposit credits account balance', function () {
-    $this->actingAs($this->admin);
+test('ledger store creates pending transaction without affecting balance', function () {
+    $this->actingAs($this->manager);
 
     $response = $this->postJson('/api/ledger', [
         'transaction_type' => 'deposit',
@@ -50,121 +52,148 @@ test('ledger store deposit credits account balance', function () {
         ->assertJsonPath('data.transaction_type', 'deposit')
         ->assertJsonPath('data.amount', '500.00');
 
-    expect($this->account->fresh()->balance)->toBe('1500.00');
+    expect($this->account->fresh()->balance)->toBe('1000.00'); // No change
 
     $transaction = Transaction::findOrFail($response->json('data.id'));
-    expect($transaction->status)->toBe('completed')
-        ->and($transaction->recorded_by)->toBe($this->admin->id)
+    expect($transaction->status)->toBe('pending')
+        ->and($transaction->recorded_by)->toBe($this->manager->id)
         ->and($transaction->account_id)->toBe($this->account->id);
-
-    $this->postJson("/api/services/approve/{$transaction->id}", [
-        'action' => 'approve',
-    ])->assertStatus(422)
-        ->assertJson(['message' => 'Transaction is not pending.']);
-
-    expect($this->account->fresh()->balance)->toBe('1500.00');
 });
 
-test('ledger store withdrawal debits account balance and rejects insufficient funds', function () {
-    $this->actingAs($this->admin);
+test('ledger update modifies pending transaction without affecting balance', function () {
+    $this->actingAs($this->manager);
 
-    // Attempt withdrawal greater than balance
-    $failResponse = $this->postJson('/api/ledger', [
-        'transaction_type' => 'withdrawal',
-        'amount' => 1500.00,
-        'note' => 'Excessive withdrawal',
-        'account_id' => $this->account->id,
-    ]);
-
-    $failResponse->assertStatus(422);
-    expect($this->account->fresh()->balance)->toBe('1000.00');
-
-    // Successful withdrawal
-    $successResponse = $this->postJson('/api/ledger', [
-        'transaction_type' => 'withdrawal',
-        'amount' => 400.00,
-        'note' => 'Valid withdrawal',
-        'account_id' => $this->account->id,
-    ]);
-
-    $successResponse->assertStatus(201);
-    expect($this->account->fresh()->balance)->toBe('600.00');
-});
-
-test('ledger update adjusts account balance by the transaction delta', function () {
-    $this->actingAs($this->admin);
-
-    // Initial deposit of 500: balance becomes 1000 + 500 = 1500
     $createResponse = $this->postJson('/api/ledger', [
         'transaction_type' => 'deposit',
         'amount' => 500.00,
         'account_id' => $this->account->id,
     ]);
     $transactionId = $createResponse->json('data.id');
-    expect($this->account->fresh()->balance)->toBe('1500.00');
+    expect($this->account->fresh()->balance)->toBe('1000.00');
 
-    // Update deposit amount to 800: balance should become 1000 + 800 = 1800
     $this->putJson("/api/ledger/{$transactionId}", [
         'transaction_type' => 'deposit',
         'amount' => 800.00,
         'account_id' => $this->account->id,
     ])->assertOk();
 
-    expect($this->account->fresh()->balance)->toBe('1800.00');
-
-    // Update deposit amount down to 200: balance should become 1000 + 200 = 1200
-    $this->putJson("/api/ledger/{$transactionId}", [
-        'transaction_type' => 'deposit',
-        'amount' => 200.00,
-        'account_id' => $this->account->id,
-    ])->assertOk();
-
-    expect($this->account->fresh()->balance)->toBe('1200.00');
+    expect($this->account->fresh()->balance)->toBe('1000.00');
+    expect(Transaction::find($transactionId)->amount)->toBe('800.00');
 });
 
-test('ledger destroy reverses balance effect on the linked account', function () {
-    $this->actingAs($this->admin);
+test('ledger update rejects modifying non-pending transaction', function () {
+    $this->actingAs($this->manager);
 
-    // Create deposit of 300: balance becomes 1300
+    $createResponse = $this->postJson('/api/ledger', [
+        'transaction_type' => 'deposit',
+        'amount' => 500.00,
+        'account_id' => $this->account->id,
+    ]);
+    $transactionId = $createResponse->json('data.id');
+
+    $transaction = Transaction::find($transactionId);
+    $transaction->update(['status' => 'completed']);
+
+    $this->putJson("/api/ledger/{$transactionId}", [
+        'transaction_type' => 'deposit',
+        'amount' => 800.00,
+        'account_id' => $this->account->id,
+    ])->assertStatus(409)
+    ->assertJson(['message' => 'Only pending transactions can be edited.']);
+});
+
+test('reversing a completed ledger entry posts one linked correction and preserves the original', function () {
+    $this->actingAs($this->manager);
+    $this->account->update(['balance' => 1500.00]);
+
+    $original = Transaction::create([
+        'transaction_type' => 'deposit',
+        'amount' => 500.00,
+        'account_id' => $this->account->id,
+        'status' => 'completed',
+        'recorded_by' => $this->manager->id,
+        'branch_id' => $this->manager->branch_id,
+        'transaction_date' => now(),
+    ]);
+
+    $this->postJson("/api/ledger/{$original->id}/reverse")->assertUnprocessable();
+    $this->postJson("/api/ledger/{$original->id}/reverse/send-otp")->assertOk();
+    $securityOtp = app(SecurityOtpService::class);
+    $challenge = $securityOtp->issueChallenge($this->manager, $securityOtp->ledgerReversalPurpose(), ['transaction_id' => $original->id]);
+    $response = $this->postJson("/api/ledger/{$original->id}/reverse", ['otp_code' => $challenge['otp_code']]);
+
+    $response->assertOk()
+        ->assertJsonPath('data.status', 'completed')
+        ->assertJsonPath('data.reversal_of_id', $original->id);
+    expect($this->account->fresh()->balance)->toBe('1000.00')
+        ->and($original->fresh()->status)->toBe('completed')
+        ->and($original->fresh()->reversal)->not->toBeNull();
+
+    $this->postJson("/api/ledger/{$original->id}/reverse")->assertStatus(409);
+    expect(Transaction::where('reversal_of_id', $original->id)->count())->toBe(1);
+});
+
+test('reversing a completed loan payment restores savings and nets the payment out of loan balance', function () {
+    $this->actingAs($this->manager);
+    $loan = Loan::factory()->active()->create([
+        'user_id' => $this->member->id,
+        'branch_id' => $this->manager->branch_id,
+    ]);
+    $loan->update(['account_id' => $this->account->id]);
+    $this->account->update(['balance' => 900.00]);
+
+    $payment = Transaction::create([
+        'transaction_type' => 'loan_payment',
+        'amount' => 100.00,
+        'account_id' => $this->account->id,
+        'loan_id' => $loan->id,
+        'status' => 'completed',
+        'recorded_by' => $this->manager->id,
+        'branch_id' => $this->manager->branch_id,
+        'transaction_date' => now(),
+    ]);
+    $remainingBeforePayment = $loan->totalPayable();
+
+    $securityOtp = app(SecurityOtpService::class);
+    $challenge = $securityOtp->issueChallenge($this->manager, $securityOtp->ledgerReversalPurpose(), ['transaction_id' => $payment->id]);
+    $this->postJson("/api/ledger/{$payment->id}/reverse", ['otp_code' => $challenge['otp_code']])->assertOk();
+
+    expect((float) $this->account->fresh()->balance)->toBe(1000.0)
+        ->and((float) $loan->fresh()->totalPaid())->toBe(0.0)
+        ->and((float) $loan->fresh()->remainingBalance())->toBe((float) $remainingBeforePayment)
+        ->and($payment->fresh()->status)->toBe('completed');
+});
+
+test('ledger destroy deletes pending transaction without affecting balance', function () {
+    $this->actingAs($this->manager);
+
     $createResponse = $this->postJson('/api/ledger', [
         'transaction_type' => 'deposit',
         'amount' => 300.00,
         'account_id' => $this->account->id,
     ]);
     $transactionId = $createResponse->json('data.id');
-    expect($this->account->fresh()->balance)->toBe('1300.00');
+    expect($this->account->fresh()->balance)->toBe('1000.00');
 
-    // Delete transaction: balance should revert to 1000
     $this->deleteJson("/api/ledger/{$transactionId}")->assertOk();
 
     expect($this->account->fresh()->balance)->toBe('1000.00');
     $this->assertDatabaseMissing('transactions', ['id' => $transactionId]);
 });
 
-test('multiple ledger operations accurately reconcile account balance', function () {
-    $this->actingAs($this->admin);
+test('ledger destroy rejects deleting non-pending transaction', function () {
+    $this->actingAs($this->manager);
 
-    // Initial balance: 1000
-    // Deposit 500 -> 1500
-    $this->postJson('/api/ledger', [
+    $createResponse = $this->postJson('/api/ledger', [
         'transaction_type' => 'deposit',
-        'amount' => 500.00,
+        'amount' => 300.00,
         'account_id' => $this->account->id,
-    ])->assertStatus(201);
+    ]);
+    $transactionId = $createResponse->json('data.id');
 
-    // Withdrawal 200 -> 1300
-    $this->postJson('/api/ledger', [
-        'transaction_type' => 'withdrawal',
-        'amount' => 200.00,
-        'account_id' => $this->account->id,
-    ])->assertStatus(201);
+    $transaction = Transaction::find($transactionId);
+    $transaction->update(['status' => 'completed']);
 
-    // Deposit 100 -> 1400
-    $this->postJson('/api/ledger', [
-        'transaction_type' => 'deposit',
-        'amount' => 100.00,
-        'account_id' => $this->account->id,
-    ])->assertStatus(201);
-
-    expect((float) $this->account->fresh()->balance)->toBe(1400.00);
+    $this->deleteJson("/api/ledger/{$transactionId}")->assertStatus(409)
+    ->assertJson(['message' => 'Only pending transactions can be deleted.']);
 });

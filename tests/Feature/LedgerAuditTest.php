@@ -135,8 +135,8 @@ test('F025-6: ledger export streams CSV file with headers and records', function
         ->and($content)->toContain('Status');
 });
 
-test('F025-7: ledger exposes entries across branches for officers holding branch bypass', function () {
-    // Give accountant officeBranch while holding the default branch bypass
+test('F025-7: branch accountant only sees ledger entries from their branch', function () {
+    // Give accountant the branch office, where their ledger access is scoped.
     $this->accountant->update(['branch_id' => $this->officeBranch->id]);
 
     $tMain = Transaction::create([
@@ -170,5 +170,5 @@ test('F025-7: ledger exposes entries across branches for officers holding branch
 
     $ids = collect($response->json('data'))->pluck('id')->all();
     expect($ids)->toContain($tOffice->id)
-        ->and($ids)->toContain($tMain->id);
+        ->not->toContain($tMain->id);
 });

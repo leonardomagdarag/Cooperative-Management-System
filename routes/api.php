@@ -186,6 +186,8 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     Route::post('/ledger', [LedgerController::class, 'store']);
     Route::put('/ledger/{transaction}', [LedgerController::class, 'update']);
     Route::delete('/ledger/{transaction}', [LedgerController::class, 'destroy']);
+    Route::post('/ledger/{transaction}/reverse/send-otp', [LedgerController::class, 'sendReversalOtp'])->middleware('throttle:3,1');
+    Route::post('/ledger/{transaction}/reverse', [LedgerController::class, 'reverse']);
 
     // Expenses
     Route::get('/expenses', [ExpenseController::class, 'index']);
