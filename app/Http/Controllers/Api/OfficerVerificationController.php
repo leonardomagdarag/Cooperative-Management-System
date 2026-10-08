@@ -95,9 +95,7 @@ class OfficerVerificationController extends Controller
         $purpose = 'officer_phone_verify';
         $issued = $this->securityOtpService->issueChallenge($user, $purpose);
 
-        $message = "Settlers CC: Phone verification OTP for new officer account is {$issued['otp_code']}. Valid for 10 mins.";
-
-        $this->securityOtpService->sendOtpSmsToPhone($user, $phoneNo, $purpose, $issued['otp_code'], $message);
+        $this->securityOtpService->sendOtpSmsToPhone($user, $phoneNo, $purpose, $issued['otp_code']);
         $this->securityOtpService->stashDebugCode($request->session(), $issued['otp_code']);
 
         return response()->json([
@@ -133,3 +131,4 @@ class OfficerVerificationController extends Controller
         return response()->json(['message' => 'Phone verified successfully.']);
     }
 }
+

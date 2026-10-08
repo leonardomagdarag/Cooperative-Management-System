@@ -46,9 +46,7 @@ class PhoneVerificationController extends Controller
         $purpose = 'phone_verification';
         $issued = $this->securityOtpService->issueChallenge($user, $purpose);
 
-        $message = "Settlers CC: Your phone verification OTP is {$issued['otp_code']}. Valid for 10 mins. Never share this.";
-
-        $this->securityOtpService->sendOtpSmsToPhone($user, $phoneNo, $purpose, $issued['otp_code'], $message);
+        $this->securityOtpService->sendOtpSmsToPhone($user, $phoneNo, $purpose, $issued['otp_code']);
         $this->securityOtpService->stashDebugCode($request->session(), $issued['otp_code']);
 
         return response()->json([
@@ -99,3 +97,4 @@ class PhoneVerificationController extends Controller
         return response()->json(['message' => 'Phone number verified successfully.']);
     }
 }
+

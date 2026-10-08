@@ -100,7 +100,7 @@ class PasswordResetController extends Controller
 
         // Send email with token
         try {
-            SendPasswordResetEmailJob::dispatch($user->id, $token);
+            SendPasswordResetEmailJob::dispatchSync($user->id, $token);
 
             $this->auditLogService->log(
                 'security.password_reset_code_sent',

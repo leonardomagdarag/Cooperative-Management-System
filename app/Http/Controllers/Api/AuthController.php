@@ -42,16 +42,16 @@ class AuthController extends Controller
 
         $loginId = $request->input('email');
         $emailNorm = User::normalizeEmail($loginId);
-        
+
         $user = User::query()
-            ->where(function($q) use ($emailNorm, $loginId) {
+            ->where(function ($q) use ($emailNorm, $loginId) {
                 $q->whereRaw('LOWER(TRIM(users.email)) = ?', [$emailNorm]);
-                
+
                 $cleanPhone = preg_replace('/[^0-9\+]/', '', $loginId);
                 if (strlen($cleanPhone) >= 10) {
                     $q->orWhereHas('personalData.contact', function ($contactQuery) use ($cleanPhone) {
                         $contactQuery->where('phone_no', $cleanPhone)
-                                     ->whereNotNull('phone_verified_at');
+                            ->whereNotNull('phone_verified_at');
                     });
                 }
             })
@@ -64,7 +64,7 @@ class AuthController extends Controller
             ]);
         }
 
-        $isOfficer = $user->hasAnyRole(['admin', 'manager', 'accountant', 'loan', 'secretary']);
+        $isOfficer = $user->is_officer;
         $audience = $isOfficer ? MaintenanceState::AUDIENCE_OFFICER : MaintenanceState::AUDIENCE_MEMBER;
 
         // The global switch is checked here as well as in
@@ -185,9 +185,9 @@ class AuthController extends Controller
 
         $permissions = $user->getAllPermissions()->pluck('name')->toArray();
 
-        // Admins are superusers at the authorization layer (see AppServiceProvider),
+        // Developers are superusers at the authorization layer (see AppServiceProvider),
         // so expose the same effective access to the React permission gates.
-        if ($user->hasRole('admin')) {
+        if ($user->hasRole('developer')) {
             $permissions = array_values(array_unique(array_merge(
                 $permissions,
                 PermissionCatalog::allPermissions(),

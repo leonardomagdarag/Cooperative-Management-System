@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Account;
+use App\Models\Branch;
 use App\Models\MemberApplication;
 use App\Models\User;
 use App\Services\TurnstileService;
@@ -59,6 +60,7 @@ test('new applicants register as inactive members pending officer approval', fun
     expect($user->account_status)->toBe('inactive')
         ->and($user->profile_completion_required)->toBeTrue()
         ->and($user->hasRole('member'))->toBeTrue()
+        ->and($user->branch_id)->toBe(Branch::where('is_head_office', true)->value('id'))
         ->and($user->email_verified_at)->toBeNull()
         ->and(Account::where('user_id', $user->id)->count())->toBe(0);
 
@@ -81,10 +83,10 @@ test('registration records the membership application for officer review', funct
         ->and($application->status)->toBe('pending');
 });
 
-test('registering notifies admin, manager and secretary officers about the application', function () {
+test('registering notifies admin, manager and accountant officers about the application', function () {
     $this->post('/register', applicantPayload(['email' => 'officer.notice@example.com']));
 
-    $officers = User::role(['admin', 'manager', 'secretary'])->get();
+    $officers = User::role(['admin', 'manager', 'accountant'])->get();
 
     expect($officers->count())->toBeGreaterThanOrEqual(3);
 

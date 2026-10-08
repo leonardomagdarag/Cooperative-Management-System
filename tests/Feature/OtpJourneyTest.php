@@ -159,20 +159,20 @@ test('OTP challenge page offers a sign-out escape route that clears the pending 
     $this->getJson('/api/user')->assertStatus(401);
 });
 
-test('admin approval of a public registration sends the email verification link', function () {
+test('manager approval of a public registration sends the email verification link', function () {
     Mail::fake();
 
     $this->seed(SpatieRolePermissionSeeder::class);
 
-    $admin = User::factory()->create(['role' => 'admin']);
-    $admin->assignRole('admin');
+    $manager = User::factory()->create(['role' => 'manager']);
+    $manager->assignRole('manager');
 
     $member = User::factory()->unverified()->create([
         'email' => 'pending-approve@example.com',
         'account_status' => 'inactive',
     ]);
 
-    $this->actingAs($admin)
+    $this->actingAs($manager)
         ->postJson("/api/members/{$member->id}/approve")
         ->assertOk();
 
@@ -250,7 +250,7 @@ test('verification SMS to an unverified phone number sends inline', function () 
     $sms->shouldReceive('isEnabled')->once()->andReturn(true);
     $sms->shouldReceive('send')
         ->once()
-        ->with('09171234567', 'Phone verification test code')
+        ->with('09171234567', 'Settlers CC: Your phone verification OTP is 123456. Valid for 10 mins. Never share this.')
         ->andReturn(true);
     app()->instance(TextBeeService::class, $sms);
     Queue::fake();
@@ -259,8 +259,7 @@ test('verification SMS to an unverified phone number sends inline', function () 
         $user,
         '09171234567',
         'phone_verification',
-        '123456',
-        'Phone verification test code'
+        '123456'
     );
 
     Queue::assertNothingPushed();

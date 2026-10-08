@@ -39,6 +39,11 @@ class SecurityOtpService
         return 'withdrawal_approval';
     }
 
+    public function ledgerReversalPurpose(): string
+    {
+        return 'ledger_reversal';
+    }
+
     public function passwordChangePurpose(): string
     {
         return 'password_change';
@@ -240,13 +245,8 @@ class SecurityOtpService
         try {
             Mail::to($recipient)->send(new OtpCodeMail($user, $purpose, $otpCode));
         } catch (Throwable $e) {
-            // A mail blip must not fail the sign-in, so this is logged and
-            // swallowed. The user can request a new code.
             Log::error("OTP email failed for user {$user->id} ({$purpose}): {$e->getMessage()}");
 
-            // Guarded separately: the audit write hits the database, and if the
-            // mail failure *was* a database problem this would throw straight
-            // out of the handler and fail the sign-in we are trying to protect.
             try {
                 $this->auditLogService->log(
                     'email.failed',
@@ -260,13 +260,7 @@ class SecurityOtpService
                 Log::error("Failed to audit OTP email failure for user {$user->id}: {$e3->getMessage()}");
             }
 
-            // Hand off to the queue as a second attempt. This only runs on the
-            // failure path, so it costs nothing when SMTP is healthy.
-            try {
-                SendOtpEmailJob::dispatch($user->id, $purpose, $otpCode, $recipient);
-            } catch (Throwable $e2) {
-                Log::error("OTP email retry dispatch failed for user {$user->id}: {$e2->getMessage()}");
-            }
+            abort(503, 'Failed to send OTP email. Please try again later.');
         }
     }
 
@@ -294,15 +288,13 @@ class SecurityOtpService
                 return;
             }
 
-            Log::warning("Immediate OTP SMS delivery failed for user {$user->id}; queuing a retry.");
+            Log::warning("Immediate OTP SMS delivery failed for user {$user->id}.");
+            abort(503, 'Failed to send OTP SMS. Please try again later.');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            throw $e;
         } catch (Throwable $e) {
             Log::warning("Immediate OTP SMS delivery threw for user {$user->id}: {$e->getMessage()}");
-        }
-
-        try {
-            SendSmsJob::dispatch($phone, $message, 'otp.sms');
-        } catch (Throwable $e) {
-            Log::error("OTP SMS retry dispatch failed for user {$user->id}: {$e->getMessage()}");
+            abort(503, 'Failed to send OTP SMS. Please try again later.');
         }
     }
 

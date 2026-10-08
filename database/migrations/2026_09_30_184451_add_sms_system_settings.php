@@ -1,8 +1,7 @@
 <?php
 
+use App\Models\SystemSetting;
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -39,7 +38,7 @@ return new class extends Migration
         ];
 
         foreach ($settings as $s) {
-            \App\Models\SystemSetting::firstOrCreate(
+            SystemSetting::firstOrCreate(
                 ['key' => $s['key']],
                 array_merge($s, ['is_editable' => true, 'requires_restart' => false])
             );
@@ -51,7 +50,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        \App\Models\SystemSetting::whereIn('key', [
+        SystemSetting::whereIn('key', [
             'sms_service_enabled',
             'textbee_api_key',
             'textbee_device_id',

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Address;
+use App\Models\Branch;
 use App\Models\Contact;
 use App\Models\Employment;
 use App\Models\MemberApplication;
@@ -79,7 +80,7 @@ class LoginController extends Controller
             $user = Auth::user();
 
             // Enforce role-specific login availability
-            $isOfficer = $user->hasAnyRole(['admin', 'manager', 'accountant', 'loan', 'secretary']);
+            $isOfficer = $user->is_officer;
             $loginAllowed = $isOfficer
                 ? (bool) SystemSetting::get('service_login_officer_enabled', true)
                 : (bool) SystemSetting::get('service_login_member_enabled', true);
@@ -146,9 +147,7 @@ class LoginController extends Controller
                 );
 
                 $this->securityOtpService->sendOtpMail(
-                    $user,
-                    $this->securityOtpService->newDevicePurpose(),
-                    $issued['otp_code']
+                    $user, $this->securityOtpService->newDevicePurpose(), $issued['otp_code']
                 );
 
                 $request->session()->put('security.pending_otp', true);
@@ -477,7 +476,7 @@ class LoginController extends Controller
                 'account_status' => 'inactive',
                 'special_loan_eligible' => false,
                 'profile_completion_required' => true,
-                'branch_id' => $validated['branch_id'] ?? null,
+                'branch_id' => $validated['branch_id'] ?? Branch::query()->where('is_head_office', true)->value('id'),
             ]);
             Role::findOrCreate('member', 'web');
             $user->assignRole('member');
@@ -564,3 +563,4 @@ class LoginController extends Controller
         return [$firstName, $lastName];
     }
 }
+
