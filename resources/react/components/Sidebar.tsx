@@ -7,6 +7,7 @@ interface NavItem {
     path: string;
     icon: string;
     permission?: string;
+    multiPermission?: string[];
     roles?: string[];
 }
 
@@ -18,6 +19,7 @@ const NAV_ITEMS: NavItem[] = [
     { label: 'Services', path: '/dashboard/services', icon: 'fas fa-briefcase', permission: 'services.view' },
     { label: 'My Loans', path: '/dashboard/member-loans', icon: 'fas fa-hand-holding-usd', roles: ['member'] },
     { label: 'Loans', path: '/dashboard/loans', icon: 'fas fa-hand-holding-usd', permission: 'loans.view' },
+    { label: 'Collections', path: '/dashboard/collections', icon: 'fas fa-wallet', multiPermission: ['collections.view-all', 'collections.view-own'] },
     { label: 'Ledger', path: '/dashboard/ledger', icon: 'fas fa-book', permission: 'transactions.view' },
     { label: 'Expenses', path: '/dashboard/expenses', icon: 'fas fa-receipt', permission: 'transactions.view' },
     { label: 'History', path: '/dashboard/history', icon: 'fas fa-history', roles: ['member'] },
@@ -40,6 +42,9 @@ export default function Sidebar() {
     const filteredItems = NAV_ITEMS.filter(item => {
         if (item.roles && (!user || !item.roles.includes(user.primary_role))) {
             return false;
+        }
+        if (item.multiPermission) {
+            return item.multiPermission.some(p => user?.permissions?.includes(p));
         }
         if (!item.permission) return true;
         return user?.permissions?.includes(item.permission);

@@ -31,10 +31,11 @@ import MemberOverview from './pages/overviews/MemberOverview';
 import AdminOverview from './pages/overviews/AdminOverview';
 import ManagerOverview from './pages/overviews/ManagerOverview';
 import TreasurerOverview from './pages/overviews/TreasurerOverview';
-import SecretaryOverview from './pages/overviews/SecretaryOverview';
+
 import LoanOverview from './pages/overviews/LoanOverview';
 import OfficerOverview from './pages/overviews/OfficerOverview';
 import MemberLoansPage from './pages/member-loans/MemberLoansPage';
+import CollectionsPage from './pages/collections/CollectionsPage';
 import MembersPage from './pages/members/MembersPage';
 import TicketsPage from './pages/tickets/TicketsPage';
 import LoadingScreen from './components/LoadingScreen';
@@ -57,12 +58,13 @@ function GuestRoute({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
 }
 
-function PermissionGate({ permission, role, children }: { permission?: string; role?: string; children: React.ReactNode }) {
+function PermissionGate({ permission, role, multiPermission, children }: { permission?: string; role?: string; multiPermission?: string[]; children: React.ReactNode }) {
     const { user } = useAuth();
     if (!user) return null;
     if (role && user.primary_role === role) return <>{children}</>;
     if (permission && user.permissions?.includes(permission)) return <>{children}</>;
-    return <UnauthorizedPlaceholder permission={permission || role} />;
+    if (multiPermission && multiPermission.some(p => user.permissions?.includes(p))) return <>{children}</>;
+    return <UnauthorizedPlaceholder permission={permission || role || multiPermission?.join(' or ')} />;
 }
 
 function RedirectToSettingsTab({ tab, subTab }: { tab: string; subTab?: string }) {
@@ -92,9 +94,10 @@ function DashboardRouter() {
         'profile': <ProfilePage />,
         'settings': <SettingsPage />,
         'member-loans': <MemberLoansPage />,
+        'collections': <CollectionsPage />,
     };
 
-    const permissionMap: Record<string, { permission?: string; role?: string }> = {
+    const permissionMap: Record<string, { permission?: string; role?: string; multiPermission?: string[] }> = {
         'logs': { permission: 'logs.view' },
         'announcements': { permission: 'announcements.view' },
         'loan-products': { permission: 'settings.update' },
@@ -108,6 +111,7 @@ function DashboardRouter() {
         'reports': { permission: 'reports.view' },
         'services': { permission: 'services.view' },
         'members': { permission: 'members.view' },
+        'collections': { multiPermission: ['collections.view-all', 'collections.view-own'] },
     };
 
     const tabRedirects: Record<string, string> = {
@@ -137,7 +141,7 @@ function DashboardRouter() {
     const gate = permissionMap[section];
     if (gate) {
         return (
-            <PermissionGate permission={gate.permission} role={gate.role}>
+            <PermissionGate permission={gate.permission} role={gate.role} multiPermission={gate.multiPermission}>
                 {section === 'logs' ? <LogsPage /> :
                  section === 'announcements' ? <AnnouncementsPage /> :
                  tabRedirects[section] ? <RedirectToSettingsTab tab={tabRedirects[section]} /> :
@@ -149,6 +153,7 @@ function DashboardRouter() {
                  section === 'reports' ? <ReportsPage /> :
                  section === 'services' ? <ServicesPage /> :
                  section === 'members' ? <MembersPage /> :
+                 section === 'collections' ? <CollectionsPage /> :
                  <DefaultOverview role={user?.primary_role || 'member'} isOfficer={!!user?.is_officer} />}
             </PermissionGate>
         );
@@ -164,7 +169,6 @@ function DefaultOverview({ role, isOfficer }: { role: string; isOfficer?: boolea
         case 'admin': return <AdminOverview />;
         case 'manager': return <ManagerOverview />;
         case 'accountant': case 'treasurer': return <TreasurerOverview />;
-        case 'secretary': return <SecretaryOverview />;
         case 'loan': return <LoanOverview />;
         default:
             if (isOfficer) return <OfficerOverview />;

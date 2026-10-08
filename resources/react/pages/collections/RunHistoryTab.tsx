@@ -1,0 +1,275 @@
+import React, { useState, useEffect } from 'react';
+import { api } from '../../api/client';
+import Button from '../../components/ui/Button';
+import Badge from '../../components/ui/Badge';
+import { useToast } from '../../contexts/ToastContext';
+import Modal from '../../components/ui/Modal';
+import ModalHeader from '../../components/ui/ModalHeader';
+import Pagination from '../../components/ui/Pagination';
+
+export default function RunHistoryTab({ canViewAll }: { canViewAll: boolean }) {
+    const { addToast } = useToast();
+    const [runs, setRuns] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 });
+    const [statusFilter, setStatusFilter] = useState('');
+    const [selectedRun, setSelectedRun] = useState<any>(null);
+    const [availableOfficers, setAvailableOfficers] = useState<any[]>([]);
+    const [replacementOfficerId, setReplacementOfficerId] = useState('');
+    const [actionReason, setActionReason] = useState('');
+    const canManageRuns = canViewAll;
+
+    useEffect(() => {
+        fetchHistory(1);
+    }, [statusFilter]);
+
+    const fetchHistory = async (page: number) => {
+        setLoading(true);
+        try {
+            let url = `/api/collections?page=${page}`;
+            if (statusFilter) url += `&status=${statusFilter}`;
+            
+            const res = await api.get(url);
+            setRuns(res.data.data);
+            setPagination({
+                current_page: res.data.current_page,
+                last_page: res.data.last_page,
+                total: res.data.total
+            });
+        } catch (err) {
+            addToast('error', 'Failed to load run history');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const viewRun = async (runId: number) => {
+        try {
+            const res = await api.get(`/api/collections/${runId}`);
+            setSelectedRun(res.data.data);
+            setActionReason('');
+            setReplacementOfficerId('');
+            if (canManageRuns) {
+                const officers = await api.get('/api/collections/officers');
+                setAvailableOfficers(officers.data.data);
+                const currentOfficer = officers.data.data.find((officer: any) => officer.id === res.data.data.loan_officer_id);
+                setReplacementOfficerId(String(currentOfficer?.id ?? officers.data.data[0]?.id ?? ''));
+            }
+        } catch (err) {
+            addToast('error', 'Failed to load run details');
+        }
+    };
+
+    const manageRun = async (action: 'replacement' | 'reassign' | 'void' | 'retry') => {
+        if (!selectedRun) return;
+        try {
+            if (action === 'replacement') {
+                const response = await api.post(`/api/collections/${selectedRun.id}/replacement`, {
+                    loan_officer_id: replacementOfficerId || undefined,
+                });
+                addToast('success', `Created linked run ${response.data.data.run_number}`);
+            } else if (action === 'reassign') {
+                await api.post(`/api/collections/${selectedRun.id}/reassign`, {
+                    loan_officer_id: replacementOfficerId,
+                    reason: actionReason,
+                });
+                addToast('success', 'Orphaned run reassigned');
+            } else if (action === 'void') {
+                await api.post(`/api/collections/${selectedRun.id}/void`, { reason: actionReason });
+                addToast('success', 'Orphaned run voided');
+            } else {
+                await api.post(`/api/collections/${selectedRun.id}/retry`, { reason: actionReason });
+                addToast('success', 'Failed collection items retried');
+            }
+            setSelectedRun(null);
+            fetchHistory(1);
+        } catch (err: any) {
+            addToast('error', err.response?.data?.message || 'Run action failed');
+        }
+    };
+
+    return (
+        <div className="p-6">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-lg font-bold text-slate-800">Run History</h2>
+                
+                <select 
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={statusFilter}
+                    onChange={e => setStatusFilter(e.target.value)}
+                >
+                    <option value="">All Statuses</option>
+                    <option value="draft">Draft</option>
+                    <option value="submitted">Submitted</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="partially_applied">Partially Applied</option>
+                    <option value="voided">Voided</option>
+                </select>
+            </div>
+
+            {loading ? (
+                <div className="text-center py-8 text-slate-500"><i className="fa-solid fa-spinner fa-spin mr-2"></i>Loading history...</div>
+            ) : runs.length === 0 ? (
+                <div className="text-center py-12 text-slate-500 bg-slate-50 rounded-lg">
+                    <p>No collection runs found.</p>
+                </div>
+            ) : (
+                <>
+                    <div className="overflow-x-auto border border-slate-200 rounded-lg mb-4">
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
+                                <tr>
+                                    <th className="p-3 font-semibold">Run Number</th>
+                                    {canViewAll && <th className="p-3 font-semibold">Officer</th>}
+                                    <th className="p-3 font-semibold">Date</th>
+                                    <th className="p-3 font-semibold">Items</th>
+                                    <th className="p-3 font-semibold">Total Amount</th>
+                                    <th className="p-3 font-semibold">Status</th>
+                                    <th className="p-3 font-semibold">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {runs.map(run => (
+                                    <tr key={run.id} className="hover:bg-slate-50">
+                                        <td className="p-3 font-mono text-slate-700">{run.run_number}</td>
+                                        {canViewAll && (
+                                            <td className="p-3">
+                                                {run.loan_officer?.personal_data?.first_name} {run.loan_officer?.personal_data?.last_name}
+                                            </td>
+                                        )}
+                                        <td className="p-3">{run.collection_date}</td>
+                                        <td className="p-3">{run.item_count}</td>
+                                        <td className="p-3 font-medium">₱{parseFloat(run.total_amount).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                        <td className="p-3">
+                                            <Badge variant={
+                                                run.status === 'approved' ? 'emerald' :
+                                                run.status === 'rejected' || run.status === 'voided' ? 'red' :
+                                                run.status === 'draft' ? 'slate' : 'blue'
+                                            }>
+                                                {run.status.replace('_', ' ')}
+                                            </Badge>
+                                            {run.orphaned_at && <Badge variant="red" className="ml-2">Officer inactive</Badge>}
+                                        </td>
+                                        <td className="p-3">
+                                            <Button variant="secondary" size="sm" onClick={() => viewRun(run.id)}>
+                                                View
+                                            </Button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <Pagination 
+                        currentPage={pagination.current_page} 
+                        lastPage={pagination.last_page} 
+                        onPageChange={fetchHistory} 
+                    />
+                </>
+            )}
+
+            {/* Run Details Modal */}
+            <Modal
+                open={!!selectedRun}
+                onClose={() => setSelectedRun(null)}
+                title="Collection Run Details"
+                header={<ModalHeader title="Collection Run Details" onClose={() => setSelectedRun(null)} />}
+            >
+                <div className="p-6">
+                    <div className="grid grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <div className="text-sm text-slate-500">Run Number</div>
+                            <div className="font-mono font-bold text-slate-800">{selectedRun?.run_number}</div>
+                            <div className="text-sm text-slate-500 mt-2">Status</div>
+                            <div className="font-semibold capitalize text-slate-800">{selectedRun?.status.replace('_', ' ')}</div>
+                        </div>
+                        <div>
+                            <div className="text-sm text-slate-500">Total Collected</div>
+                            <div className="font-semibold text-lg text-emerald-600">₱{parseFloat(selectedRun?.total_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                            <div className="text-sm text-slate-500 mt-2">Items</div>
+                            <div className="font-semibold text-slate-800">{selectedRun?.items?.length}</div>
+                        </div>
+                    </div>
+
+                    <h3 className="font-semibold text-slate-800 mb-3">Collected Items</h3>
+                    <div className="max-h-64 overflow-y-auto border border-slate-200 rounded-lg">
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
+                                <tr>
+                                    <th className="p-2 font-semibold">Member</th>
+                                    <th className="p-2 font-semibold text-right">Amount</th>
+                                <th className="p-2 font-semibold text-center">Outcome</th>
+                                <th className="p-2 font-semibold">Failure reason</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {selectedRun?.items?.map((item: any) => (
+                                    <tr key={item.id}>
+                                        <td className="p-2">
+                                            <div>{item.member?.personal_data?.first_name} {item.member?.personal_data?.last_name}</div>
+                                            <div className="text-xs text-slate-500">{item.loan?.loan_number}</div>
+                                        </td>
+                                        <td className="p-2 text-right font-medium">₱{parseFloat(item.amount).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                        <td className="p-2 text-center">
+                                            <Badge variant={
+                                                item.outcome === 'applied' ? 'emerald' : 
+                                                item.outcome === 'failed' ? 'red' : 'slate'
+                                            }>
+                                                {item.outcome}
+                                            </Badge>
+                                        </td>
+                                        <td className="p-2 text-xs text-red-700">{item.failure_reason || '—'}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {canManageRuns && (selectedRun?.status === 'rejected' || (selectedRun?.status === 'draft' && selectedRun?.orphaned_at)) && (
+                        <section className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                            <h3 className="font-semibold text-slate-800">
+                                {selectedRun?.status === 'rejected' ? 'Create linked replacement' : 'Resolve inactive officer run'}
+                            </h3>
+                            <label className="mt-3 block text-sm font-medium text-slate-700">Assigned loan officer</label>
+                            <select value={replacementOfficerId} onChange={e => setReplacementOfficerId(e.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                                <option value="">Select officer</option>
+                                {availableOfficers.map(officer => <option key={officer.id} value={officer.id}>{officer.name || `Officer ${officer.id}`}{officer.branch_name ? ` · ${officer.branch_name}` : ''}</option>)}
+                            </select>
+                            {selectedRun?.status === 'draft' && selectedRun?.orphaned_at && (
+                                <>
+                                    <label className="mt-3 block text-sm font-medium text-slate-700">Reason</label>
+                                    <textarea value={actionReason} onChange={e => setActionReason(e.target.value)} rows={2} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+                                </>
+                            )}
+                            <div className="mt-3 flex justify-end gap-2">
+                                {selectedRun?.status === 'rejected' ? (
+                                    <Button variant="primary" disabled={!replacementOfficerId} onClick={() => manageRun('replacement')}>Create replacement</Button>
+                                ) : (
+                                    <>
+                                        <Button variant="danger" disabled={actionReason.trim().length < 5} onClick={() => manageRun('void')}>Void run</Button>
+                                        <Button variant="primary" disabled={!replacementOfficerId || actionReason.trim().length < 5} onClick={() => manageRun('reassign')}>Reassign run</Button>
+                                    </>
+                                )}
+                            </div>
+                        </section>
+                    )}
+
+                    {canManageRuns && selectedRun?.status === 'partially_applied' && (
+                        <section className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                            <h3 className="font-semibold text-slate-800">Retry failed items</h3>
+                            <p className="mt-1 text-sm text-slate-600">Applied items remain unchanged. The retry revalidates only the failed items and records this action.</p>
+                            <label className="mt-3 block text-sm font-medium text-slate-700">Reason</label>
+                            <textarea value={actionReason} onChange={e => setActionReason(e.target.value)} rows={2} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+                            <div className="mt-3 flex justify-end">
+                                <Button variant="primary" disabled={actionReason.trim().length < 5} onClick={() => manageRun('retry')}>Retry failed items</Button>
+                            </div>
+                        </section>
+                    )}
+                </div>
+            </Modal>
+        </div>
+    );
+}

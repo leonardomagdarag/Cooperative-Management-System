@@ -148,6 +148,22 @@ export default function HistoryPage() {
                                         <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusColor(t.status)}`}>
                                             {t.status}
                                         </span>
+                                        {t.status === 'completed' && (
+                                            <button 
+                                                onClick={async () => {
+                                                    try {
+                                                        const res = await (await import('../../api/client')).api.post(`/transactions/${t.id}/receipts/reprint`);
+                                                        alert(res.data.message);
+                                                    } catch (err: any) {
+                                                        alert(err.response?.data?.message || 'Failed to reprint');
+                                                    }
+                                                }}
+                                                className="p-1 rounded-md text-blue-600 hover:bg-blue-50 transition-colors"
+                                                title="Print Receipt"
+                                            >
+                                                <i className="fas fa-print text-xs"></i>
+                                            </button>
+                                        )}
                                     </div>
                                     {t.note && <p className="mt-1 max-w-[200px] truncate text-xs text-gray-400">{t.note}</p>}
                                 </div>

@@ -276,6 +276,28 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     Route::post('/services/transactions/{transaction}/send-otp', [ServiceController::class, 'sendWithdrawalApprovalOtp']);
     Route::get('/services/pending', [ServiceController::class, 'pendingTransactions']);
 
+    // Collection Runs
+    Route::get('/collections', [\App\Http\Controllers\Api\CollectionRunController::class, 'index']);
+    Route::get('/collections/queues', [\App\Http\Controllers\Api\CollectionRunController::class, 'queues']);
+    Route::get('/collections/route-list', [\App\Http\Controllers\Api\CollectionRunController::class, 'routeList']);
+    Route::get('/collections/officers', [\App\Http\Controllers\Api\CollectionRunController::class, 'availableOfficers']);
+    Route::post('/collections', [\App\Http\Controllers\Api\CollectionRunController::class, 'store'])->middleware('profile.completed');
+    Route::get('/collections/{run}', [\App\Http\Controllers\Api\CollectionRunController::class, 'show']);
+    Route::post('/collections/{run}/items', [\App\Http\Controllers\Api\CollectionRunController::class, 'addItem'])->middleware(['profile.completed', 'service.availability:loan_payment']);
+    Route::put('/collections/{run}/items/{item}', [\App\Http\Controllers\Api\CollectionRunController::class, 'updateItem'])->middleware(['profile.completed', 'service.availability:loan_payment']);
+    Route::delete('/collections/{run}/items/{item}', [\App\Http\Controllers\Api\CollectionRunController::class, 'removeItem'])->middleware(['profile.completed', 'service.availability:loan_payment']);
+    Route::post('/collections/{run}/submit', [\App\Http\Controllers\Api\CollectionRunController::class, 'submit'])->middleware(['profile.completed', 'service.availability:loan_payment']);
+    Route::post('/collections/{run}/approve', [\App\Http\Controllers\Api\CollectionRunController::class, 'approveStage'])->middleware(['profile.completed', 'service.availability:loan_payment']);
+    Route::post('/collections/{run}/retry', [\App\Http\Controllers\Api\CollectionRunController::class, 'retryFailures'])->middleware(['profile.completed', 'service.availability:loan_payment']);
+    Route::post('/collections/{run}/replacement', [\App\Http\Controllers\Api\CollectionRunController::class, 'replacement'])->middleware('profile.completed');
+    Route::post('/collections/{run}/reassign', [\App\Http\Controllers\Api\CollectionRunController::class, 'reassignOrphaned'])->middleware('profile.completed');
+    Route::post('/collections/{run}/void', [\App\Http\Controllers\Api\CollectionRunController::class, 'voidOrphaned'])->middleware('profile.completed');
+    Route::put('/collections/workflow', [\App\Http\Controllers\Api\CollectionRunController::class, 'updateWorkflow']);
+
+    // Transaction Receipts
+    Route::post('/transactions/{transaction}/receipts/reprint', [\App\Http\Controllers\Api\TransactionReceiptController::class, 'reprint']);
+    Route::post('/transactions/{transaction}/receipts/reissue', [\App\Http\Controllers\Api\TransactionReceiptController::class, 'reissue']);
+
     // Service Availability Settings
     Route::get('/settings/service-availability', [SettingsController::class, 'getServiceAvailability']);
     Route::put('/settings/service-availability', [SettingsController::class, 'updateServiceAvailability']);
