@@ -17,7 +17,6 @@
 | Manager | `manager` | Yes | Broad operational oversight |
 | Accountant (Treasurer) | `accountant` | Yes | Transactions, services, financial reporting |
 | Loan Officer | `loan` | Yes | Loan processing and member loan support |
-| Secretary | `secretary` | Yes | Records, member registration, announcements |
 | Developer / Inactive / Terminated | `developer`, `inactive`, `terminated` | No | No active permissions / lifecycle states |
 
 Access is enforced by:
@@ -29,7 +28,6 @@ Role dashboards (`/dashboard` with no section routes by role):
 - `admin` → `AdminOverview`
 - `manager` → `ManagerOverview`
 - `accountant`/`treasurer` → `TreasurerOverview`
-- `secretary` → `SecretaryOverview`
 - `loan` → `LoanOverview`
 - other officers → `OfficerOverview`
 - members → `MemberOverview`
@@ -152,7 +150,7 @@ If a service is disabled, `ServiceMaintenanceModal` is shown.
 
 All officers are `is_officer=true` with `dashboard.view, settings.view, notifications.view, profile.view, profile.update` at minimum.
 
-- Role-based overview dashboard (Manager/Accountant/Secretary/Loan/Officer).
+- Role-based overview dashboard (Manager/Accountant/Loan/Officer).
 - **Services in “officer mode”** (`ServicesPage`):
   - Member selector: `GET /api/members/search?q=`, `GET /api/members/{user}` — must select a member before Deposit/Withdraw/Loan/Payment cards unlock.
   - Act on behalf of member: Deposit, Withdraw, Loan Application, Loan Payment (same APIs as member + `selectedMember` context, gated by `officer` availability flag).
@@ -162,7 +160,7 @@ All officers are `is_officer=true` with `dashboard.view, settings.view, notifica
 - **Announcements (read):** view all cooperative announcements.
 - **Reports (read/export where permitted):** `/dashboard/reports` (`reports.view`).
 - **Profile / Settings / Notifications / FAQs:** same as members.
-- **Branch scoping:** `BranchScope` restricts users/transactions/loans/expenses by branch unless unrestricted.
+- **Branch scoping:** developers are global; admin/chairman/manager users retain cross-branch access through `branches.bypass`; officers assigned to the Main branch can access all branches; officers assigned to another branch are restricted to that branch even if a stale role grant or officer override contains bypass. Members are scoped to their assigned branch. Main is the default for new member records and seeded officers. Branch filters are available to unrestricted officers; branch assignment remains enforced by the backend for restricted officers.
 
 ---
 
@@ -192,15 +190,15 @@ Exclusive / primary owner of:
 - **All operational modules:** members (CRUD + approve/decline + restore/force-delete + export + password OTP + special-loan toggle), officers (CRUD + delete), branches (CRUD), ledger (CRUD + export), expenses (CRUD), loans (full lifecycle), reports (all + balance sheet download), announcements (CRUD), logs (view/export), tickets (view/edit/close/assign).
 
 ### 5.2 Manager (`manager`)
-Preset: members (view/create/update/delete/approve/full-details), services (view/create/update), loans (view/create/update/approve/reject/disburse), transactions (view/view-all/create/update/approve/export), deposits & withdrawals (view/create/approve/reject), reports (view/export/financial), announcements (CRUD), settings (view/update), officers (create/update/delete — no `officers.view`/`manage-permissions` in preset, granted via UI `officers.view` gate where assigned), notifications + profile.
+Preset: members (view/create/update/delete/approve/full-details), services (view/create/update), loans (view/create/update/approve/reject/disburse), transactions (view/view-all/create/update/approve/export), deposits & withdrawals (view/create/approve/reject), reports (view/export/financial), announcements (CRUD), settings (view/update), officers (create/update/delete — no `officers.view`/`manage-permissions` in preset, granted via UI `officers.view` gate where assigned), `branches.bypass`, notifications + profile. Managers have cross-branch access by default.
 - Approve member applications (`POST /api/members/{user}/approve`, `POST /api/members/{user}/decline`).
 - Approve transactions (`POST /api/services/approve/{transaction}`, withdrawal OTP `POST /api/services/transactions/{transaction}/send-otp`, `GET /api/services/pending`).
 - Review/endorse/approve/reject/disburse/close loans (`POST /api/loans/{loan}/review|disburse|close`, `PUT/DELETE /api/loans/{loan}`).
 - Manage officers, members, announcements, ledger/expenses view+export, reports, settings/service-availability, public content, loan products.
-- Tickets: view/edit/close/assign (the SPA direct ticket route recognizes admin/manager/accountant; the backend's support-staff predicate also recognizes secretary or a user with `tickets.manage`, so this UI/API difference must be audited rather than assumed consistent).
+- Tickets: view/edit/close/assign (the SPA direct ticket route recognizes admin/manager/accountant; the backend's support-staff predicate also recognizes a user with `tickets.manage`, so this UI/API difference must be audited rather than assumed consistent).
 
 ### 5.3 Accountant / Treasurer (`accountant`)
-Preset: members (view/create/full-details), services (view/create/update), loans (view/create/update/approve/reject/disburse), transactions (view/view-all/create/update/export — no `approve` in preset), reports (view/export/financial), announcements (view), settings (view).
+Preset: members (view/create/full-details), services (view/create/update), loans (view/create/update/approve/reject/disburse), transactions (view/view-all/create/update/export — no `approve` in preset), reports (view/export/financial), announcements (view), settings (view). No `branches.bypass`; branch access follows assignment unless the officer is assigned to Main.
 - **Ledger** (`/dashboard/ledger`, `transactions.view`): `GET /api/ledger`, `POST /api/ledger`, `PUT /api/ledger/{transaction}`, `DELETE /api/ledger/{transaction}`, `GET /api/ledger/export`, `GET /api/ledger/summary`.
 - **Expenses** (`/dashboard/expenses`): `GET/POST/PUT/DELETE /api/expenses`.
 - **Reports:** financial, expenses, member activity/savings, loans, payments, balance sheet + download (`GET /api/reports/*`).
@@ -208,11 +206,12 @@ Preset: members (view/create/full-details), services (view/create/update), loans
 - Tickets support view (`isSupportStaff` includes accountant).
 
 ### 5.4 Loan Officer (`loan`)
-Preset: members (view/full-details), services (view/create/update), loans (view/create/update/approve/reject/disburse), announcements (view), settings (view).
+Preset: dashboard.view, members.view, services.view, loans (view/create/encode/update), settings.view, tickets (view/reply), notifications.view, profile (view/update), collections (view-own/create/submit). No `branches.bypass`; Main-branch loan officers can select among branches in the collection route, while other loan officers remain limited to their assigned branch. **No `transactions.*`** — ledger/expenses return 403.
 - **Loan Applications review** (`Services → Loan Applications`, `LoanReviewModal`, requires `loans.update`): review pending loans, endorse for approval.
-- **Loans module** (`/dashboard/loans`, `loans.view`): `GET /api/loans/search-members`, `GET /api/loans/loan-products`, `POST /api/loans` (encode for member), `GET/PUT/DELETE /api/loans/{loan}`, review/disburse/close, document upload/download.
+- **Loans module** (`/dashboard/loans`, `loans.view`): `GET /api/loans/search-members`, `GET /api/loans/loan-products`, `POST /api/loans` (encode for member), `GET/PUT/DELETE /api/loans/{loan}`, document upload/download.
+- **Field Collections** (`/dashboard/collections`, `collections.*`): own-route envelope — `GET /api/collections/route-list` (excludes loans already recorded in an in-flight run for the same date, except items in your own draft which show as Collected), list/create own runs (`GET/POST /api/collections`), record/submit items — visibility and edits scoped to own runs; see `COLLECTIONS_REWORK.md`.
 - Financial summary cards hidden in Services (`isLoanFocused`) — sees Active Loans + Pending Requests only.
-- Cannot see ledger/expenses/members management beyond view.
+- **No transaction visibility** — `transactions.view`/`transactions.view-all` intentionally not granted: `GET /api/ledger` and `GET /api/expenses` return 403 (enforced in `RoleSpecificAccessBehaviorAuditTest`).
 
 ### 5.5 Secretary (`secretary`)
 Preset: members (view/create/update/approve), loans (view), transactions (view/export), reports (view/export), announcements (view/create/update), settings (view).
