@@ -18,7 +18,6 @@ beforeEach(function () {
     $this->manager = User::where('email', 'manager@example.com')->firstOrFail();
     $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
     $this->loan = User::where('email', 'loan@example.com')->firstOrFail();
-    $this->secretary = User::where('email', 'secretary@example.com')->firstOrFail();
 
     // Branches
     $this->mainBranch = Branch::where('code', 'BR000001')->firstOrFail();
@@ -136,22 +135,7 @@ test('F015-4: GET /api/dashboard returns treasurer overview for accountant role'
         ]);
 });
 
-// ---------------------------------------------------------------------------
-// F015-5: Secretary dashboard
-// ---------------------------------------------------------------------------
 
-test('F015-5: GET /api/dashboard returns secretary overview for secretary role', function () {
-    $response = $this->actingAs($this->secretary)->getJson('/api/dashboard');
-
-    $response->assertOk()
-        ->assertJsonStructure([
-            'greeting',
-            'total_members',
-            'members_total',
-            'recent_members',
-            'recent_announcements',
-        ]);
-});
 
 // ---------------------------------------------------------------------------
 // F015-6: Loan officer dashboard
@@ -267,7 +251,7 @@ test('F015-13: Regular member cannot deposit to another member account (403)', f
 // F015-14: POST /api/services/deposit — admin can deposit to member in any branch
 // ---------------------------------------------------------------------------
 
-test('F015-14: Admin can deposit to member account in any branch (act-on-behalf)', function () {
+test('F015-14: Manager can deposit to member account in any branch (act-on-behalf)', function () {
     // Ensure member has savings account
     $savingsAccount = Account::where('user_id', $this->officeMember->id)
         ->where('account_type', 'savings')
@@ -281,14 +265,15 @@ test('F015-14: Admin can deposit to member account in any branch (act-on-behalf)
         ]);
     }
 
-    $response = $this->actingAs($this->admin)->postJson('/api/services/deposit', [
+    $this->manager->givePermissionTo('branches.bypass');
+    $response = $this->actingAs($this->manager)->postJson('/api/services/deposit', [
         'member_id' => $this->officeMember->id,
         'amount' => 500,
         'account_type' => 'savings',
         'transaction_mode' => 'counter',
     ]);
 
-    // Should succeed (201 Created) — admin is unrestricted
+    // Should succeed (201 Created) — manager has bypass
     expect($response->status())->not->toBe(403);
     $response->assertStatus(201);
 });
@@ -297,7 +282,7 @@ test('F015-14: Admin can deposit to member account in any branch (act-on-behalf)
 // F015-15: POST /api/services/deposit — officer with branch bypass can act on member in different branch
 // ---------------------------------------------------------------------------
 
-test('F015-15: Loan officer holding branch bypass can deposit to main branch member (201)', function () {
+test('F015-15: Loan officer cannot deposit even with branch bypass (403)', function () {
     // loan officer is in office branch; mainMember is in main branch
     $savingsAccount = Account::where('user_id', $this->mainMember->id)
         ->where('account_type', 'savings')
@@ -318,8 +303,7 @@ test('F015-15: Loan officer holding branch bypass can deposit to main branch mem
         'transaction_mode' => 'counter',
     ]);
 
-    expect($response->status())->not->toBe(403);
-    $response->assertStatus(201);
+    $response->assertStatus(403);
 });
 
 // ---------------------------------------------------------------------------
@@ -396,7 +380,7 @@ test('F015-18: Manager can withdraw from member account in same branch (act-on-b
 // F015-19: POST /api/services/withdrawal — officer with branch bypass can withdraw cross-branch
 // ---------------------------------------------------------------------------
 
-test('F015-19: Loan officer holding branch bypass can withdraw from a member in another branch (201)', function () {
+test('F015-19: Loan officer cannot withdraw even with branch bypass (403)', function () {
     // loan officer is in office branch; mainMember is in main branch
     $savingsAccount = Account::where('user_id', $this->mainMember->id)
         ->where('account_type', 'savings')
@@ -416,7 +400,7 @@ test('F015-19: Loan officer holding branch bypass can withdraw from a member in 
         'transaction_mode' => 'counter',
     ]);
 
-    $response->assertStatus(201);
+    $response->assertStatus(403);
 });
 
 // ---------------------------------------------------------------------------

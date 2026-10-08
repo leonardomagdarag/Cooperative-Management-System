@@ -42,6 +42,15 @@ class BranchController extends Controller
             ->groupBy('branch_id')
             ->map->count();
 
+        $officersByBranch = User::query()
+            ->officerUsers()
+            ->with(['personalData', 'roles'])
+            ->whereIn('branch_id', $branches->pluck('id'))
+            ->orderBy('account_status')
+            ->orderBy('id')
+            ->get()
+            ->groupBy('branch_id');
+
         return response()->json([
             'data' => $branches->map(fn ($b) => [
                 'id' => $b->id,
@@ -56,6 +65,12 @@ class BranchController extends Controller
                 'transactions_count' => $b->transactions_count,
                 'loans_count' => $b->loans_count,
                 'members_count' => (int) ($memberCounts[$b->id] ?? 0),
+                'officers' => ($officersByBranch[$b->id] ?? collect())->map(fn (User $officer) => [
+                    'id' => $officer->id,
+                    'name' => $officer->name ?: $officer->email,
+                    'role' => $officer->primary_role,
+                    'status' => $officer->account_status,
+                ])->values(),
                 'created_at' => $b->created_at?->toISOString(),
             ]),
         ]);

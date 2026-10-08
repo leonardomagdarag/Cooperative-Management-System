@@ -13,6 +13,7 @@ export interface Branch {
     transactions_count: number;
     loans_count: number;
     members_count: number;
+    officers: Array<{ id: number; name: string; role: string; status: string }>;
     created_at: string | null;
 }
 

@@ -8,9 +8,10 @@ use Illuminate\Database\Eloquent\Builder;
 class BranchScope
 {
     /**
-     * Whether the viewer is exempt from branch scoping. Admins, developers,
-     * users granted the branches.bypass permission, and users without an
-     * assigned branch see data across all branches.
+     * Whether the viewer is exempt from branch scoping. Developers and
+     * managers with the bypass permission are global. Officers assigned to
+     * the main branch are also global; other assigned officers stay scoped
+     * to their branch, even if an old role preset still grants bypass.
      */
     public static function isUnrestricted(?User $viewer): bool
     {
@@ -18,8 +19,20 @@ class BranchScope
             return true;
         }
 
-        if ($viewer->hasRole('admin') || $viewer->hasRole('developer')) {
+        if ($viewer->hasRole('developer')) {
             return true;
+        }
+
+        $isManager = $viewer->hasAnyRole(['admin', 'chairman', 'manager']);
+        if ($isManager && $viewer->can('branches.bypass')) {
+            return true;
+        }
+
+        $isOfficer = (bool) $viewer->is_officer
+            || $viewer->hasAnyRole(array_merge(PermissionCatalog::officerRoles(), ['admin']));
+
+        if ($isOfficer) {
+            return $viewer->branch_id === null || (bool) $viewer->branch?->isMain();
         }
 
         if ($viewer->can('branches.bypass')) {

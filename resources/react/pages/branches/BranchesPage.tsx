@@ -20,6 +20,7 @@ const emptyForm: BranchForm = { name: '', is_head_office: false, address: '', co
 
 export default function BranchesPage() {
     const [search, setSearch] = useState('');
+    const [expandedBranches, setExpandedBranches] = useState<number[]>([]);
     const [showModal, setShowModal] = useState(false);
     const [editing, setEditing] = useState<Branch | null>(null);
     const [form, setForm] = useState<BranchForm>(emptyForm);
@@ -123,42 +124,31 @@ export default function BranchesPage() {
             ) : branches.length === 0 ? (
                 <EmptyState icon="fa-building" title="No branches found" />
             ) : (
-                <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Branch</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Location</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Contacts</th>
-                                <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">Counts</th>
-                                <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">Status</th>
-                                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {branches.map(b => (
-                                <tr key={b.id} className="hover:bg-gray-50">
-                                    <td className="px-4 py-3">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-sm font-semibold text-gray-900 truncate max-w-[240px]" title={b.name}>{b.name}</span>
-                                            {b.is_head_office && <Badge variant="info">Head Office</Badge>}
-                                        </div>
-                                        <span className="text-xs text-gray-400 font-mono">{b.code}</span>
-                                    </td>
-                                    <td className="px-4 py-3 text-sm text-gray-600 truncate max-w-[260px]" title={b.address}>{b.address || '—'}</td>
-                                    <td className="px-4 py-3 text-sm text-gray-600 max-w-[240px]">
-                                        <div className="truncate" title={b.contact_number}>{b.contact_number || '—'}</div>
-                                        <div className="text-xs text-gray-400 truncate" title={b.email}>{b.email || '—'}</div>
-                                    </td>
-                                    <td className="px-4 py-3 text-center text-sm text-gray-600">
-                                        <div>{b.members_count} members</div>
-                                        <div className="text-xs text-gray-400">{b.users_count} users · {b.loans_count} loans</div>
-                                    </td>
-                                    <td className="px-4 py-3 text-center">
-                                        <Badge variant={b.is_active ? 'success' : 'neutral'}>{b.is_active ? 'Active' : 'Inactive'}</Badge>
-                                    </td>
-                                    <td className="px-4 py-3 text-right">
-                                        <div className="flex justify-end gap-1">
+                <div className="grid items-start gap-4 lg:grid-cols-2">
+                    {branches.map(b => {
+                        const expanded = expandedBranches.includes(b.id);
+                        return (
+                            <article key={b.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                                <div className="p-5">
+                                    <div className="flex items-start justify-between gap-4">
+                                        <button
+                                            type="button"
+                                            aria-expanded={expanded}
+                                            aria-controls={`branch-details-${b.id}`}
+                                            onClick={() => setExpandedBranches(current => expanded
+                                                ? current.filter(id => id !== b.id)
+                                                : [...current, b.id])}
+                                            className="min-w-0 flex-1 text-left"
+                                        >
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <i className={`fas fa-chevron-${expanded ? 'down' : 'right'} text-xs text-gray-400`} aria-hidden="true" />
+                                                <span className="truncate text-base font-semibold text-gray-900" title={b.name}>{b.name}</span>
+                                                {b.is_head_office && <Badge variant="info">Head Office</Badge>}
+                                                <Badge variant={b.is_active ? 'success' : 'neutral'}>{b.is_active ? 'Active' : 'Inactive'}</Badge>
+                                            </div>
+                                            <span className="ml-5 mt-1 block text-xs font-mono text-gray-400">{b.code}</span>
+                                        </button>
+                                        <div className="flex shrink-0 gap-1">
                                             <Button variant="ghost" size="sm" onClick={() => openEdit(b)} aria-label={`Edit ${b.name}`} className="hover:bg-emerald-50 hover:text-emerald-600"><i className="fas fa-edit"></i></Button>
                                             <Button
                                                 variant="ghost"
@@ -177,11 +167,44 @@ export default function BranchesPage() {
                                                 <i className="fas fa-trash"></i>
                                             </Button>
                                         </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                                    </div>
+                                    <div className="mt-4 grid grid-cols-3 gap-3 border-t border-gray-100 pt-4 text-center">
+                                        <div><div className="text-lg font-semibold text-gray-900">{b.members_count}</div><div className="text-xs text-gray-500">Members</div></div>
+                                        <div><div className="text-lg font-semibold text-gray-900">{b.officers?.length ?? 0}</div><div className="text-xs text-gray-500">Officers</div></div>
+                                        <div><div className="text-lg font-semibold text-gray-900">{b.loans_count}</div><div className="text-xs text-gray-500">Loans</div></div>
+                                    </div>
+                                    {expanded && (
+                                        <div id={`branch-details-${b.id}`} className="mt-4 space-y-4 border-t border-gray-100 pt-4">
+                                            <div className="grid gap-3 text-sm sm:grid-cols-2">
+                                                <div><div className="text-xs font-semibold uppercase tracking-wide text-gray-400">Address</div><div className="mt-1 text-gray-700">{b.address || '—'}</div></div>
+                                                <div><div className="text-xs font-semibold uppercase tracking-wide text-gray-400">Contact</div><div className="mt-1 text-gray-700">{b.contact_number || '—'}</div><div className="text-xs text-gray-500">{b.email || '—'}</div></div>
+                                                <div><div className="text-xs font-semibold uppercase tracking-wide text-gray-400">Users</div><div className="mt-1 text-gray-700">{b.users_count} assigned users</div></div>
+                                                <div><div className="text-xs font-semibold uppercase tracking-wide text-gray-400">Transactions</div><div className="mt-1 text-gray-700">{b.transactions_count}</div></div>
+                                            </div>
+                                            <section aria-label={`Officers assigned to ${b.name}`}>
+                                                <h3 className="mb-2 text-sm font-semibold text-gray-800">Assigned officers</h3>
+                                                {(b.officers ?? []).length === 0 ? (
+                                                    <p className="rounded-lg bg-gray-50 px-3 py-4 text-sm text-gray-500">No officers assigned to this branch.</p>
+                                                ) : (
+                                                    <ul className="divide-y divide-gray-100 rounded-lg border border-gray-100">
+                                                        {b.officers.map(officer => (
+                                                            <li key={officer.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                                                                <div className="min-w-0">
+                                                                    <div className="truncate text-sm font-medium text-gray-800">{officer.name}</div>
+                                                                    <div className="text-xs capitalize text-gray-500">{officer.role.replaceAll('_', ' ')}</div>
+                                                                </div>
+                                                                <Badge variant={officer.status === 'active' ? 'success' : 'neutral'}>{officer.status}</Badge>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                )}
+                                            </section>
+                                        </div>
+                                    )}
+                                </div>
+                            </article>
+                        );
+                    })}
                 </div>
             )}
 
