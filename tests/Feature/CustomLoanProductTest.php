@@ -45,11 +45,14 @@ test('admin can create a custom loan product and encode a loan against it', func
         ->assertJsonPath('data.code', 'calamity-relief')
         ->assertJsonPath('data.base_type', 'special');
 
-    // 2. Admin encodes loan for member referencing the custom product
+    // 2. Loan officer encodes loan for member referencing the custom product
+    $loanOfficer = User::where('email', 'loan@example.com')->firstOrFail();
+    $this->actingAs($loanOfficer);
+
     $loanResponse = $this->postJson('/api/loans', [
         'user_id' => $this->member->id,
         'loan_product' => 'calamity-relief',
-        'loan_status' => 'approved',
+        'loan_status' => 'pending',
         'loan_amount' => 15000,
         'interest_rate' => 1.0,
         'term_months' => 12,
@@ -93,6 +96,9 @@ test('encoding loan rejects inactive custom loan product with 422', function () 
         'requires_special_eligibility' => false,
         'sort_order' => 99,
     ]);
+
+    $loanOfficer = User::where('email', 'loan@example.com')->firstOrFail();
+    $this->actingAs($loanOfficer);
 
     $this->postJson('/api/loans', [
         'user_id' => $this->member->id,

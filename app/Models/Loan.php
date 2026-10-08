@@ -25,6 +25,7 @@ class Loan extends Model
         // Officer review lifecycle
         'review_status',
         'reviewed_by',
+        'encoded_by',
         'reviewed_at',
         'review_notes',
         'applied_at',
@@ -102,7 +103,9 @@ class Loan extends Model
 
     public function totalPaid()
     {
-        return $this->completedPayments()->sum('amount');
+        return (float) $this->completedPayments()
+            ->selectRaw('COALESCE(SUM(CASE WHEN reversal_of_id IS NULL THEN amount ELSE -amount END), 0) as net_paid')
+            ->value('net_paid');
     }
 
     public function totalInterest(): float
@@ -189,6 +192,47 @@ class Loan extends Model
         }
 
         return $schedule;
+    }
+
+    public function getCollectionMetrics(): array
+    {
+        $schedule = $this->paymentSchedule();
+        if (! $schedule) {
+            return ['amount_due' => 0.0, 'days_overdue' => 0];
+        }
+
+        $totalPaid = (float) $this->totalPaid();
+        $amountDue = 0.0;
+        $daysOverdue = 0;
+        $now = now()->startOfDay();
+
+        $cumulativeDue = 0.0;
+        $firstUnpaidDueDate = null;
+
+        foreach ($schedule as $installment) {
+            $dueDate = \Carbon\Carbon::createFromFormat('M d, Y', $installment['due_date'])->startOfDay();
+
+            if ($dueDate->lessThanOrEqualTo($now)) {
+                $cumulativeDue += (float) $installment['payment'];
+
+                if ($firstUnpaidDueDate === null && $totalPaid < ($cumulativeDue - 0.001)) { // tolerance for float precision
+                    $firstUnpaidDueDate = $dueDate;
+                }
+            } else {
+                break;
+            }
+        }
+
+        $amountDue = max(0.0, $cumulativeDue - $totalPaid);
+
+        if ($amountDue > 0 && $firstUnpaidDueDate !== null) {
+            $daysOverdue = (int) $firstUnpaidDueDate->diffInDays($now);
+        }
+
+        return [
+            'amount_due' => round($amountDue, 2),
+            'days_overdue' => $daysOverdue,
+        ];
     }
 
     public function employment()

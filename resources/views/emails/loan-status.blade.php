@@ -18,7 +18,7 @@
 
         <p>
             We are pleased to inform you that your loan application <strong>{{ $loan->loan_number }}</strong>
-            has been approved by our loan committee.
+            has received final approval from the chairman.
         </p>
 
         <p><strong>Loan Details:</strong></p>

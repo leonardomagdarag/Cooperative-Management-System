@@ -5,8 +5,10 @@ namespace App\Services;
 use App\Jobs\SendAnnouncementEmailJob;
 use App\Jobs\SendEmailJob;
 use App\Jobs\SendSecurityAlertJob;
+use App\Jobs\SendSmsJob;
 use App\Mail\EmailVerificationMail;
 use App\Mail\LoanDueNotification;
+use App\Mail\LoanLifecycleNotification;
 use App\Mail\LoanStatusNotification;
 use App\Mail\MemberApplicationStatusMail;
 use App\Mail\WithdrawalStatusNotification;
@@ -142,7 +144,7 @@ class NotificationService
             }
 
             if (in_array('officers', $visibility, true)) {
-                $officerRoles = ['admin', 'manager', 'secretary', 'accountant', 'loan', 'developer'];
+                $officerRoles = ['admin', 'chairman', 'manager', 'accountant', 'loan', 'developer'];
                 $userIds = $userIds->merge(User::role($officerRoles)->pluck('id'));
             }
 
@@ -290,14 +292,12 @@ class NotificationService
      */
     public function notifyLoanPayment(Loan $loan, float $amount): void
     {
-        $this->create(
-            $loan->user,
-            'loan_payment',
+        $this->notifyLoanLifecycle(
+            $loan,
             'Payment Received',
             'Your payment of ₱'.number_format($amount, 2).' has been received.',
             'normal',
-            $this->resolveUserDashboardUrl($loan->user),
-            $loan
+            'loan_payment',
         );
     }
 
@@ -366,27 +366,101 @@ class NotificationService
 
     public function notifyLoanUnderReview(Loan $loan): void
     {
-        $this->create(
-            $loan->user,
-            'general',
+        $this->notifyLoanLifecycle(
+            $loan,
             'Loan Application Under Review',
             "Your loan application {$loan->loan_number} is now being reviewed by our loan officer.",
-            'normal',
-            $this->resolveUserDashboardUrl($loan->user),
-            $loan
         );
     }
 
     public function notifyLoanEndorsedForApproval(Loan $loan): void
     {
-        $this->create(
-            $loan->user,
-            'general',
+        $this->notifyLoanLifecycle(
+            $loan,
             'Loan Application Endorsed',
-            "Your loan application {$loan->loan_number} has been endorsed and is awaiting final approval.",
+            "Your loan application {$loan->loan_number} has been endorsed and is awaiting final approval by the chairman.",
             'high',
-            $this->resolveUserDashboardUrl($loan->user),
-            $loan
+        );
+    }
+
+    public function notifyLoanSubmitted(Loan $loan): void
+    {
+        $this->notifyLoanLifecycle(
+            $loan,
+            'Loan Application Submitted',
+            "Your loan application {$loan->loan_number} was submitted and is awaiting review.",
+        );
+    }
+
+    public function notifyLoanInterviewCompleted(Loan $loan): void
+    {
+        $this->notifyLoanLifecycle(
+            $loan,
+            'Loan Interview Completed',
+            "The interview for your loan application {$loan->loan_number} has been completed.",
+        );
+    }
+
+    public function notifyLoanReturnedForReview(Loan $loan, ?string $notes = null): void
+    {
+        $message = "Your loan application {$loan->loan_number} was returned for further review.";
+        if (filled($notes)) {
+            $message .= ' Notes: '.$notes;
+        }
+
+        $this->notifyLoanLifecycle($loan, 'Loan Application Returned for Review', $message, 'high');
+    }
+
+    public function notifyLoanDisbursed(Loan $loan): void
+    {
+        $this->notifyLoanLifecycle(
+            $loan,
+            'Loan Disbursed',
+            'Your loan '.$loan->loan_number.' funds of ₱'.number_format((float) $loan->loan_amount, 2).' have been released to your savings account.',
+            'high',
+        );
+    }
+
+    public function notifyLoanClosed(Loan $loan): void
+    {
+        $this->notifyLoanLifecycle(
+            $loan,
+            'Loan Paid Off',
+            "Your loan {$loan->loan_number} has been marked as paid off.",
+            'normal',
+        );
+    }
+
+    public function notifyLoanDetailsUpdated(Loan $loan): void
+    {
+        $this->notifyLoanLifecycle(
+            $loan,
+            'Loan Application Updated',
+            "The details for your loan application {$loan->loan_number} have been updated.",
+        );
+    }
+
+    private function notifyLoanLifecycle(Loan $loan, string $title, string $message, string $priority = 'normal', string $type = 'general'): void
+    {
+        $applicant = $loan->user;
+        if (! $applicant) {
+            return;
+        }
+
+        $this->create(
+            $applicant,
+            $type,
+            $title,
+            $message,
+            $priority,
+            $this->resolveUserDashboardUrl($applicant),
+            $loan,
+        );
+
+        $this->safeSendEmail(
+            $applicant->email,
+            new LoanLifecycleNotification($loan, $title, $message),
+            'loan.lifecycle',
         );
     }
 
@@ -431,7 +505,7 @@ class NotificationService
         }
 
         try {
-            \App\Jobs\SendSmsJob::dispatch($phone, $message, 'security.alert');
+            SendSmsJob::dispatch($phone, $message, 'security.alert');
         } catch (Throwable $e) {
             Log::warning("Security alert SMS job dispatch failed for user {$user->id}: {$e->getMessage()}");
             app(TextBeeService::class)->send($phone, $message);
@@ -451,7 +525,7 @@ class NotificationService
 
         if ($sendEmail) {
             try {
-                SendSecurityAlertJob::dispatch($user->id, 'new_login', ['ip_address' => $ipAddress]);
+                SendSecurityAlertJob::dispatchSync($user->id, 'new_login', ['ip_address' => $ipAddress]);
             } catch (Throwable $e) {
                 Log::warning("Failed to dispatch security alert job: {$e->getMessage()}");
             }
@@ -473,7 +547,7 @@ class NotificationService
 
         if ($sendEmail) {
             try {
-                SendSecurityAlertJob::dispatch($user->id, 'failed_login', [
+                SendSecurityAlertJob::dispatchSync($user->id, 'failed_login', [
                     'attempts' => $attempts,
                     'ip_address' => $ipAddress,
                 ]);
@@ -498,7 +572,7 @@ class NotificationService
 
         if ($sendEmail) {
             try {
-                SendSecurityAlertJob::dispatch($user->id, 'password_changed');
+                SendSecurityAlertJob::dispatchSync($user->id, 'password_changed');
             } catch (Throwable $e) {
                 Log::warning("Failed to dispatch security alert job: {$e->getMessage()}");
             }
@@ -520,7 +594,7 @@ class NotificationService
 
         if ($sendEmail) {
             try {
-                SendSecurityAlertJob::dispatch($user->id, 'email_changed', ['new_email' => $newEmail]);
+                SendSecurityAlertJob::dispatchSync($user->id, 'email_changed', ['new_email' => $newEmail]);
             } catch (Throwable $e) {
                 Log::warning("Failed to dispatch security alert job: {$e->getMessage()}");
             }
@@ -542,7 +616,7 @@ class NotificationService
     }
 
     /**
-     * Notify review officers (secretary, manager, admin) that a new membership
+     * Notify review officers (accountant, manager, chairman, admin) that a new membership
      * application is awaiting their review. In-app only.
      */
     public function notifyMemberApplicationSubmitted(User $applicant): void
@@ -553,7 +627,7 @@ class NotificationService
         // run). Skip notifying when the role setup is incomplete instead of
         // failing the whole registration.
         try {
-            $reviewers = User::role(['admin', 'manager', 'secretary'])->get();
+            $reviewers = User::role(['admin', 'chairman', 'manager', 'accountant'])->get();
         } catch (RoleDoesNotExist) {
             return;
         }
@@ -670,9 +744,9 @@ class NotificationService
     {
         $creatorName = $ticket->user?->name ?: 'A member';
         try {
-            $supportOfficers = User::role(['admin', 'manager', 'accountant'])->get();
+            $supportOfficers = User::role(['admin', 'chairman', 'manager', 'accountant'])->get();
         } catch (RoleDoesNotExist) {
-            $supportOfficers = User::whereIn('role', ['admin', 'manager', 'accountant'])->get();
+            $supportOfficers = User::whereIn('role', ['admin', 'chairman', 'manager', 'accountant'])->get();
         }
 
         foreach ($supportOfficers as $officer) {
@@ -717,9 +791,9 @@ class NotificationService
                 $recipients = collect([$ticket->assignee]);
             } else {
                 try {
-                    $recipients = User::role(['admin', 'manager', 'accountant'])->get();
+                    $recipients = User::role(['admin', 'chairman', 'manager', 'accountant'])->get();
                 } catch (RoleDoesNotExist) {
-                    $recipients = User::whereIn('role', ['admin', 'manager', 'accountant'])->get();
+                    $recipients = User::whereIn('role', ['admin', 'chairman', 'manager', 'accountant'])->get();
                 }
             }
 

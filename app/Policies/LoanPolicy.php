@@ -26,7 +26,7 @@ class LoanPolicy
 
     public function encode(User $user): bool
     {
-        return $this->isOfficerUser($user) && ($user->can('loans.encode') || $user->can('loans.create') || $user->hasRole('admin'));
+        return $this->isOfficerUser($user) && $user->can('loans.encode');
     }
 
     public function update(User $user, Loan $loan): bool
@@ -42,12 +42,12 @@ class LoanPolicy
 
     public function disburse(User $user, Loan $loan): bool
     {
-        return $this->isOfficerUser($user) && ($user->can('loans.disburse') || $user->hasRole('admin'));
+        return $this->isOfficerUser($user) && $user->can('loans.disburse');
     }
 
     public function uploadDocument(User $user, Loan $loan): bool
     {
-        return ($this->isOfficerUser($user) && ($user->can('loans.update') || $user->can('loans.create')))
+        return ($this->isOfficerUser($user) && $user->can('loans.update'))
             || $loan->user_id === $user->id;
     }
 
@@ -66,12 +66,27 @@ class LoanPolicy
     }
 
     /**
-     * Final approval is restricted to admin and manager (chairman) only.
-     * This is a hard role gate, independent of permissions, to prevent escalation.
+     * Final approval is restricted to the chairman and separated from the
+     * applicant, encoder, and reviewer.
      */
-    public function finalApprove(User $user): bool
+    public function finalApprove(User $user, Loan $loan): bool
     {
-        return $user->hasAnyRole(['admin', 'manager']);
+        if (! $user->can('loans.approve')) {
+            return false;
+        }
+
+        if ((int) $loan->user_id === (int) $user->id
+            || (int) $loan->encoded_by === (int) $user->id
+            || (int) $loan->reviewed_by === (int) $user->id) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public function close(User $user, Loan $loan): bool
+    {
+        return $user->hasAnyRole(['chairman', 'manager']) && $user->can('loans.update');
     }
 
     public function delete(User $user): bool
@@ -82,7 +97,6 @@ class LoanPolicy
     private function isOfficerUser(User $user): bool
     {
         return (bool) (($user->is_officer ?? false)
-            || $user->hasRole('admin')
             || $user->hasAnyRole(PermissionCatalog::officerRoles()));
     }
 }

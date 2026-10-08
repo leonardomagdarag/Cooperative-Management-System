@@ -16,7 +16,7 @@ beforeEach(function () {
 });
 
 test('loan document upload stores file on private local disk and not public disk', function () {
-    $admin = User::where('email', 'admin@example.com')->firstOrFail();
+    $loanOfficer = User::where('email', 'loan@example.com')->firstOrFail();
     $borrower = User::factory()->create();
     $borrower->assignRole('member');
 
@@ -27,7 +27,7 @@ test('loan document upload stores file on private local disk and not public disk
 
     $file = UploadedFile::fake()->create('payslip.pdf', 100, 'application/pdf');
 
-    $response = $this->actingAs($admin)
+    $response = $this->actingAs($loanOfficer)
         ->postJson("/api/loans/{$loan->id}/documents", [
             'document' => $file,
         ]);

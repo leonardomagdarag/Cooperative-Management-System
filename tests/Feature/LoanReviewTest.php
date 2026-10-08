@@ -12,6 +12,8 @@ beforeEach(function () {
     $this->seed(UserSeeder::class);
 
     $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
+    $this->chairman = User::factory()->create(['role' => 'chairman', 'is_officer' => true]);
+    $this->chairman->assignRole('chairman');
     $this->officer = User::where('email', 'loan@example.com')->firstOrFail();
     $this->borrower = User::factory()->create();
 });
@@ -30,14 +32,14 @@ test('loan officer cannot approve an endorsed loan (role gate)', function () {
     expect($loan->fresh()->loan_status)->toBe('pending');
 });
 
-test('admin cannot approve a loan that is not endorsed', function () {
+test('chairman cannot approve a loan that is not endorsed', function () {
     $loan = Loan::factory()->create([
         'user_id' => $this->borrower->id,
         'loan_status' => 'pending',
         'review_status' => 'under_review',
     ]);
 
-    actingAs($this->admin)
+    actingAs($this->chairman)
         ->postJson("/api/loans/{$loan->id}/review", ['action' => 'approve'])
         ->assertStatus(422)
         ->assertJson(['message' => 'Loan must be endorsed before it can be approved.']);
@@ -45,32 +47,47 @@ test('admin cannot approve a loan that is not endorsed', function () {
     expect($loan->fresh()->loan_status)->toBe('pending');
 });
 
-test('admin can approve an endorsed loan', function () {
+test('manager or chairman can approve an endorsed loan', function () {
     $loan = Loan::factory()->create([
         'user_id' => $this->borrower->id,
         'loan_status' => 'pending',
         'review_status' => 'endorsed_for_approval',
     ]);
 
-    actingAs($this->admin)
+    $manager = User::where('email', 'manager@example.com')->firstOrFail();
+    actingAs($manager)
+        ->postJson("/api/loans/{$loan->id}/review", ['action' => 'approve'])
+        ->assertOk();
+
+    expect($loan->fresh()->loan_status)->toBe('approved');
+});
+
+test('chairman can approve an endorsed loan', function () {
+    $loan = Loan::factory()->create([
+        'user_id' => $this->borrower->id,
+        'loan_status' => 'pending',
+        'review_status' => 'endorsed_for_approval',
+    ]);
+
+    actingAs($this->chairman)
         ->postJson("/api/loans/{$loan->id}/review", ['action' => 'approve'])
         ->assertOk();
 
     $loan->refresh();
 
     expect($loan->loan_status)->toBe('approved')
-        ->and($loan->approved_by)->toBe($this->admin->id)
+        ->and($loan->approved_by)->toBe($this->chairman->id)
         ->and($loan->approved_at)->not->toBeNull();
 });
 
-test('admin can return an endorsed loan for review with notes', function () {
+test('chairman can return an endorsed loan for review with notes', function () {
     $loan = Loan::factory()->create([
         'user_id' => $this->borrower->id,
         'loan_status' => 'pending',
         'review_status' => 'endorsed_for_approval',
     ]);
 
-    actingAs($this->admin)
+    actingAs($this->chairman)
         ->postJson("/api/loans/{$loan->id}/review", [
             'action' => 'return_for_review',
             'notes' => 'Please attach the updated DTI registration.',
@@ -81,7 +98,7 @@ test('admin can return an endorsed loan for review with notes', function () {
 
     expect($loan->review_status)->toBe('under_review')
         ->and($loan->review_notes)->toBe('Please attach the updated DTI registration.')
-        ->and($loan->reviewed_by)->toBe($this->admin->id)
+        ->and($loan->reviewed_by)->toBe($this->chairman->id)
         ->and($loan->loan_status)->toBe('pending');
 });
 

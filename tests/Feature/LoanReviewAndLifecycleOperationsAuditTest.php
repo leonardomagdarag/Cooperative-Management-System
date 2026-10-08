@@ -3,7 +3,6 @@
 use App\Models\Account;
 use App\Models\Branch;
 use App\Models\Loan;
-use App\Models\LoanProduct;
 use App\Models\Transaction;
 use App\Models\User;
 use Database\Seeders\AccountSeeder;
@@ -20,6 +19,8 @@ beforeEach(function () {
     $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
     $this->manager = User::where('email', 'manager@example.com')->firstOrFail();
     $this->loanOfficer = User::where('email', 'loan@example.com')->firstOrFail();
+    $this->chairman = User::factory()->create(['role' => 'chairman', 'is_officer' => true]);
+    $this->chairman->assignRole('chairman');
     $this->borrower = User::where('email', 'arjay.ramos@example.com')->firstOrFail();
 
     $this->mainBranch = Branch::where('code', 'BR000001')->firstOrFail();
@@ -116,7 +117,7 @@ test('F024-5: loan officer can record interview completion and schedule', functi
         ->and($loan->interview_notes)->toBe('Interview conducted. Collateral verified.');
 });
 
-test('F024-6: manager can approve endorsed loan', function () {
+test('F024-6: manager or chairman can approve endorsed loan', function () {
     $loan = Loan::factory()->create([
         'user_id' => $this->borrower->id,
         'account_id' => $this->savingsAccount->id,
@@ -263,7 +264,6 @@ test('F024-12: officer updates loan terms with validation', function () {
         'interest_rate' => 4.0,
         'term_months' => 18,
         'payment_frequency' => 'monthly',
-        'loan_status' => 'pending',
     ]);
 
     $response->assertOk()

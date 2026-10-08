@@ -270,7 +270,7 @@ class LoanController extends Controller
                 },
             ],
             'loan_type' => 'nullable|in:group,business,special',
-            'loan_status' => 'required|in:pending,approved,active,paid_off',
+            'loan_status' => 'required|in:pending',
             'loan_amount' => 'required|numeric|min:1',
             'interest_rate' => 'required|numeric|min:0|max:100',
             'term_months' => 'required|integer|min:1|max:360',
@@ -283,7 +283,6 @@ class LoanController extends Controller
         $baseType = $product?->base_type ?? ($validated['loan_type'] ?? (in_array($validated['loan_product'], ['group', 'business', 'special'], true) ? $validated['loan_product'] : 'business'));
         $productCode = $product?->code ?? $validated['loan_product'];
 
-        $isApproved = in_array($validated['loan_status'], ['approved', 'active', 'paid_off'], true);
         $appliedAt = Carbon::parse($validated['applied_at'])->startOfDay();
 
         $loan = Loan::create([
@@ -295,12 +294,15 @@ class LoanController extends Controller
             'interest_rate' => $validated['interest_rate'],
             'term_months' => $validated['term_months'],
             'payment_frequency' => $validated['payment_frequency'],
-            'loan_status' => $validated['loan_status'],
+            'loan_status' => 'pending',
+            'encoded_by' => Auth::id(),
             'applied_at' => $appliedAt,
-            'approved_at' => $isApproved ? $appliedAt : null,
-            'approved_by' => $isApproved ? Auth::id() : null,
-            'due_date' => $isApproved ? $appliedAt->copy()->addMonths($validated['term_months'])->toDateString() : null,
+            'approved_at' => null,
+            'approved_by' => null,
+            'due_date' => null,
         ]);
+
+        app(NotificationService::class)->notifyLoanSubmitted($loan);
 
         return response()->json([
             'message' => 'Loan encoded. Reference: '.$loan->loan_number,
@@ -313,6 +315,7 @@ class LoanController extends Controller
         Gate::authorize('update', $loan);
 
         $validated = $request->validate([
+            'loan_status' => 'prohibited',
             'loan_product' => [
                 'nullable',
                 'string',
@@ -336,25 +339,14 @@ class LoanController extends Controller
             'interest_rate' => 'required|numeric|min:0|max:100',
             'term_months' => 'required|integer|min:1|max:360',
             'payment_frequency' => 'required|in:weekly,bi-weekly,monthly,quarterly,annually',
-            'loan_status' => 'required|in:pending,approved,active,paid_off',
             'due_date' => 'nullable|date',
         ]);
-
-        if ($validated['loan_status'] === 'paid_off' && $loan->loan_status !== 'paid_off') {
-            $outstanding = (float) $loan->remainingBalance();
-            if ($outstanding > 0) {
-                return response()->json([
-                    'message' => 'Loan cannot be marked as paid off because it still has an outstanding balance of ₱'.number_format($outstanding, 2).'.',
-                ], 422);
-            }
-        }
 
         $updateData = [
             'loan_amount' => $validated['loan_amount'],
             'interest_rate' => $validated['interest_rate'],
             'term_months' => $validated['term_months'],
             'payment_frequency' => $validated['payment_frequency'],
-            'loan_status' => $validated['loan_status'],
             'due_date' => $validated['due_date'] ?? $loan->due_date,
         ];
 
@@ -369,6 +361,7 @@ class LoanController extends Controller
         $loan->update($updateData);
 
         app(AuditLogService::class)->log('loan.updated', 'Loan record updated.', 'loan', $loan, Auth::user());
+        app(NotificationService::class)->notifyLoanDetailsUpdated($loan);
 
         return response()->json(['message' => 'Loan updated.', 'data' => $loan->fresh()]);
     }
@@ -417,21 +410,14 @@ class LoanController extends Controller
             app(AuditLogService::class)->log('loan.disbursed', 'Loan funds released.', 'loan', $loan, $user);
         });
 
-        if ($loan->user) {
-            app(NotificationService::class)->notifyAccountActivity(
-                $loan->user,
-                'Loan Disbursed',
-                'Your loan '.$loan->loan_number.' funds of ₱'.number_format($loan->loan_amount, 2).' have been released to your savings account.',
-                'high'
-            );
-        }
+        app(NotificationService::class)->notifyLoanDisbursed($loan);
 
         return response()->json(['message' => 'Loan disbursed.', 'data' => $loan->fresh()]);
     }
 
     public function close(Loan $loan): JsonResponse
     {
-        Gate::authorize('finalApprove', $loan);
+        Gate::authorize('close', $loan);
 
         if ($loan->loan_status === 'paid_off') {
             return response()->json(['message' => 'Loan is already closed.'], 422);
@@ -447,6 +433,7 @@ class LoanController extends Controller
         $loan->update(['loan_status' => 'paid_off']);
 
         app(AuditLogService::class)->log('loan.closed', 'Loan marked as paid off.', 'loan', $loan, Auth::user());
+        app(NotificationService::class)->notifyLoanClosed($loan);
 
         return response()->json(['message' => 'Loan closed.', 'data' => $loan->fresh()]);
     }
@@ -505,6 +492,7 @@ class LoanController extends Controller
                 if ($validated['interview_schedule'] ?? null) {
                     $loan->update(['interview_schedule' => $validated['interview_schedule']]);
                 }
+                app(NotificationService::class)->notifyLoanInterviewCompleted($loan);
                 break;
 
             case 'approve':
@@ -531,6 +519,7 @@ class LoanController extends Controller
                     'reviewed_by' => $user->id,
                     'reviewed_at' => now(),
                 ]);
+                app(NotificationService::class)->notifyLoanReturnedForReview($loan, $validated['notes'] ?? null);
                 break;
         }
 

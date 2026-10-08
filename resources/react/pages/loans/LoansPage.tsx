@@ -22,7 +22,7 @@ export default function LoansPage() {
     const [showEncodeModal, setShowEncodeModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [editingLoan, setEditingLoan] = useState<any>(null);
-    const [editForm, setEditForm] = useState({ loan_type: 'business', loan_amount: '', interest_rate: '3', term_months: '12', payment_frequency: 'monthly', loan_status: 'pending', due_date: '' });
+    const [editForm, setEditForm] = useState({ loan_type: 'business', loan_amount: '', interest_rate: '3', term_months: '12', payment_frequency: 'monthly', due_date: '' });
     const [encodeForm, setEncodeForm] = useState({ user_id: '', loan_product: 'business', loan_type: 'business', loan_status: 'pending', loan_amount: '', interest_rate: '3', term_months: '12', payment_frequency: 'monthly', applied_at: new Date().toISOString().split('T')[0], branch_id: '' as number | '' });
     const [memberSearch, setMemberSearch] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -111,7 +111,6 @@ export default function LoansPage() {
             interest_rate: String(l.interest_rate),
             term_months: String(l.term_months),
             payment_frequency: l.payment_frequency,
-            loan_status: l.loan_status,
             due_date: l.due_date || '',
         });
         setShowEditModal(true);
@@ -128,7 +127,6 @@ export default function LoansPage() {
             interest_rate: Number(editForm.interest_rate),
             term_months: Number(editForm.term_months),
             payment_frequency: editForm.payment_frequency,
-            loan_status: editForm.loan_status,
             due_date: editForm.due_date || null,
         });
     };
@@ -149,7 +147,8 @@ export default function LoansPage() {
     const pagination = data?.data?.pagination;
     const canEncode = data?.data?.can_encode;
     const role = user?.primary_role;
-    const canDisburse = role === 'admin' || role === 'manager';
+    const canDisburse = !!user?.permissions?.includes('loans.disburse');
+    const canClose = role === 'chairman' || role === 'manager';
     const canManage = !!canEncode;
 
     const getStatusColor = (s: string) => {
@@ -266,7 +265,7 @@ export default function LoansPage() {
                                                         <i className="fas fa-money-bill-wave"></i>
                                                     </button>
                                                 )}
-                                                {canManage && l.loan_status === 'active' && (
+                                                {canClose && l.loan_status === 'active' && (
                                                     <button onClick={() => setConfirmState({
                                                         isOpen: true,
                                                         title: 'Mark Paid Off',
@@ -570,7 +569,7 @@ export default function LoansPage() {
                             <form id="edit-loan-form" onSubmit={handleEditSubmit} className="space-y-4">
                                 <div className="grid grid-cols-2 gap-4">
                                     <div><label className="mb-1 block text-sm font-medium text-gray-700">Type</label><select value={editForm.loan_type} onChange={e => setEditForm(f => ({ ...f, loan_type: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"><option value="business">Business</option><option value="group">Group</option><option value="special">Special</option></select></div>
-                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Status</label><select value={editForm.loan_status} onChange={e => setEditForm(f => ({ ...f, loan_status: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"><option value="pending">Pending</option><option value="approved">Approved</option><option value="active">Active</option><option value="paid_off">Paid Off</option></select></div>
+                                    <div><label className="mb-1 block text-sm font-medium text-gray-700">Status</label><p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">{getStatusLabel(editingLoan.loan_status)}. Status changes are handled through the loan review and payment workflows.</p></div>
                                     <div><label className="mb-1 block text-sm font-medium text-gray-700">Amount</label><input type="number" step="0.01" value={editForm.loan_amount} onChange={e => setEditForm(f => ({ ...f, loan_amount: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 ${editErrors.loan_amount ? 'border-red-400' : 'border-gray-200'}`} />{editErrors.loan_amount && <p className="mt-1 text-xs text-red-600">{editErrors.loan_amount}</p>}</div>
                                     <div><label className="mb-1 block text-sm font-medium text-gray-700">Interest Rate (%)</label><input type="number" step="0.1" value={editForm.interest_rate} onChange={e => setEditForm(f => ({ ...f, interest_rate: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 ${editErrors.interest_rate ? 'border-red-400' : 'border-gray-200'}`} />{editErrors.interest_rate && <p className="mt-1 text-xs text-red-600">{editErrors.interest_rate}</p>}</div>
                                     <div><label className="mb-1 block text-sm font-medium text-gray-700">Term (months)</label><input type="number" value={editForm.term_months} onChange={e => setEditForm(f => ({ ...f, term_months: e.target.value }))} className={`w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 ${editErrors.term_months ? 'border-red-400' : 'border-gray-200'}`} />{editErrors.term_months && <p className="mt-1 text-xs text-red-600">{editErrors.term_months}</p>}</div>
