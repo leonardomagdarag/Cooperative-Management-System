@@ -289,6 +289,7 @@ class ServiceController extends Controller
                 'term_months' => $validated['term_months'],
                 'payment_frequency' => $validated['payment_frequency'],
                 'loan_status' => 'pending',
+                'encoded_by' => Auth::id(),
                 'applied_at' => now(),
             ];
 
@@ -315,6 +316,7 @@ class ServiceController extends Controller
         });
 
         app(AuditLogService::class)->log('service.loan_application', 'Loan application submitted.', 'loan', $loan, $user);
+        app(NotificationService::class)->notifyLoanSubmitted($loan);
 
         return response()->json(['message' => 'Loan application submitted.', 'data' => $loan], 201);
     }
@@ -322,7 +324,7 @@ class ServiceController extends Controller
     public function loanPayment(Request $request): JsonResponse
     {
         $user = Auth::user();
-        abort_unless($user && ($user->can('transactions.create') || $user->can('services.create') || $user->can('loans.update')), 403, 'Unauthorized to submit loan payments.');
+        abort_unless($user && ($user->can('transactions.create') || $user->can('services.create')), 403, 'Unauthorized to submit loan payments.');
 
         $validated = $request->validate([
             'loan_id' => 'required|exists:loans,id',
@@ -572,7 +574,7 @@ class ServiceController extends Controller
         ]);
     }
 
-    public function pendingTransactions(): JsonResponse
+    public function pendingTransactions(Request $request): JsonResponse
     {
         $user = Auth::user();
         abort_unless($this->canApprove($user), 403);
@@ -592,11 +594,47 @@ class ServiceController extends Controller
             }
         }
 
-        $transactions = Transaction::with(['account.user.personalData', 'loan'])
+        $transactions = Transaction::with(['account.user.personalData', 'loan', 'recordedBy.personalData', 'branch'])
             ->where('status', 'pending')
             ->whereIn('transaction_type', $allowedTypes);
 
         BranchScope::applyToTransactions($transactions, $user);
+
+        if ($request->filled('type')) {
+            $types = explode(',', $request->query('type'));
+            $transactions->whereIn('transaction_type', $types);
+        }
+        if ($request->filled('date_from')) {
+            $transactions->whereDate('created_at', '>=', $request->query('date_from'));
+        }
+        if ($request->filled('date_to')) {
+            $transactions->whereDate('created_at', '<=', $request->query('date_to'));
+        }
+        if ($request->filled('branch_id')) {
+            $transactions->where('branch_id', $request->query('branch_id'));
+        }
+        if ($request->filled('recorded_by')) {
+            $transactions->where('recorded_by', $request->query('recorded_by'));
+        }
+        if ($request->filled('amount_min')) {
+            $transactions->where('amount', '>=', $request->query('amount_min'));
+        }
+        if ($request->filled('amount_max')) {
+            $transactions->where('amount', '<=', $request->query('amount_max'));
+        }
+        if ($request->filled('exclude_mine') && $request->boolean('exclude_mine')) {
+            $transactions->where('recorded_by', '!=', $user->id);
+        }
+        if ($request->filled('search')) {
+            $search = $request->query('search');
+            $transactions->where(function ($q) use ($search) {
+                $q->whereHas('loan', fn ($l) => $l->where('loan_number', 'like', "%{$search}%"))
+                  ->orWhereHas('account.user.personalData', function ($p) use ($search) {
+                      $p->where('first_name', 'like', "%{$search}%")
+                        ->orWhere('last_name', 'like', "%{$search}%");
+                  });
+            });
+        }
 
         $transactions = $transactions
             ->latest()
@@ -611,6 +649,10 @@ class ServiceController extends Controller
                 'account_type' => $t->account?->account_type,
                 'proof_of_payment_api_url' => $t->proof_of_payment_path ? url('storage/'.$t->proof_of_payment_path) : null,
                 'loan_number' => $t->loan?->loan_number,
+                'recorded_by_id' => $t->recorded_by,
+                'recorded_by' => $t->recordedBy ? trim(($t->recordedBy->personalData->first_name ?? '').' '.($t->recordedBy->personalData->last_name ?? '')) : null,
+                'branch_id' => $t->branch_id,
+                'branch_name' => $t->branch?->name,
             ]);
 
         return response()->json(['data' => $transactions]);
@@ -624,6 +666,10 @@ class ServiceController extends Controller
     private function canApproveTransaction($user, Transaction $transaction): bool
     {
         if (! $user) {
+            return false;
+        }
+
+        if ((int) $transaction->recorded_by === (int) $user->id) {
             return false;
         }
 
@@ -706,3 +752,4 @@ class ServiceController extends Controller
         return (int) $user->branch_id === (int) $targetBranchId;
     }
 }
+

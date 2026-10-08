@@ -4,7 +4,6 @@ use App\Models\Account;
 use App\Models\Branch;
 use App\Models\Loan;
 use App\Models\LoanProduct;
-use App\Models\SystemSetting;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\SecurityOtpService;
@@ -23,7 +22,7 @@ beforeEach(function () {
     $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
     $this->manager = User::where('email', 'manager@example.com')->firstOrFail();
     $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
-    $this->secretary = User::where('email', 'secretary@example.com')->firstOrFail();
+    $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
     $this->member = User::where('email', 'arjay.ramos@example.com')->firstOrFail();
 
     $this->mainBranch = Branch::where('code', 'BR000001')->firstOrFail();
@@ -57,8 +56,8 @@ test('F023-2: regular members receive 403 when accessing pending queue or approv
     $this->postJson("/api/services/transactions/{$transaction->id}/send-otp")->assertForbidden();
 });
 
-test('F023-3: secretary without approval permissions receives 403 on pending queue and approval', function () {
-    $this->actingAs($this->secretary);
+test('F023-3: accountant without approval permissions receives 403 on pending queue and approval', function () {
+    $this->actingAs($this->accountant);
 
     $transaction = Transaction::create([
         'account_id' => $this->memberAccount->id,

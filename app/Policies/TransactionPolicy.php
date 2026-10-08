@@ -32,11 +32,6 @@ class TransactionPolicy
         return $user->can('transactions.update');
     }
 
-    public function delete(User $user): bool
-    {
-        return $user->can('transactions.delete');
-    }
-
     public function export(User $user): bool
     {
         return $user->can('transactions.export');

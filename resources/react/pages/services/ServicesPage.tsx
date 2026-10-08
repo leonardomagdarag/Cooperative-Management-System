@@ -1,6 +1,7 @@
 import HelpTip from '../../components/ui/HelpTip';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router';
 import { api } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
@@ -31,6 +32,8 @@ const formatPendingDate = (iso: string): string => {
 export default function ServicesPage() {
     const queryClient = useQueryClient();
     const { user } = useAuth();
+    const [searchParams, setSearchParams] = useSearchParams();
+    
     const perms = user?.permissions || [];
     const isOfficer = user?.primary_role !== 'member' && user?.primary_role !== null;
     const isAdmin = user?.primary_role === 'admin';
@@ -38,7 +41,15 @@ export default function ServicesPage() {
     const canReviewLoans = perms.includes('loans.update');
     const isLoanFocused = !!user && !isAdmin && user.primary_role === 'loan';
 
-    const [activeService, setActiveService] = useState<ServiceType>(null);
+    const activeService = (searchParams.get('service') as ServiceType) || null;
+    const setActiveService = (svc: ServiceType) => {
+        setSearchParams(prev => {
+            const next = new URLSearchParams(prev);
+            if (svc) next.set('service', svc);
+            else next.delete('service');
+            return next;
+        }, { replace: true });
+    };
     const [memberSearch, setMemberSearch] = useState('');
     const [debouncedQuery, setDebouncedQuery] = useState('');
     const [searchOpen, setSearchOpen] = useState(false);
