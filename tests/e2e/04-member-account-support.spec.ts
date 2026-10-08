@@ -27,8 +27,9 @@ test.describe('4. Member Account, Profile, Notifications & Helpdesk', () => {
     await page.locator('button:has-text("Financial")').first().click();
     await expect(page.locator('text=/Accounts|Savings|Share Capital/i').first()).toBeVisible({ timeout: 5000 });
 
-    // Open Edit Personal Info modal
-    const editBtn = page.locator('button:has-text("Edit Personal Info")').first();
+    // Switch back to Overview to open Edit Personal Info modal
+    await page.locator('button:has-text("Overview")').first().click();
+    const editBtn = page.locator('button:has-text("Edit")').first();
     await expect(editBtn).toBeVisible();
     await editBtn.click();
 

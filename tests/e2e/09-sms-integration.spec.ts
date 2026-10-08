@@ -36,20 +36,13 @@ test.describe('SMS Integration', () => {
         const type = await page.locator('input#email').getAttribute('type');
         expect(type).toBe('text');
         
-        // Wait for Turnstile
-        try {
-            await page.waitForFunction(() => {
-                const input = document.querySelector('input[name="cf-turnstile-response"]') as HTMLInputElement;
-                return Boolean(input && input.value);
-            }, { timeout: 6000 });
-        } catch { }
-        await page.waitForTimeout(500);
+
 
         // Log in using standard email (simulating that the auth controller works with the new text field)
         await page.fill('input#email', TEST_USERS.admin.email);
         await page.fill('input#password', TEST_USERS.admin.password);
         await page.click('button:has-text("Sign in")');
-        
-        await expect(page).toHaveURL(/\/dashboard/, { timeout: 15000 });
+        // It should either go to dashboard (trusted) or OTP screen (new device)
+        await page.waitForURL(/\/dashboard|\/security\/verify-otp/, { timeout: 15000 });
     });
 });

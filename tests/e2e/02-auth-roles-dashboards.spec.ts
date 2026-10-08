@@ -60,12 +60,12 @@ test.describe('2. Authentication, Roles & Dashboards', () => {
     await logoutViaUI(page);
   });
 
-  test('2.6 Secretary logs in and views Secretary Overview dashboard', async ({ page }) => {
-    await loginViaUI(page, 'secretary');
+  test('2.6 Accountant logs in and views Accountant Overview dashboard', async ({ page }) => {
+    await loginViaUI(page, 'Accountant');
     await expect(page).toHaveURL(/\/dashboard/);
 
-    // Verify Secretary Overview elements
-    await expect(page.locator('text=/Secretary Overview|Membership Applications|Announcements/i').first()).toBeVisible({ timeout: 10000 });
+    // Verify Accountant Overview elements
+    await expect(page.locator('text=/Accountant Overview|Membership Applications|Announcements/i').first()).toBeVisible({ timeout: 10000 });
     await expect(page.locator('nav a[href="/dashboard/members"]').first()).toBeVisible();
 
     await logoutViaUI(page);

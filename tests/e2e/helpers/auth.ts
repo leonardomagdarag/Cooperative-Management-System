@@ -27,11 +27,11 @@ export const TEST_USERS = {
     name: 'Leanard Guiriba',
     role: 'loan',
   },
-  secretary: {
-    email: 'secretary@example.com',
+  Accountant: {
+    email: 'accountant@example.com',
     password: 'password',
     name: 'Jenica Malveda',
-    role: 'secretary',
+    role: 'Accountant',
   },
   member: {
     email: 'arjay.ramos@example.com',
@@ -62,16 +62,7 @@ export async function loginViaUI(page: Page, userKey: keyof typeof TEST_USERS = 
   const user = TEST_USERS[userKey];
   await page.goto('/login');
   await expect(page.locator('input#email')).toBeVisible();
-  
-  // Wait for Turnstile to generate token if present
-  try {
-    await page.waitForFunction(() => {
-      const input = document.querySelector('input[name="cf-turnstile-response"]') as HTMLInputElement;
-      return Boolean(input && input.value);
-    }, { timeout: 6000 });
-  } catch {
-    // If not found, proceed
-  }
+
   await page.waitForTimeout(500);
 
   await page.locator('input#email').fill(user.email);
@@ -84,17 +75,21 @@ export async function loginViaUI(page: Page, userKey: keyof typeof TEST_USERS = 
   } catch {}
 
   if (page.url().includes('/security/verify-otp')) {
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(2000); // Wait 2s for email log to be written
     const codeEl = page.locator('.font-mono');
     let otp: string | null = null;
     if (await codeEl.isVisible()) {
       otp = (await codeEl.innerText()).trim();
     } else {
       otp = getLatestOtpForEmail(user.email);
+      console.log('Extracted OTP from log:', otp);
     }
     if (otp) {
       await page.locator('input#otp').fill(otp);
       await page.locator('button:has-text("Verify and continue")').click();
+      console.log('Filled OTP and clicked continue');
+    } else {
+      console.log('NO OTP FOUND FOR', user.email);
     }
   }
 

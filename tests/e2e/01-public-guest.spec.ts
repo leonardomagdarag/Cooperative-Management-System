@@ -61,7 +61,7 @@ test.describe('1. Public / Guest Workflows', () => {
     // Empty submission client-side validation
     const submitBtn = page.getByRole('button', { name: /Sign in/i });
     await submitBtn.click();
-    await expect(page.getByText('Please enter a valid email')).toBeVisible();
+    await expect(page.getByText('Please enter your email or phone number')).toBeVisible();
     await expect(page.getByText('Password is required')).toBeVisible();
 
     // Wait slightly for Turnstile widget
