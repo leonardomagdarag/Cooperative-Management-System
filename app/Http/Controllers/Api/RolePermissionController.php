@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\CountersignService;
 use App\Support\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,7 +16,7 @@ use Spatie\Permission\PermissionRegistrar;
 
 class RolePermissionController extends Controller
 {
-    private const RESERVED_ROLES = ['admin', 'developer', 'member', 'inactive', 'terminated'];
+    private const RESERVED_ROLES = ['admin', 'chairman', 'developer', 'member', 'inactive', 'terminated'];
 
     private const LOCKED_PERMISSIONS = [
         'dashboard.view',
@@ -23,7 +24,6 @@ class RolePermissionController extends Controller
         'profile.view',
         'profile.update',
         'settings.view',
-        'branches.bypass',
     ];
 
     public function index(): JsonResponse
@@ -90,10 +90,9 @@ class RolePermissionController extends Controller
 
         $lockedPermissions = self::LOCKED_PERMISSIONS;
         $baseRoleRequiredPermissions = [
-            'manager' => ['members.view', 'loans.view', 'services.view'],
+            'manager' => ['members.view', 'loans.view', 'services.view', 'branches.bypass'],
             'accountant' => ['transactions.view', 'services.view', 'reports.view'],
             'loan' => ['loans.view', 'services.view'],
-            'secretary' => ['members.view', 'announcements.view'],
         ];
         $roleSpecificLocked = $baseRoleRequiredPermissions[$role] ?? [];
         $allLocked = array_unique(array_merge($lockedPermissions, $roleSpecificLocked));
@@ -103,17 +102,25 @@ class RolePermissionController extends Controller
             $allLocked,
         ));
 
-        $roleModel = Role::findOrCreate($role, 'web');
+        abort_unless(Role::query()->where('name', $role)->where('guard_name', 'web')->exists(), 404, 'Role not found.');
+        abort_if(in_array($role, self::RESERVED_ROLES, true), 422, 'System roles cannot be edited here.');
         $permissions = array_values(array_intersect(
             $allAllowed,
             array_unique(array_merge($validated['permissions'], $allLocked))
         ));
 
-        app(PermissionRegistrar::class)->forgetCachedPermissions();
-        $roleModel->syncPermissions($permissions);
-        app(PermissionRegistrar::class)->forgetCachedPermissions();
+        // Enforce countersign
+        $countersign = app(CountersignService::class);
+        $pending = $countersign->request('permissions.update', [
+            'role' => $role,
+            'permissions' => $permissions,
+        ], Auth::user());
 
-        return response()->json(['message' => 'Permissions updated.', 'permissions' => $permissions]);
+        return response()->json([
+            'message' => 'Permission update requested and requires countersign approval.',
+            'request_id' => $pending->id,
+            'status' => 'pending',
+        ], 202);
     }
 
     public function storeRole(Request $request): JsonResponse
@@ -140,23 +147,27 @@ class RolePermissionController extends Controller
         }
 
         $assignedPermissions = [];
-        if (! empty($validated['template']) && Role::query()->where('name', $validated['template'])->exists()) {
-            $assignedPermissions = Role::findByName($validated['template'], 'web')->permissions()->pluck('name')->all();
+        if (! empty($validated['template'])) {
+            abort_if(in_array($validated['template'], self::RESERVED_ROLES, true), 422, 'System roles cannot be used as templates.');
+            $template = Role::query()->where('name', $validated['template'])->where('guard_name', 'web')->firstOrFail();
+            $assignedPermissions = $template->permissions()->pluck('name')->all();
         }
 
         $lockedPermissions = self::LOCKED_PERMISSIONS;
         $assignedPermissions = array_values(array_unique(array_merge($assignedPermissions, $lockedPermissions)));
 
-        $role = Role::create(['name' => $roleName, 'guard_name' => 'web']);
-        $role->syncPermissions($assignedPermissions);
-
-        app(PermissionRegistrar::class)->forgetCachedPermissions();
-
-        return response()->json([
-            'message' => "Role {$roleName} created.",
+        $pending = app(CountersignService::class)->request('role.create', [
             'role' => $roleName,
             'permissions' => $assignedPermissions,
-        ], 201);
+        ], Auth::user());
+
+        return response()->json([
+            'message' => "Role {$roleName} creation is awaiting chairman approval.",
+            'role' => $roleName,
+            'permissions' => $assignedPermissions,
+            'request_id' => $pending->id,
+            'status' => 'pending',
+        ], 202);
     }
 
     public function destroyRole(string $role): JsonResponse
@@ -168,15 +179,15 @@ class RolePermissionController extends Controller
             return response()->json(['message' => 'Base roles cannot be deleted.'], 422);
         }
 
-        $userCount = User::query()->role($role)->count();
+        $userCount = User::withTrashed()->role($role)->count();
         if ($userCount > 0) {
             return response()->json(['message' => "Unassign role from {$userCount} user(s) first."], 422);
         }
 
-        Role::findByName($role, 'web')->delete();
-        app(PermissionRegistrar::class)->forgetCachedPermissions();
+        $roleModel = Role::query()->where('name', $role)->where('guard_name', 'web')->firstOrFail();
+        $pending = app(CountersignService::class)->request('role.delete', ['role' => $roleModel->name], Auth::user());
 
-        return response()->json(['message' => "Role {$role} deleted."]);
+        return response()->json(['message' => "Role {$role} deletion is awaiting chairman approval.", 'request_id' => $pending->id, 'status' => 'pending'], 202);
     }
 
     public function restorePreset(string $role): JsonResponse
@@ -204,7 +215,7 @@ class RolePermissionController extends Controller
             return response()->json(['message' => 'Base roles cannot be renamed.'], 422);
         }
 
-        $userCount = User::query()->role($role)->count();
+        $userCount = User::withTrashed()->role($role)->count();
         if ($userCount > 0) {
             return response()->json(['message' => "Unassign role from {$userCount} user(s) first."], 422);
         }
@@ -222,16 +233,18 @@ class RolePermissionController extends Controller
             return response()->json(['message' => 'That role already exists.'], 422);
         }
 
-        $roleModel = Role::findByName($role, 'web');
-        $roleModel->update(['name' => $newName]);
-        app(PermissionRegistrar::class)->forgetCachedPermissions();
+        $roleModel = Role::query()->where('name', $role)->where('guard_name', 'web')->firstOrFail();
+        $pending = app(CountersignService::class)->request('role.rename', [
+            'role' => $roleModel->name,
+            'new_name' => $newName,
+        ], Auth::user());
 
-        return response()->json(['message' => "Role renamed to {$newName}.", 'role' => $newName]);
+        return response()->json(['message' => "Role rename is awaiting chairman approval.", 'role' => $newName, 'request_id' => $pending->id, 'status' => 'pending'], 202);
     }
 
     private function isAdmin(?User $user): bool
     {
-        return (bool) ($user && ($user->primary_role === 'admin' || $user->hasRole('admin')));
+        return (bool) ($user && $user->can('officers.manage-permissions'));
     }
 
     private function bootstrapPermissions(): void

@@ -25,7 +25,10 @@ interface MemberProfileModalProps {
     onClose: () => void;
     onEdit?: () => void;
     canEdit?: boolean;
-    canViewFullId?: boolean;
+    canViewIds?: boolean;
+    canViewLoans?: boolean;
+    canViewActivity?: boolean;
+    canViewFinancial?: boolean;
     canApprove?: boolean;
     onApprove?: (id: number) => void;
     onDecline?: () => void;
@@ -38,7 +41,7 @@ interface MemberProfileModalProps {
     isForceDeleting?: boolean;
 }
 
-export default function MemberProfileModal({ memberId, onClose, onEdit, canEdit, canViewFullId, canApprove, onApprove, onDecline, isApproving, isDeclining, isAdmin, onRestore, onForceDelete, isRestoring, isForceDeleting }: MemberProfileModalProps) {
+export default function MemberProfileModal({ memberId, onClose, onEdit, canEdit, canViewIds, canViewLoans, canViewActivity, canViewFinancial, canApprove, onApprove, onDecline, isApproving, isDeclining, isAdmin, onRestore, onForceDelete, isRestoring, isForceDeleting }: MemberProfileModalProps) {
     const [activeTab, setActiveTab] = useState('overview');
     const [lightbox, setLightbox] = useState<string | null>(null);
     const queryClient = useQueryClient();
@@ -132,7 +135,7 @@ export default function MemberProfileModal({ memberId, onClose, onEdit, canEdit,
 
                     <div className="border-b border-gray-200 bg-gray-50 shrink-0">
                         <div className="flex space-x-1 px-6 overflow-x-auto">
-                            {TABS.map(tab => (
+                            {TABS.filter(t => t.key !== 'activity' || canViewActivity).map(tab => (
                                 <button
                                     key={tab.key}
                                     onClick={() => setActiveTab(tab.key)}
@@ -233,18 +236,18 @@ export default function MemberProfileModal({ memberId, onClose, onEdit, canEdit,
                                                     <div>
                                                         <span className="text-sm font-medium text-gray-600">{row.label}:</span>
                                                         <p className="text-gray-800 font-mono font-medium mt-1">
-                                                            {fieldVal ? (canViewFullId ? fieldVal : maskedId(fieldVal)) : <span className="text-gray-400 font-normal">N/A</span>}
+                                                            {fieldVal ? (canViewIds ? fieldVal : maskedId(fieldVal)) : <span className="text-gray-400 font-normal">N/A</span>}
                                                         </p>
                                                     </div>
                                                     <div className="flex items-center justify-end">
-                                                        {canViewFullId && photoVal ? (
+                                                        {canViewIds && photoVal ? (
                                                             <img
                                                                 src={photoVal}
                                                                 alt={`${row.label} photo`}
                                                                 onClick={() => setLightbox(photoVal)}
                                                                 className="h-14 w-24 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
                                                             />
-                                                        ) : canViewFullId ? (
+                                                        ) : canViewIds ? (
                                                             <div className="h-14 w-24 rounded-lg bg-gray-100 border border-dashed border-gray-300 flex items-center justify-center">
                                                                 <i className="fas fa-id-card text-gray-300 text-xl"></i>
                                                             </div>
@@ -289,6 +292,7 @@ export default function MemberProfileModal({ memberId, onClose, onEdit, canEdit,
                                         text="text-cyan-700"
                                         account={savingsAccount}
                                         balanceLabel="Available Balance"
+                                        hideBalance={!canViewFinancial}
                                     />
                                     <AccountCard
                                         title="Share Capital"
@@ -302,6 +306,7 @@ export default function MemberProfileModal({ memberId, onClose, onEdit, canEdit,
                                         text="text-emerald-700"
                                         account={shareCapitalAccount}
                                         balanceLabel="Share Capital Balance"
+                                        hideBalance={!canViewFinancial}
                                     />
                                 </div>
 
@@ -323,7 +328,7 @@ export default function MemberProfileModal({ memberId, onClose, onEdit, canEdit,
                                                     <div className="grid grid-cols-3 gap-4 mt-4">
                                                         <div>
                                                             <span className="text-xs text-gray-600">Principal Amount</span>
-                                                            <p className="text-lg font-bold text-gray-800">{peso(l.loan_amount)}</p>
+                                                            <p className="text-lg font-bold text-gray-800">{canViewLoans ? peso(l.loan_amount) : '₱***.**'}</p>
                                                         </div>
                                                         <div>
                                                             <span className="text-xs text-gray-600">Interest Rate</span>
@@ -424,34 +429,36 @@ export default function MemberProfileModal({ memberId, onClose, onEdit, canEdit,
                                     )}
                                 </div>
 
-                                <div>
-                                    <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">Government ID Photos</h4>
-                                    {canViewFullId && ID_ROWS.some(row => m.member_ids?.[row.photo]) ? (
-                                        <div className="grid grid-cols-1 gap-3">
-                                            {ID_ROWS.filter(row => m.member_ids?.[row.photo]).map(row => (
-                                                <div key={row.key} className="grid grid-cols-2 gap-4 items-center p-3 bg-gray-50 rounded-lg">
-                                                    <p className="text-sm font-medium text-gray-700">{row.label}</p>
-                                                    <div className="flex items-center gap-3">
-                                                        <img
-                                                            src={m.member_ids[row.photo]}
-                                                            alt={`${row.label} photo`}
-                                                            onClick={() => setLightbox(m.member_ids[row.photo])}
-                                                            className="h-14 w-24 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
-                                                        />
-                                                        <a href={m.member_ids[row.photo]} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:text-blue-800">
-                                                            <i className="fas fa-external-link-alt"></i>
-                                                        </a>
+                                {canViewIds && (
+                                    <div>
+                                        <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">Government ID Photos</h4>
+                                        {ID_ROWS.some(row => m.member_ids?.[row.photo]) ? (
+                                            <div className="grid grid-cols-1 gap-3">
+                                                {ID_ROWS.filter(row => m.member_ids?.[row.photo]).map(row => (
+                                                    <div key={row.key} className="grid grid-cols-2 gap-4 items-center p-3 bg-gray-50 rounded-lg">
+                                                        <p className="text-sm font-medium text-gray-700">{row.label}</p>
+                                                        <div className="flex items-center gap-3">
+                                                            <img
+                                                                src={m.member_ids[row.photo]}
+                                                                alt={`${row.label} photo`}
+                                                                onClick={() => setLightbox(m.member_ids[row.photo])}
+                                                                className="h-14 w-24 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
+                                                            />
+                                                            <a href={m.member_ids[row.photo]} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:text-blue-800">
+                                                                <i className="fas fa-external-link-alt"></i>
+                                                            </a>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div className="flex items-center gap-3 text-gray-400 py-4">
-                                            <div className="w-20 h-14 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center"><i className="fas fa-id-card text-2xl"></i></div>
-                                            <p className="text-sm">{canViewFullId ? 'No ID photos uploaded' : 'ID photos require members.view-full-details permission'}</p>
-                                        </div>
-                                    )}
-                                </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-3 text-gray-400 py-4">
+                                                <div className="w-20 h-14 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center"><i className="fas fa-id-card text-2xl"></i></div>
+                                                <p className="text-sm">No ID photos uploaded</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
 
                                 <div>
                                     <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">Other Member Documents</h4>
@@ -616,7 +623,7 @@ function BeneField({ label, value }: { label: string; value: any }) {
     );
 }
 
-function AccountCard({ title, icon, gradient, border, text, account, balanceLabel }: { title: string; icon: React.ReactNode; gradient: string; border: string; text: string; account: any; balanceLabel: string }) {
+function AccountCard({ title, icon, gradient, border, text, account, balanceLabel, hideBalance }: { title: string; icon: React.ReactNode; gradient: string; border: string; text: string; account: any; balanceLabel: string; hideBalance?: boolean }) {
     return (
         <div className={`bg-gradient-to-br ${gradient} p-6 rounded-xl shadow-md border-2 ${border}`}>
             <div className="flex items-center justify-between mb-4">
@@ -626,7 +633,11 @@ function AccountCard({ title, icon, gradient, border, text, account, balanceLabe
             {account ? (
                 <>
                     <p className="text-sm text-gray-600 mb-2">Account Number: <span className="font-mono font-medium">{account.account_number}</span></p>
-                    <p className={`text-3xl font-bold ${text}`}>₱{Number(account.balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    {hideBalance ? (
+                        <p className={`text-3xl font-bold ${text}`}>₱***.**</p>
+                    ) : (
+                        <p className={`text-3xl font-bold ${text}`}>₱{Number(account.balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    )}
                     <p className="text-xs text-gray-600 mt-2">{balanceLabel}</p>
                 </>
             ) : (

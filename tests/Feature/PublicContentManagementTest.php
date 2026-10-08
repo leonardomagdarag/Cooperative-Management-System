@@ -65,16 +65,6 @@ test('admin sees can_manage true when reading public content', function () {
         ->assertJsonPath('can_manage', true);
 });
 
-test('admin user payload includes the public content management permission', function () {
-    $admin = makePublicContentEditor();
-    Role::findByName('admin', 'web')->revokePermissionTo('settings.update');
-
-    actingAs($admin)
-        ->getJson('/api/user')
-        ->assertOk()
-        ->assertJsonPath('primary_role', 'admin')
-        ->assertJsonFragment(['settings.update']);
-});
 
 test('non-admin users see can_manage false when reading public content', function () {
     $this->seed(SpatieRolePermissionSeeder::class);
@@ -123,7 +113,7 @@ test('admin can save the online member registration service availability setting
         ->assertJsonPath('data.login.member', true)
         ->assertJsonPath('data.login.officer', true);
 
-    actingAs($admin)
+    $response = actingAs($admin)
         ->putJson('/api/settings/service-availability', [
             'services' => [
                 'registration' => ['global' => true, 'member' => false],
@@ -134,8 +124,16 @@ test('admin can save the online member registration service availability setting
                 'loan_payment' => ['global' => true, 'member' => true, 'officer' => true, 'counter' => true, 'online' => true],
             ],
             'notify_affected' => false,
-        ])
-        ->assertOk();
+        ]);
+        
+    $response->assertStatus(202);
+    $requestId = $response->json('request_id');
+    $request = \App\Models\PrivilegedActionRequest::findOrFail($requestId);
+
+    $chairman = User::factory()->create(['email' => 'chairman3@example.com']);
+    $chairman->assignRole('chairman');
+    $chairman->givePermissionTo('oversight.approve');
+    app(\App\Services\CountersignService::class)->approve($request, $chairman);
 
     expect(
         (bool) SystemSetting::get('service_registration_member_enabled', true)

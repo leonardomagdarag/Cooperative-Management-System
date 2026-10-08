@@ -323,7 +323,7 @@ export const officerStepSchemas: z.ZodTypeAny[] = [
         postal_code: POSTAL_CODE_SCHEMA,
     }),
     z.object({
-        role: enumFrom(['admin', 'manager', 'accountant', 'secretary', 'loan'], 'Select a role'),
+        role: enumFrom(['admin', 'chairman', 'manager', 'accountant', 'secretary', 'loan'], 'Select a role'),
         branch_id: optionalId,
     }),
     z.object({
@@ -349,7 +349,7 @@ export const officerEditSchema = z.object({
     barangay: textString(100),
     city: textString(100),
     postal_code: POSTAL_CODE_SCHEMA,
-    role: enumFrom(['admin', 'manager', 'accountant', 'secretary', 'loan'], 'Select a role'),
+    role: enumFrom(['admin', 'chairman', 'manager', 'accountant', 'secretary', 'loan'], 'Select a role'),
     password: optionalPassword,
     branch_id: optionalId,
 });
@@ -368,7 +368,7 @@ export const officerSchema = z.object({
     barangay: textString(100),
     city: textString(100),
     postal_code: POSTAL_CODE_SCHEMA,
-    role: enumFrom(['admin', 'manager', 'accountant', 'secretary', 'loan'], 'Select a role'),
+    role: enumFrom(['admin', 'chairman', 'manager', 'accountant', 'secretary', 'loan'], 'Select a role'),
     password: passwordPolicy,
     password_confirmation: z.string(),
     branch_id: optionalId,
@@ -445,7 +445,7 @@ export const loanEncodeSchema = z.object({
     user_id: z.coerce.number({ invalid_type_error: 'Select a member' }).min(1, 'Select a member'),
     loan_product: requiredString('Loan product is required'),
     loan_type: enumFrom(['group', 'business', 'special'], 'Select a valid loan type'),
-    loan_status: enumFrom(['pending', 'approved', 'active', 'paid_off'], 'Select a valid loan status'),
+    loan_status: enumFrom(['pending'], 'Loans must start in the pending state'),
     loan_amount: amount(1, 'Loan amount'),
     interest_rate: z.coerce.number().min(0, 'Interest rate cannot be negative').max(100, 'Interest rate cannot exceed 100%'),
     term_months: z.coerce.number().int('Term must be a whole number').min(1, 'Term must be at least 1 month').max(360, 'Term cannot exceed 360 months'),
@@ -495,7 +495,6 @@ export const expenseSchema = z.object({
 
 export const loanEditSchema = z.object({
     loan_type: enumFrom(['business', 'group', 'special'], 'Select a valid loan type'),
-    loan_status: enumFrom(['pending', 'approved', 'active', 'paid_off'], 'Select a valid loan status'),
     loan_amount: z.coerce.number({ invalid_type_error: 'Enter a valid amount' }).finite('Enter a valid amount').positive('Amount must be greater than 0'),
     interest_rate: z.coerce.number({ invalid_type_error: 'Enter a valid interest rate' }).min(0, 'Interest rate cannot be negative').max(100, 'Interest rate cannot exceed 100%'),
     term_months: z.coerce.number().int('Term must be a whole number').min(1, 'Term must be at least 1 month').max(360, 'Term cannot exceed 360 months'),

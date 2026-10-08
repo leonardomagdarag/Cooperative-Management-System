@@ -5,8 +5,6 @@ use App\Models\User;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\SystemSettingSeeder;
 use Database\Seeders\UserSeeder;
-use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
 
 beforeEach(function () {
     $this->seed(SpatieRolePermissionSeeder::class);
@@ -14,7 +12,7 @@ beforeEach(function () {
     $this->seed(SystemSettingSeeder::class);
 
     $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
-    $this->secretary = User::where('email', 'secretary@example.com')->firstOrFail();
+    $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
     $this->member = User::where('email', 'arjay.ramos@example.com')->firstOrFail();
 });
 
@@ -41,8 +39,8 @@ test('F028-2: regular member receives 403 on store, update, and destroy', functi
     $this->deleteJson("/api/announcements/{$announcement->id}")->assertForbidden();
 });
 
-test('F028-3: secretary creates announcement with valid payload', function () {
-    $this->actingAs($this->secretary);
+test('F028-3: accountant creates announcement with valid payload', function () {
+    $this->actingAs($this->accountant);
 
     $response = $this->postJson('/api/announcements', [
         'title' => 'Annual General Assembly 2026',
@@ -58,12 +56,12 @@ test('F028-3: secretary creates announcement with valid payload', function () {
 
     $this->assertDatabaseHas('announcements', [
         'title' => 'Annual General Assembly 2026',
-        'created_by' => $this->secretary->id,
+        'created_by' => $this->accountant->id,
     ]);
 });
 
 test('F028-4: event type announcement requires event_date, returning 422 if omitted', function () {
-    $this->actingAs($this->secretary);
+    $this->actingAs($this->accountant);
 
     $response = $this->postJson('/api/announcements', [
         'title' => 'Cooperative Workshop',
@@ -77,16 +75,16 @@ test('F028-4: event type announcement requires event_date, returning 422 if omit
         ->assertJson(['message' => 'Event date is required for events.']);
 });
 
-test('F028-5: secretary updates an existing announcement', function () {
+test('F028-5: accountant updates an existing announcement', function () {
     $announcement = Announcement::create([
         'title' => 'Initial Title',
         'content' => 'Initial Content text.',
         'type' => 'announcement',
         'visibility' => ['members'],
-        'created_by' => $this->secretary->id,
+        'created_by' => $this->accountant->id,
     ]);
 
-    $this->actingAs($this->secretary);
+    $this->actingAs($this->accountant);
 
     $response = $this->putJson("/api/announcements/{$announcement->id}", [
         'title' => 'Updated Title Assembly',

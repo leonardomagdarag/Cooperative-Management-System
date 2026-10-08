@@ -18,7 +18,7 @@ beforeEach(function () {
     mock(TurnstileService::class)->shouldReceive('verify')->andReturn(true);
 
     $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
-    $this->secretary = User::where('email', 'secretary@example.com')->firstOrFail();
+    $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
     $this->member = User::where('email', 'arjay.ramos@example.com')->firstOrFail();
 });
 
@@ -67,13 +67,13 @@ test('a pending applicant cannot log in until approved', function () {
     $response->assertStatus(403)->assertJsonPath('message', 'Your account is not active.');
 });
 
-test('secretary can approve a pending application', function () {
+test('accountant can approve a pending application', function () {
     Mail::fake();
 
-    $applicant = createPendingApplicant('secretary.approves@example.com');
+    $applicant = createPendingApplicant('accountant.approves@example.com');
     $application = MemberApplication::where('user_id', $applicant->id)->firstOrFail();
 
-    $response = $this->actingAs($this->secretary)->postJson("/api/members/{$applicant->id}/approve");
+    $response = $this->actingAs($this->accountant)->postJson("/api/members/{$applicant->id}/approve");
 
     $response->assertOk()->assertJsonPath('message', 'Application approved and activation email sent.');
 
@@ -93,9 +93,9 @@ test('secretary can approve a pending application', function () {
 test('approving again reports the member is already active', function () {
     $applicant = createPendingApplicant('double.approve@example.com');
 
-    $this->actingAs($this->secretary)->postJson("/api/members/{$applicant->id}/approve")->assertOk();
+    $this->actingAs($this->accountant)->postJson("/api/members/{$applicant->id}/approve")->assertOk();
 
-    $this->actingAs($this->secretary)->postJson("/api/members/{$applicant->id}/approve")
+    $this->actingAs($this->accountant)->postJson("/api/members/{$applicant->id}/approve")
         ->assertStatus(422)
         ->assertJsonPath('message', 'Member is already active.');
 });
@@ -107,14 +107,14 @@ test('a regular member cannot approve applications', function () {
         ->assertStatus(403);
 });
 
-test('secretary can decline a pending application and release the email', function () {
+test('accountant can decline a pending application and release the email', function () {
     Mail::fake();
 
     $applicant = createPendingApplicant('decline.me@example.com');
     $originalEmail = $applicant->email;
     $application = MemberApplication::where('user_id', $applicant->id)->firstOrFail();
 
-    $response = $this->actingAs($this->secretary)->postJson("/api/members/{$applicant->id}/decline", [
+    $response = $this->actingAs($this->accountant)->postJson("/api/members/{$applicant->id}/decline", [
         'reason' => 'Incomplete submitted documents.',
     ]);
 
@@ -141,7 +141,7 @@ test('secretary can decline a pending application and release the email', functi
 test('the same email can re-register after a declined application', function () {
     $applicant = createPendingApplicant('rereregister@example.com');
 
-    $this->actingAs($this->secretary)->postJson("/api/members/{$applicant->id}/decline", ['reason' => 'Duplicated record.'])->assertOk();
+    $this->actingAs($this->accountant)->postJson("/api/members/{$applicant->id}/decline", ['reason' => 'Duplicated record.'])->assertOk();
 
     $response = $this->post('/register', memberApplicationPayload([
         'email' => 'rereregister@example.com',

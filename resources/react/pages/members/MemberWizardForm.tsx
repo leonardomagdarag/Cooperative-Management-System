@@ -164,7 +164,11 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
             }
             return isEdit ? api.put(`/api/members/${member.id}`, payload) : api.post('/api/members', payload);
         },
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['members'] }); addToast(isEdit ? 'Member updated' : 'Member created', 'success'); onClose(); },
+        onSuccess: (response) => {
+            queryClient.invalidateQueries({ queryKey: ['members'] });
+            addToast(response.data?.message || (isEdit ? 'Member updated' : 'Member created'), 'success');
+            onClose();
+        },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed to save', 'error'),
     });
 

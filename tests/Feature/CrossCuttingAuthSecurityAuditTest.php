@@ -1,11 +1,8 @@
 <?php
 
-use App\Jobs\SendOtpEmailJob;
 use App\Models\OtpChallenge;
-use App\Models\SystemSetting;
 use App\Models\TrustedDevice;
 use App\Models\User;
-use App\Services\SecurityOtpService;
 use App\Services\TurnstileService;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\SystemSettingSeeder;
@@ -13,9 +10,7 @@ use Database\Seeders\UserSeeder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
-use Illuminate\Support\Str;
 use Spatie\Activitylog\Models\Activity;
 
 beforeEach(function () {

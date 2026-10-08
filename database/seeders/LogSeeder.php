@@ -45,7 +45,7 @@ class LogSeeder extends Seeder
     private function loanTrail(AuditLogService $audit): int
     {
         $created = 0;
-        $secretary = $this->officer('secretary');
+        $accountant = $this->officer('accountant');
         $manager = $this->officer('manager');
         $loanOfficer = $this->officer('loan');
 
@@ -84,7 +84,7 @@ class LogSeeder extends Seeder
                         $loan->loan_number,
                         $amount
                     ),
-                }, 'loans', $loan, $secretary, $loan->reviewed_at);
+                }, 'loans', $loan, $accountant, $loan->reviewed_at);
             }
 
             if ($loan->approved_at && in_array($loan->loan_status, ['active', 'paid_off'], true)) {

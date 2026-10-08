@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\BackupRun;
 use App\Services\AuditLogService;
 use App\Services\BackupService;
+use App\Services\CountersignService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -171,13 +172,17 @@ class BackupController extends Controller
 
         $path = (string) $request->query('file');
 
-        try {
-            $this->backupService->delete($tier, $path, Auth::user());
-        } catch (\Throwable $e) {
-            return response()->json(['message' => $e->getMessage()], $e instanceof \RuntimeException ? 409 : 422);
-        }
+        $countersign = app(CountersignService::class);
+        $pending = $countersign->request('backup.delete', [
+            'tier' => $tier,
+            'path' => $path,
+        ], Auth::user());
 
-        return response()->json(['message' => 'Backup deleted.']);
+        return response()->json([
+            'message' => 'Backup deletion requested and requires countersign approval.',
+            'request_id' => $pending->id,
+            'status' => 'pending',
+        ], 202);
     }
 
     /**
@@ -233,18 +238,18 @@ class BackupController extends Controller
             'archive_password' => 'nullable|string',
         ]);
 
-        try {
-            $run = $this->backupService->queueRestore(
-                $validated['tier'],
-                $validated['path'],
-                $validated['scope'],
-                $validated['archive_password'] ?? '',
-                Auth::user(),
-            );
-        } catch (\Throwable $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
-        }
+        $countersign = app(CountersignService::class);
+        $pending = $countersign->request('backup.restore', [
+            'tier' => $validated['tier'],
+            'path' => $validated['path'],
+            'scope' => $validated['scope'],
+            'archive_password' => $validated['archive_password'] ?? '',
+        ], Auth::user());
 
-        return response()->json(['message' => 'Restore queued. The application will enter maintenance mode only after validation succeeds.', 'run_id' => $run->id], 202);
+        return response()->json([
+            'message' => 'Restore requested and requires countersign approval.',
+            'request_id' => $pending->id,
+            'status' => 'pending',
+        ], 202);
     }
 }

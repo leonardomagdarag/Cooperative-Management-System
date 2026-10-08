@@ -58,14 +58,14 @@ test('member and unauthorized officers are forbidden from backup endpoints', fun
     ]);
     $member->syncRoles(['member']);
 
-    $secretary = User::factory()->create([
-        'role' => 'secretary',
+    $accountant = User::factory()->create([
+        'role' => 'accountant',
         'email' => 'sec-'.Str::random(8).'@example.com',
         'account_status' => 'active',
     ]);
-    $secretary->syncRoles(['secretary']);
+    $accountant->syncRoles(['accountant']);
 
-    foreach ([$member, $secretary] as $user) {
+    foreach ([$member, $accountant] as $user) {
         $this->actingAs($user)->getJson('/api/backups')->assertStatus(403);
         $this->actingAs($user)->getJson('/api/backups/runs')->assertStatus(403);
         $this->actingAs($user)->putJson('/api/backups/settings', [])->assertStatus(403);

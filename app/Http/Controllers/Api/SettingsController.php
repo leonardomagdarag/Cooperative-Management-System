@@ -8,10 +8,10 @@ use App\Models\SystemSetting;
 use App\Models\TrustedDevice;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Services\CountersignService;
 use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
 use App\Services\TextBeeService;
-use App\Support\MaintenanceState;
 use App\Support\PersonPasswordPolicy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -155,7 +155,7 @@ class SettingsController extends Controller
 
     public function getServiceAvailability(): JsonResponse
     {
-        abort_unless(Auth::user()?->hasRole('admin'), 403);
+        abort_unless(Auth::user()?->can('settings.update'), 403);
 
         $services = ['deposit', 'withdrawal', 'loan_application', 'loan_payment'];
         $result = [];
@@ -196,7 +196,7 @@ class SettingsController extends Controller
 
     public function updateServiceAvailability(Request $request): JsonResponse
     {
-        abort_unless(Auth::user()?->hasRole('admin'), 403);
+        abort_unless(Auth::user()?->can('settings.update'), 403);
 
         $validated = $request->validate([
             'services' => 'required|array',
@@ -217,6 +217,7 @@ class SettingsController extends Controller
         }
 
         $newlyUnavailable = [];
+        $flatSettings = [];
 
         foreach ($validated['services'] as $service => $flags) {
             if ($service === 'registration') {
@@ -248,36 +249,33 @@ class SettingsController extends Controller
 
             foreach ($settings as $flag => $key) {
                 $nextValue = (bool) ($flags[$flag] ?? true);
-                $previousValue = (bool) SystemSetting::get($key, true);
-
-                if ($previousValue && ! $nextValue) {
-                    $newlyUnavailable[$service][$flag] = false;
-                }
-
-                SystemSetting::set($key, $nextValue);
+                $flatSettings[$key] = $nextValue;
             }
         }
 
-        if (($validated['notify_affected'] ?? false) && $newlyUnavailable !== []) {
-            $this->notifyAffectedUsers($newlyUnavailable);
-        }
+        $countersign = app(CountersignService::class);
+        $pending = $countersign->request('settings.update', [
+            'settings' => $flatSettings,
+            'services' => $validated['services'],
+            'notify_affected' => $validated['notify_affected'] ?? false,
+            'sync_login' => true,
+        ], Auth::user());
 
-        // The notice behind /maintenance is only ever added to by the middleware and
-        // the login endpoint, so re-enabling sign-in has to clear it explicitly or
-        // the page keeps claiming the opposite and keeps answering 503.
-        MaintenanceState::syncLoginAvailability();
-
-        return response()->json(['message' => 'Service availability updated.']);
+        return response()->json([
+            'message' => 'Service availability update requested and requires countersign approval.',
+            'request_id' => $pending->id,
+            'status' => 'pending',
+        ], 202);
     }
 
-    private function notifyAffectedUsers(array $services): void
+    public function notifyAffectedUsers(array $services): void
     {
         $notificationService = app(NotificationService::class);
 
         foreach ($services as $service => $flags) {
             if ($service === 'registration') {
                 if (isset($flags['global']) && $flags['global'] === false) {
-                    $users = User::role('admin')->where('account_status', 'active')->get();
+                    $users = User::role(['admin', 'chairman'])->where('account_status', 'active')->get();
                     foreach ($users as $user) {
                         $notificationService->notifyAccountActivity(
                             $user,
@@ -316,7 +314,7 @@ class SettingsController extends Controller
                 }
 
                 if (isset($flags['officer']) && $flags['officer'] === false) {
-                    $officerRoles = ['admin', 'manager', 'accountant', 'loan', 'secretary'];
+                    $officerRoles = ['admin', 'chairman', 'manager', 'accountant', 'loan'];
                     $users = User::whereHas('roles', fn ($q) => $q->whereIn('name', $officerRoles))
                         ->where('account_status', 'active')
                         ->get();
@@ -362,7 +360,7 @@ class SettingsController extends Controller
 
             // Officer OFF - notify active officers
             if (isset($flags['officer']) && $flags['officer'] === false) {
-                $officerRoles = ['admin', 'manager', 'accountant', 'loan', 'secretary'];
+                $officerRoles = ['admin', 'chairman', 'manager', 'accountant', 'loan'];
                 $users = User::whereHas('roles', fn ($q) => $q->whereIn('name', $officerRoles))
                     ->where('account_status', 'active')
                     ->get();
@@ -407,7 +405,7 @@ class SettingsController extends Controller
 
     public function getSmsSettings(): JsonResponse
     {
-        abort_unless(Auth::user()?->hasRole('admin'), 403);
+        abort_unless(Auth::user()?->can('settings.update'), 403);
 
         return response()->json([
             'data' => [
@@ -420,7 +418,7 @@ class SettingsController extends Controller
 
     public function updateSmsSettings(Request $request): JsonResponse
     {
-        abort_unless(Auth::user()?->hasRole('admin'), 403);
+        abort_unless(Auth::user()?->can('settings.update'), 403);
 
         $validated = $request->validate([
             'sms_service_enabled' => 'boolean',
@@ -443,7 +441,7 @@ class SettingsController extends Controller
 
     public function testSms(Request $request): JsonResponse
     {
-        abort_unless(Auth::user()?->hasRole('admin'), 403);
+        abort_unless(Auth::user()?->can('settings.update'), 403);
 
         $validated = $request->validate([
             'phone_number' => 'required|string|max:20',
@@ -490,3 +488,4 @@ class SettingsController extends Controller
         }
     }
 }
+

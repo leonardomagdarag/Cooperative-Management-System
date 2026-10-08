@@ -10,7 +10,7 @@ beforeEach(function () {
     $this->seed(UserSeeder::class);
 
     $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
-    $this->secretary = User::where('email', 'secretary@example.com')->firstOrFail();
+    $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
 });
 
 function archivedMemberFactory(string $email): User
@@ -69,16 +69,20 @@ test('restore is restricted to admin users', function () {
     $member = archivedMemberFactory('restore.denied@example.com');
     $member->delete();
 
-    $this->actingAs($this->secretary)
+    $this->actingAs($this->accountant)
         ->postJson("/api/members/{$member->id}/restore")
         ->assertForbidden();
 });
 
-test('admin can restore an archived member and undo the decline scramble', function () {
+test('chairman can restore an archived member and undo the decline scramble', function () {
     $member = archivedMemberFactory('restore.me@example.com');
     archiveAsDeclinedMember($member);
 
-    $this->actingAs($this->admin)
+    $chairman = User::factory()->create(['email' => 'chairman@example.com']);
+    $chairman->assignRole('chairman');
+    $chairman->givePermissionTo('members.delete');
+
+    $this->actingAs($chairman)
         ->postJson("/api/members/{$member->id}/restore")
         ->assertOk()
         ->assertJsonPath('message', 'Member restored.');
@@ -96,7 +100,11 @@ test('restore is rejected when the original email is already in use', function (
 
     archivedMemberFactory('restore.taken@example.com');
 
-    $this->actingAs($this->admin)
+    $chairman = User::factory()->create(['email' => 'chairman@example.com']);
+    $chairman->assignRole('chairman');
+    $chairman->givePermissionTo('members.delete');
+
+    $this->actingAs($chairman)
         ->postJson("/api/members/{$member->id}/restore")
         ->assertStatus(422);
 });
@@ -105,16 +113,20 @@ test('permanent delete is restricted to admin users', function () {
     $member = archivedMemberFactory('force.denied@example.com');
     $member->delete();
 
-    $this->actingAs($this->secretary)
+    $this->actingAs($this->accountant)
         ->deleteJson("/api/members/{$member->id}/force")
         ->assertForbidden();
 });
 
-test('admin can permanently delete an archived member', function () {
+test('chairman can permanently delete an archived member', function () {
     $member = archivedMemberFactory('force.target@example.com');
     $member->delete();
 
-    $this->actingAs($this->admin)
+    $chairman = User::factory()->create(['email' => 'chairman@example.com']);
+    $chairman->assignRole('chairman');
+    $chairman->givePermissionTo('members.delete');
+
+    $this->actingAs($chairman)
         ->deleteJson("/api/members/{$member->id}/force")
         ->assertOk()
         ->assertJsonPath('message', 'Member permanently deleted.');

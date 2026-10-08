@@ -4,6 +4,13 @@ use App\Models\User;
 
 use function Pest\Laravel\actingAs;
 
+use Database\Seeders\SpatieRolePermissionSeeder;
+use Database\Seeders\UserSeeder;
+
+beforeEach(function () {
+    $this->seed(SpatieRolePermissionSeeder::class);
+});
+
 test('authenticated dashboard reload serves the react application', function () {
     $user = User::factory()->create();
 
@@ -25,6 +32,7 @@ test('guest access to dashboard subpath is redirected to login', function () {
 
 test('member without permission accessing restricted dashboard subpath is redirected to dashboard', function () {
     $member = User::factory()->create(['role' => 'member']);
+    $member->assignRole('member');
 
     actingAs($member)
         ->get('/dashboard/members')
@@ -33,6 +41,7 @@ test('member without permission accessing restricted dashboard subpath is redire
 
 test('privileged user accessing permitted dashboard subpath can view react app', function () {
     $admin = User::factory()->create(['role' => 'admin']);
+    $admin->assignRole('admin');
 
     actingAs($admin)
         ->get('/dashboard/members')

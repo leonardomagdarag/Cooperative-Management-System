@@ -16,7 +16,9 @@ beforeEach(function () {
     $this->seed(AccountSeeder::class);
 
     $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
-    $this->secretary = User::where('email', 'secretary@example.com')->firstOrFail();
+    $this->chairman = User::factory()->create(['role' => 'chairman']);
+    $this->chairman->assignRole('chairman');
+    $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
     $this->manager = User::where('email', 'manager@example.com')->firstOrFail();
 
     $this->mainBranch = Branch::where('code', 'BR000001')->firstOrFail();
@@ -61,7 +63,7 @@ test('F017-3: regular member accessing GET /api/members/{id} views self and is f
 });
 
 test('F017-4: admin can list members with status filtering and search', function () {
-    $this->actingAs($this->admin);
+    $this->actingAs($this->chairman);
 
     // All active members
     $response = $this->getJson('/api/members?status=active');
@@ -77,7 +79,7 @@ test('F017-4: admin can list members with status filtering and search', function
 });
 
 test('F017-5: admin views full member details including personal, accounts, and contact', function () {
-    $this->actingAs($this->admin);
+    $this->actingAs($this->chairman);
 
     $response = $this->getJson("/api/members/{$this->mainMember->id}");
     $response->assertOk()
@@ -93,7 +95,7 @@ test('F017-5: admin views full member details including personal, accounts, and 
 });
 
 test('F017-6: admin creates new member with personal data, contact, address and accounts', function () {
-    $this->actingAs($this->admin);
+    $this->actingAs($this->chairman);
 
     $email = 'brandnew.member@example.com';
     $payload = [
@@ -132,7 +134,7 @@ test('F017-6: admin creates new member with personal data, contact, address and 
 });
 
 test('F017-6a: admin cannot create a member until at least one contact method is verified', function () {
-    $this->actingAs($this->admin)
+    $this->actingAs($this->chairman)
         ->postJson('/api/members', [
             'first_name' => 'Unverified',
             'last_name' => 'Member',
@@ -165,7 +167,7 @@ test('F017-6b: phone verification is sufficient when creating a member and is st
         'role' => 'member',
     ];
 
-    $this->actingAs($this->admin)
+    $this->actingAs($this->chairman)
         ->withSession(['verified_officer_phone' => $payload['phone_number']])
         ->postJson('/api/members', $payload)
         ->assertCreated();
@@ -173,7 +175,8 @@ test('F017-6b: phone verification is sufficient when creating a member and is st
     $createdUser = User::where('email', $payload['email'])->firstOrFail();
     expect($createdUser->hasVerifiedEmail())->toBeFalse()
         ->and($createdUser->personalData->contact->phone_verified_at)->not->toBeNull()
-        ->and($createdUser->personalData->contact->email_verified_at)->toBeNull();
+        ->and($createdUser->personalData->contact->email_verified_at)->toBeNull()
+        ->and($createdUser->branch_id)->toBe($this->mainBranch->id);
 });
 
 test('F017-6c: a member creator can verify a new email without officer permissions', function () {
@@ -200,7 +203,7 @@ test('F017-6c: a member creator can verify a new email without officer permissio
 });
 
 test('F017-7: admin can update an existing member', function () {
-    $this->actingAs($this->admin);
+    $this->actingAs($this->chairman);
 
     $payload = [
         'first_name' => 'ArjayUpdated',
@@ -218,7 +221,7 @@ test('F017-7: admin can update an existing member', function () {
 });
 
 test('F017-8: admin toggles special loan eligibility', function () {
-    $this->actingAs($this->admin);
+    $this->actingAs($this->chairman);
 
     $initialStatus = (bool) $this->mainMember->special_loan_eligible;
 
@@ -237,7 +240,7 @@ test('F017-8: admin toggles special loan eligibility', function () {
 });
 
 test('F017-9: admin triggers password change OTP challenge for a member', function () {
-    $this->actingAs($this->admin);
+    $this->actingAs($this->chairman);
 
     $response = $this->postJson("/api/members/{$this->mainMember->id}/password/send-otp");
     $response->assertOk()
@@ -245,7 +248,7 @@ test('F017-9: admin triggers password change OTP challenge for a member', functi
 });
 
 test('F017-10: member export validates dates and generates export response', function () {
-    $this->actingAs($this->admin);
+    $this->actingAs($this->chairman);
 
     // Invalid date range: end_date before start_date
     $invalidResponse = $this->postJson('/api/members/export', [
@@ -266,7 +269,7 @@ test('F017-10: member export validates dates and generates export response', fun
 });
 
 test('F017-11: admin can soft-delete member using DELETE /api/members/{id} (Fixed F017-01)', function () {
-    $this->actingAs($this->admin);
+    $this->actingAs($this->chairman);
 
     $response = $this->deleteJson("/api/members/{$this->mainMember->id}");
     $response->assertOk()
@@ -275,7 +278,7 @@ test('F017-11: admin can soft-delete member using DELETE /api/members/{id} (Fixe
 });
 
 test('F017-12: admin restore on soft-deleted member and force-destroy on member without accounts', function () {
-    $this->actingAs($this->admin);
+    $this->actingAs($this->chairman);
 
     // 1. Soft-delete directly via Eloquent model to bypass the destroy controller bug
     $this->mainMember->delete();
@@ -302,7 +305,7 @@ test('F017-12: admin restore on soft-deleted member and force-destroy on member 
 });
 
 test('F017-13: forceDestroy on member with accounts succeeds cleanly (Fixed F017-03)', function () {
-    $this->actingAs($this->admin);
+    $this->actingAs($this->chairman);
 
     // mainMember has accounts (created by AccountSeeder)
     $this->mainMember->delete();

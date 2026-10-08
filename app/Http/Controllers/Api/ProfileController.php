@@ -531,3 +531,4 @@ class ProfileController extends Controller
         return ['email' => Str::lower(trim($email))];
     }
 }
+

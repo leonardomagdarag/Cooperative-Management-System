@@ -2,8 +2,8 @@
 
 namespace Database\Seeders;
 
-use App\Models\Expense;
 use App\Models\Branch;
+use App\Models\Expense;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
@@ -151,10 +151,10 @@ class ExpenseSeeder extends Seeder
             throw new \RuntimeException('Seeded branches BR000001 and BR000002 before recording expenses.');
         }
 
-        $secretary = User::query()->role('secretary')->orderBy('id')->first()
+        $accountant = User::query()->role('accountant')->orderBy('id')->first()
             ?? User::query()->role('admin')->orderBy('id')->first();
 
-        if (! $secretary) {
+        if (! $accountant) {
             $this->command?->warn('No officer found to record expenses against.');
 
             return;
@@ -166,7 +166,7 @@ class ExpenseSeeder extends Seeder
             $month = Carbon::now()->subMonths($offset)->startOfMonth();
 
             foreach (self::MONTHLY as $item) {
-                $written += $this->record($item, $month, $secretary, 6, $branchIds->all());
+                $written += $this->record($item, $month, $accountant, 6, $branchIds->all());
             }
 
             foreach (self::ANNUAL as $item) {
@@ -175,7 +175,7 @@ class ExpenseSeeder extends Seeder
                     continue;
                 }
 
-                $written += $this->record($item, $month, $secretary, $item['day'], $branchIds->all());
+                $written += $this->record($item, $month, $accountant, $item['day'], $branchIds->all());
             }
         }
 

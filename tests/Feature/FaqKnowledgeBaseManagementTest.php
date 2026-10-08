@@ -14,7 +14,7 @@ beforeEach(function () {
     $this->seed(SystemSettingSeeder::class);
 
     $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
-    $this->secretary = User::where('email', 'secretary@example.com')->firstOrFail();
+    $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
     $this->member = User::where('email', 'arjay.ramos@example.com')->firstOrFail();
 });
 
@@ -38,8 +38,8 @@ test('F031-7: regular member without settings.update receives 403 when updating 
     $this->putJson('/api/faqs', faqUpdatePayload())->assertForbidden();
 });
 
-test('F031-8: secretary with settings.view but not settings.update receives 403', function () {
-    $this->actingAs($this->secretary);
+test('F031-8: accountant with settings.view but not settings.update receives 403', function () {
+    $this->actingAs($this->accountant);
 
     $this->putJson('/api/faqs', faqUpdatePayload())->assertForbidden();
 });

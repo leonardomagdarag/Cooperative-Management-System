@@ -36,8 +36,8 @@ class SearchController extends Controller
         ['label' => 'Announcements', 'keywords' => 'news updates bulletin', 'url' => '/dashboard/announcements', 'icon' => 'bullhorn', 'permission' => 'announcements.view', 'role' => null],
         ['label' => 'Reports', 'keywords' => 'financial statements export', 'url' => '/dashboard/reports', 'icon' => 'chart-pie', 'permission' => 'reports.view', 'role' => null],
         ['label' => 'Officers', 'keywords' => 'staff employees', 'url' => '/dashboard/officers', 'icon' => 'user-tie', 'permission' => 'officers.view', 'role' => null],
-        ['label' => 'Logs', 'keywords' => 'audit activity trail', 'url' => '/dashboard/logs', 'icon' => 'list-check', 'permission' => null, 'role' => 'admin'],
-        ['label' => 'Role Permissions', 'keywords' => 'roles access control', 'url' => '/dashboard/role-permissions', 'icon' => 'shield-halved', 'permission' => null, 'role' => 'admin'],
+        ['label' => 'Logs', 'keywords' => 'audit activity trail', 'url' => '/dashboard/logs', 'icon' => 'list-check', 'permission' => 'logs.view', 'role' => null],
+        ['label' => 'Role Permissions', 'keywords' => 'roles access control', 'url' => '/dashboard/role-permissions', 'icon' => 'shield-halved', 'permission' => 'officers.manage-permissions', 'role' => null],
         ['label' => 'Loan Products', 'keywords' => 'product catalog loan types', 'url' => '/dashboard/loan-products', 'icon' => 'tags', 'permission' => 'settings.update', 'role' => null],
         ['label' => 'Public Content', 'keywords' => 'website pages banners', 'url' => '/dashboard/public-content', 'icon' => 'globe', 'permission' => 'settings.update', 'role' => null],
     ];
@@ -52,9 +52,9 @@ class SearchController extends Controller
 
         $user = $request->user();
         $needle = '%'.SearchFilter::escapeLike($q).'%';
-        $isAdmin = $user->hasRole('admin') || $user->primary_role === 'admin';
+        $isAdmin = false; // No longer applies
         $isMember = $user->hasRole('member') || $user->primary_role === 'member';
-        $canViewAll = (bool) $user->is_officer || $isAdmin;
+        $canViewAll = (bool) $user->is_officer;
         $can = fn (string $permission): bool => $user->can($permission);
 
         $groups = [];

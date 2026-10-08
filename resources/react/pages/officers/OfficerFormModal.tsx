@@ -22,9 +22,9 @@ const steps = [
 
 const roleOptions = [
     { value: 'admin', label: 'Admin' },
+    { value: 'chairman', label: 'Chairman' },
     { value: 'manager', label: 'Manager' },
     { value: 'accountant', label: 'Accountant' },
-    { value: 'secretary', label: 'Secretary' },
     { value: 'loan', label: 'Loan Officer' },
 ];
 
@@ -70,9 +70,15 @@ export default function OfficerFormModal({ officer, onClose }: { officer?: any; 
             }
             return api.post('/api/members', payload);
         },
-        onSuccess: () => {
+        onSuccess: (response) => {
             queryClient.invalidateQueries({ queryKey: ['officers'] });
-            addToast(isEdit ? 'Officer updated' : 'Officer created', 'success');
+            if (response.data?.status === 'pending') {
+                addToast(isEdit
+                    ? 'Profile saved. The role change is awaiting chairman approval; current access remains unchanged.'
+                    : 'Account created inactive. Role assignment is awaiting chairman approval.', 'info');
+            } else {
+                addToast(isEdit ? 'Officer updated' : 'Officer created', 'success');
+            }
             onClose();
         },
         onError: (err: any) => {

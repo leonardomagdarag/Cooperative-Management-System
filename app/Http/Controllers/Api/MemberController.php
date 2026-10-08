@@ -7,6 +7,7 @@ use App\Jobs\SendEmailJob;
 use App\Mail\MemberWelcomeMail;
 use App\Models\Account;
 use App\Models\Address;
+use App\Models\Branch;
 use App\Models\Beneficiary;
 use App\Models\Contact;
 use App\Models\Employment;
@@ -17,6 +18,7 @@ use App\Models\PersonalData;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Services\CountersignService;
 use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
 use App\Support\BranchScope;
@@ -270,7 +272,11 @@ class MemberController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        abort_unless(Auth::user()?->can('members.create'), 403);
+        $requestedRole = $request->input('role');
+        $requiredPermission = ! empty($requestedRole) && $requestedRole !== 'member'
+            ? 'officers.create'
+            : 'members.create';
+        abort_unless(Auth::user()?->can($requiredPermission), 403);
 
         $this->assertCanAssignRole($request->input('role'), 'officers.create');
 
@@ -413,14 +419,20 @@ class MemberController extends Controller
             $role = $validated['role'] ?? 'member';
             $isOfficer = ! empty($validated['role']) && $validated['role'] !== 'member';
 
+            // Officer and custom permission roles remain inactive until
+            // chairman approval; only regular member accounts activate here.
+            $needsCountersign = $role !== 'member';
+            $storedRole = $needsCountersign ? 'inactive' : $role;
+            $accountStatus = $needsCountersign ? 'inactive' : 'active';
+
             $user = User::create([
                 'email' => $validated['email'],
                 'password' => Hash::make($validated['password']),
                 'personal_data_id' => $personalData->id,
                 'branch_id' => $this->resolveMemberBranch($validated),
-                'role' => $role,
-                'is_officer' => $isOfficer,
-                'account_status' => 'active',
+                'role' => $storedRole,
+                'is_officer' => $isOfficer && ! $needsCountersign,
+                'account_status' => $accountStatus,
                 'profile_completion_required' => false,
             ]);
 
@@ -435,7 +447,7 @@ class MemberController extends Controller
                 }
             }
 
-            $user->syncRoles([$role]);
+            $user->syncRoles([$storedRole]);
 
             // Create default accounts
             Account::create(['user_id' => $user->id, 'account_type' => 'savings', 'balance' => 0]);
@@ -479,12 +491,34 @@ class MemberController extends Controller
 
         $request->session()->forget(['verified_officer_email', 'verified_officer_phone']);
 
+        $role = $validated['role'] ?? 'member';
+        if ($role !== 'member') {
+            $countersign = app(CountersignService::class);
+            $pending = $countersign->request('role.assign', [
+                'user_id' => $user->id,
+                'roles' => [$role],
+                'legacy_role' => $role,
+                'activate' => true,
+                'new_account' => true,
+            ], Auth::user());
+
+            return response()->json([
+                'message' => 'Officer account created inactive and is awaiting chairman approval for role assignment.',
+                'request_id' => $pending->id,
+                'status' => 'pending',
+            ], 202);
+        }
+
         return response()->json(['message' => 'Member created successfully.'], 201);
     }
 
     public function update(Request $request, User $user): JsonResponse
     {
-        abort_unless(Auth::user()?->can('members.update'), 403);
+        $isOfficerAccount = (bool) ($user->is_officer
+            || $user->hasAnyRole(array_merge(PermissionCatalog::officerRoles(), ['admin', 'developer'])));
+        $assigningOfficerRole = filled($request->input('role')) && $request->input('role') !== 'member';
+        $requiredPermission = ($isOfficerAccount || $assigningOfficerRole) ? 'officers.update' : 'members.update';
+        abort_unless(Auth::user()?->can($requiredPermission), 403);
 
         $this->assertCanAssignRole($request->input('role'), 'officers.update');
 
@@ -579,7 +613,10 @@ class MemberController extends Controller
             $agreementPath = $request->file('agreement_file')->store('member-agreements/'.$user->id, 'public');
         }
 
-        DB::transaction(function () use ($user, $validated, $profilePhotoPath, $idPhotoPaths, $agreementPath) {
+        $roleNeedsCountersign = ! empty($validated['role'])
+            && $validated['role'] !== $user->primary_role;
+
+        DB::transaction(function () use ($user, $validated, $profilePhotoPath, $idPhotoPaths, $agreementPath, $roleNeedsCountersign) {
             $pd = $user->personalData;
 
             if ($pd?->contact) {
@@ -648,13 +685,12 @@ class MemberController extends Controller
             if (! empty($validated['password'])) {
                 $userData['password'] = Hash::make($validated['password']);
             }
-            if (! empty($validated['role'])) {
+            if (! empty($validated['role']) && ! $roleNeedsCountersign) {
                 $userData['role'] = $validated['role'];
                 $userData['is_officer'] = $validated['role'] !== 'member';
                 $user->syncRoles([$validated['role']]);
             }
             $user->update($userData);
-
             if (array_key_exists('beneficiaries', $validated)) {
                 $user->beneficiaries()->delete();
                 foreach ($validated['beneficiaries'] as $b) {
@@ -683,6 +719,23 @@ class MemberController extends Controller
             app(NotificationService::class)->sendEmailVerification($user->refresh());
         }
 
+        $role = $validated['role'] ?? null;
+        if ($roleNeedsCountersign) {
+            $countersign = app(CountersignService::class);
+            $pending = $countersign->request('role.assign', [
+                'user_id' => $user->id,
+                'roles' => [$role],
+                'legacy_role' => $role,
+                'activate' => false,
+            ], Auth::user());
+
+            return response()->json([
+                'message' => 'Profile updated. The role change is awaiting chairman approval; current access remains unchanged.',
+                'request_id' => $pending->id,
+                'status' => 'pending',
+            ], 202);
+        }
+
         return response()->json(['message' => 'Member updated successfully.']);
     }
 
@@ -705,18 +758,31 @@ class MemberController extends Controller
         ]);
     }
 
-    public function destroy(User $user): JsonResponse
+    public function destroy(User $user, bool $bypassCountersign = false): JsonResponse
     {
-        $isOfficer = (bool) ($user->is_officer || $user->hasAnyRole(PermissionCatalog::officerRoles()) || $user->hasRole('admin'));
+        $isOfficer = (bool) ($user->is_officer || $user->hasAnyRole(PermissionCatalog::officerRoles()) || $user->hasAnyRole(['admin', 'chairman', 'developer']));
 
-        if ($user->hasRole('admin')) {
-            abort_unless(Auth::user()?->hasRole('admin'), 403, 'Only administrators can delete admin accounts.');
+        if (! $bypassCountersign && $user->hasAnyRole(['admin', 'chairman'])) {
+            abort_unless(Auth::user()?->can('oversight.request'), 403, 'Requires oversight request permission.');
+
+            $countersign = app(CountersignService::class);
+            $pending = $countersign->request('admin.delete', [
+                'user_id' => $user->id,
+            ], Auth::user());
+
+            return response()->json([
+                'message' => 'Officer deletion requested and requires countersign approval.',
+                'request_id' => $pending->id,
+                'status' => 'pending',
+            ], 202);
         }
 
-        if ($isOfficer) {
-            abort_unless(Auth::user()?->can('officers.delete'), 403, 'Unauthorized to delete officer accounts.');
-        } else {
-            abort_unless(Auth::user()?->can('members.delete'), 403, 'Unauthorized to delete member accounts.');
+        if (! $bypassCountersign) {
+            if ($isOfficer) {
+                abort_unless(Auth::user()?->can('officers.delete'), 403, 'Unauthorized to delete officer accounts.');
+            } else {
+                abort_unless(Auth::user()?->can('members.delete'), 403, 'Unauthorized to delete member accounts.');
+            }
         }
 
         app(AuditLogService::class)->log(
@@ -726,16 +792,41 @@ class MemberController extends Controller
             $user,
             Auth::user()
         );
+        if ($user->can('collections.create')) {
+            app(\App\Services\CollectionRunService::class)->markDraftRunsOrphaned($user);
+        }
         $user->delete();
 
         return response()->json(['message' => $isOfficer ? 'Officer deleted.' : 'Member deleted.']);
     }
 
-    public function restore(int $user): JsonResponse
+    public function restore(int $user, bool $bypassCountersign = false): JsonResponse
     {
-        abort_unless(Auth::user()?->hasRole('admin'), 403);
-
         $member = User::onlyTrashed()->with(['memberApplication', 'personalData.contact'])->findOrFail($user);
+        $isOfficer = (bool) ($member->is_officer || $member->hasAnyRole(PermissionCatalog::officerRoles()) || $member->hasAnyRole(['admin', 'chairman', 'developer']));
+
+        if (! $bypassCountersign && $member->hasAnyRole(['admin', 'chairman'])) {
+            abort_unless(Auth::user()?->can('oversight.request'), 403, 'Requires oversight request permission.');
+
+            $countersign = app(CountersignService::class);
+            $pending = $countersign->request('admin.restore', [
+                'user_id' => $member->id,
+            ], Auth::user());
+
+            return response()->json([
+                'message' => 'Officer restore requested and requires countersign approval.',
+                'request_id' => $pending->id,
+                'status' => 'pending',
+            ], 202);
+        }
+
+        if (! $bypassCountersign) {
+            if ($isOfficer) {
+                abort_unless(Auth::user()?->can('officers.delete'), 403, 'Unauthorized to restore officer accounts.');
+            } else {
+                abort_unless(Auth::user()?->can('members.delete'), 403, 'Unauthorized to restore member accounts.');
+            }
+        }
 
         DB::transaction(function () use ($member) {
             if (str_starts_with((string) $member->user_number, 'ARCH-')) {
@@ -780,11 +871,33 @@ class MemberController extends Controller
         return response()->json(['message' => 'Member restored.']);
     }
 
-    public function forceDestroy(int $user): JsonResponse
+    public function forceDestroy(int $user, bool $bypassCountersign = false): JsonResponse
     {
-        abort_unless(Auth::user()?->hasRole('admin'), 403);
-
         $member = User::onlyTrashed()->with('personalData')->findOrFail($user);
+        $isOfficer = (bool) ($member->is_officer || $member->hasAnyRole(PermissionCatalog::officerRoles()) || $member->hasAnyRole(['admin', 'chairman', 'developer']));
+
+        if (! $bypassCountersign && $member->hasAnyRole(['admin', 'chairman'])) {
+            abort_unless(Auth::user()?->can('oversight.request'), 403, 'Requires oversight request permission.');
+
+            $countersign = app(CountersignService::class);
+            $pending = $countersign->request('admin.force_delete', [
+                'user_id' => $member->id,
+            ], Auth::user());
+
+            return response()->json([
+                'message' => 'Officer permanent deletion requested and requires countersign approval.',
+                'request_id' => $pending->id,
+                'status' => 'pending',
+            ], 202);
+        }
+
+        if (! $bypassCountersign) {
+            if ($isOfficer) {
+                abort_unless(Auth::user()?->can('officers.delete'), 403, 'Unauthorized to permanently delete officer accounts.');
+            } else {
+                abort_unless(Auth::user()?->can('members.delete'), 403, 'Unauthorized to permanently delete member accounts.');
+            }
+        }
 
         DB::transaction(function () use ($member) {
             $member->roles()->detach();
@@ -1225,8 +1338,12 @@ class MemberController extends Controller
             return;
         }
 
-        if ($role === 'admin' && ! Auth::user()?->hasRole('admin')) {
-            abort(403, 'Only administrators can manage admin accounts.');
+        if (in_array($role, ['developer', 'inactive', 'terminated'], true)) {
+            abort(422, 'System lifecycle roles cannot be assigned through member management.');
+        }
+
+        if (($role === 'admin' || $role === 'chairman') && ! Auth::user()?->can('oversight.request')) {
+            abort(403, "Only users with oversight request permission can assign the {$role} role.");
         }
 
         if (! Auth::user()?->can($permission)) {
@@ -1244,7 +1361,7 @@ class MemberController extends Controller
         if (BranchScope::isUnrestricted($viewer)) {
             return isset($validated['branch_id']) && $validated['branch_id'] !== null && $validated['branch_id'] !== ''
                 ? (int) $validated['branch_id']
-                : null;
+                : Branch::query()->where('is_head_office', true)->value('id');
         }
 
         return $viewer?->branch_id;

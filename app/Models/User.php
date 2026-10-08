@@ -261,7 +261,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function isSupportStaff(): bool
     {
-        return in_array($this->primary_role, ['admin', 'manager', 'accountant', 'secretary'], true)
+        return in_array($this->primary_role, ['admin', 'chairman', 'manager', 'accountant'], true)
             || $this->can('tickets.manage');
     }
 

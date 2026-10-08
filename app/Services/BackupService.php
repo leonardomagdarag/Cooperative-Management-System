@@ -2,10 +2,10 @@
 
 namespace App\Services;
 
+use App\Jobs\RestoreBackupJob;
+use App\Jobs\RunBackupJob;
 use App\Models\BackupRun;
 use App\Models\RestoreRun;
-use App\Jobs\RunBackupJob;
-use App\Jobs\RestoreBackupJob;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Support\MaintenanceState;
@@ -176,6 +176,7 @@ class BackupService
         }
         $run = BackupRun::create(['tier' => $tier, 'scope' => $scope, 'status' => 'queued', 'triggered_by' => $actor?->id]);
         RunBackupJob::dispatch($run->id);
+
         return $run;
     }
 
@@ -187,6 +188,7 @@ class BackupService
         }
         $run = RestoreRun::create(['tier' => $tier, 'path' => $path, 'scope' => $scope, 'status' => 'queued', 'triggered_by' => $actor->id]);
         RestoreBackupJob::dispatch($run->id, $password);
+
         return $run;
     }
 
@@ -206,21 +208,21 @@ class BackupService
             if ($tier === self::TIER_OFFSITE) {
                 $backup = $this->replicateDailyArchive();
             } else {
-            $params = ['--only-to-disk' => self::diskFor($tier), '--disable-notifications' => true, '--no-interaction' => true, '--config' => 'backup'];
+                $params = ['--only-to-disk' => self::diskFor($tier), '--disable-notifications' => true, '--no-interaction' => true, '--config' => 'backup'];
 
-            if ($scope === self::SCOPE_DB) {
-                $params['--only-db'] = true;
-            } elseif ($scope === self::SCOPE_FILES) {
-                $params['--only-files'] = true;
-            }
+                if ($scope === self::SCOPE_DB) {
+                    $params['--only-db'] = true;
+                } elseif ($scope === self::SCOPE_FILES) {
+                    $params['--only-files'] = true;
+                }
 
-            $exitCode = Artisan::call('backup:run', $params);
+                $exitCode = Artisan::call('backup:run', $params);
 
-            if ($exitCode !== 0) {
-                throw new RuntimeException('The backup command exited with a non-success code: '.trim(Artisan::output()));
-            }
+                if ($exitCode !== 0) {
+                    throw new RuntimeException('The backup command exited with a non-success code: '.trim(Artisan::output()));
+                }
 
-            $backup = $this->newestBackupOnDisk($tier);
+                $backup = $this->newestBackupOnDisk($tier);
             }
 
             $run->update([
@@ -754,10 +756,13 @@ class BackupService
         $path = dirname($daily['path']).'/'.Str::replaceFirst('backup-daily-', self::prefixFor(self::TIER_OFFSITE), basename($daily['path']));
         $stream = $source->readStream($daily['path']);
         if ($stream === false || ! $destination->writeStream($path, $stream)) {
-            if (is_resource($stream)) { fclose($stream); }
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
             throw new RuntimeException('Could not upload the verified daily archive to Backblaze B2.');
         }
         fclose($stream);
+
         return ['path' => $path, 'size' => $daily['size']];
     }
 
@@ -771,6 +776,7 @@ class BackupService
         if (str_contains(strtolower($message), 'mysqldump') && str_contains(strtolower($message), 'not found')) {
             return 'mysqldump is unavailable. Verify DB_DUMP_BINARY_PATH points to its directory and the worker can read it.';
         }
+
         return Str::limit($message, 2000);
     }
 }

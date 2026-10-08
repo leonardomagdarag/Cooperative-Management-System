@@ -38,7 +38,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(PersonalData::class, MemberPolicy::class);
 
         Gate::before(function (User $user, string $ability) {
-            return ($user->hasRole('admin') || $user->primary_role === 'admin') ? true : null;
+            return $user->hasRole('developer') && $ability !== 'finalApprove' ? true : null;
         });
 
         Gate::define('reports.view', [ReportPolicy::class, 'viewAny']);

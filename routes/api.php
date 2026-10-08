@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\LogController;
 use App\Http\Controllers\Api\MemberController;
 use App\Http\Controllers\Api\OfficerPermissionController;
 use App\Http\Controllers\Api\OfficerVerificationController;
+use App\Http\Controllers\Api\OversightController;
 use App\Http\Controllers\Api\PayMongoPaymentController;
 use App\Http\Controllers\Api\PayMongoSettingsController;
 use App\Http\Controllers\Api\PayMongoWebhookController;
@@ -109,6 +110,9 @@ Route::post('/auth/resend-verification', [AuthController::class, 'resendVerifica
 
 // Protected routes
 Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(function () {
+    Route::get('/oversight/requests', [OversightController::class, 'index']);
+    Route::post('/oversight/requests/{privilegedActionRequest}/otp', [OversightController::class, 'sendOtp'])->middleware('throttle:5,1');
+    Route::post('/oversight/requests/{privilegedActionRequest}/decision', [OversightController::class, 'decide'])->middleware('throttle:5,1');
     // Profile
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::put('/profile', [ProfileController::class, 'update']);

@@ -1,7 +1,8 @@
 <?php
 
 use App\Models\User;
-use App\Support\PermissionCatalog;
+use App\Models\PrivilegedActionRequest;
+use App\Services\CountersignService;
 use Database\Seeders\AccountSeeder;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\UserSeeder;
@@ -14,8 +15,10 @@ beforeEach(function () {
 
     $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
     $this->manager = User::where('email', 'manager@example.com')->firstOrFail();
-    $this->secretary = User::where('email', 'secretary@example.com')->firstOrFail();
+    $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
     $this->member = User::where('email', 'arjay.ramos@example.com')->firstOrFail();
+    $this->chairman = User::factory()->create(['email' => 'role-approval-chairman@example.com', 'role' => 'chairman', 'is_officer' => true]);
+    $this->chairman->assignRole('chairman');
 });
 
 test('F019-1: unauthenticated requests to roles endpoints return 401', function () {
@@ -60,8 +63,7 @@ test('F019-3: admin lists roles with permissions, counts, and catalog groups', f
     $roles = $response->json('roles');
     expect($roles)->toContain('manager')
         ->and($roles)->toContain('accountant')
-        ->and($roles)->toContain('loan')
-        ->and($roles)->toContain('secretary');
+        ->and($roles)->toContain('loan');
 });
 
 test('F019-4: reserved roles are excluded from editable roles list', function () {
@@ -90,22 +92,26 @@ test('F019-5: admin creates custom role with validation and template inheritance
         ->assertStatus(422)
         ->assertJson(['message' => 'That role already exists.']);
 
-    // Valid creation copying permissions from secretary template
+    // Valid creation copying permissions from accountant template
     $response = $this->postJson('/api/roles', [
         'name' => 'Compliance Inspector',
-        'template' => 'secretary',
+        'template' => 'accountant',
     ]);
-    $response->assertStatus(201)
-        ->assertJsonStructure(['message', 'role', 'permissions']);
+    $response->assertAccepted()
+        ->assertJsonStructure(['message', 'role', 'permissions', 'request_id'])
+        ->assertJsonPath('status', 'pending');
 
     expect($response->json('role'))->toBe('compliance-inspector');
+
+    expect(Role::where('name', 'compliance-inspector')->exists())->toBeFalse();
+    app(CountersignService::class)->approve(PrivilegedActionRequest::findOrFail($response->json('request_id')), $this->chairman);
 
     // Verify Spatie role exists and has inherited permissions + locked base permissions
     $role = Role::findByName('compliance-inspector', 'web');
     expect($role)->not->toBeNull()
         ->and($role->hasPermissionTo('dashboard.view'))->toBeTrue()
         ->and($role->hasPermissionTo('members.view'))->toBeTrue()
-        ->and($role->hasPermissionTo('branches.bypass'))->toBeTrue();
+        ->and($role->hasPermissionTo('branches.bypass'))->toBeFalse();
 });
 
 test('F019-6: admin updates role permissions preserving locked core permissions', function () {
@@ -115,10 +121,22 @@ test('F019-6: admin updates role permissions preserving locked core permissions'
     $response = $this->putJson('/api/roles/manager/permissions', [
         'permissions' => ['deposits.view'],
     ]);
-    $response->assertOk()
-        ->assertJsonStructure(['message', 'permissions']);
+    $response->assertStatus(202)
+        ->assertJson(['message' => 'Permission update requested and requires countersign approval.']);
 
-    $permissions = $response->json('permissions');
+    $requestId = $response->json('request_id');
+    $request = \App\Models\PrivilegedActionRequest::findOrFail($requestId);
+
+    // Simulate chairman approval
+    $chairman = \App\Models\User::factory()->create(['email' => 'chairman2@example.com']);
+    $chairman->assignRole('chairman');
+    $chairman->givePermissionTo('oversight.approve');
+
+    $countersignService = app(\App\Services\CountersignService::class);
+    $countersignService->approve($request, $chairman);
+
+    $role = \Spatie\Permission\Models\Role::findByName('manager', 'web');
+    $permissions = $role->permissions->pluck('name')->toArray();
 
     // Locked core permissions must be automatically preserved
     expect($permissions)->toContain('dashboard.view')
@@ -168,7 +186,8 @@ test('F019-9: custom role cannot be renamed or deleted while assigned to users (
     $this->actingAs($this->admin);
 
     // Create custom role
-    $this->postJson('/api/roles', ['name' => 'Branch Auditor'])->assertCreated();
+    $create = $this->postJson('/api/roles', ['name' => 'Branch Auditor'])->assertAccepted();
+    app(CountersignService::class)->approve(PrivilegedActionRequest::findOrFail($create->json('request_id')), $this->chairman);
 
     // Assign custom role to a user
     $user = User::factory()->create(['account_status' => 'active', 'role' => 'branch-auditor']);
@@ -189,20 +208,21 @@ test('F019-10: custom role lifecycle — rename and delete unassigned custom rol
     $this->actingAs($this->admin);
 
     // 1. Create
-    $this->postJson('/api/roles', ['name' => 'Temp Role'])->assertCreated();
+    $create = $this->postJson('/api/roles', ['name' => 'Temp Role'])->assertAccepted();
+    app(CountersignService::class)->approve(PrivilegedActionRequest::findOrFail($create->json('request_id')), $this->chairman);
 
     // 2. Rename
     $renameResponse = $this->putJson('/api/roles/temp-role/rename', ['name' => 'Renamed Role']);
-    $renameResponse->assertOk()
-        ->assertJson(['message' => 'Role renamed to renamed-role.', 'role' => 'renamed-role']);
+    $renameResponse->assertAccepted()->assertJsonPath('role', 'renamed-role')->assertJsonPath('status', 'pending');
+    app(CountersignService::class)->approve(PrivilegedActionRequest::findOrFail($renameResponse->json('request_id')), $this->chairman);
 
     expect(Role::where('name', 'temp-role')->exists())->toBeFalse()
         ->and(Role::where('name', 'renamed-role')->exists())->toBeTrue();
 
     // 3. Delete
     $deleteResponse = $this->deleteJson('/api/roles/renamed-role');
-    $deleteResponse->assertOk()
-        ->assertJson(['message' => 'Role renamed-role deleted.']);
+    $deleteResponse->assertAccepted()->assertJsonPath('status', 'pending');
+    app(CountersignService::class)->approve(PrivilegedActionRequest::findOrFail($deleteResponse->json('request_id')), $this->chairman);
 
     expect(Role::where('name', 'renamed-role')->exists())->toBeFalse();
 });

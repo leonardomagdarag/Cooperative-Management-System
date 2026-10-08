@@ -1,8 +1,6 @@
 <?php
 
-use App\Models\PersonalData;
 use App\Models\Ticket;
-use App\Models\TicketMessage;
 use App\Models\User;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\SystemSettingSeeder;

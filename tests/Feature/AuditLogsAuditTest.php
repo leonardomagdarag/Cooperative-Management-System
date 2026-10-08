@@ -1,11 +1,9 @@
 <?php
 
 use App\Models\User;
-use App\Services\AuditLogService;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\SystemSettingSeeder;
 use Database\Seeders\UserSeeder;
-use Spatie\Activitylog\Models\Activity;
 
 beforeEach(function () {
     $this->seed(SpatieRolePermissionSeeder::class);
@@ -13,7 +11,7 @@ beforeEach(function () {
     $this->seed(SystemSettingSeeder::class);
 
     $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
-    $this->secretary = User::where('email', 'secretary@example.com')->firstOrFail();
+    $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
     $this->member = User::where('email', 'arjay.ramos@example.com')->firstOrFail();
 });
 
@@ -26,7 +24,7 @@ test('F032-2: regular member receives 403 on /api/logs', function () {
 });
 
 test('F032-3: officer without logs.view receives 403 on /api/logs', function () {
-    $this->actingAs($this->secretary)->getJson('/api/logs')->assertForbidden();
+    $this->actingAs($this->accountant)->getJson('/api/logs')->assertForbidden();
 });
 
 test('F032-4: admin lists audit logs with pagination and filters metadata', function () {

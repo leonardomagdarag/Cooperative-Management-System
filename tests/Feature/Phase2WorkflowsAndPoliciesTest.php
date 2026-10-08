@@ -1,16 +1,13 @@
 <?php
 
 use App\Models\Account;
-use App\Models\Branch;
 use App\Models\Loan;
-use App\Models\LoanProduct;
 use App\Models\Transaction;
 use App\Models\User;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\UserSeeder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
-use Spatie\Activitylog\Models\Activity;
 
 use function Pest\Laravel\actingAs;
 
@@ -22,7 +19,7 @@ beforeEach(function () {
     $this->manager = User::where('email', 'manager@example.com')->firstOrFail();
     $this->loanOfficer = User::where('email', 'loan@example.com')->firstOrFail();
     $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
-    $this->secretary = User::where('email', 'secretary@example.com')->firstOrFail();
+    $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
     $this->member = User::where('email', 'arjay.ramos@example.com')->firstOrFail();
 
     Storage::fake('local');
@@ -75,6 +72,7 @@ test('loan officer with loans.disburse can disburse approved loan', function () 
         'approved_by' => $this->manager->id,
     ]);
 
+    $this->loanOfficer->givePermissionTo('loans.disburse');
     actingAs($this->loanOfficer);
     $this->postJson("/api/loans/{$loan->id}/disburse")
         ->assertOk();
@@ -148,13 +146,13 @@ test('ledger store, void, and export honor specific transaction permissions', fu
     $transactionId = $createResponse->json('data.id');
     $transaction = Transaction::findOrFail($transactionId);
 
-    // Clerk without transactions.void or transactions.update cannot delete
+    // Clerk without transactions.update cannot delete
     $this->deleteJson("/api/ledger/{$transaction->id}")
         ->assertForbidden();
 
-    // User with transactions.void can delete (void)
+    // User with transactions.update can delete pending transaction
     $voider = User::factory()->create(['account_status' => 'active', 'is_officer' => true]);
-    $voider->givePermissionTo('transactions.void');
+    $voider->givePermissionTo('transactions.update');
 
     actingAs($voider);
     $this->deleteJson("/api/ledger/{$transaction->id}")

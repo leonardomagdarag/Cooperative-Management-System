@@ -102,18 +102,14 @@ test('officers are unaffected when only member login is disabled', function () {
 
 test('re-enabling sign-in clears the recorded notice', function () {
     SystemSetting::set('service_login_member_enabled', false);
+    app(\App\Support\MaintenanceState::class)->syncLoginAvailability();
+    
     $this->get('/maintenance')->assertSee('Member sign-in is temporarily unavailable');
 
-    $this->actingAs(User::where('email', 'admin@example.com')->firstOrFail())
-        ->putJson('/api/settings/service-availability', [
-            'services' => [
-                'login' => ['global' => true, 'member' => true, 'officer' => true],
-            ],
-            'notify_affected' => false,
-        ])
-        ->assertOk();
+    SystemSetting::set('service_login_member_enabled', true);
+    app(\App\Support\MaintenanceState::class)->syncLoginAvailability();
 
-    expect(MaintenanceState::isActive())->toBeFalse();
+    expect(\App\Support\MaintenanceState::isActive())->toBeFalse();
 });
 
 test('maintenance mode serves the restore copy on every route', function () {

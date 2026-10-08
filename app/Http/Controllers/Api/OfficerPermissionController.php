@@ -5,12 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\OfficerPermissionOverride;
 use App\Models\User;
+use App\Services\CountersignService;
 use App\Support\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-use Spatie\Permission\PermissionRegistrar;
 
 class OfficerPermissionController extends Controller
 {
@@ -41,7 +40,7 @@ class OfficerPermissionController extends Controller
         $this->authorizeAccess($user);
 
         $validated = $request->validate([
-            'overrides' => 'required|array',
+            'overrides' => 'present|array',
             'overrides.*' => ['required', 'in:'.OfficerPermissionOverride::EFFECT_ALLOW.','.OfficerPermissionOverride::EFFECT_DISALLOW],
         ]);
 
@@ -58,23 +57,20 @@ class OfficerPermissionController extends Controller
             ->values()
             ->all();
 
-        DB::transaction(function () use ($user, $payload): void {
-            OfficerPermissionOverride::query()
-                ->where('user_id', $user->id)
-                ->delete();
-
-            if ($payload !== []) {
-                OfficerPermissionOverride::query()->insert($payload);
-            }
-        });
-
-        app(PermissionRegistrar::class)->forgetCachedPermissions();
-        OfficerPermissionOverride::forgetAllCachedEffects($user->id);
+        $overrides = collect($payload)
+            ->mapWithKeys(fn (array $row) => [$row['permission'] => $row['effect']])
+            ->all();
+        $pending = app(CountersignService::class)->request('officer.permissions.update', [
+            'user_id' => $user->id,
+            'overrides' => $overrides,
+        ], Auth::user());
 
         return response()->json([
-            'message' => 'Officer permission overrides saved.',
-            'overrides' => collect($payload)->map(fn ($row) => [$row['permission'] => $row['effect']])->collapse()->all(),
-        ]);
+            'message' => 'Officer permission overrides are awaiting chairman approval. Current access remains unchanged.',
+            'request_id' => $pending->id,
+            'status' => 'pending',
+            'overrides' => $overrides,
+        ], 202);
     }
 
     private function authorizeAccess(User $user): void

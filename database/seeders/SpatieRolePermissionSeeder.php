@@ -19,103 +19,7 @@ class SpatieRolePermissionSeeder extends Seeder
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         // === DEFINE ALL PERMISSIONS ===
-        $permissions = [
-            // Dashboard
-            'dashboard.view',
-
-            // Members
-            'members.view',
-            'members.create',
-            'members.update',
-            'members.delete',
-            'members.view-full-details',
-            'members.approve',
-
-            // Services
-            'services.view',
-            'services.create',
-            'services.update',
-
-            // Loans
-            'loans.view',
-            'loans.create',
-            'loans.encode',
-            'loans.update',
-            'loans.approve',
-            'loans.reject',
-            'loans.disburse',
-
-            // Transactions
-            'transactions.view',
-            'transactions.view-all',
-            'transactions.create',
-            'transactions.update',
-            'transactions.approve',
-            'transactions.void',
-            'transactions.export',
-
-            // Deposits & Withdrawals
-            'deposits.view',
-            'deposits.create',
-            'deposits.approve',
-            'deposits.reject',
-            'withdrawals.view',
-            'withdrawals.create',
-            'withdrawals.approve',
-            'withdrawals.reject',
-
-            // Reports
-            'reports.view',
-            'reports.export',
-            'reports.financial',
-            'reports.audit',
-
-            // Announcements
-            'announcements.view',
-            'announcements.create',
-            'announcements.update',
-            'announcements.delete',
-
-            // Settings
-            'settings.view',
-            'settings.update',
-
-            // Backups (admin-only)
-            'backups.view',
-            'backups.manage',
-            'backups.restore',
-
-            // Audit Logs
-            'logs.view',
-            'logs.export',
-
-            // Officer/Staff Management
-            'officers.view',
-            'officers.create',
-            'officers.update',
-            'officers.delete',
-            'officers.manage-permissions',
-
-            // Branch/Office Management
-            'branches.view',
-            'branches.create',
-            'branches.update',
-            'branches.delete',
-            'branches.bypass',
-
-            // Notifications
-            'notifications.view',
-            'notifications.manage',
-
-            // Profile
-            'profile.view',
-            'profile.update',
-
-            // Tickets
-            'tickets.view',
-            'tickets.reply',
-            'tickets.manage',
-        ];
+        $permissions = PermissionCatalog::allPermissions();
 
         // Create all permissions
         foreach ($permissions as $permissionName) {
@@ -130,16 +34,13 @@ class SpatieRolePermissionSeeder extends Seeder
 
         // === DEFINE ROLES ===
         $officerPresets = PermissionCatalog::rolePresets();
-        $officerRoleNames = array_merge(['admin'], PermissionCatalog::officerRoles());
+        $officerRoleNames = array_merge(['admin', 'chairman'], PermissionCatalog::officerRoles());
         $rolePermissions = [
-            // Super admin: all permissions
-            'admin' => $allPermissions,
-
-            // Officer roles receive their default permissions via Spatie roles.
+            'admin' => $officerPresets['admin'],
+            'chairman' => $officerPresets['chairman'],
             'manager' => $officerPresets['manager'],
             'accountant' => $officerPresets['accountant'],
             'loan' => $officerPresets['loan'],
-            'secretary' => $officerPresets['secretary'],
             'developer' => [],
 
             // Regular members: limited self-service permissions
@@ -181,6 +82,13 @@ class SpatieRolePermissionSeeder extends Seeder
             if ($missingPermissions !== []) {
                 $role->givePermissionTo($missingPermissions);
             }
+        }
+
+        // Branch-level staff are scoped by their assigned branch. Main-branch
+        // officers receive their cross-branch access from BranchScope, while
+        // manager roles retain the explicit bypass permission.
+        foreach (['accountant', 'loan'] as $branchScopedRole) {
+            Role::findByName($branchScopedRole, 'web')->revokePermissionTo('branches.bypass');
         }
 
         // === ASSIGN ROLES & PERMISSIONS TO EXISTING USERS ===

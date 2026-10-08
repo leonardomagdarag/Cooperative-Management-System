@@ -13,6 +13,7 @@ use Database\Seeders\Support\MemberRoster;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Creates the fixed demo logins and the ten rostered members.
@@ -120,6 +121,7 @@ class UserSeeder extends Seeder
             'education' => $profile['education'] ?? null,
             'civil_status' => $profile['civil_status'] ?? null,
             'religion' => $profile['religion'] ?? null,
+            'profile_picture' => 'placeholders/dummy_profile.svg',
             'address_id' => $address->id,
             'contact_id' => $contact->id,
             'employment_id' => $employment->id,
@@ -173,10 +175,17 @@ class UserSeeder extends Seeder
     {
         return [
             'national_id' => $this->groupDigits($this->digitsFrom($userNumber.'|national', 16), [4, 4, 4, 4]),
+            'national_id_photo' => 'placeholders/dummy_id.svg',
             'tin' => $this->groupDigits($this->digitsFrom($userNumber.'|tin', 12), [3, 3, 3, 3]),
+            'tin_photo' => 'placeholders/dummy_id.svg',
             'sss' => $this->groupDigits($this->digitsFrom($userNumber.'|sss', 10), [2, 7, 1]),
+            'sss_photo' => 'placeholders/dummy_id.svg',
             'philhealth' => $this->groupDigits($this->digitsFrom($userNumber.'|philhealth', 12), [2, 9, 1]),
+            'philhealth_photo' => 'placeholders/dummy_id.svg',
             'barangay_id' => MemberRoster::barangayCode($barangay) ?? '',
+            'barangay_id_photo' => 'placeholders/dummy_id.svg',
+            'proof_of_registration_path' => 'placeholders/dummy_id.svg',
+            'other_document_path' => 'placeholders/dummy_id.svg',
         ];
     }
 
@@ -193,6 +202,13 @@ class UserSeeder extends Seeder
      */
     public function run(): void
     {
+        if (!Storage::disk('public')->exists('placeholders/dummy_id.svg')) {
+            Storage::disk('public')->put('placeholders/dummy_id.svg', '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="150"><rect width="200" height="150" fill="#ddd"/><text x="100" y="75" font-family="sans-serif" font-size="20" text-anchor="middle" fill="#555">ID Document</text></svg>');
+        }
+        if (!Storage::disk('public')->exists('placeholders/dummy_profile.svg')) {
+            Storage::disk('public')->put('placeholders/dummy_profile.svg', '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#ddd"/><circle cx="100" cy="80" r="40" fill="#999"/><path d="M40 180 q 60 -80 120 0" stroke="#999" stroke-width="10" fill="none"/></svg>');
+        }
+
         // Branch records must exist before users can be tied to them. Keeping
         // the call here lets feature tests seed UserSeeder directly.
         $this->call(BranchSeeder::class);
@@ -204,8 +220,6 @@ class UserSeeder extends Seeder
         }
 
         $mainBranch = $branches['BR000001'];
-        $branchOffice = $branches['BR000002'];
-
         // ===================================
         // CORE ACCOUNTS (Keep for testing)
         // ===================================
@@ -233,16 +247,14 @@ class UserSeeder extends Seeder
         ]);
         $developer->assignRole('developer');
 
-        // One seeded user per officer role. Officers are tied to a branch so
-        // branch scoping can be demonstrated for managers and staff. The loan
-        // officer sits at the branch office but covers both branches, which is
-        // why head-office applicants are interviewed by USR000005 too.
+        // Seeded officers use Main as their home branch. Main-branch officers
+        // can select the branch they are working with, while production staff
+        // assigned to another branch remain scoped there.
         $officers = [
             ['role' => 'admin', 'userNumber' => 'USR000002', 'firstName' => 'Quennie Joy', 'lastName' => 'Almazan', 'title' => 'Chairman', 'birthDate' => '1985-01-20', 'gender' => 'female', 'barangay' => 'Santo Tomas', 'position' => 'Cooperative Chairman', 'type' => 'self-employed', 'company' => null, 'income' => 72000, 'branch' => $mainBranch->id, 'monthsAgo' => 132],
             ['role' => 'manager', 'userNumber' => 'USR000003', 'firstName' => 'Carl Michael', 'lastName' => 'Bigal', 'title' => 'Vice Chairman', 'birthDate' => '1983-09-14', 'gender' => 'male', 'barangay' => 'San Isidro', 'position' => 'General Manager', 'type' => 'private', 'company' => 'Settlers Credit Cooperative', 'income' => 58000, 'branch' => $mainBranch->id, 'monthsAgo' => 128],
             ['role' => 'accountant', 'userNumber' => 'USR000004', 'firstName' => 'Jasmin', 'lastName' => 'Latayan', 'title' => 'Accountant', 'birthDate' => '1990-05-06', 'gender' => 'female', 'barangay' => 'Mabacan', 'position' => 'Staff Accountant', 'type' => 'private', 'company' => 'Settlers Credit Cooperative', 'income' => 41000, 'branch' => $mainBranch->id, 'monthsAgo' => 74],
-            ['role' => 'loan', 'userNumber' => 'USR000005', 'firstName' => 'Leanard', 'lastName' => 'Guiriba', 'title' => 'Loan Officer', 'birthDate' => '1988-11-23', 'gender' => 'male', 'barangay' => 'Masiit', 'position' => 'Loan Officer', 'type' => 'private', 'company' => 'Settlers Credit Cooperative', 'income' => 45000, 'branch' => $branchOffice->id, 'monthsAgo' => 86],
-            ['role' => 'secretary', 'userNumber' => 'USR000006', 'firstName' => 'Jenica', 'lastName' => 'Malveda', 'title' => 'Secretary', 'birthDate' => '1992-02-11', 'gender' => 'female', 'barangay' => 'Dayap', 'position' => 'Corporate Secretary', 'type' => 'private', 'company' => 'Settlers Credit Cooperative', 'income' => 38000, 'branch' => $branchOffice->id, 'monthsAgo' => 61],
+            ['role' => 'loan', 'userNumber' => 'USR000005', 'firstName' => 'Leanard', 'lastName' => 'Guiriba', 'title' => 'Loan Officer', 'birthDate' => '1988-11-23', 'gender' => 'male', 'barangay' => 'Masiit', 'position' => 'Loan Officer', 'type' => 'private', 'company' => 'Settlers Credit Cooperative', 'income' => 45000, 'branch' => $mainBranch->id, 'monthsAgo' => 86],
         ];
 
         foreach ($officers as $officer) {

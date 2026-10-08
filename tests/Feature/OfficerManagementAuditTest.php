@@ -3,7 +3,6 @@
 use App\Models\Branch;
 use App\Models\OfficerPermissionOverride;
 use App\Models\User;
-use App\Support\PermissionCatalog;
 use Database\Seeders\AccountSeeder;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\UserSeeder;
@@ -15,7 +14,7 @@ beforeEach(function () {
 
     $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
     $this->manager = User::where('email', 'manager@example.com')->firstOrFail();
-    $this->secretary = User::where('email', 'secretary@example.com')->firstOrFail();
+    $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
     $this->loanOfficer = User::where('email', 'loan@example.com')->firstOrFail();
     $this->member = User::where('email', 'arjay.ramos@example.com')->firstOrFail();
     $this->mainBranch = Branch::where('code', 'BR000001')->firstOrFail();
@@ -27,8 +26,8 @@ test('F018-1: unauthenticated requests to officer permission endpoints return 40
 });
 
 test('F018-2: user without officers.manage-permissions receives 403', function () {
-    // Secretary role does not have officers.manage-permissions in preset
-    $this->actingAs($this->secretary);
+    // accountant role does not have officers.manage-permissions in preset
+    $this->actingAs($this->accountant);
     $this->getJson("/api/officers/{$this->manager->id}/permissions")->assertForbidden();
     $this->putJson("/api/officers/{$this->manager->id}/permissions", ['overrides' => []])->assertForbidden();
 
@@ -186,8 +185,8 @@ test('F018-10: privilege escalation prevention — non-admin cannot assign admin
 });
 
 test('F018-11: creating officer with valid officer role requires officers.create permission', function () {
-    // Secretary lacks officers.create permission
-    $this->actingAs($this->secretary);
+    // accountant lacks officers.create permission
+    $this->actingAs($this->accountant);
 
     $payload = [
         'first_name' => 'New',

@@ -50,8 +50,13 @@ export default function OfficerPermissionModal({ officer, onClose }: { officer: 
         mutationFn: (payload: Record<string, string>) =>
             api.put(`/api/officers/${officer.id}/permissions`, { overrides: payload }),
         onSuccess: (res) => {
-            addToast('Permission overrides saved', 'success');
-            setSaved(states);
+            if (res.data?.status === 'pending') {
+                addToast('Permission override changes are awaiting chairman approval. Current access remains unchanged.', 'info');
+                setStates(saved);
+            } else {
+                addToast('Permission overrides saved', 'success');
+                setSaved(states);
+            }
             queryClient.invalidateQueries({ queryKey: ['officer-permissions', officer.id] });
             queryClient.invalidateQueries({ queryKey: ['auth'] });
         },

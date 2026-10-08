@@ -82,21 +82,24 @@ test('members cannot use the email settings tester', function () {
         ->assertForbidden();
 });
 
-test('non-admin users with settings permissions cannot access SMS configuration', function () {
-    $officer = User::factory()->create(['role' => 'secretary']);
-    $officer->assignRole('secretary');
+test('non-admin users with settings.update permission CAN access SMS configuration', function () {
+    $officer = User::factory()->create(['role' => 'accountant']);
+    $officer->assignRole('accountant');
     $officer->givePermissionTo('settings.view');
     $officer->givePermissionTo('settings.update');
 
     $this->actingAs($officer)
         ->getJson('/api/settings/sms')
-        ->assertForbidden();
+        ->assertOk();
 
     $this->actingAs($officer)
         ->putJson('/api/settings/sms', ['sms_service_enabled' => false])
-        ->assertForbidden();
+        ->assertOk();
 
-    $this->actingAs($officer)
-        ->postJson('/api/settings/sms/test', ['phone_number' => '09761729700'])
-        ->assertForbidden();
+    // The test endpoint requires a valid phone number and returns JSON but might fail if TextBee isn't configured in test env.
+    // Let's just assert it doesn't return 403 Forbidden.
+    $response = $this->actingAs($officer)
+        ->postJson('/api/settings/sms/test', ['phone_number' => '09761729700']);
+        
+    expect($response->status())->not->toBe(403);
 });

@@ -7,7 +7,6 @@ use App\Models\User;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\UserSeeder;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 
 use function Pest\Laravel\actingAs;
 

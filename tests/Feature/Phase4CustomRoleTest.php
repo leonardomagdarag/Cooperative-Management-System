@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\User;
+use App\Models\PrivilegedActionRequest;
+use App\Services\CountersignService;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\UserSeeder;
 use Spatie\Permission\Models\Role;
@@ -14,6 +16,8 @@ beforeEach(function () {
     $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
     $this->manager = User::where('email', 'manager@example.com')->firstOrFail();
     $this->member = User::where('email', 'arjay.ramos@example.com')->firstOrFail();
+    $this->chairman = User::factory()->create(['role' => 'chairman', 'is_officer' => true]);
+    $this->chairman->assignRole('chairman');
 });
 
 test('admin can assign a custom dynamic role to a user', function () {
@@ -41,13 +45,18 @@ test('admin can assign a custom dynamic role to a user', function () {
         'verified_officer_email' => $payload['email'],
         'verified_officer_phone' => $payload['phone_number'],
     ])->postJson('/api/members', $payload)
-        ->assertStatus(201);
+        ->assertAccepted()
+        ->assertJsonPath('status', 'pending');
 
     $createdUser = User::where('email', 'carlos.compliance@example.com')->firstOrFail();
+    $request = PrivilegedActionRequest::findOrFail($response->json('request_id'));
 
-    expect($createdUser->role)->toBe('compliance_officer')
-        ->and($createdUser->hasRole('compliance_officer'))->toBeTrue()
-        ->and((bool) $createdUser->is_officer)->toBeTrue();
+    expect($createdUser->role)->toBe('inactive')
+        ->and($createdUser->hasRole('inactive'))->toBeTrue()
+        ->and($createdUser->hasRole('compliance_officer'))->toBeFalse();
+    app(CountersignService::class)->approve($request, $this->chairman);
+    expect($createdUser->fresh()->hasRole('compliance_officer'))->toBeTrue()
+        ->and((bool) $createdUser->fresh()->is_officer)->toBeTrue();
 
     // Now update the user to another custom role
     Role::findOrCreate('auditor', 'web');
@@ -61,8 +70,12 @@ test('admin can assign a custom dynamic role to a user', function () {
         'email' => 'carlos.compliance@example.com',
         'phone_number' => '09171112233',
         'role' => 'auditor',
-    ])->assertOk();
+    ])->assertAccepted()->assertJsonPath('status', 'pending');
 
+    $updateRequest = PrivilegedActionRequest::findOrFail($updateResponse->json('request_id'));
+    expect($createdUser->fresh()->role)->toBe('compliance_officer')
+        ->and($createdUser->fresh()->hasRole('auditor'))->toBeFalse();
+    app(CountersignService::class)->approve($updateRequest, $this->chairman);
     expect($createdUser->fresh()->role)->toBe('auditor')
         ->and($createdUser->fresh()->hasRole('auditor'))->toBeTrue();
 });

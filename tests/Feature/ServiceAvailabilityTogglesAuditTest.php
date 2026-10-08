@@ -22,7 +22,7 @@ beforeEach(function () {
 
     $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
     $this->manager = User::where('email', 'manager@example.com')->firstOrFail();
-    $this->secretary = User::where('email', 'secretary@example.com')->firstOrFail();
+    $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
     $this->member = User::where('email', 'arjay.ramos@example.com')->firstOrFail();
 
     $this->mainBranch = Branch::where('code', 'BR000001')->firstOrFail();
@@ -41,13 +41,16 @@ test('F020-2: regular member without settings.view receives 403', function () {
     $this->putJson('/api/settings/service-availability', [])->assertForbidden();
 });
 
-test('F020-3: non-admin settings users cannot access or update service availability', function () {
-    // Secretary role has settings.view; explicitly grant update to ensure admin-only enforcement.
-    $this->secretary->givePermissionTo('settings.update');
-    $this->actingAs($this->secretary);
+test('F020-3: users with settings.update can access service availability and request updates', function () {
+    $this->accountant->givePermissionTo('settings.update');
+    $this->actingAs($this->accountant);
 
-    $this->getJson('/api/settings/service-availability')->assertForbidden();
-    $this->putJson('/api/settings/service-availability', ['services' => []])->assertForbidden();
+    $this->getJson('/api/settings/service-availability')->assertOk();
+    $this->putJson('/api/settings/service-availability', [
+        'services' => [
+            'deposit' => ['global' => true]
+        ]
+    ])->assertStatus(202);
 });
 
 test('F020-4: authorized user retrieves full service availability schema', function () {
@@ -80,7 +83,7 @@ test('F020-5: updating service availability rejects unknown services (422)', fun
         ->assertJson(['message' => 'One or more services are invalid.']);
 });
 
-test('F020-6: admin updates service availability flags successfully', function () {
+test('F020-6: admin updates service availability flags successfully via countersign', function () {
     $this->actingAs($this->admin);
 
     $payload = [
@@ -97,14 +100,14 @@ test('F020-6: admin updates service availability flags successfully', function (
     ];
 
     $response = $this->putJson('/api/settings/service-availability', $payload);
-    $response->assertOk()
-        ->assertJson(['message' => 'Service availability updated.']);
+    $response->assertStatus(202)
+        ->assertJson(['message' => 'Service availability update requested and requires countersign approval.']);
 
-    // Check system setting values
-    expect((bool) SystemSetting::get('service_deposit_member_enabled'))->toBeFalse()
-        ->and((bool) SystemSetting::get('service_deposit_online_enabled'))->toBeFalse()
-        ->and((bool) SystemSetting::get('service_deposit_officer_enabled'))->toBeTrue()
-        ->and((bool) SystemSetting::get('service_deposit_counter_enabled'))->toBeTrue();
+    // Check request was created
+    $this->assertDatabaseHas('privileged_action_requests', [
+        'action_type' => 'settings.update',
+        'status' => 'pending',
+    ]);
 });
 
 test('F020-7: CheckServiceAvailability middleware blocks disabled service with HTTP 423', function () {
@@ -199,7 +202,17 @@ test('F020-10: notify_affected dispatches notifications when services become new
         'notify_affected' => true,
     ]);
 
-    $response->assertOk();
+    $response->assertStatus(202);
+    $requestId = $response->json('request_id');
+    $request = \App\Models\PrivilegedActionRequest::findOrFail($requestId);
+
+    // Simulate chairman approval
+    $chairman = User::factory()->create(['email' => 'chairman@example.com']);
+    $chairman->assignRole('chairman');
+    $chairman->givePermissionTo('oversight.approve');
+    
+    $countersignService = app(\App\Services\CountersignService::class);
+    $countersignService->approve($request, $chairman);
 
     // Check notifications were created for active members
     $memberNotif = Notification::where('user_id', $this->member->id)

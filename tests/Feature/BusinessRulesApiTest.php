@@ -25,6 +25,7 @@ beforeEach(function () {
     $this->seed(UserSeeder::class);
 
     $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
+    $this->admin->assignRole('chairman');
 });
 
 test('user seeder does not create duplicate fixed login accounts', function () {
@@ -36,8 +37,7 @@ test('user seeder does not create duplicate fixed login accounts', function () {
         'manager@example.com',
         'accountant@example.com',
         'loan@example.com',
-        'secretary@example.com',
-    ])->count())->toBe(6);
+    ])->count())->toBe(5);
 });
 
 test('person password policy rejects predictable name plus digits', function () {
@@ -473,18 +473,19 @@ test('non-admin cannot encode loans', function () {
     ])->assertForbidden();
 });
 
-test('seeders create secretary account with secretary role', function () {
-    $this->seed(RolePermissionSeeder::class);
+test('seeders create accountant account with accountant role', function () {
+    $this->seed(SpatieRolePermissionSeeder::class);
+    $this->seed(UserSeeder::class);
 
-    $secretary = User::where('email', 'secretary@example.com')->first();
+    $accountant = User::where('email', 'accountant@example.com')->first();
 
-    expect($secretary)->not->toBeNull()
-        ->and($secretary->role)->toBe('secretary')
-        ->and((bool) $secretary->is_officer)->toBeTrue()
-        ->and($secretary->hasRole('secretary'))->toBeTrue()
-        ->and($secretary->can('loans.view'))->toBeTrue()
-        ->and($secretary->can('members.create'))->toBeTrue()
-        ->and($secretary->cannot('admin'))->toBeTrue();
+    expect($accountant)->not->toBeNull()
+        ->and($accountant->role)->toBe('accountant')
+        ->and((bool) $accountant->is_officer)->toBeTrue()
+        ->and($accountant->hasRole('accountant'))->toBeTrue()
+        ->and($accountant->can('loans.view'))->toBeTrue()
+        ->and($accountant->can('members.create'))->toBeTrue()
+        ->and($accountant->cannot('admin'))->toBeTrue();
 });
 
 test('permission names referenced by policies exist in the catalog', function () {

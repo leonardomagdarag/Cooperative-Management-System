@@ -1,10 +1,6 @@
 <?php
 
-use App\Models\Account;
 use App\Models\Branch;
-use App\Models\Expense;
-use App\Models\Loan;
-use App\Models\Transaction;
 use App\Models\User;
 use Database\Seeders\AccountSeeder;
 use Database\Seeders\SpatieRolePermissionSeeder;

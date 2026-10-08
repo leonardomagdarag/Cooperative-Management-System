@@ -2,7 +2,6 @@
 
 use App\Models\OfficerPermissionOverride;
 use App\Models\Ticket;
-use App\Models\TicketMessage;
 use App\Models\User;
 use App\Support\PermissionCatalog;
 use Database\Seeders\SpatieRolePermissionSeeder;
@@ -17,7 +16,7 @@ beforeEach(function () {
     $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
     $this->manager = User::where('email', 'manager@example.com')->firstOrFail();
     $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
-    $this->secretary = User::where('email', 'secretary@example.com')->firstOrFail();
+    $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
     $this->loanOfficer = User::where('email', 'loan@example.com')->firstOrFail();
     $this->member = User::where('email', 'arjay.ramos@example.com')->firstOrFail();
 });
@@ -25,21 +24,21 @@ beforeEach(function () {
 test('auth user endpoint reflects officer permission overrides in permissions array', function () {
     actingAs($this->manager);
 
-    // Initial check: manager has members.delete by default
+    // Initial check: manager has members.update by default
     $initialResponse = $this->getJson('/api/user')
         ->assertOk();
-    expect($initialResponse->json('permissions'))->toContain('members.delete');
+    expect($initialResponse->json('permissions'))->toContain('members.update');
 
-    // Add a DISALLOW override for members.delete
+    // Add a DISALLOW override for members.update
     OfficerPermissionOverride::create([
         'user_id' => $this->manager->id,
-        'permission' => 'members.delete',
+        'permission' => 'members.update',
         'effect' => OfficerPermissionOverride::EFFECT_DISALLOW,
     ]);
 
     $overrideResponse = $this->getJson('/api/user')
         ->assertOk();
-    expect($overrideResponse->json('permissions'))->not->toContain('members.delete');
+    expect($overrideResponse->json('permissions'))->not->toContain('members.update');
 
     // Add an ALLOW override for backups.view (which manager does not normally have)
     OfficerPermissionOverride::create([
@@ -53,7 +52,7 @@ test('auth user endpoint reflects officer permission overrides in permissions ar
     expect($overrideResponse2->json('permissions'))->toContain('backups.view');
 });
 
-test('secretary can view all tickets and manage status as support staff', function () {
+test('accountant can view all tickets and manage status as support staff', function () {
     $ticket = Ticket::create([
         'user_id' => $this->member->id,
         'subject' => 'Question about dividend schedule',
@@ -62,23 +61,23 @@ test('secretary can view all tickets and manage status as support staff', functi
         'status' => 'open',
     ]);
 
-    actingAs($this->secretary);
+    actingAs($this->accountant);
 
-    // Secretary should be treated as support staff and view all tickets
+    // accountant should be treated as support staff and view all tickets
     $response = $this->getJson('/api/tickets?scope=all')
         ->assertOk();
 
     $ticketIds = collect($response->json('data'))->pluck('id')->all();
     expect($ticketIds)->toContain($ticket->id);
 
-    // Secretary can update status
+    // accountant can update status
     $this->patchJson("/api/tickets/{$ticket->id}/status", [
         'status' => 'in_progress',
     ])->assertOk();
 
     expect($ticket->fresh()->status)->toBe('in_progress');
 
-    // Secretary can reply
+    // accountant can reply
     $this->postJson("/api/tickets/{$ticket->id}/messages", [
         'message' => 'Hello, dividends will be released next week.',
     ])->assertStatus(201);

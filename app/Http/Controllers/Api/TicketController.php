@@ -358,7 +358,7 @@ class TicketController extends Controller
      */
     public function supportOfficers(): JsonResponse
     {
-        $officers = User::role(['admin', 'manager', 'accountant'])
+        $officers = User::role(['admin', 'chairman', 'manager', 'accountant'])
             ->with('personalData')
             ->get()
             ->map(fn (User $u) => [

@@ -28,11 +28,12 @@ test('MemberWelcomeMail rendered content does not contain plaintext password', f
     expect($reflection->hasProperty('plainPassword'))->toBeFalse();
 });
 
-test('admin creating member does not leak plaintext password in welcome email job', function () {
+test('chairman creating member does not leak plaintext password in welcome email job', function () {
     Bus::fake();
     Config::set('mail.default', 'smtp');
 
-    $admin = User::where('email', 'admin@example.com')->firstOrFail();
+    $chairman = User::factory()->create(['role' => 'chairman']);
+    $chairman->assignRole('chairman');
 
     $payload = [
         'first_name' => 'Roberto',
@@ -47,7 +48,7 @@ test('admin creating member does not leak plaintext password in welcome email jo
         'monthly_income' => 25000,
     ];
 
-    $response = $this->actingAs($admin)
+    $response = $this->actingAs($chairman)
         ->withSession(['verified_officer_email' => $payload['email']])
         ->postJson('/api/members', $payload);
 

@@ -13,7 +13,6 @@ beforeEach(function () {
     $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
     $this->manager = User::where('email', 'manager@example.com')->firstOrFail();
     $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
-    $this->secretary = User::where('email', 'secretary@example.com')->firstOrFail();
     $this->member = User::where('email', 'arjay.ramos@example.com')->firstOrFail();
 
     // Create loan officer
@@ -86,7 +85,7 @@ test('manager role access boundaries', function () {
     // Manager is forbidden from system administration: roles, backups, logs
     $this->getJson('/api/roles')->assertStatus(403);
     $this->getJson('/api/backups')->assertStatus(403);
-    $this->getJson('/api/logs')->assertStatus(403);
+    $this->getJson('/api/logs')->assertOk(); // Manager can view logs
 });
 
 test('accountant role access boundaries', function () {
@@ -112,39 +111,16 @@ test('loan officer role access boundaries', function () {
     $this->getJson('/api/loans/loan-products')->assertOk();
     $this->getJson('/api/loans/search-members')->assertOk();
 
-    // Loan officer is forbidden from accounting, system administration and logs
+    // Loan officer has no global transaction visibility — ledger/expenses
+    // require transactions.view, which is intentionally not granted.
     $this->getJson('/api/ledger')->assertStatus(403);
     $this->getJson('/api/expenses')->assertStatus(403);
-    $this->getJson('/api/roles')->assertStatus(403);
-    $this->getJson('/api/backups')->assertStatus(403);
-    $this->getJson('/api/logs')->assertStatus(403);
-});
 
-test('secretary role access boundaries', function () {
-    $this->actingAs($this->secretary);
+    // Loan officer visibility is scoped to their own field-collection runs.
+    $this->getJson('/api/collections')->assertOk();
+    $this->getJson('/api/collections/route-list')->assertOk();
 
-    // Secretary has records, announcements and member management access
-    $this->getJson('/api/members')->assertOk();
-    $this->getJson('/api/announcements')->assertOk();
-
-    // Secretary preset does not include branches.view by default, so /api/branches is 403
-    $this->getJson('/api/branches')->assertStatus(403);
-
-    // When granted branches.view override, access is permitted
-    $this->secretary->givePermissionTo('branches.view');
-    $this->getJson('/api/branches')->assertOk();
-
-    // Secretary has transactions.view, so reading expenses is allowed
-    $this->getJson('/api/expenses')->assertOk();
-
-    // But Secretary lacks transactions.update, so recording expenses is forbidden
-    $this->postJson('/api/expenses', [
-        'category' => 'Office Supplies',
-        'amount' => 100,
-        'expense_date' => now()->toDateString(),
-    ])->assertStatus(403);
-
-    // Secretary is forbidden from roles, backups, and logs
+    // Loan officer is forbidden from roles, backups, logs
     $this->getJson('/api/roles')->assertStatus(403);
     $this->getJson('/api/backups')->assertStatus(403);
     $this->getJson('/api/logs')->assertStatus(403);

@@ -12,6 +12,7 @@ import MemberExportModal from './MemberExportModal';
 import DeclineApplicationModal from './DeclineApplicationModal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Pagination from '../../components/ui/Pagination';
+import OversightApprovalModal from './OversightApprovalModal';
 
 const STATUS_FILTERS = [
     { value: 'all', label: 'All Members' },
@@ -29,11 +30,15 @@ export default function MembersPage() {
     const canEdit = perms.includes('members.update');
     const canDelete = perms.includes('members.delete');
     const canExport = perms.includes('members.view');
-    const canViewMemberId = perms.includes('members.view-full-details');
+    const canViewIds = perms.includes('members.view-ids');
+    const canViewLoans = perms.includes('members.view-loans');
+    const canViewActivity = perms.includes('members.view-activity');
+    const canViewFinancial = perms.includes('members.view-financial');
     const canApprove = perms.includes('members.approve');
     const canAssignBranch = perms.includes('branches.view');
     const hasActions = canEdit || canDelete;
     const isAdmin = user?.primary_role === 'admin';
+    const canViewOversight = ['admin', 'chairman'].includes(user?.primary_role || '') && perms.includes('oversight.view');
     const [searchParams, setSearchParams] = useSearchParams();
     const [status, setStatus] = useState(searchParams.get('status') && STATUS_FILTERS.some(f => f.value === searchParams.get('status')) ? searchParams.get('status')! : 'all');
     const [search, setSearch] = useState('');
@@ -43,6 +48,7 @@ export default function MembersPage() {
     const [editing, setEditing] = useState<any>(null);
     const [viewing, setViewing] = useState<any>(null);
     const [showExport, setShowExport] = useState(false);
+    const [showOversight, setShowOversight] = useState(false);
     const [declining, setDeclining] = useState<any>(null);
     const [confirmState, setConfirmState] = useState<{
         isOpen: boolean;
@@ -144,6 +150,7 @@ export default function MembersPage() {
                                     Add Member
                                 </button>
                             )}
+                            {canViewOversight && <button type="button" onClick={() => setShowOversight(true)} className="inline-flex items-center px-3.5 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700">Approvals</button>}
                         </div>
                     </div>
 
@@ -185,7 +192,7 @@ export default function MembersPage() {
                                     <thead className="bg-gray-100">
                                         <tr>
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-[24%]">Name</th>
-                                            {canViewMemberId && <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-32">Member ID</th>}
+                                            {canViewIds && <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-32">Member ID</th>}
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-32">Status</th>
                                             {canAssignBranch && <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-28">Branch</th>}
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-28">Join Date</th>
@@ -197,7 +204,7 @@ export default function MembersPage() {
                                         {members.map((m: any) => (
                                             <tr key={m.id} className="hover:bg-gray-50">
                                                 <td className="p-4 text-sm font-medium text-gray-900 truncate" title={m.name || 'Unknown'}>{m.name || 'Unknown'}</td>
-                                                {canViewMemberId && <td className="p-4 text-sm font-mono text-gray-500 whitespace-nowrap">{m.user_number || '—'}</td>}
+                                                {canViewIds && <td className="p-4 text-sm font-mono text-gray-500 whitespace-nowrap">{m.user_number || '—'}</td>}
                                                 <td className="p-4 whitespace-nowrap">
                                                     {m.archived_at ? (
                                                         <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">Archived</span>
@@ -270,9 +277,10 @@ export default function MembersPage() {
             </div>
 
             {showWizard && <MemberWizardForm member={editing} onClose={() => { setShowWizard(false); setEditing(null); }} />}
-            {viewing && <MemberProfileModal memberId={viewing.id} onClose={() => setViewing(null)} canApprove={canApprove} onApprove={(id) => approveMutation.mutate(id)} onDecline={() => setDeclining(viewing)} isApproving={approveMutation.isPending} isDeclining={declineMutation.isPending} onEdit={() => { setViewing(null); setEditing(viewing); setShowWizard(true); }} canEdit={canEdit} canViewFullId={canViewMemberId} isAdmin={isAdmin} onRestore={() => { setConfirmState({ isOpen: true, title: 'Restore Member', message: 'Restore this archived member?', confirmText: 'Restore', variant: 'primary', onConfirm: () => { restoreMutation.mutate(viewing.id); setViewing(null); } }); }} onForceDelete={() => { setConfirmState({ isOpen: true, title: 'Permanently Delete Member', message: 'Permanently delete this member? This cannot be undone.', confirmText: 'Permanently Delete', variant: 'danger', onConfirm: () => { forceDeleteMutation.mutate(viewing.id); setViewing(null); } }); }} isRestoring={restoreMutation.isPending} isForceDeleting={forceDeleteMutation.isPending} />}
+            {viewing && <MemberProfileModal memberId={viewing.id} onClose={() => setViewing(null)} canApprove={canApprove} onApprove={(id) => approveMutation.mutate(id)} onDecline={() => setDeclining(viewing)} isApproving={approveMutation.isPending} isDeclining={declineMutation.isPending} onEdit={() => { setViewing(null); setEditing(viewing); setShowWizard(true); }} canEdit={canEdit} canViewIds={canViewIds} canViewLoans={canViewLoans} canViewActivity={canViewActivity} canViewFinancial={canViewFinancial} isAdmin={isAdmin} onRestore={() => { setConfirmState({ isOpen: true, title: 'Restore Member', message: 'Restore this archived member?', confirmText: 'Restore', variant: 'primary', onConfirm: () => { restoreMutation.mutate(viewing.id); setViewing(null); } }); }} onForceDelete={() => { setConfirmState({ isOpen: true, title: 'Permanently Delete Member', message: 'Permanently delete this member? This cannot be undone.', confirmText: 'Permanently Delete', variant: 'danger', onConfirm: () => { forceDeleteMutation.mutate(viewing.id); setViewing(null); } }); }} isRestoring={restoreMutation.isPending} isForceDeleting={forceDeleteMutation.isPending} />}
             {declining && <DeclineApplicationModal member={declining} onConfirm={(reason) => declineMutation.mutate({ id: declining.id, reason })} onClose={() => setDeclining(null)} submitting={declineMutation.isPending} />}
             {showExport && <MemberExportModal onClose={() => setShowExport(false)} />}
+            <OversightApprovalModal open={showOversight} onClose={() => setShowOversight(false)} canDecide={user?.primary_role === 'chairman'} />
             <ConfirmDialog
                 isOpen={confirmState.isOpen}
                 onClose={() => setConfirmState(s => ({ ...s, isOpen: false }))}

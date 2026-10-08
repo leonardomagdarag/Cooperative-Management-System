@@ -85,12 +85,12 @@ test('normal authenticated member cannot access PayMongo settings or credentials
 
 test('non-admin settings users cannot access PayMongo configuration or tests', function () {
     $officer = User::factory()->create([
-        'role' => 'secretary',
-        'email' => 'secretary-'.Str::random(8).'@example.com',
+        'role' => 'accountant',
+        'email' => 'accountant-'.Str::random(8).'@example.com',
         'password' => 'password',
         'account_status' => 'active',
     ]);
-    $officer->syncRoles(['secretary']);
+    $officer->syncRoles(['accountant']);
     $officer->givePermissionTo(['settings.view', 'settings.update']);
 
     $this->actingAs($officer)

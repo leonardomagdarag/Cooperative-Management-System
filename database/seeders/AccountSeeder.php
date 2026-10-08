@@ -45,7 +45,7 @@ class AccountSeeder extends Seeder
         }
 
         $ledger = new LedgerWriter;
-        $secretary = $ledger->officer('USR000006');
+        $accountant = $ledger->officer('USR000006');
 
         foreach (MemberRoster::all() as $member) {
             $user = $members[$member['user_number']] ?? null;
@@ -65,7 +65,7 @@ class AccountSeeder extends Seeder
                 'transaction_type' => 'fee',
                 'amount' => self::MEMBERSHIP_FEE,
                 'transaction_date' => $joinedAt,
-                'recorded_by' => $secretary?->id,
+                'recorded_by' => $accountant?->id,
                 'note' => 'Membership fee on joining',
             ]);
 
@@ -75,11 +75,11 @@ class AccountSeeder extends Seeder
                 'transaction_type' => 'deposit',
                 'amount' => 500,
                 'transaction_date' => $joinedAt->copy()->addMinutes(30),
-                'recorded_by' => $secretary?->id,
+                'recorded_by' => $accountant?->id,
                 'note' => 'Opening savings deposit',
             ]);
 
-            $this->shareCapitalSeries($ledger, $shareCapital, $member, $joinedAt, $secretary?->id);
+            $this->shareCapitalSeries($ledger, $shareCapital, $member, $joinedAt, $accountant?->id);
         }
 
         $this->recomputeAll();
