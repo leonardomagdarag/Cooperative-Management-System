@@ -5,7 +5,7 @@
 .env
 .env.backup
 .env.production
-# Environment templates carrying real credentials. Only .env.example is tracked.
+# Local env files carrying real credentials. Tracked templates: .env.example, .env.dev.example, .env.prod.example.
 .env.example.dev
 .env.example.prod
 .phpactor.json
@@ -32,3 +32,15 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Non-system planning/audit material (kept on disk, never committed).
+/*_REWORK.md
+/REWORK_IMPLEMENTATION_SUMMARY.md
+/docs/diagrams/
+/tests/e2e/screenshot.spec.ts
+
+# Local scratch and debug artifacts.
+/login-failure.png
+/revoke.php
+/revoke_permissions.php
+/scratch/
