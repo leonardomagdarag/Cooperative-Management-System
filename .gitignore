@@ -44,3 +44,8 @@ Thumbs.db
 /revoke.php
 /revoke_permissions.php
 /scratch/
+
+# Local frontend audit outputs (kept on disk, never committed).
+/docs/FRONTEND_AUDIT_REPORT.md
+/frontend_audit_screenshots/
+/tests/e2e/frontend-audit.spec.ts
