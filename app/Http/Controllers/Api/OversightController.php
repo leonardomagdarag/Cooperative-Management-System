@@ -93,4 +93,3 @@ class OversightController extends Controller
         return response()->json(['message' => 'Decision recorded.']);
     }
 }
-

@@ -2,8 +2,6 @@
 
 namespace App\Services;
 
-use App\Jobs\SendOtpEmailJob;
-use App\Jobs\SendSmsJob;
 use App\Mail\OtpCodeMail;
 use App\Models\Notification;
 use App\Models\OtpChallenge;
@@ -15,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Throwable;
 
 class SecurityOtpService
@@ -98,6 +97,12 @@ class SecurityOtpService
                 'is_active' => true,
             ]
         );
+
+        OtpChallenge::query()
+            ->active()
+            ->where('user_id', $user->id)
+            ->where('purpose', $this->newDevicePurpose())
+            ->update(['consumed_at' => now()]);
 
         $this->auditLogService->log(
             'security.device_trusted',
@@ -236,6 +241,12 @@ class SecurityOtpService
             return;
         }
 
+        if (app()->environment('testing') && config('mail.default') === 'smtp') {
+            Log::info("OTP email ({$purpose}) for {$user->email}: {$otpCode}");
+
+            return;
+        }
+
         // OTP is sent inline rather than queued. The challenge lives for
         // `security_otp_expiry_minutes` (10 by default), and on shared hosting
         // the queue only drains when cron fires. Waiting on that tick spent
@@ -290,7 +301,7 @@ class SecurityOtpService
 
             Log::warning("Immediate OTP SMS delivery failed for user {$user->id}.");
             abort(503, 'Failed to send OTP SMS. Please try again later.');
-        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+        } catch (HttpException $e) {
             throw $e;
         } catch (Throwable $e) {
             Log::warning("Immediate OTP SMS delivery threw for user {$user->id}: {$e->getMessage()}");
@@ -324,7 +335,7 @@ class SecurityOtpService
     {
         // Development-only: let the OTP page surface the code so local testing
         // is never blocked by email delivery. Never stored outside local env.
-        if (config('app.env') === 'local') {
+        if (in_array(config('app.env'), ['local', 'testing'], true)) {
             $session->put('security.pending_otp_debug_code', $otpCode);
         }
     }

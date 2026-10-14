@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\User;
 use App\Models\PrivilegedActionRequest;
+use App\Models\User;
 use App\Services\CountersignService;
 use Database\Seeders\AccountSeeder;
 use Database\Seeders\SpatieRolePermissionSeeder;
@@ -13,10 +13,10 @@ beforeEach(function () {
     $this->seed(UserSeeder::class);
     $this->seed(AccountSeeder::class);
 
-    $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
-    $this->manager = User::where('email', 'manager@example.com')->firstOrFail();
-    $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
-    $this->member = User::where('email', 'arjay.ramos@example.com')->firstOrFail();
+    $this->admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
+    $this->manager = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
+    $this->accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
+    $this->member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
     $this->chairman = User::factory()->create(['email' => 'role-approval-chairman@example.com', 'role' => 'chairman', 'is_officer' => true]);
     $this->chairman->assignRole('chairman');
 });
@@ -125,17 +125,17 @@ test('F019-6: admin updates role permissions preserving locked core permissions'
         ->assertJson(['message' => 'Permission update requested and requires countersign approval.']);
 
     $requestId = $response->json('request_id');
-    $request = \App\Models\PrivilegedActionRequest::findOrFail($requestId);
+    $request = PrivilegedActionRequest::findOrFail($requestId);
 
     // Simulate chairman approval
-    $chairman = \App\Models\User::factory()->create(['email' => 'chairman2@example.com']);
+    $chairman = User::factory()->create(['email' => 'chairman2@example.com']);
     $chairman->assignRole('chairman');
     $chairman->givePermissionTo('oversight.approve');
 
-    $countersignService = app(\App\Services\CountersignService::class);
+    $countersignService = app(CountersignService::class);
     $countersignService->approve($request, $chairman);
 
-    $role = \Spatie\Permission\Models\Role::findByName('manager', 'web');
+    $role = Role::findByName('manager', 'web');
     $permissions = $role->permissions->pluck('name')->toArray();
 
     // Locked core permissions must be automatically preserved

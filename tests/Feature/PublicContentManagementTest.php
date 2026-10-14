@@ -1,13 +1,14 @@
 <?php
 
+use App\Models\PrivilegedActionRequest;
 use App\Models\SiteContent;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Services\CountersignService;
 use App\Support\SiteContentCatalog;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\SystemSettingSeeder;
 use Database\Seeders\UserSeeder;
-use Spatie\Permission\Models\Role;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\getJson;
@@ -18,7 +19,7 @@ function makePublicContentEditor(): User
     (new SpatieRolePermissionSeeder)->run();
     (new UserSeeder)->run();
 
-    return User::where('email', 'admin@example.com')->firstOrFail();
+    return User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
 }
 
 function makeUnauthorizedUser(): User
@@ -64,7 +65,6 @@ test('admin sees can_manage true when reading public content', function () {
         ->assertOk()
         ->assertJsonPath('can_manage', true);
 });
-
 
 test('non-admin users see can_manage false when reading public content', function () {
     $this->seed(SpatieRolePermissionSeeder::class);
@@ -125,15 +125,15 @@ test('admin can save the online member registration service availability setting
             ],
             'notify_affected' => false,
         ]);
-        
+
     $response->assertStatus(202);
     $requestId = $response->json('request_id');
-    $request = \App\Models\PrivilegedActionRequest::findOrFail($requestId);
+    $request = PrivilegedActionRequest::findOrFail($requestId);
 
     $chairman = User::factory()->create(['email' => 'chairman3@example.com']);
     $chairman->assignRole('chairman');
     $chairman->givePermissionTo('oversight.approve');
-    app(\App\Services\CountersignService::class)->approve($request, $chairman);
+    app(CountersignService::class)->approve($request, $chairman);
 
     expect(
         (bool) SystemSetting::get('service_registration_member_enabled', true)

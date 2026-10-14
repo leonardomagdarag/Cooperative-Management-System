@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router';
 import { api } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
-import { getServiceAvailability, type ServiceAvailabilityData } from '../../api/settings';
+import { getServiceStatus, type ServiceAvailabilityData } from '../../api/settings';
 import DepositWizard from './DepositWizard';
 import WithdrawalWizard from './WithdrawalWizard';
 import LoanApplicationWizard from './LoanApplicationWizard';
@@ -63,8 +63,9 @@ export default function ServicesPage() {
 
     // Fetch service availability
     const { data: availabilityData } = useQuery({
-        queryKey: ['service-availability'],
-        queryFn: getServiceAvailability,
+        queryKey: ['service-status'],
+        queryFn: getServiceStatus,
+        refetchOnMount: 'always',
     });
     const availability = availabilityData?.data?.data as ServiceAvailabilityData | undefined;
 
@@ -505,7 +506,7 @@ export default function ServicesPage() {
                         />
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <ServiceCard
                             icon={
                                 <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">

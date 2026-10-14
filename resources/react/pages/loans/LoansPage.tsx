@@ -80,7 +80,7 @@ export default function LoansPage() {
 
     const disburseMutation = useMutation({
         mutationFn: (id: number) => api.post(`/api/loans/${id}/disburse`),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['loans'] }); queryClient.invalidateQueries({ queryKey: ['loan-detail', selectedLoanId] }); addToast('Loan disbursed', 'success'); },
+        onSuccess: () => { setConfirmState(s => ({ ...s, isOpen: false })); queryClient.invalidateQueries({ queryKey: ['loans'] }); queryClient.invalidateQueries({ queryKey: ['loan-detail', selectedLoanId] }); addToast('Loan disbursed', 'success'); },
         onError: (err: any) => addToast(err.response?.data?.message || 'Disbursement failed', 'error'),
     });
 
@@ -223,7 +223,7 @@ export default function LoansPage() {
                     </div>
                 ) : (
                     <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-xs">
-                        <table className="min-w-full divide-y divide-gray-200 table-fixed">
+                        <table className="min-w-[800px] w-full divide-y divide-gray-200 table-fixed">
                             <thead className="bg-gray-100">
                                 <tr>
                                     <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Loan #</th>
@@ -353,7 +353,7 @@ export default function LoansPage() {
                                     <InfoRow label="Status" value={<span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${getStatusColor(detail.loan_status)}`}>{detail.loan_status}</span>} />
                                     <InfoRow label="Applied" value={detail.applied_at || '—'} />
                                     <InfoRow label="Approved" value={detail.approved_at || '—'} />
-                                    <InfoRow label="Due Date" value={detail.due_date || '—'} />
+                                    <InfoRow label="Due Date" value={detail.due_date ? new Date(`${String(detail.due_date).slice(0, 10)}T00:00:00`).toLocaleDateString() : '—'} />
                                     <InfoRow label="Approved By" value={detail.approved_by?.name || '—'} />
                                 </div>
                             )}
@@ -362,24 +362,26 @@ export default function LoansPage() {
                             {activeTab === 'payments' && (
                                 <div>
                                     {detail?.payments?.length > 0 ? (
-                                        <table className="min-w-full divide-y divide-gray-200 rounded-lg border border-gray-200">
-                                            <thead className="bg-gray-50">
-                                                <tr>
-                                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                                                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
-                                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-100">
-                                                {detail.payments.map((p: any) => (
-                                                    <tr key={p.id}>
-                                                        <td className="px-3 py-2 text-sm text-gray-500">{p.payment_date || '—'}</td>
-                                                        <td className="px-3 py-2 text-sm text-right font-medium text-gray-900">₱{Number(p.amount).toLocaleString()}</td>
-                                                        <td className="px-3 py-2"><span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${p.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{p.status || 'completed'}</span></td>
+                                        <div className="overflow-x-auto rounded-lg border border-gray-200">
+                                            <table className="min-w-[450px] w-full divide-y divide-gray-200">
+                                                <thead className="bg-gray-50">
+                                                    <tr>
+                                                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                                                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
+                                                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                                                     </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100">
+                                                    {detail.payments.map((p: any) => (
+                                                        <tr key={p.id}>
+                                                            <td className="px-3 py-2 text-sm text-gray-500">{p.payment_date || '—'}</td>
+                                                            <td className="px-3 py-2 text-sm text-right font-medium text-gray-900">₱{Number(p.amount).toLocaleString()}</td>
+                                                            <td className="px-3 py-2"><span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${p.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{p.status || 'completed'}</span></td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     ) : (
                                         <div className="rounded-lg bg-gray-50 p-8 text-center text-sm text-gray-500">Payment history available in loan details view</div>
                                     )}
@@ -391,7 +393,7 @@ export default function LoansPage() {
                                 <div>
                                     {detail?.payment_schedule?.length > 0 ? (
                                         <div className="overflow-x-auto rounded-lg border border-gray-200">
-                                            <table className="min-w-full divide-y divide-gray-200">
+                                            <table className="min-w-[500px] w-full divide-y divide-gray-200">
                                                 <thead className="bg-gray-50">
                                                     <tr>
                                                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">#</th>

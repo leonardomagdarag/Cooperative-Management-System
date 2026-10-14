@@ -38,7 +38,7 @@ test('global login availability drives the public login route', function () {
         ->assertStatus(503)
         ->assertSee('Sign-in is temporarily unavailable');
 
-    post('/login', ['email' => 'admin@example.com', 'password' => 'password'])
+    post('/login', ['email' => 'leo.baluyot039+admin@gmail.com', 'password' => 'password'])
         ->assertStatus(503);
 
     seedAuthAvailability(['service_login_enabled' => true]);
@@ -58,7 +58,7 @@ test('member login is blocked when member login availability is disabled', funct
     seedAuthAvailability(['service_login_member_enabled' => false]);
 
     $response = postJson('/api/login', [
-        'email' => 'arjay.ramos@example.com',
+        'email' => 'leo.baluyot039+arjay.ramos@gmail.com',
         'password' => 'password',
     ]);
 
@@ -72,7 +72,7 @@ test('officer login is blocked when officer login availability is disabled', fun
     seedAuthAvailability(['service_login_officer_enabled' => false]);
 
     $response = postJson('/api/login', [
-        'email' => 'admin@example.com',
+        'email' => 'leo.baluyot039+admin@gmail.com',
         'password' => 'password',
     ]);
 
@@ -86,7 +86,7 @@ test('officer login still works when only member login availability is disabled'
     seedAuthAvailability(['service_login_member_enabled' => false]);
 
     $response = postJson('/api/login', [
-        'email' => 'admin@example.com',
+        'email' => 'leo.baluyot039+admin@gmail.com',
         'password' => 'password',
     ]);
 
@@ -98,7 +98,7 @@ test('member login still works when only officer login availability is disabled'
     seedAuthAvailability(['service_login_officer_enabled' => false]);
 
     $response = postJson('/api/login', [
-        'email' => 'arjay.ramos@example.com',
+        'email' => 'leo.baluyot039+arjay.ramos@gmail.com',
         'password' => 'password',
     ]);
 
@@ -129,6 +129,6 @@ test('seeded system setting defaults enable registration and login for everyone'
 });
 
 test('role users exist for the seeded auth availability tests', function () {
-    expect(User::where('email', 'arjay.ramos@example.com')->first())->not->toBeNull()
-        ->and(User::where('email', 'admin@example.com')->first())->not->toBeNull();
+    expect(User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->first())->not->toBeNull()
+        ->and(User::where('email', 'leo.baluyot039+admin@gmail.com')->first())->not->toBeNull();
 });

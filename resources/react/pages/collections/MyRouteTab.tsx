@@ -164,17 +164,9 @@ export default function MyRouteTab() {
                 addToast('success', 'Run submitted successfully');
                 fetchData();
             } catch (err: any) {
-                if (err.response?.status === 422 && err.response.data.message.includes('late')) {
-                    const reason = prompt('This run is late. Please provide a reason for the delay:');
-                    if (reason) {
-                        try {
-                            await api.post(`/api/collections/${activeRun.id}/submit`, { late_reason: reason });
-                            addToast('success', 'Late run submitted successfully');
-                            fetchData();
-                        } catch (e: any) {
-                            addToast('error', e.response?.data?.message || 'Failed to submit late run');
-                        }
-                    }
+                const message = String(err.response?.data?.message || '');
+                if (err.response?.status === 422 && /late|deadline/i.test(message)) {
+                    addToast('error', 'The submission deadline has passed. Contact a manager to submit this run on your behalf.');
                 } else {
                     addToast('error', err.response?.data?.message || 'Failed to submit run');
                 }

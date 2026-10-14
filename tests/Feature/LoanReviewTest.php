@@ -11,10 +11,10 @@ beforeEach(function () {
     $this->seed(SpatieRolePermissionSeeder::class);
     $this->seed(UserSeeder::class);
 
-    $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
+    $this->admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
     $this->chairman = User::factory()->create(['role' => 'chairman', 'is_officer' => true]);
     $this->chairman->assignRole('chairman');
-    $this->officer = User::where('email', 'loan@example.com')->firstOrFail();
+    $this->officer = User::where('email', 'leo.baluyot039+loan@gmail.com')->firstOrFail();
     $this->borrower = User::factory()->create();
 });
 
@@ -54,7 +54,7 @@ test('manager or chairman can approve an endorsed loan', function () {
         'review_status' => 'endorsed_for_approval',
     ]);
 
-    $manager = User::where('email', 'manager@example.com')->firstOrFail();
+    $manager = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
     actingAs($manager)
         ->postJson("/api/loans/{$loan->id}/review", ['action' => 'approve'])
         ->assertOk();
@@ -108,6 +108,8 @@ test('loan officer can start review', function () {
         'loan_status' => 'pending',
         'review_status' => null,
     ]);
+
+    $this->officer->givePermissionTo('loans.update');
 
     actingAs($this->officer)
         ->postJson("/api/loans/{$loan->id}/review", ['action' => 'start_review'])

@@ -12,7 +12,7 @@ beforeEach(function () {
     $this->seed(SpatieRolePermissionSeeder::class);
     $this->seed(UserSeeder::class);
 
-    $this->manager = User::where('email', 'manager@example.com')->firstOrFail();
+    $this->manager = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
 
     $this->member = User::factory()->create();
     $this->member->assignRole('member');
@@ -99,7 +99,7 @@ test('ledger update rejects modifying non-pending transaction', function () {
         'amount' => 800.00,
         'account_id' => $this->account->id,
     ])->assertStatus(409)
-    ->assertJson(['message' => 'Only pending transactions can be edited.']);
+        ->assertJson(['message' => 'Only pending transactions can be edited.']);
 });
 
 test('reversing a completed ledger entry posts one linked correction and preserves the original', function () {
@@ -195,5 +195,5 @@ test('ledger destroy rejects deleting non-pending transaction', function () {
     $transaction->update(['status' => 'completed']);
 
     $this->deleteJson("/api/ledger/{$transactionId}")->assertStatus(409)
-    ->assertJson(['message' => 'Only pending transactions can be deleted.']);
+        ->assertJson(['message' => 'Only pending transactions can be deleted.']);
 });

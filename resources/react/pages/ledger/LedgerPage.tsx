@@ -201,7 +201,7 @@ export default function LedgerPage() {
                     </div>
                 ) : (
                     <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-                        <table className="min-w-full divide-y divide-gray-200 table-fixed">
+                        <table className="min-w-[850px] w-full divide-y divide-gray-200 table-fixed">
                             <thead className="bg-gray-100">
                                 <tr>
                                     <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Txn #</th>
@@ -233,7 +233,7 @@ export default function LedgerPage() {
                                                         <button
                                                             onClick={async () => {
                                                                 try {
-                                                                    const res = await api.post(`/transactions/${t.id}/receipts/reprint`);
+                                                                    const res = await api.post(`/api/transactions/${t.id}/receipts/reprint`);
                                                                     addToast(res.data.message, 'success');
                                                                 } catch (err: any) {
                                                                     addToast(err.response?.data?.message || 'Failed to reprint', 'error');
@@ -250,7 +250,7 @@ export default function LedgerPage() {
                                                                     const note = prompt('Reason for certified reissue:');
                                                                     if (note) {
                                                                         try {
-                                                                            const res = await api.post(`/transactions/${t.id}/receipts/reissue`, { note });
+                                                                            const res = await api.post(`/api/transactions/${t.id}/receipts/reissue`, { note });
                                                                             addToast(res.data.message, 'success');
                                                                         } catch (err: any) {
                                                                             addToast(err.response?.data?.message || 'Failed to reissue', 'error');

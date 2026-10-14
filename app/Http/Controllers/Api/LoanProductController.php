@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\LoanProduct;
+use App\Services\AuditLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -66,6 +67,8 @@ class LoanProductController extends Controller
             'sort_order' => (int) $validated['sort_order'],
         ]);
 
+        app(AuditLogService::class)->log('settings.loan_product_created', 'Loan product created.', 'system_setting', $product, Auth::user(), ['product_code' => $product->code, 'product_name' => $product->name]);
+
         return response()->json(['message' => 'Loan product created.', 'data' => $product], 201);
     }
 
@@ -111,6 +114,8 @@ class LoanProductController extends Controller
             'sort_order' => (int) $validated['sort_order'],
         ]);
 
+        app(AuditLogService::class)->log('settings.loan_product_updated', 'Loan product updated.', 'system_setting', $loanProduct, Auth::user(), ['product_code' => $loanProduct->code, 'product_name' => $loanProduct->name]);
+
         return response()->json(['message' => 'Loan product updated.', 'data' => $loanProduct->fresh()]);
     }
 
@@ -119,6 +124,8 @@ class LoanProductController extends Controller
         abort_unless(Auth::user()?->can('settings.update'), 403);
 
         $loanProduct->update(['is_active' => ! $loanProduct->is_active]);
+
+        app(AuditLogService::class)->log('settings.loan_product_toggled', 'Loan product active state toggled.', 'system_setting', $loanProduct, Auth::user(), ['product_code' => $loanProduct->code, 'is_active' => $loanProduct->is_active]);
 
         return response()->json([
             'message' => $loanProduct->name.($loanProduct->fresh()->is_active ? ' enabled.' : ' disabled.'),
@@ -131,6 +138,8 @@ class LoanProductController extends Controller
         abort_unless(Auth::user()?->can('settings.update'), 403);
 
         $loanProduct->delete();
+
+        app(AuditLogService::class)->log('settings.loan_product_deleted', 'Loan product deleted.', 'system_setting', $loanProduct, Auth::user(), ['product_code' => $loanProduct->code, 'product_name' => $loanProduct->name]);
 
         return response()->json(['message' => 'Loan product deleted.']);
     }

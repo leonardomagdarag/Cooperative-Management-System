@@ -69,7 +69,18 @@ export default function ServiceAvailabilityPage() {
 
     const saveMutation = useMutation({
         mutationFn: (payload: { services: ServiceAvailabilityData; notify_affected: boolean }) => updateServiceAvailability(payload),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['service-availability'] }); setShowConfirm(false); setNotifyAffected(false); addToast('Service availability updated successfully.', 'success'); },
+        onSuccess: (response) => {
+            queryClient.invalidateQueries({ queryKey: ['service-availability'] });
+            setShowConfirm(false);
+            setNotifyAffected(false);
+            const requestId = response.data?.request_id;
+            addToast(
+                requestId
+                    ? `Service availability update requested and queued for countersign approval (Request #${requestId}).`
+                    : 'Service availability updated successfully.',
+                'success',
+            );
+        },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed to update service availability.', 'error'),
     });
 

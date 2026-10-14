@@ -7,8 +7,8 @@ use App\Jobs\SendEmailJob;
 use App\Mail\MemberWelcomeMail;
 use App\Models\Account;
 use App\Models\Address;
-use App\Models\Branch;
 use App\Models\Beneficiary;
+use App\Models\Branch;
 use App\Models\Contact;
 use App\Models\Employment;
 use App\Models\Expense;
@@ -18,6 +18,7 @@ use App\Models\PersonalData;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Services\CollectionRunService;
 use App\Services\CountersignService;
 use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
@@ -465,13 +466,8 @@ class MemberController extends Controller
 
             $isOfficer = ! empty($validated['role']);
 
-            app(AuditLogService::class)->log(
-                $isOfficer ? 'officer.created' : 'member.created',
-                $isOfficer ? 'New officer created.' : 'New member created.',
-                $isOfficer ? 'officer' : 'member',
-                $user,
-                Auth::user()
-            );
+            $submittedData = collect($validated)->except(['password', 'password_confirmation', 'otp_code', 'profile_photo', 'national_id_photo', 'tin_photo', 'sss_photo', 'philhealth_photo', 'barangay_id_photo', 'agreement_file'])->toArray();
+            app(AuditLogService::class)->log($isOfficer ? 'officer.created' : 'member.created', $isOfficer ? 'New officer created.' : 'New member created.', $isOfficer ? 'officer' : 'member', $user, Auth::user(), ['attributes' => $submittedData]);
 
             return $user;
         });
@@ -704,13 +700,8 @@ class MemberController extends Controller
 
             $isOfficer = ! empty($validated['role']) ? ($validated['role'] !== 'member') : (bool) $user->is_officer;
 
-            app(AuditLogService::class)->log(
-                $isOfficer ? 'officer.updated' : 'member.updated',
-                $isOfficer ? 'Officer profile updated.' : 'Member profile updated.',
-                $isOfficer ? 'officer' : 'member',
-                $user,
-                Auth::user()
-            );
+            $submittedData = collect($validated)->except(['password', 'password_confirmation', 'otp_code', 'profile_photo', 'national_id_photo', 'tin_photo', 'sss_photo', 'philhealth_photo', 'barangay_id_photo', 'agreement_file'])->toArray();
+            app(AuditLogService::class)->log($isOfficer ? 'officer.updated' : 'member.updated', $isOfficer ? 'Officer profile updated.' : 'Member profile updated.', $isOfficer ? 'officer' : 'member', $user, Auth::user(), ['attributes' => $submittedData]);
         });
 
         $emailChanged = $user->email !== $validated['email'];
@@ -793,7 +784,7 @@ class MemberController extends Controller
             Auth::user()
         );
         if ($user->can('collections.create')) {
-            app(\App\Services\CollectionRunService::class)->markDraftRunsOrphaned($user);
+            app(CollectionRunService::class)->markDraftRunsOrphaned($user);
         }
         $user->delete();
 

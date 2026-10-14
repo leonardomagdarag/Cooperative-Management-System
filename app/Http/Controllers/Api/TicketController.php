@@ -7,6 +7,7 @@ use App\Models\Ticket;
 use App\Models\TicketAttachment;
 use App\Models\TicketMessage;
 use App\Models\User;
+use App\Services\AuditLogService;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -178,6 +179,8 @@ class TicketController extends Controller
             // Log notification error gracefully
         }
 
+        app(AuditLogService::class)->log('ticket.created', 'Support ticket submitted.', 'ticket', $ticket, $user, ['subject' => $ticket->subject, 'category' => $ticket->category, 'priority' => $ticket->priority]);
+
         return response()->json([
             'message' => 'Ticket created successfully.',
             'data' => $this->serializeTicketDetail($ticket->fresh(['user.personalData', 'user.roles', 'messages.attachments']), $user),
@@ -276,6 +279,8 @@ class TicketController extends Controller
             }
         }
 
+        app(AuditLogService::class)->log('ticket.reply_added', 'Ticket reply added.', 'ticket', $ticket, $user, ['is_internal' => $isInternal]);
+
         return response()->json([
             'message' => 'Reply posted successfully.',
             'data' => $this->serializeMessage($message->fresh(['user.personalData', 'user.roles', 'attachments']), $user),
@@ -316,6 +321,8 @@ class TicketController extends Controller
             // Ignore
         }
 
+        app(AuditLogService::class)->log('ticket.status_updated', "Ticket status updated to {$newStatus}.", 'ticket', $ticket, $request->user(), ['old_status' => $oldStatus, 'new_status' => $newStatus]);
+
         return response()->json([
             'message' => "Ticket status updated to {$newStatus}.",
             'data' => [
@@ -342,6 +349,8 @@ class TicketController extends Controller
         $ticket->save();
 
         $assigneeName = $ticket->assignee ? $ticket->assignee->name : 'Unassigned';
+
+        app(AuditLogService::class)->log('ticket.assigned', "Ticket assigned to {$assigneeName}.", 'ticket', $ticket, $request->user(), ['assigned_to' => $ticket->assigned_to]);
 
         return response()->json([
             'message' => "Ticket assigned to {$assigneeName}.",

@@ -93,6 +93,7 @@ class LoanController extends Controller
                 'branch_name' => $l->branch?->name,
                 'review_status' => $l->review_status,
                 'review_status_label' => $l->review_status_label,
+                'reviewed_by' => $l->reviewed_by,
                 'interview_status' => $l->interview_status,
                 'interview_schedule' => $l->interview_schedule?->format('Y-m-d\TH:i'),
                 'review_notes' => $l->review_notes,
@@ -109,7 +110,7 @@ class LoanController extends Controller
                 'per_page' => $paginator->perPage(),
                 'total' => $paginator->total(),
             ],
-            'can_encode' => (bool) ($user && ($user->can('loans.encode') || $user->can('loans.create') || $user->hasRole('admin'))),
+            'can_encode' => (bool) ($user && ($user->can('loans.encode') || $user->hasRole('admin'))),
         ]);
     }
 
@@ -151,7 +152,7 @@ class LoanController extends Controller
             'payments' => $loan->completedPayments->map(fn ($p) => [
                 'id' => $p->id,
                 'amount' => $p->amount,
-                'payment_date' => $p->payment_date?->format('Y-m-d'),
+                'payment_date' => $p->transaction_date?->format('Y-m-d'),
                 'status' => $p->status,
             ]),
             'documents' => $loan->documents->map(fn ($d) => [

@@ -144,6 +144,9 @@ class AuthController extends Controller
 
     public function logout(Request $request): JsonResponse
     {
+        $user = $request->user('web');
+        $this->auditLogService->log('auth.logout', 'User logged out.', 'auth', $user, $user);
+
         Auth::guard('web')->logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
@@ -211,6 +214,7 @@ class AuthController extends Controller
             'email' => $user->email,
             'email_verified' => (bool) $user->hasVerifiedEmail(),
             'primary_role' => $user->primary_role,
+            'is_officer' => (bool) $user->is_officer,
             'account_status' => $user->account_status ?? 'active',
             'first_name' => $user->personalData?->first_name,
             'profile_completion_required' => $user->requiresProfileCompletion(),

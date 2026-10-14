@@ -152,7 +152,7 @@ export default function HistoryPage() {
                                             <button 
                                                 onClick={async () => {
                                                     try {
-                                                        const res = await (await import('../../api/client')).api.post(`/transactions/${t.id}/receipts/reprint`);
+                                                        const res = await (await import('../../api/client')).api.post(`/api/transactions/${t.id}/receipts/reprint`);
                                                         alert(res.data.message);
                                                     } catch (err: any) {
                                                         alert(err.response?.data?.message || 'Failed to reprint');

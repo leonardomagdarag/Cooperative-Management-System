@@ -11,9 +11,9 @@ beforeEach(function () {
     $this->seed(UserSeeder::class);
     $this->seed(SystemSettingSeeder::class);
 
-    $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
-    $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
-    $this->member = User::where('email', 'arjay.ramos@example.com')->firstOrFail();
+    $this->admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
+    $this->accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
+    $this->member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
 });
 
 test('F028-1: unauthenticated requests to announcement CRUD endpoints return 401', function () {

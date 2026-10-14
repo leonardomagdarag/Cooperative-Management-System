@@ -188,7 +188,7 @@ export default function MembersPage() {
                                     <p className="text-sm text-gray-500 mt-4">No members found</p>
                                 </div>
                             ) : (
-                                <table className="min-w-full divide-y divide-gray-200 table-fixed">
+                                <table className="min-w-[800px] w-full divide-y divide-gray-200 table-fixed">
                                     <thead className="bg-gray-100">
                                         <tr>
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-[24%]">Name</th>

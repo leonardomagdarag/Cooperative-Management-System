@@ -15,7 +15,7 @@ test.describe('4. Member Account, Profile, Notifications & Helpdesk', () => {
     await expect(page.locator('h2').first()).toBeVisible({ timeout: 10000 });
 
     // Verify presence of member name & email
-    await expect(page.locator('text=/arjay.ramos@example.com/i').first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('leo.baluyot039+arjay.ramos@gmail.com').first()).toBeVisible({ timeout: 10000 });
 
     // Switch between Profile tabs
     await page.locator('button:has-text("Contact & Address")').first().click();

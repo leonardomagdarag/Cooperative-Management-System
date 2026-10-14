@@ -10,7 +10,7 @@ beforeEach(function () {
     $this->seed(SpatieRolePermissionSeeder::class);
     $this->seed(UserSeeder::class);
 
-    $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
+    $this->admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
 
     $this->member = User::factory()->create([
         'profile_completion_required' => false,
@@ -45,9 +45,9 @@ test('admin can create a custom loan product and encode a loan against it', func
         ->assertJsonPath('data.code', 'calamity-relief')
         ->assertJsonPath('data.base_type', 'special');
 
-    // 2. Loan officer encodes loan for member referencing the custom product
-    $loanOfficer = User::where('email', 'loan@example.com')->firstOrFail();
-    $this->actingAs($loanOfficer);
+    // 2. An authorized encoder creates a loan referencing the custom product.
+    $this->admin->forceFill(['is_officer' => false])->save();
+    $this->actingAs($this->admin);
 
     $loanResponse = $this->postJson('/api/loans', [
         'user_id' => $this->member->id,
@@ -97,8 +97,7 @@ test('encoding loan rejects inactive custom loan product with 422', function () 
         'sort_order' => 99,
     ]);
 
-    $loanOfficer = User::where('email', 'loan@example.com')->firstOrFail();
-    $this->actingAs($loanOfficer);
+    $this->actingAs($this->admin);
 
     $this->postJson('/api/loans', [
         'user_id' => $this->member->id,

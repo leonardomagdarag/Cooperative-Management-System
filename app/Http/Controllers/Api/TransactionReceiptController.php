@@ -5,17 +5,19 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Transaction;
 use App\Models\TransactionReceipt;
-use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Auth;
+use App\Services\AuditLogService;
 use App\Support\BranchScope;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class TransactionReceiptController extends Controller
 {
     public function reprint(Request $request, Transaction $transaction): JsonResponse
     {
         $user = Auth::user();
-        abort_unless($user->can('transactions.view-all') || $user->can('transactions.view'), 403);
+        $isOwner = (int) $transaction->account?->user_id === (int) $user->id;
+        abort_unless($user->can('transactions.view-all') || $user->can('transactions.view') || $isOwner, 403);
         abort_unless(BranchScope::isUnrestricted($user) || (int) $transaction->branch_id === (int) $user->branch_id, 403);
         abort_unless($transaction->status === 'completed', 422, 'Cannot reprint uncompleted transaction');
 
@@ -26,7 +28,7 @@ class TransactionReceiptController extends Controller
             'issued_to_member_id' => $transaction->account?->user_id,
             'certified' => false,
         ]);
-        app(\App\Services\AuditLogService::class)->log('transaction.receipt_reprinted', 'Duplicate receipt issued.', 'transaction', $receipt, $user, ['transaction_id' => $transaction->id]);
+        app(AuditLogService::class)->log('transaction.receipt_reprinted', 'Duplicate receipt issued.', 'transaction', $receipt, $user, ['transaction_id' => $transaction->id]);
 
         return response()->json([
             'message' => 'Duplicate receipt generated.',
@@ -53,7 +55,7 @@ class TransactionReceiptController extends Controller
             'certified' => true,
             'note' => $validated['note'],
         ]);
-        app(\App\Services\AuditLogService::class)->log('transaction.receipt_reissued', 'Certified replacement receipt issued.', 'transaction', $receipt, $user, ['transaction_id' => $transaction->id, 'reason' => $validated['note']]);
+        app(AuditLogService::class)->log('transaction.receipt_reissued', 'Certified replacement receipt issued.', 'transaction', $receipt, $user, ['transaction_id' => $transaction->id, 'reason' => $validated['note']]);
 
         return response()->json([
             'message' => 'Certified receipt generated.',

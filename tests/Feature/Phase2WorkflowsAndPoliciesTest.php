@@ -15,24 +15,24 @@ beforeEach(function () {
     $this->seed(SpatieRolePermissionSeeder::class);
     $this->seed(UserSeeder::class);
 
-    $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
-    $this->manager = User::where('email', 'manager@example.com')->firstOrFail();
-    $this->loanOfficer = User::where('email', 'loan@example.com')->firstOrFail();
-    $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
-    $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
-    $this->member = User::where('email', 'arjay.ramos@example.com')->firstOrFail();
+    $this->admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
+    $this->manager = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
+    $this->loanOfficer = User::where('email', 'leo.baluyot039+loan@gmail.com')->firstOrFail();
+    $this->accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
+    $this->accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
+    $this->member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
 
     Storage::fake('local');
     Storage::fake('public');
 });
 
-test('loan officer can encode loan and sees can_encode true', function () {
+test('loan role cannot encode loans without loans.encode', function () {
     actingAs($this->loanOfficer);
 
     $indexResponse = $this->getJson('/api/loans')
         ->assertOk();
 
-    expect($indexResponse->json('can_encode'))->toBeTrue();
+    expect($indexResponse->json('can_encode'))->toBeFalse();
 
     $payload = [
         'user_id' => $this->member->id,
@@ -46,10 +46,7 @@ test('loan officer can encode loan and sees can_encode true', function () {
         'applied_at' => now()->toDateString(),
     ];
 
-    $response = $this->postJson('/api/loans', $payload)
-        ->assertStatus(201);
-
-    expect($response->json('data.loan_amount'))->toEqual(50000);
+    $this->postJson('/api/loans', $payload)->assertForbidden();
 });
 
 test('loan officer with loans.disburse can disburse approved loan', function () {
@@ -96,11 +93,19 @@ test('loan officer or borrower can upload loan document', function () {
 
     $file = UploadedFile::fake()->create('contract.pdf', 50, 'application/pdf');
 
-    // Loan officer upload
+    // Upload is permission-gated; the default loan preset lacks loans.update.
     actingAs($this->loanOfficer);
     $this->postJson("/api/loans/{$loan->id}/documents", [
         'document' => $file,
-    ])->assertStatus(201);
+    ])->assertForbidden();
+
+    // An officer explicitly granted loans.update can upload the document.
+    $authorizedOfficer = User::factory()->create(['account_status' => 'active', 'is_officer' => true]);
+    $authorizedOfficer->givePermissionTo('loans.update');
+    actingAs($authorizedOfficer);
+    $this->postJson("/api/loans/{$loan->id}/documents", [
+        'document' => UploadedFile::fake()->create('officer-note.pdf', 50, 'application/pdf'),
+    ])->assertCreated();
 
     // Borrower upload
     $file2 = UploadedFile::fake()->create('valid_id.pdf', 50, 'application/pdf');
@@ -132,9 +137,9 @@ test('ledger store, void, and export honor specific transaction permissions', fu
         ['balance' => 5000]
     );
 
-    // transactions.create allows manual ledger entry
+    // Manual deposit entries require both ledger and deposit creation rights.
     $clerk = User::factory()->create(['account_status' => 'active', 'is_officer' => true]);
-    $clerk->givePermissionTo('transactions.create');
+    $clerk->givePermissionTo(['transactions.create', 'deposits.create']);
 
     actingAs($clerk);
     $createResponse = $this->postJson('/api/ledger', [
@@ -152,7 +157,7 @@ test('ledger store, void, and export honor specific transaction permissions', fu
 
     // User with transactions.update can delete pending transaction
     $voider = User::factory()->create(['account_status' => 'active', 'is_officer' => true]);
-    $voider->givePermissionTo('transactions.update');
+    $voider->givePermissionTo(['transactions.update', 'deposits.create']);
 
     actingAs($voider);
     $this->deleteJson("/api/ledger/{$transaction->id}")

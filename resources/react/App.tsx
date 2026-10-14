@@ -111,7 +111,7 @@ function DashboardRouter() {
         'reports': { permission: 'reports.view' },
         'services': { permission: 'services.view' },
         'members': { permission: 'members.view' },
-        'collections': { multiPermission: ['collections.view-all', 'collections.view-own'] },
+        'collections': { multiPermission: ['collections.view-all', 'collections.view-own', 'collections.review', 'collections.approve'] },
     };
 
     const tabRedirects: Record<string, string> = {

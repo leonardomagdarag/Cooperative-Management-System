@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\User;
 use App\Models\PrivilegedActionRequest;
+use App\Models\User;
 use App\Services\CountersignService;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\UserSeeder;
@@ -13,9 +13,9 @@ beforeEach(function () {
     $this->seed(SpatieRolePermissionSeeder::class);
     $this->seed(UserSeeder::class);
 
-    $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
-    $this->manager = User::where('email', 'manager@example.com')->firstOrFail();
-    $this->member = User::where('email', 'arjay.ramos@example.com')->firstOrFail();
+    $this->admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
+    $this->manager = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
+    $this->member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
     $this->chairman = User::factory()->create(['role' => 'chairman', 'is_officer' => true]);
     $this->chairman->assignRole('chairman');
 });

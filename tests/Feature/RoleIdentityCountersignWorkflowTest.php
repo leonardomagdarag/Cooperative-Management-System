@@ -5,6 +5,7 @@ use App\Models\User;
 use App\Services\CountersignService;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Spatie\Permission\Models\Role;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 beforeEach(function () {
     $this->seed(SpatieRolePermissionSeeder::class);
@@ -69,7 +70,7 @@ test('a role assigned while deletion waits for approval is preserved', function 
     expect(fn () => app(CountersignService::class)->approve(
         PrivilegedActionRequest::findOrFail($delete->json('request_id')),
         $this->chairman,
-    ))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    ))->toThrow(HttpException::class);
 
     expect(Role::query()->where('name', 'late-assigned-role')->exists())->toBeTrue()
         ->and($target->fresh()->hasRole('late-assigned-role'))->toBeTrue()

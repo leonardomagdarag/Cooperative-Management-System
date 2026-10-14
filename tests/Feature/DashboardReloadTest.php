@@ -1,11 +1,9 @@
 <?php
 
 use App\Models\User;
+use Database\Seeders\SpatieRolePermissionSeeder;
 
 use function Pest\Laravel\actingAs;
-
-use Database\Seeders\SpatieRolePermissionSeeder;
-use Database\Seeders\UserSeeder;
 
 beforeEach(function () {
     $this->seed(SpatieRolePermissionSeeder::class);

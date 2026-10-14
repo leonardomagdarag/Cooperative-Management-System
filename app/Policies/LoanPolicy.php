@@ -26,7 +26,8 @@ class LoanPolicy
 
     public function encode(User $user): bool
     {
-        return $this->isOfficerUser($user) && $user->can('loans.encode');
+        return $user->hasRole('admin')
+            || ($this->isOfficerUser($user) && $user->can('loans.encode'));
     }
 
     public function update(User $user, Loan $loan): bool
@@ -97,6 +98,6 @@ class LoanPolicy
     private function isOfficerUser(User $user): bool
     {
         return (bool) (($user->is_officer ?? false)
-            || $user->hasAnyRole(PermissionCatalog::officerRoles()));
+            || $user->hasAnyRole(array_merge(PermissionCatalog::officerRoles(), ['admin'])));
     }
 }

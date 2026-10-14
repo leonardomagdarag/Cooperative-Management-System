@@ -11,7 +11,7 @@ test('report endpoints return paginated report data for admins', function () {
     $this->seed(SpatieRolePermissionSeeder::class);
     $this->seed(UserSeeder::class);
 
-    $admin = User::where('email', 'admin@example.com')->firstOrFail();
+    $admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
 
     $this->actingAs($admin)->getJson('/api/reports/options')
         ->assertOk()
@@ -57,7 +57,7 @@ test('financial report aggregates interest cash receipts and excludes rejected o
     $this->seed(SpatieRolePermissionSeeder::class);
     $this->seed(UserSeeder::class);
 
-    $admin = User::where('email', 'admin@example.com')->firstOrFail();
+    $admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
     $member = User::factory()->create();
     $member->assignRole('member');
 

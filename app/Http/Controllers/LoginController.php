@@ -563,4 +563,3 @@ class LoginController extends Controller
         return [$firstName, $lastName];
     }
 }
-

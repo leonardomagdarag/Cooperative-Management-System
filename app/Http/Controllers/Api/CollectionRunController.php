@@ -8,6 +8,7 @@ use App\Models\CollectionRunItem;
 use App\Models\Loan;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Services\AuditLogService;
 use App\Services\CollectionRunService;
 use App\Services\CountersignService;
 use App\Support\BranchScope;
@@ -151,7 +152,19 @@ class CollectionRunController extends Controller
     public function show(CollectionRun $run): JsonResponse
     {
         $user = Auth::user();
-        abort_unless($user->can('collections.view-all') || ($user->can('collections.view-own') && $run->loan_officer_id === $user->id), 403);
+        $stages = $run->stages_snapshot ?? [];
+        $currentStage = is_array($stages) ? ($stages[(int) $run->current_stage] ?? null) : null;
+        $canReviewCurrentStage = in_array($run->status, ['submitted', 'in_progress'], true)
+            && is_array($currentStage)
+            && ! empty($currentStage['permission'])
+            && $user->can($currentStage['permission']);
+
+        abort_unless(
+            $user->can('collections.view-all')
+                || ($user->can('collections.view-own') && (int) $run->loan_officer_id === (int) $user->id)
+                || $canReviewCurrentStage,
+            403,
+        );
         abort_unless(BranchScope::isUnrestricted($user) || (int) $run->branch_id === (int) $user->branch_id, 403);
 
         $run->load(['items.member.personalData', 'items.loan', 'items.account', 'loanOfficer.personalData', 'approvals.decidedBy.personalData']);
@@ -175,6 +188,12 @@ class CollectionRunController extends Controller
         ]);
 
         $item = $this->service->addItem($run, $validated);
+        app(AuditLogService::class)->log('collections.item_added', 'Collection item added to draft run.', 'collection_run', $run, $user, [
+            'item_id' => $item->id,
+            'member_id' => $item->member_id,
+            'loan_id' => $item->loan_id,
+            'amount' => $item->amount,
+        ]);
 
         return response()->json(['data' => $item], 201);
     }
@@ -187,6 +206,12 @@ class CollectionRunController extends Controller
         abort_unless($item->collection_run_id === $run->id, 422);
 
         $this->service->removeItem($item);
+        app(AuditLogService::class)->log('collections.item_removed', 'Collection item removed from draft run.', 'collection_run', $run, $user, [
+            'item_id' => $item->id,
+            'member_id' => $item->member_id,
+            'loan_id' => $item->loan_id,
+            'amount' => $item->amount,
+        ]);
 
         return response()->json(['message' => 'Item removed']);
     }
@@ -204,6 +229,11 @@ class CollectionRunController extends Controller
             'visited' => 'required|boolean',
         ]);
         $item = $this->service->updateItem($item, $validated);
+        app(AuditLogService::class)->log('collections.item_updated', 'Draft collection item updated.', 'collection_run', $run, $user, [
+            'item_id' => $item->id,
+            'amount' => $item->amount,
+            'visited' => $item->visited,
+        ]);
 
         return response()->json(['data' => $item, 'message' => 'Collection item updated.']);
     }
@@ -219,6 +249,12 @@ class CollectionRunController extends Controller
         ]);
 
         $run = $this->service->submitRun($run, $user, $validated['late_reason'] ?? null);
+        app(AuditLogService::class)->log('collections.run_submitted', 'Collection run submitted for approval.', 'collection_run', $run, $user, [
+            'run_number' => $run->run_number,
+            'item_count' => $run->item_count,
+            'total_amount' => $run->total_amount,
+            'is_late' => $run->is_late,
+        ]);
 
         return response()->json(['data' => $run, 'message' => 'Run submitted successfully']);
     }
@@ -308,6 +344,12 @@ class CollectionRunController extends Controller
         ]);
 
         $run = $this->service->approveStage($run, $user, $validated['action'], $validated['note'] ?? null);
+        app(AuditLogService::class)->log('collections.stage_decided', 'Collection approval stage decided.', 'collection_run', $run, $user, [
+            'action' => $validated['action'],
+            'stage' => $run->current_stage,
+            'status' => $run->status,
+            'note' => $validated['note'] ?? null,
+        ]);
 
         return response()->json(['data' => $run, 'message' => 'Stage '.$validated['action']]);
     }

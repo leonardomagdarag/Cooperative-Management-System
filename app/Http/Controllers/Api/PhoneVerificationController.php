@@ -97,4 +97,3 @@ class PhoneVerificationController extends Controller
         return response()->json(['message' => 'Phone number verified successfully.']);
     }
 }
-

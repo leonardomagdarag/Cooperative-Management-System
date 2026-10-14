@@ -7,6 +7,7 @@ use App\Models\Account;
 use App\Models\Loan;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\AuditLogService;
 use App\Services\SecurityOtpService;
 use App\Support\BranchScope;
 use App\Support\SearchFilter;
@@ -66,6 +67,8 @@ class LedgerController extends Controller
                 'id' => $t->id,
                 'transaction_number' => $t->transaction_number,
                 'transaction_type' => $t->transaction_type,
+                'account_id' => $t->account_id,
+                'loan_id' => $t->loan_id,
                 'reversal_of_id' => $t->reversal_of_id,
                 'reversal_of_transaction_number' => $t->reversalOf?->transaction_number,
                 'amount' => $t->amount,
@@ -196,9 +199,15 @@ class LedgerController extends Controller
         ]);
 
         $type = $validated['transaction_type'];
-        if ($type === 'deposit') abort_unless($user?->can('deposits.create'), 403, 'Missing deposits.create permission.');
-        if ($type === 'withdrawal') abort_unless($user?->can('withdrawals.create'), 403, 'Missing withdrawals.create permission.');
-        if (in_array($type, ['loan_payment', 'loan_disbursement'])) abort_unless($user?->can('loans.create') || $user?->can('loans.encode') || $user?->can('loans.update'), 403, 'Missing loan management permission.');
+        if ($type === 'deposit') {
+            abort_unless($user?->can('deposits.create'), 403, 'Missing deposits.create permission.');
+        }
+        if ($type === 'withdrawal') {
+            abort_unless($user?->can('withdrawals.create'), 403, 'Missing withdrawals.create permission.');
+        }
+        if (in_array($type, ['loan_payment', 'loan_disbursement'])) {
+            abort_unless($user?->can('loans.create') || $user?->can('loans.encode') || $user?->can('loans.update'), 403, 'Missing loan management permission.');
+        }
 
         $transaction = Transaction::create([
             'transaction_type' => $validated['transaction_type'],
@@ -234,9 +243,15 @@ class LedgerController extends Controller
         ]);
 
         $type = $validated['transaction_type'];
-        if ($type === 'deposit') abort_unless($user?->can('deposits.create') || $user?->can('deposits.approve'), 403, 'Missing deposits permission.');
-        if ($type === 'withdrawal') abort_unless($user?->can('withdrawals.create') || $user?->can('withdrawals.approve'), 403, 'Missing withdrawals permission.');
-        if (in_array($type, ['loan_payment', 'loan_disbursement'])) abort_unless($user?->can('loans.create') || $user?->can('loans.encode') || $user?->can('loans.update') || $user?->can('loans.approve'), 403, 'Missing loan management permission.');
+        if ($type === 'deposit') {
+            abort_unless($user?->can('deposits.create') || $user?->can('deposits.approve'), 403, 'Missing deposits permission.');
+        }
+        if ($type === 'withdrawal') {
+            abort_unless($user?->can('withdrawals.create') || $user?->can('withdrawals.approve'), 403, 'Missing withdrawals permission.');
+        }
+        if (in_array($type, ['loan_payment', 'loan_disbursement'])) {
+            abort_unless($user?->can('loans.create') || $user?->can('loans.encode') || $user?->can('loans.update') || $user?->can('loans.approve'), 403, 'Missing loan management permission.');
+        }
 
         $transaction->update([
             'transaction_type' => $validated['transaction_type'],
@@ -256,9 +271,15 @@ class LedgerController extends Controller
         abort_unless($user?->can('transactions.update'), 403);
 
         $type = $transaction->transaction_type;
-        if ($type === 'deposit') abort_unless($user?->can('deposits.create') || $user?->can('deposits.approve'), 403, 'Missing deposits permission.');
-        if ($type === 'withdrawal') abort_unless($user?->can('withdrawals.create') || $user?->can('withdrawals.approve'), 403, 'Missing withdrawals permission.');
-        if (in_array($type, ['loan_payment', 'loan_disbursement'])) abort_unless($user?->can('loans.create') || $user?->can('loans.encode') || $user?->can('loans.update') || $user?->can('loans.approve'), 403, 'Missing loan management permission.');
+        if ($type === 'deposit') {
+            abort_unless($user?->can('deposits.create') || $user?->can('deposits.approve'), 403, 'Missing deposits permission.');
+        }
+        if ($type === 'withdrawal') {
+            abort_unless($user?->can('withdrawals.create') || $user?->can('withdrawals.approve'), 403, 'Missing withdrawals permission.');
+        }
+        if (in_array($type, ['loan_payment', 'loan_disbursement'])) {
+            abort_unless($user?->can('loans.create') || $user?->can('loans.encode') || $user?->can('loans.update') || $user?->can('loans.approve'), 403, 'Missing loan management permission.');
+        }
 
         if ($transaction->status !== 'pending') {
             abort(409, 'Only pending transactions can be deleted.');
@@ -331,13 +352,13 @@ class LedgerController extends Controller
             ]);
 
             if ($transaction->loan_id && $transaction->transaction_type === 'loan_payment') {
-                $loan = \App\Models\Loan::whereKey($transaction->loan_id)->lockForUpdate()->firstOrFail();
+                $loan = Loan::whereKey($transaction->loan_id)->lockForUpdate()->firstOrFail();
                 if ($loan->loan_status === 'paid_off' && $loan->remainingBalance() > 0) {
                     $loan->update(['loan_status' => 'active']);
                 }
             }
 
-            app(\App\Services\AuditLogService::class)->log('transaction.reversed', 'Reversal entry posted.', 'transaction', $reversal, $user, ['reversal_of_id' => $transaction->id]);
+            app(AuditLogService::class)->log('transaction.reversed', 'Reversal entry posted.', 'transaction', $reversal, $user, ['reversal_of_id' => $transaction->id]);
 
             return $reversal;
         });

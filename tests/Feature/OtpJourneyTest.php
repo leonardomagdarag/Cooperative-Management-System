@@ -1,6 +1,5 @@
 <?php
 
-use App\Jobs\SendSmsJob;
 use App\Mail\EmailVerificationMail;
 use App\Mail\OtpCodeMail;
 use App\Models\User;
@@ -10,6 +9,7 @@ use Database\Seeders\SpatieRolePermissionSeeder;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 function otpJourneyCode(): string
 {
@@ -202,7 +202,7 @@ test('active database OTP challenge gates user even if session pending flag was 
         ->assertRedirect(route('otp.challenge.show'));
 });
 
-test('OTP SMS sends inline and queues only a failed delivery for retry', function () {
+test('OTP SMS sends successful deliveries inline without queueing them', function () {
     $user = User::factory()->create();
     $user->personalData->contact->forceFill([
         'phone_no' => '09761729700',
@@ -223,7 +223,7 @@ test('OTP SMS sends inline and queues only a failed delivery for retry', functio
     Queue::assertNothingPushed();
 });
 
-test('OTP SMS queues a retry after immediate delivery fails', function () {
+test('OTP SMS reports immediate delivery failure without queueing a stale code', function () {
     $user = User::factory()->create();
     $user->personalData->contact->forceFill([
         'phone_no' => '09761729700',
@@ -239,9 +239,10 @@ test('OTP SMS queues a retry after immediate delivery fails', function () {
     app()->instance(TextBeeService::class, $sms);
     Queue::fake();
 
-    app(SecurityOtpService::class)->sendOtpSms($user, 'new_device_login', '123456');
+    expect(fn () => app(SecurityOtpService::class)->sendOtpSms($user, 'new_device_login', '123456'))
+        ->toThrow(HttpException::class);
 
-    Queue::assertPushed(SendSmsJob::class, fn (SendSmsJob $job) => $job->phone === '09761729700');
+    Queue::assertNothingPushed();
 });
 
 test('verification SMS to an unverified phone number sends inline', function () {

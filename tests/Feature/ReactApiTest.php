@@ -70,12 +70,12 @@ test('seeded admin can access protected react api endpoints', function () {
     $this->seed(SpatieRolePermissionSeeder::class);
     $this->seed(UserSeeder::class);
 
-    $admin = User::where('email', 'admin@example.com')->firstOrFail();
+    $admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
 
     $this->actingAs($admin)
         ->getJson('/api/user')
         ->assertOk()
-        ->assertJsonPath('email', 'admin@example.com')
+        ->assertJsonPath('email', 'leo.baluyot039+admin@gmail.com')
         ->assertJsonPath('primary_role', 'admin');
 
     foreach ([

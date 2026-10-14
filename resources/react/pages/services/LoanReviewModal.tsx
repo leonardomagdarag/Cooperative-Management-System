@@ -48,6 +48,9 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
         (l: any) => l.review_status === null || l.review_status === 'under_review' || l.review_status === 'endorsed_for_approval',
     );
     const selectedLoan = selectedLoanId ? loans.find((l: any) => l.id === selectedLoanId) ?? null : null;
+    const isCurrentReviewer = selectedLoan && user
+        ? Number(selectedLoan.reviewed_by) === user.id
+        : false;
 
     const reviewMutation = useMutation({
         mutationFn: ({ loanId, action, notes }: { loanId: number; action: string; notes?: string }) =>
@@ -349,7 +352,7 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
 
                         {selectedLoan.review_status === 'endorsed_for_approval' && (
                             <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 shadow-sm">
-                                {canFinalApprove ? (
+                                {canFinalApprove && !isCurrentReviewer ? (
                                     <>
                                         <p className="text-sm text-blue-800 mb-4 font-medium">
                                             <i className="fas fa-star mr-1.5"></i>
@@ -384,6 +387,17 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
                                                 </button>
                                             </div>
                                         </div>
+                                    </>
+                                ) : isCurrentReviewer ? (
+                                    <>
+                                        <p className="text-sm text-blue-800 font-medium">
+                                            <i className="fas fa-user-shield mr-1.5"></i>
+                                            This application has been endorsed. Separation of duties requires a different authorized officer to issue final approval.
+                                        </p>
+                                        <button onClick={backToList}
+                                            className="mt-5 w-full py-2.5 bg-white border border-blue-300 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-50 transition-colors shadow-sm">
+                                            Back to List
+                                        </button>
                                     </>
                                 ) : (
                                     <>

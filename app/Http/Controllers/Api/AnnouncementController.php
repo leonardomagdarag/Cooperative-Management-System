@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Announcement;
+use App\Services\AuditLogService;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -133,6 +134,8 @@ class AnnouncementController extends Controller
             Log::error('Failed to send announcement notification', ['id' => $announcement->id, 'error' => $e->getMessage()]);
         }
 
+        app(AuditLogService::class)->log('announcements.created', 'Announcement published.', 'announcement', $announcement, $user, ['title' => $announcement->title, 'type' => $announcement->type]);
+
         return response()->json([
             'message' => 'Announcement created successfully.',
             'data' => $this->serialize($announcement),
@@ -177,6 +180,8 @@ class AnnouncementController extends Controller
             'event_location' => $validated['type'] === 'event' ? ($validated['event_location'] ?? null) : null,
         ]);
 
+        app(AuditLogService::class)->log('announcements.updated', 'Announcement updated.', 'announcement', $announcement, $user, ['title' => $announcement->title, 'type' => $announcement->type]);
+
         return response()->json([
             'message' => 'Announcement updated successfully.',
             'data' => $this->serialize($announcement),
@@ -189,6 +194,8 @@ class AnnouncementController extends Controller
         abort_unless($user->can('announcements.delete'), 403);
 
         $announcement->delete();
+
+        app(AuditLogService::class)->log('announcements.deleted', 'Announcement deleted.', 'announcement', $announcement, $user, ['title' => $announcement->title, 'type' => $announcement->type]);
 
         return response()->json(['message' => 'Announcement deleted successfully.']);
     }

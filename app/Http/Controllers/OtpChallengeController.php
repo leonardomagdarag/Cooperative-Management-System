@@ -141,4 +141,3 @@ class OtpChallengeController extends Controller
         return back()->with('success', 'A new verification code was sent to your mobile number.');
     }
 }
-

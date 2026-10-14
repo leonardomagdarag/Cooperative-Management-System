@@ -12,8 +12,8 @@ beforeEach(function () {
     $this->seed(SpatieRolePermissionSeeder::class);
     $this->seed(UserSeeder::class);
 
-    $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
-    $this->manager = User::where('email', 'manager@example.com')->firstOrFail();
+    $this->admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
+    $this->manager = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
 
     $this->main = Branch::where('code', 'BR000001')->firstOrFail();
     $this->office = Branch::where('code', 'BR000002')->firstOrFail();

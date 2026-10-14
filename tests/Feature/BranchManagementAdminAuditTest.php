@@ -12,8 +12,8 @@ beforeEach(function () {
     $this->seed(UserSeeder::class);
     $this->seed(SystemSettingSeeder::class);
 
-    $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
-    $this->member = User::where('email', 'arjay.ramos@example.com')->firstOrFail();
+    $this->admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
+    $this->member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
 
     $this->headOffice = Branch::where('code', 'BR000001')->firstOrFail();
     $this->subBranch = Branch::where('code', 'BR000002')->firstOrFail();

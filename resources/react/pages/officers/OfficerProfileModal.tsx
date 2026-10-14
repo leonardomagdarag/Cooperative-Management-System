@@ -78,7 +78,7 @@ export default function OfficerProfileModal({ officer, onClose, onEdit, onManage
                     </div>
 
                     <div className="border-b border-gray-200 bg-gray-50 shrink-0">
-                        <div className="flex space-x-1 px-6">
+                        <div className="flex space-x-1 px-4 sm:px-6 overflow-x-auto">
                             {TABS.map(tab => (
                                 <button
                                     key={tab.key}
@@ -116,7 +116,7 @@ export default function OfficerProfileModal({ officer, onClose, onEdit, onManage
 
                                 <div className="flex-1">
                                     <h5 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b-2 border-cyan-100">Personal Information</h5>
-                                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
                                         <InfoField label="Date of Birth" value={fmtDate(pd.birth_date)} />
                                         <InfoField label="Place of Birth" value={pd.birthplace} />
                                         <InfoField label="Gender" value={pd.gender ? pd.gender.charAt(0).toUpperCase() + pd.gender.slice(1) : 'N/A'} />
@@ -127,7 +127,7 @@ export default function OfficerProfileModal({ officer, onClose, onEdit, onManage
 
                                     <h5 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b-2 border-cyan-100 mt-6">Role & Permissions</h5>
                                     <div className="bg-gradient-to-r from-cyan-50 to-emerald-50 p-4 rounded-lg border border-cyan-200">
-                                        <div className="grid grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             <InfoField label="System Role" value={primaryRole.charAt(0).toUpperCase() + primaryRole.slice(1)} strong />
                                             <InfoField label="Position" value={pd.title ? pd.title.charAt(0).toUpperCase() + pd.title.slice(1) : 'N/A'} strong />
                                         </div>

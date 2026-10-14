@@ -1,7 +1,6 @@
 <?php
 
 use App\Models\SystemSetting;
-use App\Models\User;
 use App\Support\MaintenanceState;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\SystemSettingSeeder;
@@ -60,7 +59,7 @@ test('the api login endpoint honours the global switch', function () {
     // /api/login carries only ['web', 'throttle'], so EnsurePublicLoginEnabled
     // never ran for it and the global switch used to be advisory.
     $this->postJson('/api/login', [
-        'email' => 'admin@example.com',
+        'email' => 'leo.baluyot039+admin@gmail.com',
         'password' => 'password',
     ])
         ->assertStatus(403)
@@ -75,7 +74,7 @@ test('a member-only block names the audience and points at the page', function (
     SystemSetting::set('service_login_member_enabled', false);
 
     $this->postJson('/api/login', [
-        'email' => 'arjay.ramos@example.com',
+        'email' => 'leo.baluyot039+arjay.ramos@gmail.com',
         'password' => 'password',
     ])
         ->assertStatus(403)
@@ -93,7 +92,7 @@ test('officers are unaffected when only member login is disabled', function () {
     SystemSetting::set('service_login_member_enabled', false);
 
     $this->postJson('/api/login', [
-        'email' => 'admin@example.com',
+        'email' => 'leo.baluyot039+admin@gmail.com',
         'password' => 'password',
     ])->assertOk();
 
@@ -102,14 +101,14 @@ test('officers are unaffected when only member login is disabled', function () {
 
 test('re-enabling sign-in clears the recorded notice', function () {
     SystemSetting::set('service_login_member_enabled', false);
-    app(\App\Support\MaintenanceState::class)->syncLoginAvailability();
-    
+    app(MaintenanceState::class)->syncLoginAvailability();
+
     $this->get('/maintenance')->assertSee('Member sign-in is temporarily unavailable');
 
     SystemSetting::set('service_login_member_enabled', true);
-    app(\App\Support\MaintenanceState::class)->syncLoginAvailability();
+    app(MaintenanceState::class)->syncLoginAvailability();
 
-    expect(\App\Support\MaintenanceState::isActive())->toBeFalse();
+    expect(MaintenanceState::isActive())->toBeFalse();
 });
 
 test('maintenance mode serves the restore copy on every route', function () {

@@ -92,7 +92,7 @@ export default function ApprovalsQueueTab() {
                 </div>
             ) : (
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
+                    <table className="w-full min-w-[700px] text-left text-sm">
                         <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
                             <tr>
                                 <th className="p-3 font-semibold">Run Number</th>
@@ -112,7 +112,9 @@ export default function ApprovalsQueueTab() {
                                         {run.loan_officer?.personal_data?.first_name} {run.loan_officer?.personal_data?.last_name}
                                     </td>
                                     <td className="p-3">
-                                        {run.collection_date}
+                                        {run.collection_date
+                                            ? new Date(`${String(run.collection_date).slice(0, 10)}T00:00:00`).toLocaleDateString()
+                                            : '—'}
                                         {run.is_late ? <Badge variant="red" className="ml-2">Late</Badge> : null}
                                     </td>
                                     <td className="p-3">{run.item_count}</td>
@@ -138,7 +140,7 @@ export default function ApprovalsQueueTab() {
                 header={<ModalHeader title="Review Collection Run" onClose={() => { setSelectedRun(null); setSelectedIsStalled(false); }} />}
             >
                 <div className="p-6">
-                    <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
                         <div>
                             <div className="text-sm text-slate-500">Run Number</div>
                             <div className="font-mono font-bold text-slate-800">{selectedRun?.run_number}</div>

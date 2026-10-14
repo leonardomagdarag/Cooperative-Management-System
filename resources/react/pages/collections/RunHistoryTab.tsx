@@ -118,7 +118,7 @@ export default function RunHistoryTab({ canViewAll }: { canViewAll: boolean }) {
             ) : (
                 <>
                     <div className="overflow-x-auto border border-slate-200 rounded-lg mb-4">
-                        <table className="w-full text-left text-sm">
+                        <table className="w-full min-w-[700px] text-left text-sm">
                             <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
                                 <tr>
                                     <th className="p-3 font-semibold">Run Number</th>
@@ -139,7 +139,7 @@ export default function RunHistoryTab({ canViewAll }: { canViewAll: boolean }) {
                                                 {run.loan_officer?.personal_data?.first_name} {run.loan_officer?.personal_data?.last_name}
                                             </td>
                                         )}
-                                        <td className="p-3">{run.collection_date}</td>
+                                        <td className="p-3">{run.collection_date ? new Date(`${String(run.collection_date).slice(0, 10)}T00:00:00`).toLocaleDateString() : '—'}</td>
                                         <td className="p-3">{run.item_count}</td>
                                         <td className="p-3 font-medium">₱{parseFloat(run.total_amount).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                                         <td className="p-3">

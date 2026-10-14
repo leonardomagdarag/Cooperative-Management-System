@@ -22,6 +22,35 @@ use Illuminate\Validation\Rule;
 
 class ServiceController extends Controller
 {
+    public function availability(): JsonResponse
+    {
+        $user = Auth::user();
+        abort_unless($user, 403);
+
+        $services = ['deposit', 'withdrawal', 'loan_application', 'loan_payment'];
+        $result = [];
+
+        foreach ($services as $service) {
+            $flags = [
+                'global' => (bool) SystemSetting::get("service_{$service}_enabled", true),
+                'member' => (bool) SystemSetting::get("service_{$service}_member_enabled", true),
+                'officer' => (bool) SystemSetting::get("service_{$service}_officer_enabled", true),
+            ];
+
+            if (in_array($service, ['deposit', 'withdrawal', 'loan_payment'], true)) {
+                $flags['counter'] = (bool) SystemSetting::get("service_{$service}_counter_enabled", true);
+                $flags['online'] = (bool) SystemSetting::get("service_{$service}_online_enabled", true);
+                if ($service === 'withdrawal') {
+                    $flags['bank_transfer'] = (bool) SystemSetting::get('service_withdrawal_bank_transfer_enabled', true);
+                }
+            }
+
+            $result[$service] = $flags;
+        }
+
+        return response()->json(['data' => $result]);
+    }
+
     public function index(): JsonResponse
     {
         $user = Auth::user();
@@ -629,10 +658,10 @@ class ServiceController extends Controller
             $search = $request->query('search');
             $transactions->where(function ($q) use ($search) {
                 $q->whereHas('loan', fn ($l) => $l->where('loan_number', 'like', "%{$search}%"))
-                  ->orWhereHas('account.user.personalData', function ($p) use ($search) {
-                      $p->where('first_name', 'like', "%{$search}%")
-                        ->orWhere('last_name', 'like', "%{$search}%");
-                  });
+                    ->orWhereHas('account.user.personalData', function ($p) use ($search) {
+                        $p->where('first_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%");
+                    });
             });
         }
 
@@ -752,4 +781,3 @@ class ServiceController extends Controller
         return (int) $user->branch_id === (int) $targetBranchId;
     }
 }
-

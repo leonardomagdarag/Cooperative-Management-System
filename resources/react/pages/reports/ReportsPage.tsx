@@ -561,7 +561,7 @@ export default function ReportsPage() {
                     <div className="overflow-x-auto">
                         <div className="inline-block min-w-full align-middle">
                             <div className="overflow-hidden shadow">
-                                <table className="min-w-full divide-y divide-gray-200 table-fixed">
+                                <table className="min-w-[700px] w-full divide-y divide-gray-200 table-fixed">
                                     <thead className="bg-gray-100">
                                         <tr>
                                             <th scope="col" className={thCls}>Member</th>
@@ -597,7 +597,7 @@ export default function ReportsPage() {
                     <div className="overflow-x-auto">
                         <div className="inline-block min-w-full align-middle">
                             <div className="overflow-hidden shadow">
-                                <table className="min-w-full divide-y divide-gray-200 table-fixed">
+                                <table className="min-w-[850px] w-full divide-y divide-gray-200 table-fixed">
                                     <thead className="bg-gray-100">
                                         <tr>
                                             <th className={thCls}>Member</th>
@@ -676,7 +676,7 @@ export default function ReportsPage() {
                     <div className="overflow-x-auto">
                         <div className="inline-block min-w-full align-middle">
                             <div className="overflow-hidden shadow">
-                                <table className="min-w-full divide-y divide-gray-200 table-fixed">
+                                <table className="min-w-[650px] w-full divide-y divide-gray-200 table-fixed">
                                     <thead className="bg-gray-100">
                                         <tr>
                                             <th className={thCls}>Member</th>
@@ -713,7 +713,7 @@ export default function ReportsPage() {
                                 <h3 className="text-sm font-semibold text-gray-700">Pending Transactions</h3>
                             </div>
                             <div className="overflow-x-auto">
-                                <table className="min-w-full divide-y divide-gray-100">
+                                <table className="min-w-[650px] w-full divide-y divide-gray-100">
                                     <thead className="bg-gray-50">
                                         <tr>
                                             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Transaction #</th>

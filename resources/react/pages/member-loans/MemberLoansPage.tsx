@@ -79,10 +79,10 @@ export default function MemberLoansPage() {
                             ))}
                         </div>
 
-                        <div className="p-6 overflow-y-auto flex-1">
+                        <div className="p-4 sm:p-6 overflow-y-auto flex-1">
                             {tab === 'details' && (
                                 <div className="space-y-6">
-                                    <div className="grid grid-cols-3 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                         <div className="bg-linear-to-br from-emerald-700 to-teal-800 rounded-xl p-5 text-white shadow-xs"><p className="text-sm text-white/80">Loan Amount</p><p className="text-2xl font-bold">₱{Number(selected.loan_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p></div>
                                         <div className="bg-linear-to-br from-emerald-600 to-teal-600 rounded-xl p-5 text-white shadow-xs"><p className="text-sm text-white/80">Total Paid</p><p className="text-2xl font-bold">₱{Number(selected.total_paid).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p></div>
                                         <div className="bg-linear-to-br from-amber-600 to-orange-600 rounded-xl p-5 text-white shadow-xs"><p className="text-sm text-white/80">Balance Remaining</p><p className="text-2xl font-bold">₱{Number(selected.remaining_balance).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p></div>
@@ -130,7 +130,7 @@ export default function MemberLoansPage() {
                             {tab === 'schedule' && (
                                 <div className="overflow-x-auto">
                                     {selected.payment_schedule ? (
-                                        <table className="min-w-full text-sm"><thead className="bg-gray-50"><tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider"><th className="px-4 py-2">#</th><th className="px-4 py-2">Due Date</th><th className="px-4 py-2 text-right">Payment</th><th className="px-4 py-2 text-right">Principal</th><th className="px-4 py-2 text-right">Interest</th><th className="px-4 py-2 text-right">Balance</th></tr></thead>
+                                        <table className="min-w-[600px] w-full text-sm"><thead className="bg-gray-50"><tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider"><th className="px-4 py-2">#</th><th className="px-4 py-2">Due Date</th><th className="px-4 py-2 text-right">Payment</th><th className="px-4 py-2 text-right">Principal</th><th className="px-4 py-2 text-right">Interest</th><th className="px-4 py-2 text-right">Balance</th></tr></thead>
                                             <tbody className="divide-y divide-gray-100">
                                                 {selected.payment_schedule.map((s: any) => (
                                                     <tr key={s.period} className="hover:bg-gray-50"><td className="px-4 py-2">{s.period}</td><td className="px-4 py-2">{s.due_date || '—'}</td><td className="px-4 py-2 text-right font-medium">₱{Number(s.payment).toLocaleString()}</td><td className="px-4 py-2 text-right">₱{Number(s.principal).toLocaleString()}</td><td className="px-4 py-2 text-right text-gray-500">₱{Number(s.interest).toLocaleString()}</td><td className="px-4 py-2 text-right">{Number(s.balance) > 0 ? `₱${Number(s.balance).toLocaleString()}` : '—'}</td></tr>
@@ -146,7 +146,7 @@ export default function MemberLoansPage() {
                             {tab === 'history' && (
                                 <div className="overflow-x-auto">
                                     {selected.completed_payments && selected.completed_payments.length > 0 ? (
-                                        <table className="min-w-full text-sm"><thead className="bg-gray-50"><tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider"><th className="px-4 py-2">#</th><th className="px-4 py-2">Transaction #</th><th className="px-4 py-2 text-right">Amount</th><th className="px-4 py-2">Date</th><th className="px-4 py-2">Status</th></tr></thead>
+                                        <table className="min-w-[500px] w-full text-sm"><thead className="bg-gray-50"><tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider"><th className="px-4 py-2">#</th><th className="px-4 py-2">Transaction #</th><th className="px-4 py-2 text-right">Amount</th><th className="px-4 py-2">Date</th><th className="px-4 py-2">Status</th></tr></thead>
                                             <tbody className="divide-y divide-gray-100">
                                                 {selected.completed_payments.map((p: any) => (
                                                     <tr key={p.id} className="hover:bg-gray-50"><td className="px-4 py-2">{p.payment_number}</td><td className="px-4 py-2 font-mono text-xs truncate max-w-[220px]" title={p.transaction_number}>{p.transaction_number}</td><td className="px-4 py-2 text-right font-medium">₱{Number(p.amount).toLocaleString()}</td><td className="px-4 py-2 text-gray-500">{p.payment_date}</td><td className="px-4 py-2"><span className="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">{p.status}</span></td></tr>

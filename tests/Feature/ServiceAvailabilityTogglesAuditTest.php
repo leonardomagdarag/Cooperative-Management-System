@@ -4,9 +4,11 @@ use App\Models\Account;
 use App\Models\Branch;
 use App\Models\Loan;
 use App\Models\Notification;
+use App\Models\PrivilegedActionRequest;
 use App\Models\SystemSetting;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\CountersignService;
 use Database\Seeders\AccountSeeder;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\SystemSettingSeeder;
@@ -20,10 +22,10 @@ beforeEach(function () {
     $this->seed(UserSeeder::class);
     $this->seed(AccountSeeder::class);
 
-    $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
-    $this->manager = User::where('email', 'manager@example.com')->firstOrFail();
-    $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
-    $this->member = User::where('email', 'arjay.ramos@example.com')->firstOrFail();
+    $this->admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
+    $this->manager = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
+    $this->accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
+    $this->member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
 
     $this->mainBranch = Branch::where('code', 'BR000001')->firstOrFail();
     $this->account = Account::where('user_id', $this->member->id)->where('account_type', 'savings')->firstOrFail();
@@ -48,8 +50,8 @@ test('F020-3: users with settings.update can access service availability and req
     $this->getJson('/api/settings/service-availability')->assertOk();
     $this->putJson('/api/settings/service-availability', [
         'services' => [
-            'deposit' => ['global' => true]
-        ]
+            'deposit' => ['global' => true],
+        ],
     ])->assertStatus(202);
 });
 
@@ -204,14 +206,14 @@ test('F020-10: notify_affected dispatches notifications when services become new
 
     $response->assertStatus(202);
     $requestId = $response->json('request_id');
-    $request = \App\Models\PrivilegedActionRequest::findOrFail($requestId);
+    $request = PrivilegedActionRequest::findOrFail($requestId);
 
     // Simulate chairman approval
     $chairman = User::factory()->create(['email' => 'chairman@example.com']);
     $chairman->assignRole('chairman');
     $chairman->givePermissionTo('oversight.approve');
-    
-    $countersignService = app(\App\Services\CountersignService::class);
+
+    $countersignService = app(CountersignService::class);
     $countersignService->approve($request, $chairman);
 
     // Check notifications were created for active members

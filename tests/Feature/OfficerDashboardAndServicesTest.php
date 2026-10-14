@@ -14,10 +14,10 @@ beforeEach(function () {
     $this->seed(AccountSeeder::class);
 
     // Officers (seeded by UserSeeder)
-    $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
-    $this->manager = User::where('email', 'manager@example.com')->firstOrFail();
-    $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
-    $this->loan = User::where('email', 'loan@example.com')->firstOrFail();
+    $this->admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
+    $this->manager = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
+    $this->accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
+    $this->loan = User::where('email', 'leo.baluyot039+loan@gmail.com')->firstOrFail();
 
     // Branches
     $this->mainBranch = Branch::where('code', 'BR000001')->firstOrFail();
@@ -134,8 +134,6 @@ test('F015-4: GET /api/dashboard returns treasurer overview for accountant role'
             'month_withdrawals',
         ]);
 });
-
-
 
 // ---------------------------------------------------------------------------
 // F015-6: Loan officer dashboard

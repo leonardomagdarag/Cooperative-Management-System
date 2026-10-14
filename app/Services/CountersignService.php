@@ -3,12 +3,15 @@
 namespace App\Services;
 
 use App\Http\Controllers\Api\MemberController;
-use App\Models\PrivilegedActionRequest;
+use App\Http\Controllers\Api\SettingsController;
+use App\Models\Notification;
 use App\Models\OfficerPermissionOverride;
+use App\Models\PrivilegedActionRequest;
 use App\Models\SystemSetting;
 use App\Models\User;
-use App\Services\NotificationService;
 use App\Support\MaintenanceState;
+use App\Support\PermissionCatalog;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -40,7 +43,7 @@ class CountersignService
             ->where('account_status', 'active')
             ->get();
         foreach ($approvers as $approver) {
-            \App\Models\Notification::query()->create([
+            Notification::query()->create([
                 'user_id' => $approver->id,
                 'type' => 'security_alert',
                 'title' => 'Privileged action needs approval',
@@ -93,11 +96,11 @@ class CountersignService
         $claimed = PrivilegedActionRequest::query()->whereKey($request->id)
             ->where('status', 'pending')->where('expires_at', '>', now())
             ->update([
-            'status' => 'approved',
-            'decided_by' => $decider->id,
-            'decided_at' => now(),
-            'otp_verified_at' => now(),
-        ]);
+                'status' => 'approved',
+                'decided_by' => $decider->id,
+                'decided_at' => now(),
+                'otp_verified_at' => now(),
+            ]);
         abort_unless($claimed, 409, 'This request is no longer pending.');
         $request->refresh();
 
@@ -121,11 +124,11 @@ class CountersignService
         $claimed = PrivilegedActionRequest::query()->whereKey($request->id)
             ->where('status', 'pending')->where('expires_at', '>', now())
             ->update([
-            'status' => 'rejected',
-            'decided_by' => $decider->id,
-            'decided_at' => now(),
-            'decision_note' => $note,
-        ]);
+                'status' => 'rejected',
+                'decided_by' => $decider->id,
+                'decided_at' => now(),
+                'decision_note' => $note,
+            ]);
         abort_unless($claimed, 409, 'This request is no longer pending.');
         $request->refresh();
 
@@ -261,6 +264,7 @@ class CountersignService
                 } else {
                     $user->update(['account_status' => 'active']);
                 }
+
                 return ['status' => 'success', 'user_id' => $user->id];
 
             case 'admin.delete':
@@ -294,6 +298,7 @@ class CountersignService
                     'account_status' => ($payload['activate'] ?? false) ? 'active' : $user->account_status,
                 ]);
                 app(PermissionRegistrar::class)->forgetCachedPermissions();
+
                 return ['status' => 'success', 'roles' => $payload['roles']];
 
             case 'permissions.update':
@@ -310,7 +315,7 @@ class CountersignService
                 abort_unless(is_array($overrides), 422, 'Permission overrides are invalid.');
                 foreach ($overrides as $permission => $effect) {
                     abort_unless(
-                        in_array($permission, \App\Support\PermissionCatalog::allPermissions(), true)
+                        in_array($permission, PermissionCatalog::allPermissions(), true)
                             && in_array($effect, [OfficerPermissionOverride::EFFECT_ALLOW, OfficerPermissionOverride::EFFECT_DISALLOW], true),
                         422,
                         'An override contains an invalid permission or effect.'
@@ -337,6 +342,7 @@ class CountersignService
                 $role = Role::create(['name' => $payload['role'], 'guard_name' => 'web']);
                 $role->syncPermissions($payload['permissions']);
                 app(PermissionRegistrar::class)->forgetCachedPermissions();
+
                 return ['status' => 'success', 'role' => $role->name];
 
             case 'role.rename':
@@ -344,18 +350,20 @@ class CountersignService
                 abort_unless(is_string($payload['new_name'] ?? null) && $payload['new_name'] !== '', 422, 'Invalid role name.');
                 abort_if(Role::query()->where('name', $payload['new_name'])->where('guard_name', 'web')->exists(), 409, 'Role name already exists.');
                 abort_if(User::withTrashed()->role($role->name)->exists(), 409, 'Role is assigned to a user and cannot be renamed.');
-                abort_if(in_array($role->name, array_keys(\App\Support\PermissionCatalog::rolePresets()), true), 422, 'Base roles cannot be renamed.');
+                abort_if(in_array($role->name, array_keys(PermissionCatalog::rolePresets()), true), 422, 'Base roles cannot be renamed.');
                 abort_if(in_array($payload['new_name'], ['admin', 'chairman', 'developer', 'member', 'inactive', 'terminated'], true), 422, 'Reserved role name.');
                 $role->update(['name' => $payload['new_name']]);
                 app(PermissionRegistrar::class)->forgetCachedPermissions();
+
                 return ['status' => 'success', 'role' => $payload['new_name']];
 
             case 'role.delete':
                 $role = Role::query()->where('name', $payload['role'] ?? null)->where('guard_name', 'web')->firstOrFail();
-                abort_if(in_array($role->name, array_keys(\App\Support\PermissionCatalog::rolePresets()), true), 422, 'Base roles cannot be deleted.');
+                abort_if(in_array($role->name, array_keys(PermissionCatalog::rolePresets()), true), 422, 'Base roles cannot be deleted.');
                 abort_if(User::withTrashed()->role($role->name)->exists(), 409, 'Role is assigned to a user and cannot be deleted.');
                 $role->delete();
                 app(PermissionRegistrar::class)->forgetCachedPermissions();
+
                 return ['status' => 'success', 'role' => $payload['role']];
 
             case 'backup.restore':
@@ -380,13 +388,13 @@ class CountersignService
 
             case 'settings.update':
                 foreach ($payload['settings'] as $key => $value) {
-                    \App\Models\SystemSetting::set($key, $value);
+                    SystemSetting::set($key, $value);
                 }
                 if ($payload['sync_login'] ?? false) {
-                    \App\Support\MaintenanceState::syncLoginAvailability();
+                    MaintenanceState::syncLoginAvailability();
                 }
                 if (($payload['notify_affected'] ?? false) && isset($payload['services'])) {
-                    app(\App\Http\Controllers\Api\SettingsController::class)->notifyAffectedUsers($payload['services']);
+                    app(SettingsController::class)->notifyAffectedUsers($payload['services']);
                 }
 
                 return ['status' => 'success', 'updated_keys' => array_keys($payload['settings'])];
@@ -471,6 +479,35 @@ class CountersignService
 
         $line = json_encode($entry)."\n";
         Storage::disk('local')->append($logPath, trim($line));
+
+        if (class_exists(AuditLogService::class)) {
+            $actorId = match ($event) {
+                'requested' => $request->requested_by,
+                'approved', 'rejected', 'reconciled_executed', 'reconciled_failed' => $request->decided_by,
+                default => null,
+            };
+            $actor = $actorId ? User::find($actorId) : null;
+
+            $description = match ($event) {
+                'requested' => "Privileged action '{$request->action_type}' requested.",
+                'approved' => "Privileged action '{$request->action_type}' approved.",
+                'rejected' => "Privileged action '{$request->action_type}' rejected.",
+                'executed' => "Privileged action '{$request->action_type}' executed successfully.",
+                'failed' => "Privileged action '{$request->action_type}' failed to execute.",
+                'reconciled_executed' => "Privileged action '{$request->action_type}' reconciled as executed.",
+                'reconciled_failed' => "Privileged action '{$request->action_type}' reconciled as failed.",
+                default => "Privileged action '{$request->action_type}' state changed to {$event}.",
+            };
+
+            app(AuditLogService::class)->log(
+                "oversight.{$event}",
+                $description,
+                'oversight',
+                $request,
+                $actor ?? Auth::user(),
+                ['action_type' => $request->action_type, 'payload' => $request->payload]
+            );
+        }
 
         if ($request->action_type === 'backup.restore' && $event === 'approved') {
             // Best effort B2 sync

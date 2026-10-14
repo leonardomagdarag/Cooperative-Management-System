@@ -100,13 +100,13 @@ export default function BranchesPage() {
     };
 
     return (
-        <div className="max-w-7xl mx-auto p-6">
-            <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <div className="max-w-7xl mx-auto p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Branches</h1>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Branches</h1>
                     <p className="text-sm text-gray-500">Manage cooperative offices and branch affiliations</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
                     <input
                         value={search}
                         onChange={e => setSearch(e.target.value)}

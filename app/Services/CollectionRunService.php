@@ -36,13 +36,24 @@ class CollectionRunService
             // run_number could be CR-YYYYMMDD-USERID-RANDOM
             $runNumber = 'CR-'.Carbon::parse($date)->format('Ymd').'-'.$officer->id.'-'.strtoupper(Str::random(4));
 
-            return CollectionRun::create([
+            $run = CollectionRun::create([
                 'run_number' => $runNumber,
                 'loan_officer_id' => $officer->id,
                 'collection_date' => $date,
                 'branch_id' => $branchId ?? $officer->branch_id,
                 'status' => 'draft',
             ]);
+
+            app(AuditLogService::class)->log(
+                'collections.run_created',
+                'Collection run created.',
+                'collection_run',
+                $run,
+                $officer,
+                ['run_number' => $run->run_number],
+            );
+
+            return $run;
         });
     }
 

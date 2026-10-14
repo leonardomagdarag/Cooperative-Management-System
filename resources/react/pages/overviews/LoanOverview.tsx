@@ -70,7 +70,7 @@ export default function LoanOverview() {
                 )}
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className={`bg-white rounded-2xl shadow-sm border p-5 ${pending > 0 ? 'border-amber-200' : 'border-gray-100'}`}>
                     <div className="flex items-center justify-between mb-3">
                         <div className={`w-10 h-10 ${pending > 0 ? 'bg-amber-50' : 'bg-gray-50'} rounded-xl flex items-center justify-center`}>
@@ -130,7 +130,7 @@ export default function LoanOverview() {
                         </div>
                         <div className="overflow-x-auto">
                             {pendingLoans.length > 0 ? (
-                                <table className="min-w-full text-sm">
+                                <table className="min-w-[500px] w-full text-sm">
                                     <thead><tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100"><th className="px-6 py-3">Member</th><th className="px-6 py-3">Product</th><th className="px-6 py-3">Amount</th><th className="px-6 py-3">Applied</th></tr></thead>
                                     <tbody className="divide-y divide-gray-50">
                                         {pendingLoans.map((l: any) => (

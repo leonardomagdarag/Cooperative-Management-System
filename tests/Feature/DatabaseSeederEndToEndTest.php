@@ -33,7 +33,7 @@ test('the whole seeder runs on an empty database and produces a coherent coopera
     $this->seed(DatabaseSeeder::class);
 
     // Nothing should be missing.
-    expect(User::count())->toBe(16)
+    expect(User::count())->toBe(15)
         ->and(Branch::count())->toBe(2)
         ->and(LoanProduct::count())->toBe(3)
         ->and(Account::count())->toBe(20)

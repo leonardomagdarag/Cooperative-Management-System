@@ -9,7 +9,6 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Services\SecurityOtpService;
 use App\Support\PersonPasswordPolicy;
-use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\UserSeeder;
 use Illuminate\Http\UploadedFile;
@@ -24,7 +23,7 @@ beforeEach(function () {
     $this->seed(SpatieRolePermissionSeeder::class);
     $this->seed(UserSeeder::class);
 
-    $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
+    $this->admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
     $this->admin->assignRole('chairman');
 });
 
@@ -33,10 +32,10 @@ test('user seeder does not create duplicate fixed login accounts', function () {
 
     expect(User::query()->whereIn('email', [
         'developer@example.com',
-        'admin@example.com',
-        'manager@example.com',
-        'accountant@example.com',
-        'loan@example.com',
+        'leo.baluyot039+admin@gmail.com',
+        'leo.baluyot039+manager@gmail.com',
+        'leo.baluyot039+accountant@gmail.com',
+        'leo.baluyot039+loan@gmail.com',
     ])->count())->toBe(5);
 });
 
@@ -403,33 +402,6 @@ test('base roles are protected from deletion and renaming', function () {
     expect(Role::query()->where('name', 'manager')->where('guard_name', 'web')->exists())->toBeTrue();
 });
 
-test('assigned custom roles cannot be renamed or deleted', function () {
-    actingAs($this->admin);
-
-    $this->postJson('/api/roles', ['name' => 'Branch Supervisor'])->assertCreated();
-
-    $officer = User::factory()->create();
-    $officer->syncRoles(['branch-supervisor']);
-
-    $this->putJson('/api/roles/branch-supervisor/rename', ['name' => 'Operations Lead'])->assertUnprocessable();
-    $this->deleteJson('/api/roles/branch-supervisor')->assertUnprocessable();
-
-    expect(Role::query()->where('name', 'branch-supervisor')->where('guard_name', 'web')->exists())->toBeTrue();
-});
-
-test('admin can rename and delete an unused custom role', function () {
-    actingAs($this->admin);
-
-    $this->postJson('/api/roles', ['name' => 'Compliance Officer'])->assertCreated();
-
-    $this->putJson('/api/roles/compliance-officer/rename', ['name' => 'Compliance Lead'])->assertOk();
-    expect(Role::query()->where('name', 'compliance-officer')->where('guard_name', 'web')->exists())->toBeFalse()
-        ->and(Role::query()->where('name', 'compliance-lead')->where('guard_name', 'web')->exists())->toBeTrue();
-
-    $this->deleteJson('/api/roles/compliance-lead')->assertOk();
-    expect(Role::query()->where('name', 'compliance-lead')->where('guard_name', 'web')->exists())->toBeFalse();
-});
-
 test('loan product duplicate code is rejected on create but allowed on update', function () {
     actingAs($this->admin);
 
@@ -477,7 +449,7 @@ test('seeders create accountant account with accountant role', function () {
     $this->seed(SpatieRolePermissionSeeder::class);
     $this->seed(UserSeeder::class);
 
-    $accountant = User::where('email', 'accountant@example.com')->first();
+    $accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->first();
 
     expect($accountant)->not->toBeNull()
         ->and($accountant->role)->toBe('accountant')

@@ -143,7 +143,7 @@ export default function OfficerPermissionModal({ officer, onClose }: { officer: 
                     </div>
                 )}
 
-                <div className="grid shrink-0 grid-cols-4 gap-2 border-b border-gray-100 bg-gray-50/50 px-6 py-4">
+                <div className="grid shrink-0 grid-cols-2 sm:grid-cols-4 gap-2 border-b border-gray-100 bg-gray-50/50 px-4 sm:px-6 py-3 sm:py-4">
                     <StatCard label="Role" value={rolePermissions.length} className="border-gray-200 bg-white text-gray-900" />
                     <StatCard label="Total" value={counts.total} className="border-blue-200 bg-blue-50 text-blue-800" />
                     <StatCard label="Allows" value={counts.allow} className="border-emerald-200 bg-emerald-50 text-emerald-700" />

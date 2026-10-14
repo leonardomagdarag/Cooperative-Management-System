@@ -100,6 +100,6 @@ test('non-admin users with settings.update permission CAN access SMS configurati
     // Let's just assert it doesn't return 403 Forbidden.
     $response = $this->actingAs($officer)
         ->postJson('/api/settings/sms/test', ['phone_number' => '09761729700']);
-        
+
     expect($response->status())->not->toBe(403);
 });

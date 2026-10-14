@@ -16,7 +16,8 @@ beforeEach(function () {
 });
 
 test('loan document upload stores file on private local disk and not public disk', function () {
-    $loanOfficer = User::where('email', 'loan@example.com')->firstOrFail();
+    $loanOfficer = User::where('email', 'leo.baluyot039+loan@gmail.com')->firstOrFail();
+    $loanOfficer->givePermissionTo('loans.update');
     $borrower = User::factory()->create();
     $borrower->assignRole('member');
 
@@ -119,7 +120,7 @@ test('another member cannot download a borrower loan document', function () {
 });
 
 test('officer with loans.view permission can download borrower loan document', function () {
-    $admin = User::where('email', 'admin@example.com')->firstOrFail();
+    $admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
     $borrower = User::factory()->create();
     $borrower->assignRole('member');
 

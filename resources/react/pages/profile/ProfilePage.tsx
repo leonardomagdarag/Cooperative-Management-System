@@ -171,7 +171,7 @@ export default function ProfilePage() {
                                 <h3 className="font-semibold text-gray-900">Personal Information</h3>
                                 <button onClick={() => setEditModal('personal')} className="text-sm font-medium text-emerald-600 hover:text-emerald-700"><i className="fas fa-edit mr-1"></i>Edit</button>
                             </div>
-                            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                                 <InfoCard label="First Name" value={personal_data?.first_name || '\u2014'} />
                                 <InfoCard label="Middle Name" value={personal_data?.mid_name || '\u2014'} />
                                 <InfoCard label="Last Name" value={personal_data?.last_name || '\u2014'} />
@@ -190,7 +190,7 @@ export default function ProfilePage() {
                                 <h3 className="font-semibold text-gray-900">Government IDs</h3>
                                 <button onClick={() => setEditModal('ids')} className="text-sm font-medium text-emerald-600 hover:text-emerald-700"><i className="fas fa-edit mr-1"></i>Edit</button>
                             </div>
-                            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                                 <InfoCard label="National ID" value={member_id?.national_id || '\u2014'} />
                                 <InfoCard label="TIN" value={member_id?.tin || '\u2014'} />
                                 <InfoCard label="SSS" value={member_id?.sss || '\u2014'} />
@@ -207,7 +207,7 @@ export default function ProfilePage() {
                                 <h3 className="font-semibold text-gray-900">Contact Information</h3>
                                 <button onClick={() => setEditModal('contact')} className="text-sm font-medium text-emerald-600 hover:text-emerald-700"><i className="fas fa-edit mr-1"></i>Edit</button>
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <InfoCard label="Phone" value={contact?.phone_no || '\u2014'} />
                                 <InfoCard label="Email" value={contact?.email || user.email} />
                                 <InfoCard label="Facebook" value={contact?.facebook || '\u2014'} />
@@ -219,7 +219,7 @@ export default function ProfilePage() {
                                 <h3 className="font-semibold text-gray-900">Address</h3>
                                 <button onClick={() => setEditModal('address')} className="text-sm font-medium text-emerald-600 hover:text-emerald-700"><i className="fas fa-edit mr-1"></i>Edit</button>
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <InfoCard label="Country" value={address?.country || '\u2014'} />
                                 <InfoCard label="Region" value={address?.region || '\u2014'} />
                                 <InfoCard label="Province" value={address?.province || '\u2014'} />
@@ -238,7 +238,7 @@ export default function ProfilePage() {
                             <h3 className="font-semibold text-gray-900">Employment Information</h3>
                             <button onClick={() => setEditModal('employment')} className="text-sm font-medium text-emerald-600 hover:text-emerald-700"><i className="fas fa-edit mr-1"></i>Edit</button>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <InfoCard label="Employment Type" value={employment?.employment_type || '\u2014'} />
                             <InfoCard label="Company / Employer" value={employment?.company || '\u2014'} />
                             <InfoCard label="Position" value={employment?.position || '\u2014'} />
@@ -350,7 +350,7 @@ export default function ProfilePage() {
                     isSaving={updateMutation.isPending}
                 >
                     {(state, handleChange, errors) => (
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <Field label="First Name" name="first_name" value={state.first_name ?? profile.personal_data?.first_name} onChange={handleChange} required error={errors.first_name} />
                             <Field label="Middle Name" name="mid_name" value={state.mid_name ?? profile.personal_data?.mid_name} onChange={handleChange} />
                             <Field label="Last Name" name="last_name" value={state.last_name ?? profile.personal_data?.last_name} onChange={handleChange} required error={errors.last_name} />
@@ -394,7 +394,7 @@ export default function ProfilePage() {
                     isSaving={updateMutation.isPending}
                 >
                     {(state, handleChange, errors) => (
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <Field label="Country" name="country" value={state.country ?? profile.address?.country} onChange={handleChange} />
                             <Field label="Region" name="region" value={state.region ?? profile.address?.region} onChange={handleChange} />
                             <Field label="Province" name="province" value={state.province ?? profile.address?.province} onChange={handleChange} />
@@ -415,7 +415,7 @@ export default function ProfilePage() {
                     isSaving={updateMutation.isPending}
                 >
                     {(state, handleChange) => (
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <Field label="National ID" name="national_id" value={state.national_id ?? profile.member_id?.national_id} onChange={handleChange} />
                             <Field label="TIN" name="tin" value={state.tin ?? profile.member_id?.tin} onChange={handleChange} />
                             <Field label="SSS" name="sss" value={state.sss ?? profile.member_id?.sss} onChange={handleChange} />
@@ -433,7 +433,7 @@ export default function ProfilePage() {
                     isSaving={updateMutation.isPending}
                 >
                     {(state, handleChange) => (
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <Field label="Employment Type" name="employment_type" value={state.employment_type ?? profile.employment?.employment_type} onChange={handleChange} />
                             <Field label="Company/Employer" name="employer_name" value={state.employer_name ?? profile.employment?.company} onChange={handleChange} />
                             <Field label="Position" name="position" value={state.position ?? profile.employment?.position} onChange={handleChange} />
@@ -590,8 +590,8 @@ function BeneficiariesEditModal({ profile, onClose, onSave, isSaving }: { profil
                     <form id="bens-form" onSubmit={handleSubmit} className="space-y-4">
                         {errors && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-100">{errors}</div>}
                         {bens.map((b, i) => (
-                            <div key={i} className="flex gap-3 items-end p-4 bg-gray-50 rounded-xl border border-gray-200">
-                                <div className="flex-1 grid grid-cols-3 gap-3">
+                            <div key={i} className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end p-4 bg-gray-50 rounded-xl border border-gray-200">
+                                <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3">
                                     <div>
                                         <label className="mb-1 block text-xs font-medium text-gray-500">First Name</label>
                                         <input type="text" value={b.first_name} onChange={e => { markDirty(); const n = [...bens]; n[i].first_name = e.target.value; setBens(n); setErrors(''); }} className="w-full rounded-lg border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" required />
@@ -605,7 +605,7 @@ function BeneficiariesEditModal({ profile, onClose, onSave, isSaving }: { profil
                                         <input type="text" value={b.relationship} onChange={e => { markDirty(); const n = [...bens]; n[i].relationship = e.target.value; setBens(n); setErrors(''); }} className="w-full rounded-lg border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" required />
                                     </div>
                                 </div>
-                                <button type="button" onClick={() => { markDirty(); setBens(bens.filter((_, idx) => idx !== i)) }} className="h-[38px] px-3 text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"><i className="fas fa-trash"></i></button>
+                                <button type="button" onClick={() => { markDirty(); setBens(bens.filter((_, idx) => idx !== i)) }} className="h-[38px] px-3 self-end sm:self-auto text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100 flex items-center justify-center"><i className="fas fa-trash"></i></button>
                             </div>
                         ))}
                         <button type="button" onClick={() => { markDirty(); setBens([...bens, { first_name: '', last_name: '', relationship: '' }]) }} className="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-sm font-medium text-emerald-600 hover:border-emerald-200 hover:bg-emerald-50 transition-colors"><i className="fas fa-plus mr-2"></i>Add Beneficiary</button>

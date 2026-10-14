@@ -19,7 +19,7 @@ const NAV_ITEMS: NavItem[] = [
     { label: 'Services', path: '/dashboard/services', icon: 'fas fa-briefcase', permission: 'services.view' },
     { label: 'My Loans', path: '/dashboard/member-loans', icon: 'fas fa-hand-holding-usd', roles: ['member'] },
     { label: 'Loans', path: '/dashboard/loans', icon: 'fas fa-hand-holding-usd', permission: 'loans.view' },
-    { label: 'Collections', path: '/dashboard/collections', icon: 'fas fa-wallet', multiPermission: ['collections.view-all', 'collections.view-own'] },
+    { label: 'Collections', path: '/dashboard/collections', icon: 'fas fa-wallet', multiPermission: ['collections.view-all', 'collections.view-own', 'collections.review', 'collections.approve'] },
     { label: 'Ledger', path: '/dashboard/ledger', icon: 'fas fa-book', permission: 'transactions.view' },
     { label: 'Expenses', path: '/dashboard/expenses', icon: 'fas fa-receipt', permission: 'transactions.view' },
     { label: 'History', path: '/dashboard/history', icon: 'fas fa-history', roles: ['member'] },

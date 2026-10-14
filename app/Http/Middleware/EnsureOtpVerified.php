@@ -22,10 +22,17 @@ class EnsureOtpVerified
         $pendingOtp = (bool) $request->session()->get('security.pending_otp', false);
 
         if (! $pendingOtp) {
+            $otpService = app(SecurityOtpService::class);
+            $fingerprint = $otpService->buildDeviceFingerprint($request);
+
+            if ($otpService->isTrustedDevice($user, $fingerprint)) {
+                return $next($request);
+            }
+
             $hasActiveChallenge = OtpChallenge::query()
                 ->active()
                 ->where('user_id', $user->id)
-                ->where('purpose', app(SecurityOtpService::class)->newDevicePurpose())
+                ->where('purpose', $otpService->newDevicePurpose())
                 ->exists();
 
             if ($hasActiveChallenge) {

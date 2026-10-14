@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\SiteContent;
 use App\Models\SystemSetting;
+use App\Services\AuditLogService;
 use App\Support\HtmlSanitizer;
 use App\Support\SiteContentCatalog;
 use Illuminate\Http\JsonResponse;
@@ -72,6 +73,15 @@ class PublicContentController extends Controller
                 );
             }
         });
+
+        app(AuditLogService::class)->log(
+            'public_content.updated',
+            'Public website content updated.',
+            'public_content',
+            null,
+            Auth::user(),
+            ['sections' => array_keys($validated['form'] ?? [])],
+        );
 
         return response()->json(['message' => 'Public content updated successfully.']);
     }

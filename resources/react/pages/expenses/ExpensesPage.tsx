@@ -126,7 +126,7 @@ export default function ExpensesPage() {
                     </div>
                 ) : (
                     <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-xs">
-                        <table className="min-w-full divide-y divide-gray-200">
+                        <table className="min-w-[700px] w-full divide-y divide-gray-200">
                             <thead className="bg-gray-100">
                                 <tr>
                                     <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Date</th>
@@ -157,7 +157,10 @@ export default function ExpensesPage() {
                                                         message: `Delete this expense record of ₱${Number(e.amount).toLocaleString()} (${e.category})?`,
                                                         confirmText: 'Delete',
                                                         variant: 'danger',
-                                                        onConfirm: () => deleteMutation.mutate(e.id),
+                                                        onConfirm: () => {
+                                                            setConfirmState(s => ({ ...s, isOpen: false }));
+                                                            deleteMutation.mutate(e.id);
+                                                        },
                                                     })} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer" title="Delete"><i className="fas fa-trash text-xs"></i></button>
                                                 </div>
                                             </td>

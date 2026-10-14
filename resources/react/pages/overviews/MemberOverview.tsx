@@ -26,15 +26,15 @@ export default function MemberOverview() {
 
     return (
         <div className="space-y-6">
-            <div className="bg-gradient-to-r from-emerald-600 to-cyan-600 rounded-2xl shadow-xl p-8 text-white">
-                <div className="flex items-center justify-between">
+            <div className="bg-gradient-to-r from-emerald-600 to-cyan-600 rounded-2xl shadow-xl p-5 sm:p-8 text-white">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <h1 className="text-3xl font-bold mb-2">{d.greeting || 'Welcome back'}, {displayName}!</h1>
-                        <p className="text-emerald-50 text-lg">Here's your financial overview for today</p>
+                        <h1 className="text-2xl sm:text-3xl font-bold mb-2">{d.greeting || 'Welcome back'}, {displayName}!</h1>
+                        <p className="text-emerald-50 text-base sm:text-lg">Here's your financial overview for today</p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-left sm:text-right">
                         <p className="text-emerald-100 text-sm">Member ID</p>
-                        <p className="text-2xl font-bold font-mono">{d.user_number || user?.user_number || '—'}</p>
+                        <p className="text-xl sm:text-2xl font-bold font-mono">{d.user_number || user?.user_number || '—'}</p>
                     </div>
                 </div>
             </div>
@@ -148,7 +148,7 @@ export default function MemberOverview() {
                                                 {l.loan_status.charAt(0).toUpperCase() + l.loan_status.slice(1)}
                                             </span>
                                         </div>
-                                        <div className="grid grid-cols-3 gap-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                             <div>
                                                 <p className="text-xs text-gray-600 mb-1">Principal Amount</p>
                                                 <p className="text-lg font-bold text-gray-900">₱{Number(l.loan_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>

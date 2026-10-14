@@ -47,6 +47,10 @@ export async function getServiceAvailability() {
     return api.get('/api/settings/service-availability');
 }
 
+export async function getServiceStatus() {
+    return api.get('/api/services/availability');
+}
+
 export async function updateServiceAvailability(data: {
     services: ServiceAvailabilityData;
     notify_affected: boolean;

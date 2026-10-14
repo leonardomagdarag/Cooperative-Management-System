@@ -60,8 +60,8 @@ class LeoLoanDueTestSeeder extends Seeder
             return;
         }
 
-        $approverId = User::query()->where('email', 'admin@example.com')->value('id');
-        $officerId = User::query()->where('email', 'loan@example.com')->value('id');
+        $approverId = User::query()->where('email', 'leo.baluyot039+admin@gmail.com')->value('id');
+        $officerId = User::query()->where('email', 'leo.baluyot039+loan@gmail.com')->value('id');
 
         $dueDate = Carbon::today()->addDay();
 

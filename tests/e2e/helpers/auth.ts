@@ -4,43 +4,43 @@ import path from 'path';
 
 export const TEST_USERS = {
   admin: {
-    email: 'admin@example.com',
+    email: 'leo.baluyot039+admin@gmail.com',
     password: 'password',
     name: 'Quennie Joy Almazan',
     role: 'admin',
   },
   manager: {
-    email: 'manager@example.com',
+    email: 'leo.baluyot039+manager@gmail.com',
     password: 'password',
     name: 'Carl Michael Bigal',
     role: 'manager',
   },
   accountant: {
-    email: 'accountant@example.com',
+    email: 'leo.baluyot039+accountant@gmail.com',
     password: 'password',
     name: 'Jasmin Latayan',
     role: 'accountant',
   },
   loan: {
-    email: 'loan@example.com',
+    email: 'leo.baluyot039+loan@gmail.com',
     password: 'password',
     name: 'Leanard Guiriba',
     role: 'loan',
   },
-  Accountant: {
-    email: 'accountant@example.com',
+  chairman: {
+    email: 'leo.baluyot039+chairman@gmail.com',
     password: 'password',
-    name: 'Jenica Malveda',
-    role: 'Accountant',
+    name: 'Eduardo Reyes',
+    role: 'chairman',
   },
   member: {
-    email: 'arjay.ramos@example.com',
+    email: 'leo.baluyot039+arjay.ramos@gmail.com',
     password: 'password',
     name: 'Arjay Ramos',
     role: 'member',
   },
   member2: {
-    email: 'crisdavid.jarabejo@example.com',
+    email: 'leo.baluyot039+crisdavid.jarabejo@gmail.com',
     password: 'password',
     name: 'Cris David Jarabejo',
     role: 'member',
@@ -51,7 +51,8 @@ export function getLatestOtpForEmail(email: string): string | null {
   const logPath = path.resolve('storage/logs/laravel.log');
   if (!fs.existsSync(logPath)) return null;
   const content = fs.readFileSync(logPath, 'utf8');
-  const matches = [...content.matchAll(new RegExp(`for ${email}: (\\d{6})`, 'g'))];
+  const escaped = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const matches = [...content.matchAll(new RegExp(`for ${escaped}:\\s*(\\d{6})`, 'g'))];
   if (matches.length > 0) {
     return matches[matches.length - 1][1];
   }
@@ -61,35 +62,36 @@ export function getLatestOtpForEmail(email: string): string | null {
 export async function loginViaUI(page: Page, userKey: keyof typeof TEST_USERS = 'admin') {
   const user = TEST_USERS[userKey];
   await page.goto('/login');
-  await expect(page.locator('input#email')).toBeVisible();
-
-  await page.waitForTimeout(500);
+  await expect(page.locator('input#email')).toBeVisible({ timeout: 10000 });
 
   await page.locator('input#email').fill(user.email);
   await page.locator('input#password').fill(user.password);
   await page.locator('button:has-text("Sign in")').click();
 
-  // If redirected to OTP verification challenge (e.g. member new device)
+  // If redirected to OTP verification challenge (e.g. member on untrusted device)
   try {
     await page.waitForURL(/\/security\/verify-otp|\/dashboard/, { timeout: 15000 });
   } catch {}
 
   if (page.url().includes('/security/verify-otp')) {
-    await page.waitForTimeout(2000); // Wait 2s for email log to be written
-    const codeEl = page.locator('.font-mono');
+    const otpInput = page.locator('input#otp');
+    await expect(otpInput).toBeVisible({ timeout: 10000 });
+
     let otp: string | null = null;
-    if (await codeEl.isVisible()) {
+    const codeEl = page.locator('.font-mono');
+    if (await codeEl.isVisible({ timeout: 2000 }).catch(() => false)) {
       otp = (await codeEl.innerText()).trim();
-    } else {
-      otp = getLatestOtpForEmail(user.email);
-      console.log('Extracted OTP from log:', otp);
+    }
+    if (!otp) {
+      for (let i = 0; i < 10; i++) {
+        otp = getLatestOtpForEmail(user.email);
+        if (otp) break;
+        await page.waitForTimeout(500);
+      }
     }
     if (otp) {
-      await page.locator('input#otp').fill(otp);
+      await otpInput.fill(otp);
       await page.locator('button:has-text("Verify and continue")').click();
-      console.log('Filled OTP and clicked continue');
-    } else {
-      console.log('NO OTP FOUND FOR', user.email);
     }
   }
 
@@ -99,8 +101,8 @@ export async function loginViaUI(page: Page, userKey: keyof typeof TEST_USERS = 
 
 export async function logoutViaUI(page: Page) {
   try {
-    // If a modal close button is present, click it
-    const modalClose = page.locator('button[aria-label="Close dialog"], button[aria-label="Close"], button:has-text("Close")').first();
+    // Dismiss any modal dialog if open
+    const modalClose = page.locator('button[aria-label="Close dialog"], button[aria-label="Close"], button:has-text("Close"), button:has-text("Cancel")').first();
     if (await modalClose.isVisible({ timeout: 1000 }).catch(() => false)) {
       await modalClose.click().catch(() => {});
     }
@@ -108,12 +110,17 @@ export async function logoutViaUI(page: Page) {
 
   try {
     await page.evaluate(async () => {
-      await fetch('/api/logout', { 
-        method: 'POST', 
-        headers: { 
+      const xsrfCookie = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('XSRF-TOKEN='));
+      const token = xsrfCookie ? decodeURIComponent(xsrfCookie.split('=')[1]) : '';
+      await fetch('/api/logout', {
+        method: 'POST',
+        headers: {
           'X-Requested-With': 'XMLHttpRequest',
-          'Accept': 'application/json'
-        } 
+          'Accept': 'application/json',
+          'X-XSRF-TOKEN': token,
+        },
       });
       window.location.href = '/login';
     });
@@ -122,4 +129,3 @@ export async function logoutViaUI(page: Page) {
     await page.goto('/login');
   }
 }
-

@@ -261,6 +261,15 @@ class SettingsController extends Controller
             'sync_login' => true,
         ], Auth::user());
 
+        app(AuditLogService::class)->log(
+            'settings.service_availability_requested',
+            'Service availability change requested and queued for countersign approval.',
+            'system_setting',
+            null,
+            Auth::user(),
+            ['request_id' => $pending->id, 'services' => $validated['services']],
+        );
+
         return response()->json([
             'message' => 'Service availability update requested and requires countersign approval.',
             'request_id' => $pending->id,
@@ -436,6 +445,19 @@ class SettingsController extends Controller
             SystemSetting::set('textbee_device_id', $validated['textbee_device_id'] ?? '');
         }
 
+        app(AuditLogService::class)->log(
+            'settings.sms_updated',
+            'SMS integration settings updated.',
+            'system_setting',
+            null,
+            Auth::user(),
+            [
+                'sms_service_enabled' => $validated['sms_service_enabled'] ?? null,
+                'textbee_device_id' => array_key_exists('textbee_device_id', $validated) ? $validated['textbee_device_id'] : null,
+                'api_key_changed' => array_key_exists('textbee_api_key', $validated),
+            ],
+        );
+
         return response()->json(['message' => 'SMS settings updated.']);
     }
 
@@ -488,4 +510,3 @@ class SettingsController extends Controller
         }
     }
 }
-

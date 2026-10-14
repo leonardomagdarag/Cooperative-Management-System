@@ -12,7 +12,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 beforeEach(function () {
     $this->seed(SpatieRolePermissionSeeder::class);
     $this->seed(UserSeeder::class);
-    $this->manager = User::where('email', 'manager@example.com')->firstOrFail();
+    $this->manager = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
     $this->branch = Branch::create([
         'code' => 'TEST',
         'name' => 'Collection Test Branch',
@@ -38,6 +38,43 @@ test('collection approval queue loads using the submission timestamp', function 
         ->getJson('/api/collections/queues')
         ->assertOk()
         ->assertJsonStructure(['data', 'current_page', 'last_page', 'stalled']);
+});
+
+test('a reviewer can view only runs assigned to their current approval permission', function () {
+    $reviewer = User::factory()->create([
+        'branch_id' => $this->branch->id,
+        'account_status' => 'active',
+        'is_officer' => true,
+    ]);
+    $reviewer->assignRole('accountant');
+
+    $reviewRun = CollectionRun::create([
+        'run_number' => 'CR-REVIEW-DETAIL',
+        'loan_officer_id' => $this->manager->id,
+        'collection_date' => today(),
+        'branch_id' => $this->branch->id,
+        'status' => 'submitted',
+        'stages_snapshot' => [['key' => 'review', 'label' => 'Review', 'permission' => 'collections.review']],
+        'current_stage' => 0,
+    ]);
+    $approveRun = CollectionRun::create([
+        'run_number' => 'CR-APPROVE-DETAIL',
+        'loan_officer_id' => $this->manager->id,
+        'collection_date' => today(),
+        'branch_id' => $this->branch->id,
+        'status' => 'submitted',
+        'stages_snapshot' => [['key' => 'approve', 'label' => 'Approve', 'permission' => 'collections.approve']],
+        'current_stage' => 0,
+    ]);
+
+    $this->actingAs($reviewer)
+        ->getJson("/api/collections/{$reviewRun->id}")
+        ->assertOk()
+        ->assertJsonPath('data.run_number', 'CR-REVIEW-DETAIL');
+
+    $this->actingAs($reviewer)
+        ->getJson("/api/collections/{$approveRun->id}")
+        ->assertForbidden();
 });
 
 test('a rejected run creates one linked replacement for an active officer', function () {

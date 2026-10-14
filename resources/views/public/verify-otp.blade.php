@@ -24,7 +24,7 @@
             <div class="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{{ session('success') }}</div>
         @endif
 
-        @if (config('app.env') === 'local' && session('security.pending_otp_debug_code'))
+        @if (in_array(config('app.env'), ['local', 'testing'], true) && session('security.pending_otp_debug_code'))
             <div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                 <p class="font-medium">Development code</p>
                 <p class="mt-1 font-mono text-2xl tracking-[0.4em]">{{ session('security.pending_otp_debug_code') }}</p>

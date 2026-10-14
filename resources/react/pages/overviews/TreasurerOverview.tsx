@@ -70,7 +70,7 @@ export default function TreasurerOverview() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
                     <div className="flex items-center justify-between mb-3">
                         <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center">

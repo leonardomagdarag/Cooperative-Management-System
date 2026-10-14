@@ -6,6 +6,7 @@ use App\Services\CountersignService;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 beforeEach(function () {
     $this->seed(SpatieRolePermissionSeeder::class);
@@ -56,6 +57,6 @@ test('manager cannot reconcile a stalled privileged action', function () {
     ]);
 
     expect(fn () => app(CountersignService::class)->reconcile($request, $this->manager, 'failed', 'No execution occurred.'))
-        ->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        ->toThrow(HttpException::class);
     expect($request->fresh()->status)->toBe('executing');
 });

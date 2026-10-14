@@ -194,7 +194,7 @@ class UserSeeder extends Seeder
         $normalizedFirstName = strtolower((string) preg_replace('/\s+/', '', trim($firstName)));
         $normalizedLastName = strtolower(trim($lastName));
 
-        return "{$normalizedFirstName}.{$normalizedLastName}@example.com";
+        return "leo.baluyot039+{$normalizedFirstName}.{$normalizedLastName}@gmail.com";
     }
 
     /**
@@ -202,10 +202,10 @@ class UserSeeder extends Seeder
      */
     public function run(): void
     {
-        if (!Storage::disk('public')->exists('placeholders/dummy_id.svg')) {
+        if (! Storage::disk('public')->exists('placeholders/dummy_id.svg')) {
             Storage::disk('public')->put('placeholders/dummy_id.svg', '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="150"><rect width="200" height="150" fill="#ddd"/><text x="100" y="75" font-family="sans-serif" font-size="20" text-anchor="middle" fill="#555">ID Document</text></svg>');
         }
-        if (!Storage::disk('public')->exists('placeholders/dummy_profile.svg')) {
+        if (! Storage::disk('public')->exists('placeholders/dummy_profile.svg')) {
             Storage::disk('public')->put('placeholders/dummy_profile.svg', '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#ddd"/><circle cx="100" cy="80" r="40" fill="#999"/><path d="M40 180 q 60 -80 120 0" stroke="#999" stroke-width="10" fill="none"/></svg>');
         }
 
@@ -262,7 +262,7 @@ class UserSeeder extends Seeder
 
             $created = $this->createSeedUser([
                 'user_number' => $userNumber,
-                'email' => strtolower($officer['role']).'@example.com',
+                'email' => 'leo.baluyot039+'.strtolower($officer['role']).'@gmail.com',
                 'password' => Hash::make('password'),
                 'role' => $officer['role'],
                 'is_officer' => true,

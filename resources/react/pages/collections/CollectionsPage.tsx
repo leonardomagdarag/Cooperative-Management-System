@@ -8,9 +8,10 @@ import RunHistoryTab from './RunHistoryTab';
 export default function CollectionsPage() {
     const { user } = useAuth();
     
-    // permissions: collections.create (officer), collections.approve (manager), collections.view-all
+    // Reviewers need queue access even when they cannot browse collection history.
     const isOfficer = user?.permissions?.includes('collections.create');
     const isApprover = user?.permissions?.includes('collections.approve') || user?.permissions?.includes('oversight.approve');
+    const canReview = user?.permissions?.includes('collections.review');
     const canViewAll = user?.permissions?.includes('collections.view-all');
 
     const tabs = [];
@@ -19,7 +20,7 @@ export default function CollectionsPage() {
         tabs.push({ key: 'my-route', id: 'my-route', label: 'My Route' });
     }
     
-    if (isApprover) {
+    if (isApprover || canReview) {
         tabs.push({ key: 'approvals', id: 'approvals', label: 'Approvals Queue' });
     }
     

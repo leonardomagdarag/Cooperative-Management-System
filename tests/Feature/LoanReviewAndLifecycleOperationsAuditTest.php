@@ -16,12 +16,15 @@ beforeEach(function () {
     $this->seed(AccountSeeder::class);
     $this->seed(SystemSettingSeeder::class);
 
-    $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
-    $this->manager = User::where('email', 'manager@example.com')->firstOrFail();
-    $this->loanOfficer = User::where('email', 'loan@example.com')->firstOrFail();
+    $this->admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
+    $this->manager = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
+    $this->loanOfficer = User::where('email', 'leo.baluyot039+loan@gmail.com')->firstOrFail();
+    // Review and loan maintenance are permission-gated and are not in the
+    // default loan role preset. Grant them explicitly for these workflow tests.
+    $this->loanOfficer->givePermissionTo('loans.update');
     $this->chairman = User::factory()->create(['role' => 'chairman', 'is_officer' => true]);
     $this->chairman->assignRole('chairman');
-    $this->borrower = User::where('email', 'arjay.ramos@example.com')->firstOrFail();
+    $this->borrower = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
 
     $this->mainBranch = Branch::where('code', 'BR000001')->firstOrFail();
     $this->savingsAccount = Account::where('user_id', $this->borrower->id)->where('account_type', 'savings')->firstOrFail();

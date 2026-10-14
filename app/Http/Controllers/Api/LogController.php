@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use App\Support\SearchFilter;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,7 +19,12 @@ class LogController extends Controller
         abort_unless($user && ($user->can('logs.view') || $user->hasRole('admin')), 403);
 
         $query = Activity::query()
-            ->with(['causer.personalData', 'subject']);
+            ->with(['causer.personalData'])
+            ->with(['subject' => function (MorphTo $morphTo) {
+                $morphTo->morphWith([
+                    User::class => ['personalData'],
+                ]);
+            }]);
 
         // Search
         if ($search = SearchFilter::escapeLike($request->string('search')->toString())) {
@@ -44,6 +51,12 @@ class LogController extends Controller
         // Filter by event
         if ($event = $request->string('event')->toString()) {
             $query->where('event', $event);
+        }
+
+        // Filter by user (causer)
+        if ($userId = $request->integer('user_id')) {
+            $query->where('causer_id', $userId)
+                ->where('causer_type', User::class);
         }
 
         // Date range filter
@@ -75,6 +88,11 @@ class LogController extends Controller
                 'event' => $log->event,
                 'subject_type' => class_basename($log->subject_type),
                 'subject_id' => $log->subject_id,
+                'subject_name' => $log->subject ? (
+                    $log->subject instanceof User
+                        ? trim(($log->subject->personalData->first_name ?? '').' '.($log->subject->personalData->last_name ?? '')) ?: $log->subject->email
+                        : (method_exists($log->subject, 'getName') ? $log->subject->getName() : ($log->subject->name ?? $log->subject->title ?? $log->subject->email ?? null))
+                ) : null,
                 'causer' => $log->causer ? [
                     'id' => $log->causer->id,
                     'name' => trim(($log->causer->personalData->first_name ?? '').' '.($log->causer->personalData->last_name ?? '')) ?: $log->causer->email,
@@ -92,6 +110,21 @@ class LogController extends Controller
             'filters' => [
                 'tags' => Activity::query()->select('log_name')->distinct()->whereNotNull('log_name')->orderBy('log_name')->pluck('log_name'),
                 'events' => Activity::query()->select('event')->distinct()->whereNotNull('event')->orderBy('event')->pluck('event'),
+                'users' => Activity::query()->select('causer_id', 'causer_type')
+                    ->distinct()
+                    ->whereNotNull('causer_id')
+                    ->with('causer.personalData')
+                    ->get()
+                    ->map(function ($log) {
+                        if (! $log->causer) {
+                            return null;
+                        }
+
+                        return [
+                            'id' => $log->causer_id,
+                            'name' => trim(($log->causer->personalData->first_name ?? '').' '.($log->causer->personalData->last_name ?? '')) ?: $log->causer->email,
+                        ];
+                    })->filter()->unique('id')->values(),
             ],
         ]);
     }

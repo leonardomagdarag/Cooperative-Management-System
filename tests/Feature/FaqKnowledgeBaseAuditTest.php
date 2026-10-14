@@ -10,8 +10,8 @@ beforeEach(function () {
     $this->seed(UserSeeder::class);
     $this->seed(SystemSettingSeeder::class);
 
-    $this->member = User::where('email', 'arjay.ramos@example.com')->firstOrFail();
-    $this->manager = User::where('email', 'manager@example.com')->firstOrFail();
+    $this->member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $this->manager = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
 });
 
 test('F031-1: unauthenticated access to /api/faqs returns 401', function () {

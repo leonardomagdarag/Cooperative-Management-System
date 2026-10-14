@@ -2,6 +2,7 @@
 
 use App\Models\Branch;
 use App\Models\OfficerPermissionOverride;
+use App\Models\PrivilegedActionRequest;
 use App\Models\User;
 use Database\Seeders\AccountSeeder;
 use Database\Seeders\SpatieRolePermissionSeeder;
@@ -12,11 +13,11 @@ beforeEach(function () {
     $this->seed(UserSeeder::class);
     $this->seed(AccountSeeder::class);
 
-    $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
-    $this->manager = User::where('email', 'manager@example.com')->firstOrFail();
-    $this->accountant = User::where('email', 'accountant@example.com')->firstOrFail();
-    $this->loanOfficer = User::where('email', 'loan@example.com')->firstOrFail();
-    $this->member = User::where('email', 'arjay.ramos@example.com')->firstOrFail();
+    $this->admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
+    $this->manager = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
+    $this->accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
+    $this->loanOfficer = User::where('email', 'leo.baluyot039+loan@gmail.com')->firstOrFail();
+    $this->member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
     $this->mainBranch = Branch::where('code', 'BR000001')->firstOrFail();
 });
 
@@ -60,7 +61,7 @@ test('F018-4: admin can retrieve officer permission details and overrides', func
         ->and($response->json('officer.role'))->toBe('manager');
 });
 
-test('F018-5: admin updates officer overrides with allow and disallow effects', function () {
+test('F018-5: officer overrides remain unchanged until countersign approval', function () {
     $this->actingAs($this->admin);
 
     $payload = [
@@ -71,25 +72,14 @@ test('F018-5: admin updates officer overrides with allow and disallow effects', 
     ];
 
     $response = $this->putJson("/api/officers/{$this->manager->id}/permissions", $payload);
-    $response->assertOk()
-        ->assertJson(['message' => 'Officer permission overrides saved.']);
+    $response->assertAccepted()
+        ->assertJsonPath('status', 'pending');
 
-    $overrides = $response->json('overrides');
-    expect($overrides['backups.view'])->toBe('allow')
-        ->and($overrides['members.delete'])->toBe('disallow');
-
-    // Verify database state
-    $allowRow = OfficerPermissionOverride::where('user_id', $this->manager->id)
-        ->where('permission', 'backups.view')
-        ->first();
-    expect($allowRow)->not->toBeNull()
-        ->and($allowRow->effect)->toBe(OfficerPermissionOverride::EFFECT_ALLOW);
-
-    $disallowRow = OfficerPermissionOverride::where('user_id', $this->manager->id)
-        ->where('permission', 'members.delete')
-        ->first();
-    expect($disallowRow)->not->toBeNull()
-        ->and($disallowRow->effect)->toBe(OfficerPermissionOverride::EFFECT_DISALLOW);
+    expect(PrivilegedActionRequest::findOrFail($response->json('request_id'))->action_type)
+        ->toBe('officer.permissions.update')
+        ->and($this->manager->fresh()->can('backups.view'))->toBeFalse()
+        ->and($this->manager->fresh()->can('members.delete'))->toBeFalse()
+        ->and(OfficerPermissionOverride::where('user_id', $this->manager->id)->exists())->toBeFalse();
 });
 
 test('F018-6: officer permission overrides validate effect values', function () {

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -210,7 +211,7 @@ class Loan extends Model
         $firstUnpaidDueDate = null;
 
         foreach ($schedule as $installment) {
-            $dueDate = \Carbon\Carbon::createFromFormat('M d, Y', $installment['due_date'])->startOfDay();
+            $dueDate = Carbon::createFromFormat('M d, Y', $installment['due_date'])->startOfDay();
 
             if ($dueDate->lessThanOrEqualTo($now)) {
                 $cumulativeDue += (float) $installment['payment'];

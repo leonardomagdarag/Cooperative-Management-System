@@ -239,7 +239,7 @@ class RolePermissionController extends Controller
             'new_name' => $newName,
         ], Auth::user());
 
-        return response()->json(['message' => "Role rename is awaiting chairman approval.", 'role' => $newName, 'request_id' => $pending->id, 'status' => 'pending'], 202);
+        return response()->json(['message' => 'Role rename is awaiting chairman approval.', 'role' => $newName, 'request_id' => $pending->id, 'status' => 'pending'], 202);
     }
 
     private function isAdmin(?User $user): bool

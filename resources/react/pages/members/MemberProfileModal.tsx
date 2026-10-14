@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
@@ -46,6 +46,19 @@ export default function MemberProfileModal({ memberId, onClose, onEdit, canEdit,
     const [lightbox, setLightbox] = useState<string | null>(null);
     const queryClient = useQueryClient();
     const { addToast } = useToast();
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        const prevOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.body.style.overflow = prevOverflow;
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [onClose]);
 
     const { data, isLoading } = useQuery({
         queryKey: ['member', memberId],
@@ -190,7 +203,7 @@ export default function MemberProfileModal({ memberId, onClose, onEdit, canEdit,
 
                                     <div className="flex-1">
                                         <SectionTitle>Personal Information</SectionTitle>
-                                        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
                                             <Field label="Date of Birth" value={fmtDate(pd.birth_date)} />
                                             <Field label="Place of Birth" value={pd.birthplace} />
                                             <Field label="Gender" value={pd.gender ? pd.gender.charAt(0).toUpperCase() + pd.gender.slice(1) : 'N/A'} />
@@ -201,8 +214,8 @@ export default function MemberProfileModal({ memberId, onClose, onEdit, canEdit,
 
                                         <div className="mt-6">
                                             <SectionTitle>Address</SectionTitle>
-                                            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                                                <div className="col-span-2"><Field label="Street Address" value={[m.address?.street, m.address?.barangay, m.address?.city, m.address?.province].filter(Boolean).join(', ') || 'N/A'} /></div>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                                                <div className="sm:col-span-2"><Field label="Street Address" value={[m.address?.street, m.address?.barangay, m.address?.city, m.address?.province].filter(Boolean).join(', ') || 'N/A'} /></div>
                                                 <Field label="Barangay" value={m.address?.barangay} />
                                                 <Field label="City/Municipality" value={m.address?.city} />
                                                 <Field label="Province" value={m.address?.province} />
@@ -218,7 +231,7 @@ export default function MemberProfileModal({ memberId, onClose, onEdit, canEdit,
                             <div className="space-y-6">
                                 <div>
                                     <SectionTitle>Contact Information</SectionTitle>
-                                    <div className="grid grid-cols-2 gap-6">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                         <Field label="Email Address" value={m.contact?.email || m.email} />
                                         <Field label="Phone Number" value={m.contact?.phone_no} />
                                         <Field label="Facebook" value={m.contact?.facebook} />
@@ -232,14 +245,14 @@ export default function MemberProfileModal({ memberId, onClose, onEdit, canEdit,
                                             const fieldVal = m.member_ids?.[row.key];
                                             const photoVal = m.member_ids?.[row.photo];
                                             return (
-                                                <div key={row.key} className="grid grid-cols-2 gap-4 items-center p-4 bg-gray-50 rounded-lg">
+                                                <div key={row.key} className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center p-4 bg-gray-50 rounded-lg">
                                                     <div>
                                                         <span className="text-sm font-medium text-gray-600">{row.label}:</span>
                                                         <p className="text-gray-800 font-mono font-medium mt-1">
                                                             {fieldVal ? (canViewIds ? fieldVal : maskedId(fieldVal)) : <span className="text-gray-400 font-normal">N/A</span>}
                                                         </p>
                                                     </div>
-                                                    <div className="flex items-center justify-end">
+                                                    <div className="flex items-center sm:justify-end">
                                                         {canViewIds && photoVal ? (
                                                             <img
                                                                 src={photoVal}
@@ -262,7 +275,7 @@ export default function MemberProfileModal({ memberId, onClose, onEdit, canEdit,
                                 {m.employment && (
                                     <div>
                                         <SectionTitle>Employment Information</SectionTitle>
-                                        <div className="grid grid-cols-2 gap-6">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                             <Field label="Employer Name" value={m.employment.company} />
                                             <Field label="Position" value={m.employment.position} />
                                             <Field label="Employment Type" value={m.employment.employment_type ? m.employment.employment_type.charAt(0).toUpperCase() + m.employment.employment_type.slice(1) : 'N/A'} />
@@ -325,7 +338,7 @@ export default function MemberProfileModal({ memberId, onClose, onEdit, canEdit,
                                                             {l.loan_status.charAt(0).toUpperCase() + l.loan_status.slice(1)}
                                                         </span>
                                                     </div>
-                                                    <div className="grid grid-cols-3 gap-4 mt-4">
+                                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
                                                         <div>
                                                             <span className="text-xs text-gray-600">Principal Amount</span>
                                                             <p className="text-lg font-bold text-gray-800">{canViewLoans ? peso(l.loan_amount) : '₱***.**'}</p>

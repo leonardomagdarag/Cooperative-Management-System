@@ -131,4 +131,3 @@ class OfficerVerificationController extends Controller
         return response()->json(['message' => 'Phone verified successfully.']);
     }
 }
-
