@@ -29,6 +29,7 @@ export default function OtpVerifyField({
     const [otpSent, setOtpSent] = useState(false);
     const [otpCode, setOtpCode] = useState('');
     const [localError, setLocalError] = useState('');
+    const [infoMessage, setInfoMessage] = useState('');
     const [countdown, setCountdown] = useState(0);
     const [verifiedState, setVerifiedState] = useState(isVerified);
 
@@ -49,9 +50,13 @@ export default function OtpVerifyField({
             setOtpSent(true);
             setLocalError('');
             setCountdown(60); // 1 minute cooldown
+            if (data?.message) {
+                setInfoMessage(data.message);
+            }
         },
         onError: (err: any) => {
             setLocalError(err.response?.data?.message || err.message || 'Failed to send OTP');
+            setInfoMessage('');
         }
     });
 
@@ -61,6 +66,7 @@ export default function OtpVerifyField({
             if (data.success) {
                 setVerifiedState(true);
                 setLocalError('');
+                setInfoMessage('');
             } else {
                 setLocalError(data.message || 'Verification failed');
             }
@@ -85,6 +91,7 @@ export default function OtpVerifyField({
                             setVerifiedState(false);
                             setOtpSent(false);
                             setLocalError('');
+                            setInfoMessage('');
                         }}
                         disabled={verifiedState}
                         placeholder={placeholder}
@@ -133,6 +140,12 @@ export default function OtpVerifyField({
                 )}
             </div>
             {displayError && <p className="mt-1 text-xs text-red-600">{displayError}</p>}
+            {!displayError && infoMessage && (
+                <p className="mt-1 text-xs text-blue-600 flex items-center gap-1.5">
+                    <i className="fas fa-info-circle shrink-0"></i>
+                    <span>{infoMessage}</span>
+                </p>
+            )}
         </div>
     );
 }

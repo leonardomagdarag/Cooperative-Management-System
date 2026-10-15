@@ -110,8 +110,8 @@ class OtpChallengeController extends Controller
             return redirect()->route('login_page');
         }
 
-        if (! $this->securityOtpService->userCanReceiveSms($user)) {
-            return back()->withErrors(['otp' => 'SMS is not available for your account.']);
+        if (! $this->securityOtpService->userHasVerifiedPhone($user)) {
+            return back()->withErrors(['otp' => 'You do not have a verified mobile number registered.']);
         }
 
         $purpose = (string) $request->session()->get('security.pending_otp_purpose', $this->securityOtpService->newDevicePurpose());
@@ -135,9 +135,11 @@ class OtpChallengeController extends Controller
         $fingerprint = (string) $request->session()->get('security.pending_otp_fingerprint', '');
 
         $issued = $this->securityOtpService->issueChallenge($user, $purpose, ['fingerprint' => $fingerprint]);
-        $this->securityOtpService->sendOtpSms($user, $purpose, $issued['otp_code']);
+        $sentBySms = $this->securityOtpService->sendOtpSms($user, $purpose, $issued['otp_code']);
         $this->securityOtpService->stashDebugCode($request->session(), $issued['otp_code']);
 
-        return back()->with('success', 'A new verification code was sent to your mobile number.');
+        return back()->with('success', $sentBySms
+            ? 'A new verification code was sent to your mobile number.'
+            : 'SMS is unavailable. A new verification code was sent to your email.');
     }
 }

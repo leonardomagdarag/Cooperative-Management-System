@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Cooperative management system for **Settlers Credit Cooperative**. Laravel 12 monolith (PHP 8.4) serving a **React 19 SPA**, session-authenticated with Sanctum, permissions via Spatie. No Blade page-per-view — the entire UI is one React app, the sole exception being the standalone maintenance page (see Architecture).
+Cooperative management system for **Settlers Credit Cooperative**. Laravel 12 monolith (PHP 8.4) serving a **React 19 SPA** built with Vite and Tailwind CSS, session-authenticated with Sanctum, permissions via Spatie. The local development database is MySQL; feature tests force SQLite in memory. No Blade page-per-view — the entire UI is one React app, the sole exception being the standalone maintenance page (see Architecture).
 
 ## Architecture
 
@@ -19,6 +19,7 @@ Cooperative management system for **Settlers Credit Cooperative**. Laravel 12 mo
 
 ## Roles & permissions
 
+- The current built-in officer role presets are `admin`, `chairman`, `manager`, `accountant`, and `loan`; members use `member`. Custom/dynamic roles are supported. `secretary` and `treasurer` are legacy names migrated to `accountant`, not separate active roles. The manual QA first pass exercised Guest, Member, and each of those five officer roles; see `docs/QA/QA_RESULT_1.md` and the running defect/update register in `docs/QA/QA_LOG.md` for results. A passing test-case count does not mean the run found no defects.
 - **`app/Support/PermissionCatalog.php` is the single source of truth** for permission names (`groups()`), role presets (`rolePresets()`), and officer roles (`officerRoles()`). Add a permission there, not inline in a controller.
 - **`officerRoles()` is `[chairman, manager, accountant, loan]` — it excludes `admin` and `developer`.** Code that gates on `hasAnyRole(PermissionCatalog::officerRoles())` must check `admin` explicitly too (see `CheckServiceAvailability`), or admin users get treated as members.
 - Legacy role names are migrated, not supported: `secretary` and `treasurer` become `accountant` (migration `2026_10_03_224440_*` and `SpatieRolePermissionSeeder`). Do not reintroduce them.
@@ -51,14 +52,23 @@ vendor/bin/pint     # formatter, laravel preset (no pint.json in repo)
   beforeEach(function () {
       $this->seed(SpatieRolePermissionSeeder::class);
       $this->seed(UserSeeder::class);
-      $this->admin = User::where('email', 'admin@example.com')->firstOrFail();
+      $this->admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
   });
   ```
   `DatabaseSeeder` runs `SpatieRolePermissionSeeder` **twice** (once to create roles, once after `UserSeeder` to backfill) — if you add seeded users, keep that two-pass ordering.
-- Seeded logins are all `password`: officers `admin@`, `manager@`, `accountant@`, `loan@example.com` (emails are `{role}@example.com`), `developer@example.com`, and members as `first.last@example.com` (e.g. `arjay.ramos@example.com`).
+- Seeded logins are all `password`: officers use `leo.baluyot039+{role}@gmail.com` (e.g. `leo.baluyot039+admin@gmail.com`), members use `leo.baluyot039+{first}.{last}@gmail.com` (e.g. `leo.baluyot039+arjay.ramos@gmail.com`) — except the one real-gmail member `leo.baluyot.magdarag039@gmail.com` and the deprecated `developer@example.com`, which are left untouched.
 - **E2E: Playwright**, `tests/e2e/*.spec.ts`, `npx playwright test`. `workers: 1` and `fullyParallel: false` are deliberate — the specs mutate a **real shared MySQL database** and will conflict if parallelized. 90s timeout, 1 retry.
 - E2E prerequisites: `php artisan serve` on `127.0.0.1:8000`, assets built (`npm run build`) or Vite running, and a **seeded MySQL** database. `tests/e2e/helpers/auth.ts` reads one-time OTPs out of `storage/logs/laravel.log`, so logging must be capturing them.
 - No ESLint, no `tsc`, no frontend test runner. Verification order: `vendor/bin/pint --test` → `php artisan test` → `npm run build`.
+
+## Manual QA
+
+- The initial manual QA pass has covered all system roles. Follow-up QA is a cleanup pass: use the first-pass findings as leads, reproduce them in the running application, verify expected behavior, and update the findings with confirmed, fixed, or not-reproducible status.
+- Test as the role named in the task and follow its real user workflows through the browser. Do not rely on the existing Playwright E2E specs for this manual QA pass; they are deprecated for this purpose. Read relevant project documentation and functionality notes before testing, and inspect application code, database records, or logs when needed to understand observed behavior.
+- Do not change application behavior or backend/controller logic as part of a QA-only task. Record reproducible defects with evidence and a proposed fix for a separate implementation task. If the task explicitly includes fixing defects, follow the repository architecture and security instructions above.
+- Protect the database. Use only task-scoped test data and make reversible changes; record any records changed or created. Do not reset, truncate, or otherwise wipe the database unless the task explicitly authorizes it and the target data is confirmed to be disposable. Clean up QA-created data when safe and practical.
+- Save screenshots and the final report under a clearly named, role- or feature-specific folder in `docs/`, with descriptive filenames. For each finding, record the role/workflow, reproduction steps, expected and actual results, status, and supporting screenshot or relevant error/log evidence. Avoid capturing credentials, OTPs, or other secrets in screenshots or reports.
+- Close the pass with a concise summary of verified findings, evidence locations, any test data left behind, and unresolved issues. Do not mark an issue fixed without verifying the corrected behavior in the running application.
 
 ## Environment gotchas
 
@@ -74,7 +84,8 @@ vendor/bin/pint     # formatter, laravel preset (no pint.json in repo)
 
 ## Docs & conventions
 
-- **`FUNCTIONALIT_LIST.md` (repo root) is the verified system-functionality reference** — roles, per-role capabilities, and the exact permission gating in use. Read it before changing access rules.
+- **`FUNCTIONALIT_LIST.md` (repo root) is the system-functionality reference** for workflows and role capabilities; `app/Support/PermissionCatalog.php`, seeders, and active backend authorization remain authoritative for actual access. Read the functionality reference before changing access rules, then verify expectations against code.
+- `docs/QA/CODE_DOCUMENT_ALIGNMENT.md` records known code/documentation drift; `docs/QA/QA_RESULT_1.md`, `docs/QA/QA_LOG.md`, and role-specific reports under `docs/QA/` hold browser QA findings and their current statuses. Check the latest register before repeating or closing a finding.
 - `docs/BACKUPS.md` covers the three backup tiers, B2 off-site setup, restore safety, and ops commands; `docs/DATABASE_DICTIONARY.csv` documents table/column meanings when changing schema.
 - Root `*_REWORK.md` files (`COLLECTIONS_REWORK`, `ROLE_REWORK`, `LEDGER_OTP_REWORK`, `TRANSACTION_APPROVAL_REWORK`, `REWORK_IMPLEMENTATION_SUMMARY`) are uncommitted working notes for the current rework — orientation only, verify against code.
 - `Leo/` (gitignored; only `Leo/audit_pipeline.ps1` is tracked) and the untracked `scratch/` hold planning/audit material. Not authoritative.

@@ -25,7 +25,9 @@ class PhoneVerificationController extends Controller
         ]);
 
         if (! $this->textBeeService->isEnabled()) {
-            return response()->json(['message' => 'SMS service is not enabled.'], 503);
+            return response()->json([
+                'message' => 'SMS service is currently unavailable. Phone number cannot be verified at this time.',
+            ], 503);
         }
 
         $user = Auth::user();
@@ -46,8 +48,14 @@ class PhoneVerificationController extends Controller
         $purpose = 'phone_verification';
         $issued = $this->securityOtpService->issueChallenge($user, $purpose);
 
-        $this->securityOtpService->sendOtpSmsToPhone($user, $phoneNo, $purpose, $issued['otp_code']);
+        $sentBySms = $this->securityOtpService->sendOtpSmsToPhone($user, $phoneNo, $purpose, $issued['otp_code']);
         $this->securityOtpService->stashDebugCode($request->session(), $issued['otp_code']);
+
+        if (! $sentBySms) {
+            return response()->json([
+                'message' => 'Failed to deliver SMS to this phone number. Please check the number or try again later.',
+            ], 503);
+        }
 
         return response()->json([
             'message' => 'Verification code sent to your phone.',

@@ -13,7 +13,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Symfony\Component\HttpKernel\Exception\HttpException;
 use Throwable;
 
 class SecurityOtpService
@@ -275,37 +274,46 @@ class SecurityOtpService
         }
     }
 
-    public function sendOtpSms(User $user, string $purpose, string $otpCode): void
+    public function sendOtpSms(User $user, string $purpose, string $otpCode): bool
     {
         $phone = $user->contact?->phone_no;
         if (! $phone || ! $user->contact?->phone_verified_at) {
-            return;
+            $this->logOtpForTesting('SMS', $user, $purpose, $otpCode);
+            $this->sendOtpMail($user, $purpose, $otpCode);
+
+            return false;
         }
 
-        $this->sendOtpSmsToPhone($user, $phone, $purpose, $otpCode);
+        return $this->sendOtpSmsToPhone($user, $phone, $purpose, $otpCode, null, true);
     }
 
-    public function sendOtpSmsToPhone(User $user, string $phone, string $purpose, string $otpCode, ?string $message = null): void
+    public function sendOtpSmsToPhone(User $user, string $phone, string $purpose, string $otpCode, ?string $message = null, bool $fallbackToEmail = false): bool
     {
+        $this->logOtpForTesting('SMS', $user, $purpose, $otpCode);
         $sms = app(TextBeeService::class);
-        if (! $sms->isEnabled()) {
-            return;
-        }
-
         $message ??= $this->otpSmsMessage($purpose, $otpCode);
 
         try {
-            if ($sms->send($phone, $message)) {
-                return;
+            if ($sms->isEnabled() && $sms->send($phone, $message)) {
+                return true;
             }
 
-            Log::warning("Immediate OTP SMS delivery failed for user {$user->id}.");
-            abort(503, 'Failed to send OTP SMS. Please try again later.');
-        } catch (HttpException $e) {
-            throw $e;
+            Log::warning("OTP SMS unavailable for user {$user->id} ({$purpose})".($fallbackToEmail ? '; falling back to email.' : '.'));
         } catch (Throwable $e) {
-            Log::warning("Immediate OTP SMS delivery threw for user {$user->id}: {$e->getMessage()}");
-            abort(503, 'Failed to send OTP SMS. Please try again later.');
+            Log::warning("OTP SMS delivery threw for user {$user->id} ({$purpose})".($fallbackToEmail ? '; falling back to email: ' : ': ').$e->getMessage());
+        }
+
+        if ($fallbackToEmail) {
+            $this->sendOtpMail($user, $purpose, $otpCode);
+        }
+
+        return false;
+    }
+
+    private function logOtpForTesting(string $channel, User $user, string $purpose, string $otpCode): void
+    {
+        if (app()->environment(['local', 'testing'])) {
+            Log::info("OTP {$channel} ({$purpose}) for user {$user->id} ({$user->email}): {$otpCode}");
         }
     }
 
@@ -329,6 +337,12 @@ class SecurityOtpService
         return $user->contact?->phone_verified_at !== null
             && $user->contact?->phone_no !== null
             && app(TextBeeService::class)->isEnabled();
+    }
+
+    public function userHasVerifiedPhone(User $user): bool
+    {
+        return $user->contact?->phone_verified_at !== null
+            && $user->contact?->phone_no !== null;
     }
 
     public function stashDebugCode(Session $session, string $otpCode): void

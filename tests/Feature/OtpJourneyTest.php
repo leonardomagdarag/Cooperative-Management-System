@@ -9,7 +9,6 @@ use Database\Seeders\SpatieRolePermissionSeeder;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
-use Symfony\Component\HttpKernel\Exception\HttpException;
 
 function otpJourneyCode(): string
 {
@@ -223,7 +222,7 @@ test('OTP SMS sends successful deliveries inline without queueing them', functio
     Queue::assertNothingPushed();
 });
 
-test('OTP SMS reports immediate delivery failure without queueing a stale code', function () {
+test('OTP SMS falls back to email after immediate delivery failure without queueing a stale code', function () {
     $user = User::factory()->create();
     $user->personalData->contact->forceFill([
         'phone_no' => '09761729700',
@@ -240,9 +239,24 @@ test('OTP SMS reports immediate delivery failure without queueing a stale code',
     Queue::fake();
 
     expect(fn () => app(SecurityOtpService::class)->sendOtpSms($user, 'new_device_login', '123456'))
-        ->toThrow(HttpException::class);
+        ->not->toThrow(Throwable::class);
 
     Queue::assertNothingPushed();
+});
+
+test('OTP SMS falls back to email when the SMS service is disabled', function () {
+    $user = User::factory()->create();
+    $user->personalData->contact->forceFill([
+        'phone_no' => '09761729700',
+        'phone_verified_at' => now(),
+    ])->save();
+
+    $sms = mock(TextBeeService::class);
+    $sms->shouldReceive('isEnabled')->once()->andReturn(false);
+    $sms->shouldNotReceive('send');
+    app()->instance(TextBeeService::class, $sms);
+
+    expect(app(SecurityOtpService::class)->sendOtpSms($user, 'new_device_login', '654321'))->toBeFalse();
 });
 
 test('verification SMS to an unverified phone number sends inline', function () {
@@ -264,4 +278,83 @@ test('verification SMS to an unverified phone number sends inline', function () 
     );
 
     Queue::assertNothingPushed();
+});
+
+test('failed phone ownership SMS does not fall back to the account email', function () {
+    $user = User::factory()->create();
+    $sms = mock(TextBeeService::class);
+    $sms->shouldReceive('isEnabled')->once()->andReturn(true);
+    $sms->shouldReceive('send')->once()->andReturn(false);
+    app()->instance(TextBeeService::class, $sms);
+    Mail::fake();
+
+    expect(app(SecurityOtpService::class)->sendOtpSmsToPhone(
+        $user,
+        '09171234567',
+        'phone_verification',
+        '123456'
+    ))->toBeFalse();
+
+    Mail::assertNothingOutgoing();
+});
+
+test('resend via SMS route falls back to email when SMS service is disabled', function () {
+    $user = User::factory()->create();
+    $user->personalData->contact->forceFill([
+        'phone_no' => '09761729700',
+        'phone_verified_at' => now(),
+    ])->save();
+
+    $sms = mock(TextBeeService::class);
+    $sms->shouldReceive('isEnabled')->andReturn(false);
+    $sms->shouldNotReceive('send');
+    app()->instance(TextBeeService::class, $sms);
+
+    $this->actingAs($user)
+        ->withSession(['security.pending_otp' => true])
+        ->post(route('otp.challenge.resend_sms'))
+        ->assertRedirect()
+        ->assertSessionHas('success', 'SMS is unavailable. A new verification code was sent to your email.');
+});
+
+test('resend via SMS route rejects when user has no verified phone number', function () {
+    $user = User::factory()->create();
+    $user->personalData->contact->forceFill([
+        'phone_no' => null,
+        'phone_verified_at' => null,
+    ])->save();
+
+    $this->actingAs($user)
+        ->withSession(['security.pending_otp' => true])
+        ->post(route('otp.challenge.resend_sms'))
+        ->assertSessionHasErrors(['otp' => 'You do not have a verified mobile number registered.']);
+});
+
+test('phone verification returns 503 when SMS service is disabled', function () {
+    $user = User::factory()->create();
+    $user->assignRole('member');
+
+    $sms = mock(TextBeeService::class);
+    $sms->shouldReceive('isEnabled')->andReturn(false);
+    app()->instance(TextBeeService::class, $sms);
+
+    $this->actingAs($user)
+        ->postJson('/api/profile/phone/send-otp', ['phone_no' => '09171234567'])
+        ->assertStatus(503)
+        ->assertJsonPath('message', 'SMS service is currently unavailable. Phone number cannot be verified at this time.');
+});
+
+test('officer phone verification returns 503 when SMS service is disabled', function () {
+    $this->seed(SpatieRolePermissionSeeder::class);
+    $admin = User::factory()->create();
+    $admin->givePermissionTo('officers.create');
+
+    $sms = mock(TextBeeService::class);
+    $sms->shouldReceive('isEnabled')->andReturn(false);
+    app()->instance(TextBeeService::class, $sms);
+
+    $this->actingAs($admin)
+        ->postJson('/api/officers/verify-phone/send', ['phone_no' => '09171234567'])
+        ->assertStatus(503)
+        ->assertJsonPath('message', 'SMS service is currently unavailable. Please verify the email address instead.');
 });

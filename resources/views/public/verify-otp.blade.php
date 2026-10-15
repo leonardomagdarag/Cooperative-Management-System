@@ -38,7 +38,7 @@
             <button type="submit" class="public-btn public-btn-primary w-full">Verify and continue</button>
         </form>
 
-        @if (auth()->check() && app(\App\Services\SecurityOtpService::class)->userCanReceiveSms(auth()->user()))
+        @if (auth()->check() && app(\App\Services\SecurityOtpService::class)->userHasVerifiedPhone(auth()->user()))
             <div class="mt-3 flex items-center justify-between text-sm">
                 <form method="POST" action="{{ route('otp.challenge.resend') }}">
                     @csrf
