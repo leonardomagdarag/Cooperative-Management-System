@@ -60,7 +60,7 @@ class DashboardController extends Controller
         $activeLoans = $user->loans->whereIn('loan_status', ['approved', 'active'])->values();
 
         $totalLoanBalance = $activeLoans->sum(function ($l) {
-            $totalPaid = $l->payments->where('status', 'completed')->sum('amount');
+            $totalPaid = $l->totalPaid();
 
             return max(0, round($l->totalPayable() - $totalPaid, 2));
         });
@@ -110,8 +110,9 @@ class DashboardController extends Controller
             ]),
             'active_loans_count' => $activeLoans->count(),
             'loans' => $activeLoans->map(function ($l) {
-                $totalPaid = $l->payments->where('status', 'completed')->sum('amount');
-                $progress = $l->loan_amount > 0 ? round(($totalPaid / $l->loan_amount) * 100, 1) : 0;
+                $totalPaid = $l->totalPaid();
+                $totalPayable = $l->totalPayable();
+                $progress = $totalPayable > 0 ? round(($totalPaid / $totalPayable) * 100, 1) : 0;
 
                 return [
                     'id' => $l->id,
@@ -119,7 +120,7 @@ class DashboardController extends Controller
                     'loan_type' => $l->loan_type,
                     'loan_amount' => $l->loan_amount,
                     'loan_status' => $l->loan_status,
-                    'remaining_balance' => max(0, round($l->totalPayable() - $totalPaid, 2)),
+                    'remaining_balance' => max(0, round($totalPayable - $totalPaid, 2)),
                     'total_paid' => $totalPaid,
                     'progress' => $progress,
                     'due_date' => $l->due_date?->format('M d, Y'),
@@ -159,7 +160,7 @@ class DashboardController extends Controller
         $paidLoanStatuses = ['paid', 'paid_off', 'paid-off'];
 
         $activeLoansCount = BranchScope::applyToLoans(Loan::query()->whereIn('loan_status', $activeLoanStatuses), Auth::user(), $branchId)->count();
-        $pendingLoansCount = BranchScope::applyToLoans(Loan::query()->where('loan_status', 'pending'), Auth::user(), $branchId)->count();
+        $pendingLoansCount = BranchScope::applyToLoans(Loan::awaitingReview(), Auth::user(), $branchId)->count();
 
         $loanPrincipalActive = (float) BranchScope::applyToLoans(Loan::query()->whereIn('loan_status', $activeLoanStatuses), Auth::user(), $branchId)->sum('loan_amount');
         $loanPaymentsOnActive = (float) $this->loanPaymentsOnActiveLoans($branchId);
@@ -355,7 +356,7 @@ class DashboardController extends Controller
 
         $activeLoanStatuses = ['approved', 'active'];
         $activeLoansCount = BranchScope::applyToLoans(Loan::query()->whereIn('loan_status', $activeLoanStatuses), Auth::user(), $branchId)->count();
-        $pendingLoansCount = BranchScope::applyToLoans(Loan::query()->where('loan_status', 'pending'), Auth::user(), $branchId)->count();
+        $pendingLoansCount = BranchScope::applyToLoans(Loan::awaitingReview(), Auth::user(), $branchId)->count();
 
         $overdueLoansCount = BranchScope::applyToLoans(
             Loan::query()
@@ -597,7 +598,7 @@ class DashboardController extends Controller
         $activeLoanStatuses = ['approved', 'active'];
         $paidLoanStatuses = ['paid', 'paid_off', 'paid-off'];
 
-        $pendingCount = BranchScope::applyToLoans(Loan::query()->where('loan_status', 'pending'), Auth::user(), $branchId)->count();
+        $pendingCount = BranchScope::applyToLoans(Loan::awaitingReview(), Auth::user(), $branchId)->count();
         $activeCount = BranchScope::applyToLoans(Loan::query()->whereIn('loan_status', $activeLoanStatuses), Auth::user(), $branchId)->count();
         $rejectedCount = BranchScope::applyToLoans(Loan::query()->where('loan_status', 'rejected'), Auth::user(), $branchId)->count();
 
@@ -634,7 +635,7 @@ class DashboardController extends Controller
         )->sum('loan_amount');
 
         $pendingLoans = BranchScope::applyToLoans(
-            Loan::query()->with(['user.personalData'])->where('loan_status', 'pending'),
+            Loan::awaitingReview()->with(['user.personalData']),
             Auth::user(),
             $branchId
         )->latest()
@@ -723,7 +724,7 @@ class DashboardController extends Controller
 
         $pendingLoans = null;
         if ($user->can('loans.update') || $user->can('loans.approve')) {
-            $pendingLoans = BranchScope::applyToLoans(Loan::query()->where('loan_status', 'pending'), $user, $branchId)->count();
+            $pendingLoans = BranchScope::applyToLoans(Loan::awaitingReview(), $user, $branchId)->count();
         }
 
         $membersTotal = null;
@@ -811,9 +812,10 @@ class DashboardController extends Controller
             ->latest()
             ->get()
             ->map(function ($l) {
-                $totalPaid = $l->payments->sum('amount');
+                $totalPaid = $l->totalPaid();
                 $remaining = $l->remainingBalance();
-                $progress = $l->loan_amount > 0 ? round(($totalPaid / $l->loan_amount) * 100, 1) : 0;
+                $totalPayable = $l->totalPayable();
+                $progress = $totalPayable > 0 ? round(($totalPaid / $totalPayable) * 100, 1) : 0;
 
                 $schedule = $l->paymentSchedule();
 
@@ -843,13 +845,14 @@ class DashboardController extends Controller
                         'status' => $gm->status ?? 'pending',
                     ])->values(),
                     'payment_schedule' => $schedule,
-                    'completed_payments' => $l->payments->sortBy('payment_date')->values()->map(fn ($p, $idx) => [
+                    'payments' => $l->payments->sortBy(fn ($p) => $p->transaction_date ?? $p->created_at)->values()->map(fn ($p, $idx) => [
                         'id' => $p->id,
                         'payment_number' => $idx + 1,
                         'transaction_number' => $p->transaction_number ?? ('PAY-'.$p->id),
                         'amount' => $p->amount,
-                        'payment_date' => ($p->payment_date ?? $p->created_at)->format('M d, Y'),
+                        'payment_date' => ($p->transaction_date ?? $p->created_at)?->format('M d, Y'),
                         'status' => $p->status ?? 'completed',
+                        'is_reversal' => $p->reversal_of_id !== null,
                     ]),
                     'estimated_interest' => $schedule ? $schedule[count($schedule) - 1]['total_interest'] ?? 0 : 0,
                     'estimated_total_repayment' => $schedule
@@ -896,7 +899,7 @@ class DashboardController extends Controller
 
         return $this->accountTotalsCache[$cacheKey] = [
             'savings' => (float) ($totals['savings'] ?? 0),
-            'share_capital' => (float) ($totals['share_capital'] ?? 0),
+            'share_capital' => (float) ($totals['share-capital'] ?? 0),
         ];
     }
 

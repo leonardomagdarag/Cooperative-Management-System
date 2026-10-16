@@ -122,18 +122,25 @@ class LoanController extends Controller
             'product',
             'user.personalData',
             'approvedBy.personalData',
-            'completedPayments',
+            'payments',
             'groupMembers.personalData',
             'documents.uploadedBy.personalData',
         ]);
+
+        $schedule = $loan->paymentSchedule();
+        $totalPaid = $loan->totalPaid();
+        $totalPayable = $loan->totalPayable();
+        $lastInstallment = $schedule ? $schedule[count($schedule) - 1] : null;
 
         return response()->json([
             'id' => $loan->id,
             'loan_number' => $loan->loan_number,
             'loan_type' => $loan->loan_type,
+            'loan_type_label' => $loan->loan_type_label,
             'loan_product' => $loan->loan_product,
             'loan_product_name' => $loan->product?->name,
             'loan_amount' => $loan->loan_amount,
+            'principal_amount' => $loan->principal_amount ?? $loan->loan_amount,
             'interest_rate' => $loan->interest_rate,
             'term_months' => $loan->term_months,
             'payment_frequency' => $loan->payment_frequency,
@@ -141,7 +148,12 @@ class LoanController extends Controller
             'applied_at' => $loan->applied_at?->format('Y-m-d'),
             'approved_at' => $loan->approved_at?->format('Y-m-d'),
             'due_date' => $loan->due_date,
-            'payment_schedule' => $loan->paymentSchedule(),
+            'total_paid' => $totalPaid,
+            'remaining_balance' => $loan->remainingBalance(),
+            'progress' => $totalPayable > 0 ? round(($totalPaid / $totalPayable) * 100, 1) : 0,
+            'estimated_interest' => $lastInstallment['total_interest'] ?? 0,
+            'estimated_total_repayment' => $lastInstallment['total_payment'] ?? $loan->totalPayable(),
+            'payment_schedule' => $schedule,
             'borrower' => $loan->user?->personalData ? [
                 'name' => trim($loan->user->personalData->first_name.' '.$loan->user->personalData->last_name),
                 'user_number' => $loan->user->user_number,
@@ -149,11 +161,14 @@ class LoanController extends Controller
             'approved_by' => $loan->approvedBy?->personalData ? [
                 'name' => trim($loan->approvedBy->personalData->first_name.' '.$loan->approvedBy->personalData->last_name),
             ] : null,
-            'payments' => $loan->completedPayments->map(fn ($p) => [
+            'payments' => $loan->payments->sortBy(fn ($p) => $p->transaction_date ?? $p->created_at)->values()->map(fn ($p, $idx) => [
                 'id' => $p->id,
+                'payment_number' => $idx + 1,
+                'transaction_number' => $p->transaction_number,
                 'amount' => $p->amount,
-                'payment_date' => $p->transaction_date?->format('Y-m-d'),
+                'payment_date' => ($p->transaction_date ?? $p->created_at)?->format('M d, Y'),
                 'status' => $p->status,
+                'is_reversal' => $p->reversal_of_id !== null,
             ]),
             'documents' => $loan->documents->map(fn ($d) => [
                 'id' => $d->id,

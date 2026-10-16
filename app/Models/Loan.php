@@ -50,6 +50,16 @@ class Loan extends Model
         'interview_schedule' => 'datetime',
     ];
 
+    /** Loans that are still actionable in the officer review queue. */
+    public function scopeAwaitingReview($query)
+    {
+        return $query->where('loan_status', 'pending')
+            ->where(function ($query) {
+                $query->whereNull('review_status')
+                    ->orWhereIn('review_status', ['under_review', 'endorsed_for_approval']);
+            });
+    }
+
     protected static function boot()
     {
         parent::boot();
@@ -104,6 +114,15 @@ class Loan extends Model
 
     public function totalPaid()
     {
+        // Reuse the eager-loaded relation when present so callers that already
+        // load `payments` (dashboards, profile, loan detail) do not issue a
+        // query per loan. The aggregated result is identical either way.
+        if ($this->relationLoaded('payments')) {
+            return (float) $this->payments
+                ->where('status', 'completed')
+                ->sum(fn ($p) => $p->reversal_of_id === null ? (float) $p->amount : -(float) $p->amount);
+        }
+
         return (float) $this->completedPayments()
             ->selectRaw('COALESCE(SUM(CASE WHEN reversal_of_id IS NULL THEN amount ELSE -amount END), 0) as net_paid')
             ->value('net_paid');

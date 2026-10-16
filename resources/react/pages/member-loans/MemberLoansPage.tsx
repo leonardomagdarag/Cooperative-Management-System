@@ -1,6 +1,23 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import HelpTip from '../../components/ui/HelpTip';
+import AmortizationTable from '../../components/loans/AmortizationTable';
+import PaymentHistoryTable from '../../components/loans/PaymentHistoryTable';
+import { formatPeso } from '../../lib/format';
+
+const LOAN_STATUS_STYLES: Record<string, { label: string; className: string }> = {
+    active: { label: 'Active', className: 'bg-emerald-100 text-emerald-700' },
+    approved: { label: 'Approved', className: 'bg-emerald-100 text-emerald-700' },
+    pending: { label: 'Pending', className: 'bg-amber-100 text-amber-700' },
+    paid: { label: 'Paid', className: 'bg-blue-100 text-blue-700' },
+    paid_off: { label: 'Paid Off', className: 'bg-blue-100 text-blue-700' },
+    rejected: { label: 'Rejected', className: 'bg-red-100 text-red-700' },
+};
+
+function loanStatusMeta(status: string) {
+    return LOAN_STATUS_STYLES[status] ?? { label: status, className: 'bg-gray-100 text-gray-600' };
+}
 
 export default function MemberLoansPage() {
     const { data, isLoading } = useQuery({ queryKey: ['member-loans'], queryFn: () => api.get('/api/member-loans') });
@@ -44,12 +61,7 @@ export default function MemberLoansPage() {
                                         <td className="px-6 py-3 text-right font-medium">₱{Number(l.loan_amount).toLocaleString()}</td>
                                         <td className="px-6 py-3 text-center">{Number(l.interest_rate).toFixed(1)}%</td>
                                         <td className="px-6 py-3 text-center">
-                                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                                                l.loan_status === 'active' || l.loan_status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
-                                                l.loan_status === 'paid' || l.loan_status === 'paid_off' ? 'bg-blue-100 text-blue-700' :
-                                                l.loan_status === 'pending' ? 'bg-amber-100 text-amber-700' :
-                                                'bg-gray-100 text-gray-600'
-                                            }`}>{l.loan_status}</span>
+                                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${loanStatusMeta(l.loan_status).className}`}>{loanStatusMeta(l.loan_status).label}</span>
                                         </td>
                                         <td className="px-6 py-3 text-center text-sm">{l.due_date || '—'}</td>
                                     </tr>
@@ -83,9 +95,37 @@ export default function MemberLoansPage() {
                             {tab === 'details' && (
                                 <div className="space-y-6">
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                        <div className="bg-linear-to-br from-emerald-700 to-teal-800 rounded-xl p-5 text-white shadow-xs"><p className="text-sm text-white/80">Loan Amount</p><p className="text-2xl font-bold">₱{Number(selected.loan_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p></div>
-                                        <div className="bg-linear-to-br from-emerald-600 to-teal-600 rounded-xl p-5 text-white shadow-xs"><p className="text-sm text-white/80">Total Paid</p><p className="text-2xl font-bold">₱{Number(selected.total_paid).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p></div>
-                                        <div className="bg-linear-to-br from-amber-600 to-orange-600 rounded-xl p-5 text-white shadow-xs"><p className="text-sm text-white/80">Balance Remaining</p><p className="text-2xl font-bold">₱{Number(selected.remaining_balance).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p></div>
+                                        <div className="bg-linear-to-br from-emerald-700 to-teal-800 rounded-xl p-5 text-white shadow-xs"><p className="text-sm text-white/80">Loan Amount</p><p className="text-2xl font-bold">{formatPeso(selected.loan_amount)}</p></div>
+                                        <div className="bg-linear-to-br from-emerald-600 to-teal-600 rounded-xl p-5 text-white shadow-xs"><p className="text-sm text-white/80">Total Paid</p><p className="text-2xl font-bold">{formatPeso(selected.total_paid)}</p></div>
+                                        <div className="bg-linear-to-br from-amber-600 to-orange-600 rounded-xl p-5 text-white shadow-xs"><p className="text-sm text-white/80">Balance Remaining</p><p className="text-2xl font-bold">{formatPeso(selected.remaining_balance)}</p></div>
+                                    </div>
+
+                                    <div className="bg-gray-50 rounded-xl p-5">
+                                        <h3 className="flex items-center gap-2 font-semibold text-gray-900 mb-4">How your loan breaks down <HelpTip text="Principal is the amount you borrowed. Interest is the cost of borrowing. Added together they make up the total you repay." /></h3>
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                            <div className="rounded-lg border border-gray-100 bg-white p-4">
+                                                <p className="flex items-center gap-1 text-xs font-medium text-gray-500">Principal <HelpTip text="The amount you borrowed, before any interest is added." /></p>
+                                                <p className="mt-1 text-lg font-semibold text-gray-900">{formatPeso(selected.principal_amount || selected.loan_amount)}</p>
+                                            </div>
+                                            <div className="rounded-lg border border-gray-100 bg-white p-4">
+                                                <p className="flex items-center gap-1 text-xs font-medium text-gray-500">+ Interest <HelpTip text="The total cost of borrowing over your whole term." /></p>
+                                                <p className="mt-1 text-lg font-semibold text-gray-900">{formatPeso(selected.estimated_interest)}</p>
+                                            </div>
+                                            <div className="rounded-lg border border-gray-100 bg-white p-4">
+                                                <p className="flex items-center gap-1 text-xs font-medium text-gray-500">= Total Repayment <HelpTip text="Principal plus interest: the total amount you will pay over the life of the loan." /></p>
+                                                <p className="mt-1 text-lg font-semibold text-emerald-700">{formatPeso(selected.estimated_total_repayment)}</p>
+                                            </div>
+                                        </div>
+                                        <div className="mt-5">
+                                            <div className="mb-1.5 flex items-center justify-between text-xs text-gray-500">
+                                                <span>{formatPeso(selected.total_paid)} paid</span>
+                                                <span>{formatPeso(selected.remaining_balance)} remaining</span>
+                                            </div>
+                                            <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-200">
+                                                <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, Math.max(0, Number(selected.progress) || 0))}%` }} />
+                                            </div>
+                                            <p className="mt-1 text-right text-xs font-medium text-emerald-700">{Number(selected.progress || 0).toFixed(1)}% paid</p>
+                                        </div>
                                     </div>
 
                                     <div className="grid md:grid-cols-2 gap-6">
@@ -93,12 +133,12 @@ export default function MemberLoansPage() {
                                             <h3 className="font-semibold text-gray-900 mb-3">Loan Information</h3>
                                             <dl className="space-y-2 text-sm">
                                                 <div className="flex justify-between"><dt className="text-gray-500">Type</dt><dd className="font-medium">{selected.loan_type_label || selected.loan_type}</dd></div>
-                                                <div className="flex justify-between"><dt className="text-gray-500">Principal</dt><dd className="font-medium">₱{Number(selected.principal_amount || selected.loan_amount).toLocaleString()}</dd></div>
-                                                <div className="flex justify-between"><dt className="text-gray-500">Interest Rate</dt><dd className="font-medium">{Number(selected.interest_rate).toFixed(1)}%</dd></div>
-                                                <div className="flex justify-between"><dt className="text-gray-500">Term</dt><dd className="font-medium">{selected.term_months} months</dd></div>
-                                                <div className="flex justify-between"><dt className="text-gray-500">Payment Frequency</dt><dd className="font-medium capitalize">{selected.payment_frequency}</dd></div>
-                                                {selected.estimated_interest > 0 && <><div className="flex justify-between"><dt className="text-gray-500">Est. Interest</dt><dd className="font-medium">₱{Number(selected.estimated_interest).toLocaleString()}</dd></div><div className="flex justify-between"><dt className="text-gray-500">Est. Total Repayment</dt><dd className="font-medium">₱{Number(selected.estimated_total_repayment).toLocaleString()}</dd></div></>}
-                                                <div className="flex justify-between"><dt className="text-gray-500">Status</dt><dd><span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">{selected.loan_status}</span></dd></div>
+                                                <div className="flex justify-between"><dt className="flex items-center gap-1 text-gray-500">Principal <HelpTip text="The amount you borrowed, before interest." /></dt><dd className="font-medium">{formatPeso(selected.principal_amount || selected.loan_amount)}</dd></div>
+                                                <div className="flex justify-between"><dt className="flex items-center gap-1 text-gray-500">Interest Rate <HelpTip text="The percentage charged on the loan, applied over the term." /></dt><dd className="font-medium">{Number(selected.interest_rate).toFixed(1)}%</dd></div>
+                                                <div className="flex justify-between"><dt className="flex items-center gap-1 text-gray-500">Term <HelpTip text="How long you have to repay the loan, in months." /></dt><dd className="font-medium">{selected.term_months} months</dd></div>
+                                                <div className="flex justify-between"><dt className="flex items-center gap-1 text-gray-500">Payment Frequency <HelpTip text="How often an installment is due (for example, monthly)." /></dt><dd className="font-medium capitalize">{selected.payment_frequency}</dd></div>
+                                                {selected.estimated_interest > 0 && <><div className="flex justify-between"><dt className="flex items-center gap-1 text-gray-500">Est. Interest <HelpTip text="Estimated total interest over the whole term." /></dt><dd className="font-medium">{formatPeso(selected.estimated_interest)}</dd></div><div className="flex justify-between"><dt className="flex items-center gap-1 text-gray-500">Est. Total Repayment <HelpTip text="Principal plus estimated interest." /></dt><dd className="font-medium">{formatPeso(selected.estimated_total_repayment)}</dd></div></>}
+                                                <div className="flex justify-between"><dt className="text-gray-500">Status</dt><dd><span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${loanStatusMeta(selected.loan_status).className}`}>{loanStatusMeta(selected.loan_status).label}</span></dd></div>
                                             </dl>
                                         </div>
                                         <div className="bg-gray-50 rounded-xl p-5">
@@ -106,7 +146,7 @@ export default function MemberLoansPage() {
                                             <dl className="space-y-2 text-sm">
                                                 <div className="flex justify-between"><dt className="text-gray-500">Applied</dt><dd className="font-medium">{selected.applied_at}</dd></div>
                                                 <div className="flex justify-between"><dt className="text-gray-500">Approved</dt><dd className="font-medium">{selected.approved_at || '—'}</dd></div>
-                                                <div className="flex justify-between"><dt className="text-gray-500">Due Date</dt><dd className="font-medium">{selected.due_date || '—'}</dd></div>
+                                                <div className="flex justify-between"><dt className="flex items-center gap-1 text-gray-500">Due Date <HelpTip text="The final date by which the whole loan should be repaid." /></dt><dd className="font-medium">{selected.due_date || '—'}</dd></div>
                                                 {selected.approved_by && <div className="flex justify-between"><dt className="text-gray-500">Approved By</dt><dd className="font-medium">{selected.approved_by}</dd></div>}
                                             </dl>
                                         </div>
@@ -128,34 +168,20 @@ export default function MemberLoansPage() {
                             )}
 
                             {tab === 'schedule' && (
-                                <div className="overflow-x-auto">
-                                    {selected.payment_schedule ? (
-                                        <table className="min-w-[600px] w-full text-sm"><thead className="bg-gray-50"><tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider"><th className="px-4 py-2">#</th><th className="px-4 py-2">Due Date</th><th className="px-4 py-2 text-right">Payment</th><th className="px-4 py-2 text-right">Principal</th><th className="px-4 py-2 text-right">Interest</th><th className="px-4 py-2 text-right">Balance</th></tr></thead>
-                                            <tbody className="divide-y divide-gray-100">
-                                                {selected.payment_schedule.map((s: any) => (
-                                                    <tr key={s.period} className="hover:bg-gray-50"><td className="px-4 py-2">{s.period}</td><td className="px-4 py-2">{s.due_date || '—'}</td><td className="px-4 py-2 text-right font-medium">₱{Number(s.payment).toLocaleString()}</td><td className="px-4 py-2 text-right">₱{Number(s.principal).toLocaleString()}</td><td className="px-4 py-2 text-right text-gray-500">₱{Number(s.interest).toLocaleString()}</td><td className="px-4 py-2 text-right">{Number(s.balance) > 0 ? `₱${Number(s.balance).toLocaleString()}` : '—'}</td></tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    ) : (
-                                        <p className="text-center py-8 text-gray-500">Schedule not available</p>
-                                    )}
+                                <div className="space-y-4">
+                                    <p className="flex flex-wrap items-center gap-1 text-sm text-gray-500">
+                                        Each row is one installment. <span className="inline-flex items-center gap-1">Payment <HelpTip text="The amount due for this period. It is made up of principal plus interest." /></span>
+                                        = <span className="inline-flex items-center gap-1">Principal <HelpTip text="The part of this payment that reduces the amount you borrowed." /></span>
+                                        + <span className="inline-flex items-center gap-1">Interest <HelpTip text="The part of this payment that covers the cost of borrowing." /></span>.
+                                    </p>
+                                    <AmortizationTable schedule={selected.payment_schedule} totalPaid={Number(selected.total_paid) || 0} />
                                 </div>
                             )}
 
                             {tab === 'history' && (
-                                <div className="overflow-x-auto">
-                                    {selected.completed_payments && selected.completed_payments.length > 0 ? (
-                                        <table className="min-w-[500px] w-full text-sm"><thead className="bg-gray-50"><tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider"><th className="px-4 py-2">#</th><th className="px-4 py-2">Transaction #</th><th className="px-4 py-2 text-right">Amount</th><th className="px-4 py-2">Date</th><th className="px-4 py-2">Status</th></tr></thead>
-                                            <tbody className="divide-y divide-gray-100">
-                                                {selected.completed_payments.map((p: any) => (
-                                                    <tr key={p.id} className="hover:bg-gray-50"><td className="px-4 py-2">{p.payment_number}</td><td className="px-4 py-2 font-mono text-xs truncate max-w-[220px]" title={p.transaction_number}>{p.transaction_number}</td><td className="px-4 py-2 text-right font-medium">₱{Number(p.amount).toLocaleString()}</td><td className="px-4 py-2 text-gray-500">{p.payment_date}</td><td className="px-4 py-2"><span className="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">{p.status}</span></td></tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    ) : (
-                                        <div className="text-center py-12"><p className="text-gray-500">No payments recorded yet</p></div>
-                                    )}
+                                <div className="space-y-3">
+                                    <p className="flex items-center gap-1 text-sm text-gray-500">Payments you have made. <HelpTip text="Only completed payments reduce your balance. Pending payments still need approval." /></p>
+                                    <PaymentHistoryTable payments={selected.payments} />
                                 </div>
                             )}
                         </div>

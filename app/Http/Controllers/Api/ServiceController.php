@@ -91,7 +91,7 @@ class ServiceController extends Controller
         }
         BranchScope::applyToTransactions($pendingApprovalsQuery, $user);
 
-        $pendingLoansQuery = Loan::where('loan_status', 'pending');
+        $pendingLoansQuery = Loan::awaitingReview();
         BranchScope::applyToLoans($pendingLoansQuery, $user);
 
         return response()->json([
@@ -396,6 +396,13 @@ class ServiceController extends Controller
         ]);
 
         $loan = Loan::findOrFail($validated['loan_id']);
+
+        abort_unless(
+            in_array($loan->loan_status, ['approved', 'active'], true),
+            422,
+            'Payments can only be made on active or approved loans.'
+        );
+
         $targetUserId = $validated['member_id'] ?? $validated['user_id'] ?? $user->id;
 
         if (! $this->canManageServicesForMembers($user)) {

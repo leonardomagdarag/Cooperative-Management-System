@@ -104,7 +104,7 @@ export default function LedgerPage() {
     };
 
     const openAdd = () => { reset(); setEditingId(null); setForm({ transaction_type: 'deposit', amount: '', note: '', account_id: '', loan_id: '', branch_id: '', transaction_date: new Date().toISOString().slice(0, 10) }); setShowAddModal(true); };
-    const openEdit = (t: any) => { reset(); setEditingId(t.id); setForm({ transaction_type: t.transaction_type, amount: t.amount, note: t.note || '', account_id: t.account_id || '', loan_id: t.loan_id || '', branch_id: t.branch_id || '', transaction_date: t.transaction_date || new Date().toISOString().slice(0, 10) }); setShowAddModal(true); };
+    const openEdit = (t: any) => { reset(); setEditingId(t.id); setForm({ transaction_type: t.transaction_type, amount: t.amount, note: t.note || '', account_id: t.account_id != null ? String(t.account_id) : '', loan_id: t.loan_id != null ? String(t.loan_id) : '', branch_id: t.branch_id || '', transaction_date: t.transaction_date || new Date().toISOString().slice(0, 10) }); setShowAddModal(true); };
 
     const exportCsv = async () => {
         try {

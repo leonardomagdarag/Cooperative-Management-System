@@ -796,3 +796,62 @@ test('member cannot pay another member loan without supplying their own id', fun
 
     expect(Transaction::where('transaction_type', 'loan_payment')->where('client_request_id', 'req_lp_owner_0001')->count())->toBe(0);
 });
+
+test('loan payment rejects payments on pending or unapproved loans', function () {
+    $member = User::factory()->create();
+    $member->assignRole('member');
+
+    $savingsAccount = Account::factory()->create([
+        'user_id' => $member->id,
+        'account_type' => 'savings',
+        'balance' => 5000,
+    ]);
+
+    $pendingLoan = Loan::factory()->create([
+        'user_id' => $member->id,
+        'loan_amount' => 5000,
+        'interest_rate' => 12,
+        'term_months' => 6,
+        'loan_status' => 'pending',
+    ]);
+
+    actingAs($this->admin);
+
+    $this->postJson('/api/services/loan-payment', [
+        'member_id' => $member->id,
+        'loan_id' => $pendingLoan->id,
+        'amount' => 500,
+        'transaction_mode' => 'counter',
+    ])->assertStatus(422)
+        ->assertJsonPath('message', 'Payments can only be made on active or approved loans.');
+
+    expect(Transaction::where('loan_id', $pendingLoan->id)->count())->toBe(0)
+        ->and((float) $savingsAccount->fresh()->balance)->toBe(5000.0)
+        ->and($pendingLoan->fresh()->loan_status)->toBe('pending');
+});
+
+test('admin can create officer when email is verified even if phone is unverified via OTP', function () {
+    actingAs($this->admin);
+
+    $email = 'new.officer.test@example.com';
+
+    // Simulate session containing verified email OTP but unverified phone OTP
+    session(['verified_officer_email' => $email]);
+
+    $this->postJson('/api/members', [
+        'first_name' => 'Test',
+        'last_name' => 'Officer',
+        'birth_date' => now()->subYears(30)->toDateString(),
+        'gender' => 'male',
+        'civil_status' => 'single',
+        'email' => $email,
+        'phone_number' => '09179998877',
+        'password' => 'S3cureOfficerPass!1',
+        'password_confirmation' => 'S3cureOfficerPass!1',
+        'role' => 'loan',
+    ])->assertStatus(202);
+
+    $officer = User::where('email', $email)->firstOrFail();
+    expect($officer->personalData->contact->email_verified_at)->not->toBeNull()
+        ->and($officer->personalData->contact->phone_verified_at)->toBeNull();
+});

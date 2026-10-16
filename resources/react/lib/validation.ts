@@ -486,8 +486,8 @@ export const ledgerSchema = z.object({
     transaction_type: enumFrom(['deposit', 'withdrawal', 'loan_payment', 'loan_disbursement', 'fee'], 'Select a transaction type'),
     amount: z.coerce.number().positive('Enter a valid amount').min(0.01, 'Amount must be at least 0.01'),
     note: optionalString(500),
-    account_id: optionalString(50),
-    loan_id: optionalString(50),
+    account_id: z.union([z.string(), z.number()]).optional().transform(v => v != null ? String(v) : undefined),
+    loan_id: z.union([z.string(), z.number()]).optional().transform(v => v != null ? String(v) : undefined),
     branch_id: optionalId,
 }).superRefine((d, ctx) => {
     if ((d.transaction_type === 'deposit' || d.transaction_type === 'withdrawal') && !d.account_id) {

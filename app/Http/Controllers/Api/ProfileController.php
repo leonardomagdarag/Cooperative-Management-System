@@ -41,12 +41,11 @@ class ProfileController extends Controller
 
         $accounts = $user->accounts;
         $totalBalance = $accounts->sum('balance');
-        $loans = $user->loans()->latest()->take(10)->get();
-        $activeLoans = $user->loans()->whereIn('loan_status', ['approved', 'disbursed', 'active'])->count();
+        $loans = $user->loans->sortByDesc('created_at')->take(10)->values();
+        $activeLoans = $user->loans->whereIn('loan_status', ['approved', 'disbursed', 'active'])->count();
 
-        $totalLoanBalance = $user->loans()
+        $totalLoanBalance = $user->loans
             ->whereIn('loan_status', ['approved', 'active'])
-            ->get()
             ->sum(fn ($l) => $l->remainingBalance());
 
         $savingsAccount = $accounts->where('account_type', 'savings')->first();
@@ -144,8 +143,9 @@ class ProfileController extends Controller
             ]),
             'total_balance' => $totalBalance,
             'loans' => $loans->map(function ($l) {
-                $totalPaid = $l->payments->sum('amount');
-                $progress = $l->loan_amount > 0 ? round(($totalPaid / $l->loan_amount) * 100, 1) : 0;
+                $totalPaid = $l->totalPaid();
+                $totalPayable = $l->totalPayable();
+                $progress = $totalPayable > 0 ? round(($totalPaid / $totalPayable) * 100, 1) : 0;
 
                 return [
                     'id' => $l->id,
@@ -154,7 +154,7 @@ class ProfileController extends Controller
                     'principal_amount' => $l->principal_amount ?? $l->loan_amount,
                     'loan_amount' => $l->loan_amount,
                     'loan_status' => $l->loan_status,
-                    'remaining_balance' => $l->remainingBalance(),
+                    'remaining_balance' => max(0, round($totalPayable - $totalPaid, 2)),
                     'total_paid' => $totalPaid,
                     'progress' => $progress,
                     'due_date' => $l->due_date?->format('M d, Y'),

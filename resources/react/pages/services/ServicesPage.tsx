@@ -39,6 +39,7 @@ export default function ServicesPage() {
     const isAdmin = user?.primary_role === 'admin';
     const canApprove = perms.includes('transactions.approve') || perms.includes('deposits.approve') || perms.includes('withdrawals.approve');
     const canReviewLoans = perms.includes('loans.update');
+    const canDeposit = perms.includes('deposits.create') || perms.includes('services.create');
     const isLoanFocused = !!user && !isAdmin && user.primary_role === 'loan';
 
     const activeService = (searchParams.get('service') as ServiceType) || null;
@@ -464,7 +465,7 @@ export default function ServicesPage() {
                             color="green"
                             label="Deposit Money"
                             desc="Add funds to savings or share capital"
-                            locked={!hasSelectedMember}
+                            locked={!hasSelectedMember || !canDeposit}
                             maintenance={availability?.deposit?.global === false || availability?.deposit?.officer === false}
                             onClick={() => openService('deposit')}
                         />

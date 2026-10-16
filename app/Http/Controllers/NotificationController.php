@@ -29,7 +29,18 @@ class NotificationController extends Controller
         $query = Auth::user()
             ->notifications()
             ->active()
-            ->orderByPriority();
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
+
+        $priorityTotals = Auth::user()
+            ->notifications()
+            ->active()
+            ->selectRaw("SUM(CASE WHEN priority IN ('urgent', 'high') THEN 1 ELSE 0 END) as high_count, SUM(CASE WHEN priority IN ('normal', 'low') THEN 1 ELSE 0 END) as normal_count")
+            ->first();
+        $priorityCounts = [
+            'high' => (int) ($priorityTotals?->high_count ?? 0),
+            'normal' => (int) ($priorityTotals?->normal_count ?? 0),
+        ];
 
         $status = $request->string('status')->toString();
         if ($status === 'unread') {
@@ -63,6 +74,7 @@ class NotificationController extends Controller
             return response()->json([
                 'notifications' => $paginator->getCollection()->map(fn ($notification) => $this->serializeNotification($notification)),
                 'unread_count' => $this->getUnreadCount(),
+                'priority_counts' => $priorityCounts,
                 'pagination' => [
                     'current_page' => $paginator->currentPage(),
                     'last_page' => $paginator->lastPage(),
@@ -82,6 +94,7 @@ class NotificationController extends Controller
         return response()->json([
             'notifications' => $notifications,
             'unread_count' => $unreadCount,
+            'priority_counts' => $priorityCounts,
         ]);
     }
 

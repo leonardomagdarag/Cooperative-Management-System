@@ -63,13 +63,14 @@ test('F020-4: authorized user retrieves full service availability schema', funct
         ->assertJsonStructure([
             'data' => [
                 'deposit' => ['global', 'member', 'officer', 'counter', 'online'],
-                'withdrawal' => ['global', 'member', 'officer', 'counter', 'online', 'bank_transfer'],
                 'loan_application' => ['global', 'member', 'officer'],
                 'loan_payment' => ['global', 'member', 'officer', 'counter', 'online'],
                 'registration' => ['global', 'member'],
                 'login' => ['global', 'member', 'officer'],
             ],
-        ]);
+        ])
+        // Withdrawal moved to the Financial Accounts settings tab.
+        ->assertJsonMissingPath('data.withdrawal');
 });
 
 test('F020-5: updating service availability rejects unknown services (422)', function () {

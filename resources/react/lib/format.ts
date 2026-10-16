@@ -15,3 +15,9 @@ export function formatDate(iso: string | null | undefined): string {
     if (!iso) return '—';
     return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
+
+export function formatPeso(amount: number | string | null | undefined): string {
+    const value = Number(amount);
+    if (!Number.isFinite(value)) return '₱0.00';
+    return `₱${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}

@@ -70,6 +70,7 @@ export default function NotificationsPage() {
 
     const notifications: Notification[] = data?.data?.notifications ?? [];
     const pagination = data?.data?.pagination;
+    const priorityCounts = data?.data?.priority_counts ?? { high: 0, normal: 0 };
 
     const getCategoryColor = (type: string) => {
         if (type === 'security_alert') return 'bg-red-100 text-red-700';
@@ -105,6 +106,17 @@ export default function NotificationsPage() {
                     >
                         Clear Read
                     </button>
+                </div>
+            </div>
+
+            <div className="mb-6 grid gap-3 sm:grid-cols-2">
+                <div className="flex items-center gap-4 rounded-2xl border border-rose-100 bg-white p-4 shadow-sm">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-50 text-rose-600"><i className="fas fa-triangle-exclamation" aria-hidden="true"></i></span>
+                    <div><p className="text-sm font-medium text-slate-600">High importance</p><p className="text-2xl font-bold text-slate-900">{priorityCounts.high}</p></div>
+                </div>
+                <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600"><i className="fas fa-bell" aria-hidden="true"></i></span>
+                    <div><p className="text-sm font-medium text-slate-600">Normal alerts</p><p className="text-2xl font-bold text-slate-900">{priorityCounts.normal}</p></div>
                 </div>
             </div>
 
@@ -165,6 +177,9 @@ export default function NotificationsPage() {
                                     <div className="flex items-center gap-2">
                                         <p className="font-medium text-gray-900">{n.title}</p>
                                         {!n.is_read && <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-red-100 text-red-700">Unread</span>}
+                                        <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${n.priority === 'high' || n.priority === 'urgent' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>
+                                            {n.priority === 'high' || n.priority === 'urgent' ? 'High importance' : 'Normal'}
+                                        </span>
                                         <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${getCategoryColor(n.type)}`}>
                                             {n.type.replace('_', ' ')}
                                         </span>

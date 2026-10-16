@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use App\Models\Notification;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\SystemSettingSeeder;
 use Database\Seeders\UserSeeder;
@@ -59,6 +60,49 @@ test('member role access boundaries', function () {
     $this->getJson('/api/backups')->assertStatus(403);
     $this->getJson('/api/logs')->assertStatus(403);
     $this->postJson('/api/branches', ['name' => 'Unauthorized Branch'])->assertStatus(403);
+});
+
+test('notifications are newest first and include active high and normal priority counts', function () {
+    $this->member->notifications()->delete();
+    $olderHigh = Notification::create([
+        'user_id' => $this->member->id,
+        'type' => 'security_alert',
+        'title' => 'Older security alert',
+        'message' => 'Older alert',
+        'priority' => 'urgent',
+    ]);
+    Notification::whereKey($olderHigh->id)->update(['created_at' => now()->subDay()]);
+    $latestNormal = Notification::create([
+        'user_id' => $this->member->id,
+        'type' => 'general',
+        'title' => 'Latest update',
+        'message' => 'Latest alert',
+        'priority' => 'normal',
+    ]);
+    Notification::whereKey($latestNormal->id)->update(['created_at' => now()->addMinute()]);
+    Notification::create([
+        'user_id' => $this->member->id,
+        'type' => 'general',
+        'title' => 'Low priority update',
+        'message' => 'Low alert',
+        'priority' => 'low',
+    ]);
+    Notification::create([
+        'user_id' => $this->member->id,
+        'type' => 'security_alert',
+        'title' => 'Expired alert',
+        'message' => 'Expired',
+        'priority' => 'high',
+        'expires_at' => now()->subMinute(),
+    ]);
+
+    $this->actingAs($this->member)
+        ->getJson('/api/notifications?page=1')
+        ->assertOk()
+        ->assertJsonPath('notifications.0.id', $latestNormal->id)
+        ->assertJsonPath('notifications.2.id', $olderHigh->id)
+        ->assertJsonPath('priority_counts.high', 1)
+        ->assertJsonPath('priority_counts.normal', 2);
 });
 
 test('admin role access capabilities', function () {

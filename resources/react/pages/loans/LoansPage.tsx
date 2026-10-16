@@ -9,6 +9,9 @@ import { useToast } from '../../contexts/ToastContext';
 import { validate, loanEncodeSchema, loanEditSchema, type FieldErrors } from '../../lib/validation';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Pagination from '../../components/ui/Pagination';
+import AmortizationTable from '../../components/loans/AmortizationTable';
+import PaymentHistoryTable from '../../components/loans/PaymentHistoryTable';
+import { formatPeso } from '../../lib/format';
 
 export default function LoansPage() {
     const { user } = useAuth();
@@ -342,85 +345,68 @@ export default function LoansPage() {
 
                             {/* Tab: Overview */}
                             {activeTab === 'overview' && detail && (
-                                <div className="space-y-3">
-                                    <InfoRow label="Loan Number" value={detail.loan_number} />
-                                    <InfoRow label="Borrower" value={detail.borrower?.name || '—'} />
-                                    <InfoRow label="Type" value={detail.loan_type} />
-                                    <InfoRow label="Amount" value={`₱${Number(detail.loan_amount).toLocaleString()}`} />
-                                    <InfoRow label="Interest Rate" value={`${detail.interest_rate}%`} />
-                                    <InfoRow label="Term" value={`${detail.term_months} months`} />
-                                    <InfoRow label="Payment Frequency" value={detail.payment_frequency} />
-                                    <InfoRow label="Status" value={<span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${getStatusColor(detail.loan_status)}`}>{detail.loan_status}</span>} />
-                                    <InfoRow label="Applied" value={detail.applied_at || '—'} />
-                                    <InfoRow label="Approved" value={detail.approved_at || '—'} />
-                                    <InfoRow label="Due Date" value={detail.due_date ? new Date(`${String(detail.due_date).slice(0, 10)}T00:00:00`).toLocaleDateString() : '—'} />
-                                    <InfoRow label="Approved By" value={detail.approved_by?.name || '—'} />
+                                <div className="space-y-4">
+                                    <div className="rounded-xl bg-gray-50 p-5">
+                                        <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-gray-900">How this loan breaks down <HelpTip text="Principal is the amount borrowed. Interest is the cost of borrowing. Added together they make up the total to be repaid." /></h3>
+                                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                            <div className="rounded-lg border border-gray-100 bg-white p-4">
+                                                <p className="flex items-center gap-1 text-xs font-medium text-gray-500">Principal <HelpTip text="The amount borrowed, before any interest is added." /></p>
+                                                <p className="mt-1 text-lg font-semibold text-gray-900">{formatPeso(detail.principal_amount || detail.loan_amount)}</p>
+                                            </div>
+                                            <div className="rounded-lg border border-gray-100 bg-white p-4">
+                                                <p className="flex items-center gap-1 text-xs font-medium text-gray-500">+ Interest <HelpTip text="The total cost of borrowing over the whole term." /></p>
+                                                <p className="mt-1 text-lg font-semibold text-gray-900">{formatPeso(detail.estimated_interest)}</p>
+                                            </div>
+                                            <div className="rounded-lg border border-gray-100 bg-white p-4">
+                                                <p className="flex items-center gap-1 text-xs font-medium text-gray-500">= Total Repayment <HelpTip text="Principal plus interest: the total to be paid over the life of the loan." /></p>
+                                                <p className="mt-1 text-lg font-semibold text-emerald-700">{formatPeso(detail.estimated_total_repayment)}</p>
+                                            </div>
+                                        </div>
+                                        <div className="mt-5">
+                                            <div className="mb-1.5 flex items-center justify-between text-xs text-gray-500">
+                                                <span>{formatPeso(detail.total_paid)} paid</span>
+                                                <span>{formatPeso(detail.remaining_balance)} remaining</span>
+                                            </div>
+                                            <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-200">
+                                                <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, Math.max(0, Number(detail.progress) || 0))}%` }} />
+                                            </div>
+                                            <p className="mt-1 text-right text-xs font-medium text-emerald-700">{Number(detail.progress || 0).toFixed(1)}% paid</p>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-3">
+                                        <InfoRow label="Loan Number" value={detail.loan_number} />
+                                        <InfoRow label="Borrower" value={detail.borrower?.name || '—'} />
+                                        <InfoRow label="Type" value={detail.loan_product_name || detail.loan_type_label || detail.loan_type} />
+                                        <InfoRow label="Amount" value={formatPeso(detail.loan_amount)} hint="The total amount borrowed for this loan." />
+                                        <InfoRow label="Interest Rate" value={`${detail.interest_rate}%`} hint="The percentage charged on the loan, applied over the term." />
+                                        <InfoRow label="Term" value={`${detail.term_months} months`} hint="How long the borrower has to repay the loan, in months." />
+                                        <InfoRow label="Payment Frequency" value={detail.payment_frequency} hint="How often an installment is due (for example, monthly)." />
+                                        <InfoRow label="Status" value={<span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${getStatusColor(detail.loan_status)}`}>{getStatusLabel(detail.loan_status)}</span>} />
+                                        <InfoRow label="Applied" value={detail.applied_at || '—'} />
+                                        <InfoRow label="Approved" value={detail.approved_at || '—'} />
+                                        <InfoRow label="Due Date" value={detail.due_date ? new Date(`${String(detail.due_date).slice(0, 10)}T00:00:00`).toLocaleDateString() : '—'} hint="The final date by which the whole loan should be repaid." />
+                                        <InfoRow label="Approved By" value={detail.approved_by?.name || '—'} />
+                                    </div>
                                 </div>
                             )}
 
                             {/* Tab: Payment History */}
                             {activeTab === 'payments' && (
-                                <div>
-                                    {detail?.payments?.length > 0 ? (
-                                        <div className="overflow-x-auto rounded-lg border border-gray-200">
-                                            <table className="min-w-[450px] w-full divide-y divide-gray-200">
-                                                <thead className="bg-gray-50">
-                                                    <tr>
-                                                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                                                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
-                                                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-gray-100">
-                                                    {detail.payments.map((p: any) => (
-                                                        <tr key={p.id}>
-                                                            <td className="px-3 py-2 text-sm text-gray-500">{p.payment_date || '—'}</td>
-                                                            <td className="px-3 py-2 text-sm text-right font-medium text-gray-900">₱{Number(p.amount).toLocaleString()}</td>
-                                                            <td className="px-3 py-2"><span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${p.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{p.status || 'completed'}</span></td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    ) : (
-                                        <div className="rounded-lg bg-gray-50 p-8 text-center text-sm text-gray-500">Payment history available in loan details view</div>
-                                    )}
+                                <div className="space-y-3">
+                                    <p className="flex items-center gap-1 text-sm text-gray-500">Payments recorded against this loan. <HelpTip text="Only completed payments reduce the balance. Pending payments still need approval." /></p>
+                                    <PaymentHistoryTable payments={detail?.payments} compact />
                                 </div>
                             )}
 
                             {/* Tab: Amortization Schedule */}
                             {activeTab === 'schedule' && (
-                                <div>
-                                    {detail?.payment_schedule?.length > 0 ? (
-                                        <div className="overflow-x-auto rounded-lg border border-gray-200">
-                                            <table className="min-w-[500px] w-full divide-y divide-gray-200">
-                                                <thead className="bg-gray-50">
-                                                    <tr>
-                                                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">#</th>
-                                                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Due Date</th>
-                                                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Payment</th>
-                                                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Principal</th>
-                                                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Interest</th>
-                                                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Balance</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-gray-100">
-                                                    {detail.payment_schedule.map((row: any) => (
-                                                        <tr key={row.period} className="hover:bg-gray-50">
-                                                            <td className="px-3 py-1.5 text-xs text-gray-500">{row.period}</td>
-                                                            <td className="px-3 py-1.5 text-xs text-gray-500">{row.due_date}</td>
-                                                            <td className="px-3 py-1.5 text-xs text-right font-medium text-gray-900">₱{row.payment.toLocaleString()}</td>
-                                                            <td className="px-3 py-1.5 text-xs text-right text-gray-500">₱{row.principal.toLocaleString()}</td>
-                                                            <td className="px-3 py-1.5 text-xs text-right text-gray-500">₱{row.interest.toLocaleString()}</td>
-                                                            <td className="px-3 py-1.5 text-xs text-right text-gray-500">₱{row.balance.toLocaleString()}</td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    ) : (
-                                        <div className="rounded-lg bg-gray-50 p-8 text-center text-sm text-gray-500">No schedule data available</div>
-                                    )}
+                                <div className="space-y-3">
+                                    <p className="flex flex-wrap items-center gap-1 text-sm text-gray-500">
+                                        Each row is one installment. <span className="inline-flex items-center gap-1">Payment <HelpTip text="The amount due for this period: principal plus interest." /></span>
+                                        = <span className="inline-flex items-center gap-1">Principal <HelpTip text="The part of this payment that reduces the amount borrowed." /></span>
+                                        + <span className="inline-flex items-center gap-1">Interest <HelpTip text="The part of this payment that covers the cost of borrowing." /></span>.
+                                    </p>
+                                    <AmortizationTable schedule={detail?.payment_schedule} totalPaid={Number(detail?.total_paid) || 0} compact />
                                 </div>
                             )}
 
@@ -600,10 +586,10 @@ export default function LoansPage() {
     );
 }
 
-function InfoRow({ label, value }: { label: string; value: any }) {
+function InfoRow({ label, value, hint }: { label: any; value: any; hint?: string }) {
     return (
         <div className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2">
-            <span className="text-sm text-gray-500">{label}</span>
+            <span className="flex items-center gap-1 text-sm text-gray-500">{label}{hint && <HelpTip text={hint} />}</span>
             <span className="text-sm font-medium text-gray-900">{value}</span>
         </div>
     );

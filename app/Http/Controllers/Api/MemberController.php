@@ -344,11 +344,10 @@ class MemberController extends Controller
             'agreement_file' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
         ], PersonFieldRules::messages());
 
+        // For officer accounts, email verification is strictly required.
+        // Phone verification is optional when email is verified (e.g. when SMS gateway is unavailable).
         if ($role && $role !== 'member' && ! $verifiedEmail) {
             return response()->json(['message' => 'Email must be verified via OTP first.'], 422);
-        }
-        if ($role && $role !== 'member' && ! $verifiedPhone) {
-            return response()->json(['message' => 'Phone number must be verified via OTP first.'], 422);
         }
         if ((! $role || $role === 'member') && ! $verifiedEmail && ! $verifiedPhone) {
             return response()->json([

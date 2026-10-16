@@ -110,7 +110,10 @@ export default function OfficerFormModal({ officer, onClose }: { officer?: any; 
 
         if (step === 1 && !isEdit) {
             if (!isEmailVerified) errs.email = 'Email must be verified first.';
-            if (!isPhoneVerified) errs.phone_number = 'Phone must be verified first.';
+            // Phone verification is required only when email has not been verified.
+            // When email is verified, SMS phone verification is encouraged but not blocking
+            // (allows officer creation in environments where SMS gateway is unavailable).
+            if (!isEmailVerified && !isPhoneVerified) errs.phone_number = 'Phone must be verified first.';
         }
 
         setErrors(errs);
@@ -288,6 +291,13 @@ export default function OfficerFormModal({ officer, onClose }: { officer?: any; 
                                                     return { success: true, message: res.data.message };
                                                 }}
                                             />
+                                            {isEmailVerified && !isPhoneVerified && (
+                                                <p className="col-span-1 -mt-2 text-xs text-amber-600 flex items-center gap-1">
+                                                    <i className="fas fa-info-circle" />
+                                                    Phone verification is recommended but optional once email is verified.
+                                                </p>
+                                            )}
+
                                         </>
                                     )}
                                     <div className="col-span-2"><label className="block text-xs font-medium text-gray-500 mb-1">Street</label><input value={form.street} onChange={e => setClearing('street')(e.target.value)} maxLength={255} className={`w-full rounded-lg border p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 ${errors.street ? 'border-red-400' : 'border-gray-300'}`} />{errors.street && <p className="mt-1 text-xs text-red-600">{errors.street}</p>}</div>

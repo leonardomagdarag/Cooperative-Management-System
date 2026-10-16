@@ -121,7 +121,6 @@ test('admin can save the online member registration service availability setting
                 'registration' => ['global' => true, 'member' => false],
                 'login' => ['global' => true, 'member' => true, 'officer' => true],
                 'deposit' => ['global' => true, 'member' => true, 'officer' => true, 'counter' => true, 'online' => true],
-                'withdrawal' => ['global' => true, 'member' => true, 'officer' => true, 'counter' => true, 'online' => true, 'bank_transfer' => true],
                 'loan_application' => ['global' => true, 'member' => true, 'officer' => true],
                 'loan_payment' => ['global' => true, 'member' => true, 'officer' => true, 'counter' => true, 'online' => true],
             ],

@@ -3,6 +3,7 @@
 use App\Models\Account;
 use App\Models\BackupRun;
 use App\Models\Branch;
+use App\Models\Loan;
 use App\Models\User;
 use Database\Seeders\AccountSeeder;
 use Database\Seeders\QaChairmanSeeder;
@@ -113,6 +114,50 @@ test('chairman dashboard gives a cooperative-wide overview without administrator
         ->assertJsonStructure(['total_members', 'total_savings', 'total_share_capital', 'pending_transactions', 'pending_loans', 'loans_active', 'month_net', 'loan_status_series'])
         ->assertJsonPath('total_members', $memberCount)
         ->assertJsonMissingPath('backup_status');
+});
+
+test('chairman share capital total matches all share-capital account balances', function () {
+    $this->seed(QaChairmanSeeder::class);
+    $chairman = User::where('email', 'leo.baluyot039+chairman@gmail.com')->firstOrFail();
+    $expected = (float) Account::query()->where('account_type', 'share-capital')->sum('balance');
+
+    $response = $this->actingAs($chairman)
+        ->getJson('/api/dashboard?branch_id='.$this->officeBranch->id)
+        ->assertOk();
+
+    expect((float) $response->json('total_share_capital'))->toBe($expected)
+        ->and((float) $response->json('share_capital_total'))->toBe($expected);
+});
+
+test('dashboard and services pending-loan totals exclude rejected review requests', function () {
+    foreach (range(1, 3) as $index) {
+        Loan::factory()->create([
+            'user_id' => $this->mainMember->id,
+            'loan_status' => 'pending',
+            'review_status' => 'review_rejected',
+        ]);
+    }
+
+    Loan::factory()->create([
+        'user_id' => $this->mainMember->id,
+        'loan_status' => 'pending',
+        'review_status' => 'under_review',
+    ]);
+
+    $this->actingAs($this->admin)
+        ->getJson('/api/dashboard')
+        ->assertOk()
+        ->assertJsonPath('pending_loans', 1);
+
+    $this->getJson('/api/services')
+        ->assertOk()
+        ->assertJsonPath('pending_loans', 1);
+
+    $this->actingAs($this->loan)
+        ->getJson('/api/dashboard')
+        ->assertOk()
+        ->assertJsonPath('pending_loans', 1)
+        ->assertJsonCount(1, 'pending_loans_list');
 });
 
 // ---------------------------------------------------------------------------
