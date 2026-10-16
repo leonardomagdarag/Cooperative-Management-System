@@ -49,7 +49,7 @@ export default function PublicContentPage() {
     const { addToast } = useToast();
 
     const { data, isLoading } = useQuery({
-        queryKey: ['public-content'],
+        queryKey: ['public-content', 'editor'],
         queryFn: () => api.get('/api/public-content'),
     });
 
@@ -63,12 +63,21 @@ export default function PublicContentPage() {
     const canManage = data?.data?.can_manage === true;
 
     useEffect(() => {
-        if (Object.keys(form).length === 0 && data?.data?.form) {
-            setForm(data.data.form);
-            const firstSection = Object.keys(data.data.sections || {})[0];
-            if (firstSection) setActiveSection(firstSection);
+        const loaded = data?.data?.form;
+        if (!loaded) return;
+
+        if (Object.keys(form).length === 0) {
+            setForm(loaded);
         }
-    }, [data, form]);
+
+        // The editor schema (sections) is admin-only and may arrive a moment after
+        // a cached payload (e.g. a guest response still cached from the login
+        // page). Attach the first section as soon as the schema is available.
+        const sectionKeys = Object.keys(data.data.sections || {});
+        if (!activeSection && sectionKeys.length > 0) {
+            setActiveSection(sectionKeys[0]);
+        }
+    }, [data, form, activeSection]);
 
     const sectionKeys = Object.keys(sections);
     const meta = sections[activeSection] || {};

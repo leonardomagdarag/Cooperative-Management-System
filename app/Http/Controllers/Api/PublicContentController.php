@@ -19,12 +19,10 @@ class PublicContentController extends Controller
 {
     public function index(): JsonResponse
     {
-        $sections = SiteContentCatalog::editorSections();
-        $form = SiteContentCatalog::editorContent();
+        $canManage = (bool) Auth::user()?->hasRole('admin');
 
-        return response()->json([
-            'sections' => $sections,
-            'form' => $form,
+        $payload = [
+            'form' => SiteContentCatalog::editorContent(),
             'metrics' => app(CooperativeMetricsService::class)->publicMetrics(),
             'availability' => [
                 'registration' => [
@@ -37,16 +35,24 @@ class PublicContentController extends Controller
                     'officer' => (bool) SystemSetting::get('service_login_officer_enabled', true),
                 ],
             ],
-            'can_manage' => (bool) Auth::user()?->hasRole('admin'),
+            'can_manage' => $canManage,
             'turnstile_site_key' => config('services.turnstile.site_key'),
-        ]);
+        ];
+
+        // The editor schema (field definitions, groups, controls) is only needed
+        // by the admin editor. Never ship it to unauthenticated visitors.
+        if ($canManage) {
+            $payload['sections'] = SiteContentCatalog::editorSections();
+        }
+
+        return response()->json($payload);
     }
 
     public function save(Request $request): JsonResponse
     {
         abort_unless(Auth::user()?->hasRole('admin'), 403);
 
-        $validated = $request->validate($this->rules());
+        $validated = $request->validate($this->rules(), $this->messages(), $this->attributes());
 
         DB::transaction(function () use ($validated) {
             foreach (SiteContentCatalog::recordsFromForm($validated['form']) as $record) {
@@ -116,5 +122,42 @@ class PublicContentController extends Controller
         $rules['form.home.founding_year'] = 'nullable|integer|min:1900|max:'.(int) date('Y');
 
         return $rules;
+    }
+
+    /**
+     * Friendly messages for rules whose default wording exposes the raw key.
+     *
+     * @return array<string, string>
+     */
+    private function messages(): array
+    {
+        return [
+            'form.home.founding_year.integer' => 'The founding year must be a whole number.',
+            'form.home.founding_year.min' => 'The founding year must be at least :min.',
+            'form.home.founding_year.max' => 'The founding year must not be greater than :max.',
+        ];
+    }
+
+    /**
+     * Map the generic `form.{section}.{path}` rule keys to human labels so
+     * validation messages read naturally instead of leaking the internal key.
+     *
+     * @return array<string, string>
+     */
+    private function attributes(): array
+    {
+        $attributes = [];
+
+        foreach (SiteContentCatalog::fieldDefinitions() as $field) {
+            $attributes['form.'.$field['section'].'.'.$field['path']] = strtolower($field['label'] ?? $field['path']);
+        }
+
+        foreach (['board', 'officers'] as $section) {
+            $attributes['form.'.$section.'.cards.*.name'] = 'name';
+            $attributes['form.'.$section.'.cards.*.position'] = 'position';
+            $attributes['form.'.$section.'.cards.*.image_url'] = 'image URL';
+        }
+
+        return $attributes;
     }
 }

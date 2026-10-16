@@ -139,3 +139,39 @@ test('founding year is validated when saving public content', function () {
         ->putJson('/api/public-content', ['form' => $form])
         ->assertOk();
 });
+
+test('founding year validation returns a friendly message instead of the raw key', function () {
+    $admin = makeMetricsAdmin();
+
+    $form = SiteContentCatalog::editorContent();
+    $form['home']['founding_year'] = (string) (now()->year + 1);
+
+    $response = actingAs($admin)
+        ->putJson('/api/public-content', ['form' => $form])
+        ->assertStatus(422);
+
+    $errors = $response->json('errors');
+
+    expect($errors['form.home.founding_year'][0] ?? null)
+        ->toBe('The founding year must not be greater than '.(int) date('Y').'.');
+});
+
+test('public content hides the editor schema from unauthenticated visitors', function () {
+    $response = getJson('/api/public-content')->assertOk();
+
+    expect($response->json('can_manage'))->toBeFalse()
+        ->and($response->json('sections'))->toBeNull()
+        ->and($response->json('form'))->not->toBeNull();
+});
+
+test('public content includes the editor schema for administrators', function () {
+    $admin = makeMetricsAdmin();
+
+    $response = actingAs($admin)
+        ->getJson('/api/public-content')
+        ->assertOk();
+
+    expect($response->json('can_manage'))->toBeTrue()
+        ->and($response->json('sections'))->toBeArray()
+        ->and($response->json('sections'))->toHaveKey('home');
+});

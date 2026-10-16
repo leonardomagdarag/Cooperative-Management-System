@@ -34,11 +34,10 @@ function fullForm(): array
     return SiteContentCatalog::editorContent();
 }
 
-test('public content api returns sections, form, can_manage and turnstile key', function () {
+test('public content api returns form, can_manage and turnstile key but hides the editor schema from guests', function () {
     $response = getJson('/api/public-content')
         ->assertOk()
         ->assertJsonStructure([
-            'sections',
             'form',
             'availability',
             'can_manage',
@@ -46,24 +45,27 @@ test('public content api returns sections, form, can_manage and turnstile key', 
         ]);
 
     $data = $response->json();
-    expect($data['sections'])->toBeArray()
-        ->and($data['sections'])->toHaveKeys([
-            'home', 'about', 'board', 'officers', 'member_statements',
-            'news', 'events', 'contact', 'policies',
-        ])
+
+    expect($data)->not->toHaveKey('sections')
         ->and($data['form'])->toBeArray()
         ->and($data['availability']['registration'])->toEqual(['global' => true, 'member' => true])
         ->and($data['availability']['login'])->toEqual(['global' => true, 'member' => true, 'officer' => true])
         ->and($data['can_manage'])->toBeFalse();
 });
 
-test('admin sees can_manage true when reading public content', function () {
+test('admin sees can_manage true and the editor schema when reading public content', function () {
     $admin = makePublicContentEditor();
 
-    actingAs($admin)
+    $response = actingAs($admin)
         ->getJson('/api/public-content')
         ->assertOk()
         ->assertJsonPath('can_manage', true);
+
+    expect($response->json('sections'))->toBeArray()
+        ->and($response->json('sections'))->toHaveKeys([
+            'home', 'about', 'board', 'officers', 'member_statements',
+            'news', 'events', 'contact', 'policies',
+        ]);
 });
 
 test('non-admin users see can_manage false when reading public content', function () {
