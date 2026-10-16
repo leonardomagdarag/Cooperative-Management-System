@@ -7,6 +7,7 @@ export interface PaginationProps {
     total?: number;
     perPage?: number;
     className?: string;
+    scrollToTop?: boolean;
 }
 
 export default function Pagination({
@@ -16,8 +17,21 @@ export default function Pagination({
     total,
     perPage,
     className = '',
+    scrollToTop = true,
 }: PaginationProps) {
     if (lastPage <= 1 && (!total || total <= (perPage ?? 15))) return null;
+
+    const handlePageChange = (newPage: number) => {
+        onChange(newPage);
+        if (scrollToTop) {
+            const main = document.querySelector('main');
+            if (main) {
+                main.scrollTo({ top: 0, behavior: 'smooth' });
+            } else {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+    };
 
     const from = perPage && total ? Math.min((page - 1) * perPage + 1, total) : null;
     const to = perPage && total ? Math.min(page * perPage, total) : null;
@@ -46,7 +60,7 @@ export default function Pagination({
                     variant="secondary"
                     size="sm"
                     disabled={page <= 1}
-                    onClick={() => onChange(Math.max(1, page - 1))}
+                    onClick={() => handlePageChange(Math.max(1, page - 1))}
                     aria-label="Previous page"
                 >
                     <i className="fas fa-chevron-left text-xs" />
@@ -59,7 +73,7 @@ export default function Pagination({
                     variant="secondary"
                     size="sm"
                     disabled={page >= lastPage}
-                    onClick={() => onChange(Math.min(lastPage, page + 1))}
+                    onClick={() => handlePageChange(Math.min(lastPage, page + 1))}
                     aria-label="Next page"
                 >
                     <span className="hidden sm:inline">Next</span>

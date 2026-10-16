@@ -43,6 +43,7 @@ import TicketsPage from './pages/tickets/TicketsPage';
 import LoadingScreen from './components/LoadingScreen';
 import EmptyState from './components/ui/EmptyState';
 import ToastContainer from './components/ui/ToastContainer';
+import ScrollToTop from './components/ScrollToTop';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const { user, isLoading } = useAuth();
@@ -183,6 +184,7 @@ function DefaultOverview({ role, isOfficer }: { role: string; isOfficer?: boolea
 export default function App() {
     return (
         <>
+            <ScrollToTop />
             <ToastContainer />
             <Routes>
                 <Route element={<PublicLayout />}>

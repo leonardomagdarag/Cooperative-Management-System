@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router';
+import { NavLink, useLocation } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { useSidebar } from '../contexts/SidebarContext';
 
@@ -35,6 +35,7 @@ const NAV_ITEMS: NavItem[] = [
 export default function Sidebar() {
     const { user, logout } = useAuth();
     const { isOpen, isMobileOpen, closeMobile } = useSidebar();
+    const location = useLocation();
 
     const labelClass = isOpen
         ? 'max-w-64 opacity-100'
@@ -77,7 +78,13 @@ export default function Sidebar() {
                             <NavLink
                                 to={item.path}
                                 end={item.path === '/dashboard'}
-                                onClick={closeMobile}
+                                onClick={() => {
+                                    closeMobile();
+                                    if (location.pathname === item.path) {
+                                        document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
+                                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                                    }
+                                }}
                                 title={item.label}
                                 className={({ isActive }) =>
                                     `flex items-center gap-3 rounded-lg px-3.5 py-3 transition-all duration-200 ${

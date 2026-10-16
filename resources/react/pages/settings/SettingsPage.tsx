@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'react-router';
 import { changePassword, revokeDevices, deactivateAccount, deleteAccount, sendPasswordOtp } from '../../api/settings';
@@ -60,6 +60,12 @@ export default function SettingsPage() {
     const visibleTabs = tabs.filter(t => t.visible);
     const initial = (location.state as { tab?: string } | null)?.tab;
     const [activeTab, setActiveTab] = useState(visibleTabs.some(t => t.key === initial) ? initial! : 'account');
+
+    useEffect(() => {
+        const main = document.querySelector('main');
+        if (main) main.scrollTop = 0;
+        else window.scrollTo({ top: 0, behavior: 'instant' });
+    }, [activeTab]);
 
     return (
         <div className="space-y-6">

@@ -1,5 +1,5 @@
 import HelpTip from '../../components/ui/HelpTip';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend } from 'chart.js';
@@ -83,11 +83,17 @@ function Pagination({ meta, page, setPage }: { meta: any; page: number; setPage:
     if (!meta || meta.total === 0) return null;
     const from = (page - 1) * meta.per_page + 1;
     const to = Math.min(page * meta.per_page, meta.total);
+    const handlePage = (n: number) => {
+        setPage(n);
+        const main = document.querySelector('main');
+        if (main) main.scrollTo({ top: 0, behavior: 'smooth' });
+        else window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
     return (
         <div className="p-4 bg-white border-t border-gray-200 flex items-center justify-center gap-2">
-            <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1} className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50">Previous</button>
+            <button onClick={() => handlePage(Math.max(1, page - 1))} disabled={page === 1} className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50">Previous</button>
             <span className="text-sm font-normal text-gray-500">Showing <span className="font-semibold text-gray-900">{from}-{to}</span> of <span className="font-semibold text-gray-900">{meta.total}</span></span>
-            <button onClick={() => setPage(Math.min(meta.last_page, page + 1))} disabled={page === meta.last_page} className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50">Next</button>
+            <button onClick={() => handlePage(Math.min(meta.last_page, page + 1))} disabled={page === meta.last_page} className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50">Next</button>
         </div>
     );
 }
@@ -122,6 +128,12 @@ export default function ReportsPage() {
         setReportType(key);
         setReportPages(p => ({ ...p, [key]: 1 }));
     };
+
+    useEffect(() => {
+        const main = document.querySelector('main');
+        if (main) main.scrollTop = 0;
+        else window.scrollTo({ top: 0, behavior: 'instant' });
+    }, [reportType]);
 
     const { from, to } = reportWindow(rangePreset, startDate, endDate);
     const rangeParams = { from, to };
