@@ -34,26 +34,50 @@ class SiteContentCatalog
                     ],
                     [
                         'title' => 'Stats',
+                        'description' => 'Control the public metrics cards and switch them between live cooperative figures and the manual values below.',
                         'fields' => [
+                            [
+                                'path' => 'stats_visible',
+                                'label' => 'Show metrics section',
+                                'description' => 'Turn this off to hide the metrics cards on the public home page.',
+                                'control' => 'toggle',
+                                'storage' => 'boolean',
+                                'default' => true,
+                            ],
+                            [
+                                'path' => 'stats_use_cooperative',
+                                'label' => 'Use cooperative metrics',
+                                'description' => 'When on, the public page shows live figures from the cooperative\'s data. When off, the manual values below are used.',
+                                'control' => 'toggle',
+                                'storage' => 'boolean',
+                                'default' => false,
+                            ],
+                            [
+                                'path' => 'founding_year',
+                                'label' => 'Founding year',
+                                'description' => 'Used to compute years of service when live cooperative metrics are on.',
+                                'control' => 'number',
+                                'default' => '2016',
+                            ],
                             [
                                 'path' => 'active_members',
                                 'label' => 'Active members',
-                                'description' => 'Public active member count shown on the home page.',
+                                'description' => 'Manual active member count. Used when live cooperative metrics are off.',
                             ],
                             [
                                 'path' => 'total_assets',
                                 'label' => 'Total assets',
-                                'description' => 'Public total assets callout.',
+                                'description' => 'Manual total assets callout. Used when live cooperative metrics are off.',
                             ],
                             [
                                 'path' => 'years_service',
                                 'label' => 'Years of service',
-                                'description' => 'Years of service statistic.',
+                                'description' => 'Manual years of service statistic. Used when live cooperative metrics are off.',
                             ],
                             [
                                 'path' => 'service_done',
                                 'label' => 'Services done',
-                                'description' => 'Services delivered statistic.',
+                                'description' => 'Manual services delivered statistic. Used when live cooperative metrics are off.',
                             ],
                         ],
                     ],
@@ -497,6 +521,9 @@ class SiteContentCatalog
         return [
             'home' => [
                 'hero_subtitle' => 'Homing Strength in members through financial excellence and community partnership',
+                'stats_visible' => true,
+                'stats_use_cooperative' => false,
+                'founding_year' => '2016',
                 'active_members' => '567',
                 'total_assets' => '₱2M+',
                 'years_service' => '10',

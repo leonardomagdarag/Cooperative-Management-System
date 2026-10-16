@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\SiteContent;
 use App\Models\SystemSetting;
 use App\Services\AuditLogService;
+use App\Services\CooperativeMetricsService;
 use App\Support\HtmlSanitizer;
 use App\Support\SiteContentCatalog;
 use Illuminate\Http\JsonResponse;
@@ -24,6 +25,7 @@ class PublicContentController extends Controller
         return response()->json([
             'sections' => $sections,
             'form' => $form,
+            'metrics' => app(CooperativeMetricsService::class)->publicMetrics(),
             'availability' => [
                 'registration' => [
                     'global' => (bool) SystemSetting::get('service_registration_enabled', true),
@@ -74,6 +76,8 @@ class PublicContentController extends Controller
             }
         });
 
+        CooperativeMetricsService::forget();
+
         app(AuditLogService::class)->log(
             'public_content.updated',
             'Public website content updated.',
@@ -108,6 +112,8 @@ class PublicContentController extends Controller
             $rules['form.'.$section.'.cards.*.position'] = 'nullable|string|max:255';
             $rules['form.'.$section.'.cards.*.image_url'] = 'nullable|string|max:2048';
         }
+
+        $rules['form.home.founding_year'] = 'nullable|integer|min:1900|max:'.(int) date('Y');
 
         return $rules;
     }

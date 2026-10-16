@@ -56,6 +56,8 @@ function AboutPreview() {
     const { data: pc } = useQuery({ queryKey: ['public-content'], queryFn: () => api.get('/api/public-content') });
     const about = pc?.data?.form?.about || {};
     const home = pc?.data?.form?.home || {};
+    const statsVisible = home.stats_visible !== false;
+    const live = home.stats_use_cooperative === true ? (pc?.data?.metrics || {}) : {};
 
     return (
         <section id="about" className="public-section bg-white">
@@ -71,32 +73,34 @@ function AboutPreview() {
                     </p>
                 </div>
 
-                <div className="my-14 grid grid-cols-2 gap-4 md:grid-cols-4">
-                    <div className="public-card public-card-hover p-6">
-                        <div className="mb-2 text-3xl font-extrabold text-emerald-700">
-                            {home.active_members || '500+'}
+                {statsVisible && (
+                    <div className="my-14 grid grid-cols-2 gap-4 md:grid-cols-4">
+                        <div className="public-card public-card-hover p-6">
+                            <div className="mb-2 text-3xl font-extrabold text-emerald-700">
+                                {live.active_members || home.active_members || '500+'}
+                            </div>
+                            <div className="text-sm font-medium text-slate-600">Active Members</div>
                         </div>
-                        <div className="text-sm font-medium text-slate-600">Active Members</div>
-                    </div>
-                    <div className="public-card public-card-hover p-6">
-                        <div className="mb-2 text-3xl font-extrabold text-emerald-700">
-                            {home.total_assets || '₱10M+'}
+                        <div className="public-card public-card-hover p-6">
+                            <div className="mb-2 text-3xl font-extrabold text-emerald-700">
+                                {live.total_assets || home.total_assets || '₱10M+'}
+                            </div>
+                            <div className="text-sm font-medium text-slate-600">Total Assets</div>
                         </div>
-                        <div className="text-sm font-medium text-slate-600">Total Assets</div>
-                    </div>
-                    <div className="public-card public-card-hover p-6">
-                        <div className="mb-2 text-3xl font-extrabold text-emerald-700">
-                            {home.years_service || '10+'}
+                        <div className="public-card public-card-hover p-6">
+                            <div className="mb-2 text-3xl font-extrabold text-emerald-700">
+                                {live.years_service || home.years_service || '10+'}
+                            </div>
+                            <div className="text-sm font-medium text-slate-600">Years of Service</div>
                         </div>
-                        <div className="text-sm font-medium text-slate-600">Years of Service</div>
-                    </div>
-                    <div className="public-card public-card-hover p-6">
-                        <div className="mb-2 text-3xl font-extrabold text-emerald-700">
-                            {home.service_done || '1,000+'}
+                        <div className="public-card public-card-hover p-6">
+                            <div className="mb-2 text-3xl font-extrabold text-emerald-700">
+                                {live.service_done || home.service_done || '1,000+'}
+                            </div>
+                            <div className="text-sm font-medium text-slate-600">Services Done</div>
                         </div>
-                        <div className="text-sm font-medium text-slate-600">Services Done</div>
                     </div>
-                </div>
+                )}
 
                 <div className="text-center">
                     <Link to="/about" className="public-btn public-btn-primary">
