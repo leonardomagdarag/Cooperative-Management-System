@@ -48,6 +48,7 @@ class DatabaseSeeder extends Seeder
             BoardMemberSeeder::class,
             SystemSettingSeeder::class,
             ServiceAvailabilitySeeder::class,
+            FinancialSettingSeeder::class,
             AnnouncementSeeder::class,
         ]);
     }

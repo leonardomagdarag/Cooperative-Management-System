@@ -385,9 +385,22 @@ export const depositSchema = z.object({
     branch_id: optionalId,
 });
 
-export function withdrawalSchema(available: number) {
+function withdrawalAmountField(available: number, min: number, max: number) {
+    const configuredMax = max > 0 ? Math.min(available, max) : available;
+    const maxMessage = max > 0 && max <= available
+        ? `Amount exceeds the maximum withdrawal limit of \u20b1${max.toLocaleString()}`
+        : `Amount exceeds available balance of \u20b1${available.toLocaleString()}`;
+
+    return z.coerce
+        .number()
+        .positive('Enter a valid amount')
+        .min(min, `Minimum withdrawal amount is \u20b1${min.toLocaleString()}`)
+        .max(configuredMax, maxMessage);
+}
+
+export function withdrawalSchema(available: number, min = 100, max = 0) {
     return z.object({
-        amount: z.coerce.number().positive('Enter a valid amount').min(100, 'Minimum withdrawal amount is ₱100').max(available, `Amount exceeds available balance of \u20b1${available.toLocaleString()}`),
+        amount: withdrawalAmountField(available, min, max),
         transaction_mode: enumFrom(['counter', 'online', 'bank_transfer'], 'Select a transaction mode'),
         reason: optionalString(500),
         bank_name: optionalString(100),
@@ -404,9 +417,9 @@ export function withdrawalSchema(available: number) {
 }
 
 /** Base object schema without superRefine – use .pick() for step-specific validation */
-export function withdrawalBaseSchema(available: number) {
+export function withdrawalBaseSchema(available: number, min = 100, max = 0) {
     return z.object({
-        amount: z.coerce.number().positive('Enter a valid amount').min(100, 'Minimum withdrawal amount is ₱100').max(available, `Amount exceeds available balance of \u20b1${available.toLocaleString()}`),
+        amount: withdrawalAmountField(available, min, max),
         transaction_mode: enumFrom(['counter', 'online', 'bank_transfer'], 'Select a transaction mode'),
         reason: optionalString(500),
         bank_name: optionalString(100),

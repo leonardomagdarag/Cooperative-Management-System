@@ -198,6 +198,39 @@ images,is_archived,varchar,255,Archive state flag for the image.
 images,created_at,timestamp,N/A,Record creation timestamp.
 images,updated_at,timestamp,N/A,Record last-update timestamp.
 images,,,,Main purpose: Legacy registry mapping member numbers to images kept on external cloud storage.
+interest_disbursements,id,bigint,N/A,Auto-incrementing primary key.
+interest_disbursements,account_type,varchar,20,Interest-bearing account type: savings / share-capital (indexed with created_at).
+interest_disbursements,rate,decimal,8,4,Annual interest rate snapshot for the batch.
+interest_disbursements,interval,varchar,20,Crediting interval at the time of the run: daily / monthly / yearly.
+interest_disbursements,period_label,varchar,30,Batch period label such as 2026-10-16 / 2026-10 / 2026.
+interest_disbursements,period_start,date,N/A,First day covered by the batch.
+interest_disbursements,period_end,date,N/A,Last day covered by the batch.
+interest_disbursements,member_count,int,N/A,Unsigned count of members credited in the batch.
+interest_disbursements,skipped_count,int,N/A,Unsigned count of members skipped by the minimum-payout threshold.
+interest_disbursements,total_amount,decimal,15,2,Total interest credited across all members in the batch.
+interest_disbursements,status,varchar,20,Batch state: completed / failed / reversed (indexed).
+interest_disbursements,trigger,varchar,20,What started the run: scheduled / manual.
+interest_disbursements,batch_key,varchar,100,Unique idempotency key such as savings:2026-10.
+interest_disbursements,requested_by,bigint,N/A,Foreign key to users.id - who triggered a manual run (nullable).
+interest_disbursements,approved_by,bigint,N/A,Foreign key to users.id - the approver for a manual run (nullable).
+interest_disbursements,note,text,N/A,Free-text note or narration.
+interest_disbursements,created_at,timestamp,N/A,Record creation timestamp.
+interest_disbursements,updated_at,timestamp,N/A,Record last-update timestamp.
+interest_disbursements,,,,Main purpose: One auditable header per interest crediting batch, recording the rate/interval snapshot, totals, and idempotency key.
+interest_disbursement_items,id,bigint,N/A,Auto-incrementing primary key.
+interest_disbursement_items,interest_disbursement_id,bigint,N/A,Foreign key to interest_disbursements.id - the batch this line belongs to (cascade delete).
+interest_disbursement_items,user_id,bigint,N/A,Foreign key to users.id - the member credited or skipped (nullable).
+interest_disbursement_items,account_id,bigint,N/A,Foreign key to accounts.id - the account credited or skipped (nullable).
+interest_disbursement_items,transaction_id,bigint,N/A,Foreign key to transactions.id - the posted interest transaction for a credit (nullable).
+interest_disbursement_items,amount,decimal,15,2,Interest amount for the member; the would-be amount when skipped.
+interest_disbursement_items,balance_before,decimal,15,2,Account balance before the credit.
+interest_disbursement_items,balance_after,decimal,15,2,Account balance after the credit (equal to before when skipped).
+interest_disbursement_items,rate,decimal,8,4,Annual interest rate snapshot for the line.
+interest_disbursement_items,skipped,boolean,N/A,Whether the member was skipped rather than credited (indexed with the batch id).
+interest_disbursement_items,skip_reason,varchar,100,Reason recorded when the line was skipped.
+interest_disbursement_items,created_at,timestamp,N/A,Record creation timestamp.
+interest_disbursement_items,updated_at,timestamp,N/A,Record last-update timestamp.
+interest_disbursement_items,,,,Main purpose: Per-member lines for each interest batch, giving the credited or skipped amount and the resulting account balance.
 jobs,id,bigint,N/A,Auto-incrementing primary key.
 jobs,queue,varchar,255,Queue name the job was pushed onto (indexed). Used for the default and emails queues.
 jobs,payload,longtext,N/A,Serialized job payload.
@@ -497,7 +530,7 @@ tickets,,,,Main purpose: Provides the member support-ticket system with assignme
 transactions,id,bigint,N/A,Auto-incrementing primary key.
 transactions,transaction_number,varchar,20,Unique human-readable transaction reference.
 transactions,client_request_id,varchar,100,Client-supplied idempotency key; unique and prevents duplicate submissions.
-transactions,transaction_type,enum,N/A,Kind of movement: deposit / withdrawal / loan_payment / loan_disbursement / fee. Defaults to deposit.
+transactions,transaction_type,enum,N/A,Kind of movement: deposit / withdrawal / loan_payment / loan_disbursement / interest / fee. Defaults to deposit.
 transactions,transaction_mode,varchar,255,Channel used to perform the transaction such as over-the-counter.
 transactions,payment_gateway,varchar,50,Online payment provider such as PayMongo (indexed).
 transactions,payment_method_used,varchar,50,Specific gateway method such as GCash or Maya.

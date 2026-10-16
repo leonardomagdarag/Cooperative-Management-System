@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Account;
 use App\Models\Branch;
 use App\Models\Expense;
+use App\Models\InterestDisbursement;
+use App\Models\InterestDisbursementItem;
 use App\Models\Loan;
 use App\Models\Transaction;
 use App\Models\User;
@@ -462,6 +464,95 @@ class ReportController extends Controller
         return response()->json($this->withPagination($items, $paginator));
     }
 
+    public function interestDisbursements(Request $request): JsonResponse
+    {
+        abort_unless(Auth::user()?->can('interest.view'), 403);
+
+        $query = InterestDisbursement::query()
+            ->with(['requestedBy.personalData', 'approvedBy.personalData'])
+            ->when($request->filled('account_type'), fn ($q) => $q->where('account_type', $request->string('account_type')->toString()))
+            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')->toString()));
+
+        if ($request->filled('from') || $request->filled('to')) {
+            [$start, $end] = $this->resolveRange($request);
+            $query->whereBetween('interest_disbursements.created_at', [$start, $end]);
+        }
+
+        $perPage = min(max((int) $request->integer('per_page', 15), 1), 100);
+        $paginator = $query->orderByDesc('created_at')->paginate($perPage);
+
+        $items = collect($paginator->items())->map(function (InterestDisbursement $batch) {
+            return [
+                'id' => $batch->id,
+                'account_type' => $batch->account_type,
+                'account_label' => $batch->account_type === 'share-capital' ? 'Share Capital' : 'Savings',
+                'rate' => (float) $batch->rate,
+                'interval' => $batch->interval,
+                'period_label' => $batch->period_label,
+                'member_count' => $batch->member_count,
+                'skipped_count' => $batch->skipped_count,
+                'total_amount' => (float) $batch->total_amount,
+                'status' => $batch->status,
+                'trigger' => $batch->trigger,
+                'requested_by' => $this->personName($batch->requestedBy?->personalData) ?: $batch->requestedBy?->email,
+                'approved_by' => $this->personName($batch->approvedBy?->personalData) ?: $batch->approvedBy?->email,
+                'created_at' => $batch->created_at?->toIso8601String(),
+            ];
+        });
+
+        return response()->json($this->withPagination($items, $paginator));
+    }
+
+    public function interestDisbursementDetail(Request $request, InterestDisbursement $interestDisbursement): JsonResponse
+    {
+        abort_unless(Auth::user()?->can('interest.view'), 403);
+
+        $query = $interestDisbursement->items()
+            ->with(['user.personalData', 'account:id,account_number,account_type'])
+            ->when($request->has('include_skipped') && ! $request->boolean('include_skipped'),
+                fn ($q) => $q->where('skipped', false))
+            ->orderByDesc('skipped')
+            ->orderByDesc('amount');
+
+        $perPage = min(max((int) $request->integer('per_page', 20), 1), 100);
+        $paginator = $query->paginate($perPage);
+
+        $items = collect($paginator->items())->map(function (InterestDisbursementItem $item) {
+            return [
+                'id' => $item->id,
+                'member_name' => $this->personName($item->user?->personalData) ?: ($item->user?->email ?? 'N/A'),
+                'account_number' => $item->account?->account_number,
+                'amount' => (float) $item->amount,
+                'balance_before' => (float) $item->balance_before,
+                'balance_after' => (float) $item->balance_after,
+                'skipped' => (bool) $item->skipped,
+                'skip_reason' => $item->skip_reason,
+                'transaction_id' => $item->transaction_id,
+                'created_at' => $item->created_at?->toIso8601String(),
+            ];
+        });
+
+        return response()->json(array_merge(
+            [
+                'batch' => [
+                    'id' => $interestDisbursement->id,
+                    'account_type' => $interestDisbursement->account_type,
+                    'account_label' => $interestDisbursement->account_type === 'share-capital' ? 'Share Capital' : 'Savings',
+                    'rate' => (float) $interestDisbursement->rate,
+                    'interval' => $interestDisbursement->interval,
+                    'period_label' => $interestDisbursement->period_label,
+                    'member_count' => $interestDisbursement->member_count,
+                    'skipped_count' => $interestDisbursement->skipped_count,
+                    'total_amount' => (float) $interestDisbursement->total_amount,
+                    'status' => $interestDisbursement->status,
+                    'trigger' => $interestDisbursement->trigger,
+                    'created_at' => $interestDisbursement->created_at?->toIso8601String(),
+                ],
+            ],
+            $this->withPagination($items, $paginator)
+        ));
+    }
+
     public function export(Request $request)
     {
         $type = $request->string('report_type')->toString();
@@ -471,7 +562,7 @@ class ReportController extends Controller
             abort(422, 'Invalid export format.');
         }
 
-        $allowedTypes = ['financial_report', 'balance_sheet', 'member_savings', 'loans', 'payments', 'expenses', 'member_activity', 'members', 'officers'];
+        $allowedTypes = ['financial_report', 'balance_sheet', 'member_savings', 'loans', 'payments', 'expenses', 'member_activity', 'members', 'officers', 'interest_disbursements'];
         if (! in_array($type, $allowedTypes, true)) {
             abort(422, 'Invalid report type.');
         }
@@ -482,6 +573,7 @@ class ReportController extends Controller
             'balance_sheet' => $canExport || $viewer?->can('reports.financial'),
             'members' => $canExport || $viewer?->can('members.view'),
             'officers' => $canExport || $viewer?->can('officers.view') || $viewer?->can('members.view'),
+            'interest_disbursements' => $canExport || $viewer?->can('interest.view'),
             default => $canExport || $viewer?->can('reports.view'),
         };
         abort_unless($allowed, 403);
@@ -516,6 +608,7 @@ class ReportController extends Controller
             'member_activity' => array_merge($base, $this->memberActivityExportPayload($request, $start, $end, $branchId, $rangeLabel)),
             'members' => array_merge($base, $this->membersExportPayload($start, $end, $branchId, $rangeLabel)),
             'officers' => array_merge($base, $this->officersExportPayload($start, $end, $branchId, $rangeLabel)),
+            'interest_disbursements' => array_merge($base, $this->interestDisbursementsExportPayload($request, $start, $end, $rangeLabel)),
         };
     }
 
@@ -962,6 +1055,50 @@ class ReportController extends Controller
                 ['key' => 'branch', 'label' => 'Branch'],
                 ['key' => 'status', 'label' => 'Status'],
                 ['key' => 'joined', 'label' => 'Join Date'],
+            ],
+            $rows
+        );
+    }
+
+    private function interestDisbursementsExportPayload(Request $request, Carbon $start, Carbon $end, string $rangeLabel): array
+    {
+        $accountType = $request->string('account_type')->toString();
+
+        $rows = InterestDisbursement::query()
+            ->when($accountType !== '', fn ($q) => $q->where('account_type', $accountType))
+            ->whereBetween('created_at', [$start, $end])
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(function (InterestDisbursement $batch) {
+                return [
+                    $batch->created_at?->format('M d, Y H:i') ?? '—',
+                    $batch->account_type === 'share-capital' ? 'Share Capital' : 'Savings',
+                    (string) $batch->period_label,
+                    rtrim(rtrim(number_format((float) $batch->rate, 4, '.', ''), '0'), '.').'% / '.$batch->interval,
+                    (string) $batch->member_count,
+                    (string) $batch->skipped_count,
+                    $this->money($batch->total_amount),
+                    ucfirst((string) $batch->trigger),
+                    ucfirst((string) $batch->status),
+                ];
+            })->all();
+
+        return $this->singleSectionPayload(
+            'interest_disbursements',
+            'Interest Disbursements Report',
+            $rangeLabel,
+            'interest-disbursements',
+            'Interest Batches',
+            [
+                ['key' => 'date', 'label' => 'Date'],
+                ['key' => 'account', 'label' => 'Account'],
+                ['key' => 'period', 'label' => 'Period'],
+                ['key' => 'rate', 'label' => 'Rate'],
+                ['key' => 'members', 'label' => 'Members', 'align' => 'right'],
+                ['key' => 'skipped', 'label' => 'Skipped', 'align' => 'right'],
+                ['key' => 'total', 'label' => 'Total', 'align' => 'right'],
+                ['key' => 'trigger', 'label' => 'Trigger'],
+                ['key' => 'status', 'label' => 'Status'],
             ],
             $rows
         );

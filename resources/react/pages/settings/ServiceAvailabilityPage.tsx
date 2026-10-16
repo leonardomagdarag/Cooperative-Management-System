@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '../../contexts/ToastContext';
-import { getServiceAvailability, updateServiceAvailability, type ServiceAvailabilityData, type ServiceAvailabilityFlags } from '../../api/settings';
+import { getServiceAvailability, updateServiceAvailability, type SettingsServiceAvailabilityData, type ServiceAvailabilityFlags } from '../../api/settings';
 import SettingsTabHeader from './SettingsTabHeader';
 
-type ServiceKey = keyof ServiceAvailabilityData;
+type ServiceKey = keyof SettingsServiceAvailabilityData;
 type AvailabilityFlag = keyof ServiceAvailabilityFlags;
 
 const serviceConfig: Record<ServiceKey, { label: string; description: string; icon: string; flags: Array<{ key: AvailabilityFlag; label: string; description: string }> }> = {
@@ -18,11 +18,6 @@ const serviceConfig: Record<ServiceKey, { label: string; description: string; ic
     deposit: { label: 'Deposits', description: 'Members and officers adding money to cooperative accounts.', icon: 'fas fa-plus-circle', flags: [
         { key: 'member', label: 'Members', description: 'Allow members to make deposits.' }, { key: 'officer', label: 'Officers', description: 'Allow officers to process deposits.' },
         { key: 'counter', label: 'Counter (OTC)', description: 'Allow over-the-counter deposits.' }, { key: 'online', label: 'Online', description: 'Allow online deposits.' },
-    ] },
-    withdrawal: { label: 'Withdrawals', description: 'Members withdrawing funds through approved channels.', icon: 'fas fa-minus-circle', flags: [
-        { key: 'member', label: 'Members', description: 'Allow members to request withdrawals.' }, { key: 'officer', label: 'Officers', description: 'Allow officers to process withdrawals.' },
-        { key: 'counter', label: 'Counter (OTC)', description: 'Allow over-the-counter withdrawals.' }, { key: 'online', label: 'Online', description: 'Allow online withdrawals.' },
-        { key: 'bank_transfer', label: 'Bank Transfer', description: 'Allow bank transfer withdrawals.' },
     ] },
     loan_application: { label: 'Loan Applications', description: 'Control access to new loan applications.', icon: 'fas fa-file-contract', flags: [
         { key: 'member', label: 'Members', description: 'Allow members to apply for loans.' }, { key: 'officer', label: 'Officers', description: 'Allow officers to process applications.' },
@@ -42,13 +37,13 @@ function StatusPill({ enabled, onClick }: { enabled: boolean; onClick: () => voi
 export default function ServiceAvailabilityPage() {
     const { addToast } = useToast();
     const queryClient = useQueryClient();
-    const [originalFlags, setOriginalFlags] = useState<Partial<ServiceAvailabilityData>>({});
-    const [editedFlags, setEditedFlags] = useState<Partial<ServiceAvailabilityData>>({});
+    const [originalFlags, setOriginalFlags] = useState<Partial<SettingsServiceAvailabilityData>>({});
+    const [editedFlags, setEditedFlags] = useState<Partial<SettingsServiceAvailabilityData>>({});
     const [notifyAffected, setNotifyAffected] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
 
     const { data, isLoading, isError, error } = useQuery({ queryKey: ['service-availability'], queryFn: getServiceAvailability });
-    const loadedFlags = data?.data?.data as ServiceAvailabilityData | undefined;
+    const loadedFlags = data?.data?.data as SettingsServiceAvailabilityData | undefined;
 
     useEffect(() => {
         if (loadedFlags) { setOriginalFlags(loadedFlags); setEditedFlags(loadedFlags); }
@@ -68,7 +63,7 @@ export default function ServiceAvailabilityPage() {
     }, [editedFlags, originalFlags]);
 
     const saveMutation = useMutation({
-        mutationFn: (payload: { services: ServiceAvailabilityData; notify_affected: boolean }) => updateServiceAvailability(payload),
+        mutationFn: (payload: { services: SettingsServiceAvailabilityData; notify_affected: boolean }) => updateServiceAvailability(payload),
         onSuccess: (response) => {
             queryClient.invalidateQueries({ queryKey: ['service-availability'] });
             setShowConfirm(false);
@@ -86,7 +81,7 @@ export default function ServiceAvailabilityPage() {
 
     const updateFlag = (service: ServiceKey, flag: AvailabilityFlag, value: boolean) => setEditedFlags(previous => ({ ...previous, [service]: { ...previous[service], [flag]: value } }));
     const cancelChanges = () => { setEditedFlags(originalFlags); setNotifyAffected(false); };
-    const confirmSave = () => { if (changes.length > 0) saveMutation.mutate({ services: editedFlags as ServiceAvailabilityData, notify_affected: notifyAffected }); };
+    const confirmSave = () => { if (changes.length > 0) saveMutation.mutate({ services: editedFlags as SettingsServiceAvailabilityData, notify_affected: notifyAffected }); };
 
     if (isLoading) return <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-24 animate-pulse rounded-xl bg-gray-100" />)}</div>;
     if (isError) return <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700">Failed to load service availability: {(error as any)?.message || 'Unknown error'}</div>;

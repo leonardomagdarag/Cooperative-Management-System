@@ -6,6 +6,7 @@ import { Chart as ChartJS, ArcElement, BarElement, CategoryScale, LinearScale, T
 import { api } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
+import InterestDisbursementsReport from './InterestDisbursementsReport';
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend);
 
@@ -18,12 +19,12 @@ const RANGE_PRESETS: Record<string, string> = {
 };
 
 function txBadgeClass(type: string): string {
-    const c: Record<string, string> = { deposit: 'bg-blue-100 text-blue-800', withdrawal: 'bg-orange-100 text-orange-800', loan_payment: 'bg-green-100 text-green-800', loan_disbursement: 'bg-purple-100 text-purple-800', fee: 'bg-red-100 text-red-800' };
+    const c: Record<string, string> = { deposit: 'bg-blue-100 text-blue-800', withdrawal: 'bg-orange-100 text-orange-800', loan_payment: 'bg-green-100 text-green-800', loan_disbursement: 'bg-purple-100 text-purple-800', interest: 'bg-teal-100 text-teal-800', fee: 'bg-red-100 text-red-800' };
     return c[type] || 'bg-gray-100 text-gray-800';
 }
 
 function txBadgeText(type: string): string {
-    const c: Record<string, string> = { deposit: 'Deposit', withdrawal: 'Withdrawal', loan_payment: 'Loan Payment', loan_disbursement: 'Loan Disbursement', fee: 'Fee' };
+    const c: Record<string, string> = { deposit: 'Deposit', withdrawal: 'Withdrawal', loan_payment: 'Loan Payment', loan_disbursement: 'Loan Disbursement', interest: 'Interest', fee: 'Fee' };
     return c[type] || type?.replace(/_/g, ' ') || 'Unknown';
 }
 
@@ -101,6 +102,7 @@ export default function ReportsPage() {
     const canViewFinancial = perms.includes('reports.financial');
     const canViewMembers = perms.includes('members.view');
     const canViewOfficers = perms.includes('officers.view') || canViewMembers;
+    const canViewInterest = perms.includes('interest.view');
 
     const now = new Date();
     const [reportType, setReportType] = useState('financial');
@@ -134,6 +136,7 @@ export default function ReportsPage() {
         ...(canViewFinancial ? [{ key: 'balance_sheet', label: 'Balance Sheet', icon: 'fas fa-balance-scale' }] : []),
         ...(canViewMembers ? [{ key: 'members', label: 'Members Report', icon: 'fas fa-id-card' }] : []),
         ...(canViewOfficers ? [{ key: 'officers', label: 'Officers Report', icon: 'fas fa-user-tie' }] : []),
+        ...(canViewInterest ? [{ key: 'interest', label: 'Interest Disbursements', icon: 'fas fa-coins' }] : []),
     ];
 
     const needsOptions = ['member_savings', 'member_activity', 'expenses'].includes(reportType);
@@ -257,7 +260,8 @@ export default function ReportsPage() {
     const totalsByTypeOptions = { maintainAspectRatio: false, plugins: { legend: { position: 'right' } } };
 
     const downloadReport = async (format: 'pdf' | 'excel') => {
-        const params: any = { from, to, report_type: reportType, format };
+        const exportType = reportType === 'interest' ? 'interest_disbursements' : reportType;
+        const params: any = { from, to, report_type: exportType, format };
         if (reportType === 'member_savings' || reportType === 'member_activity') params.member_id = memberId || undefined;
         if (reportType === 'loans') params.filter = loanFilter === 'all' ? undefined : loanFilter;
         if (reportType === 'expenses') params.category = expenseCategory || undefined;
@@ -385,6 +389,7 @@ export default function ReportsPage() {
                                 <option value="withdrawal">Withdrawal</option>
                                 <option value="loan_disbursement">Loan</option>
                                 <option value="loan_payment">Payment</option>
+                                <option value="interest">Interest</option>
                                 <option value="fee">Fee</option>
                             </select>
                         </div>
@@ -392,7 +397,7 @@ export default function ReportsPage() {
                 </div>
 
                 <div className="flex items-center gap-2 ml-auto">
-                    {reportType !== 'balance_sheet' || canViewFinancial ? (
+                    {(reportType !== 'balance_sheet' || canViewFinancial) ? (
                         <>
                             <button onClick={() => downloadReport('pdf')} className="inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-center text-white bg-red-700 border border-red-700 rounded-lg hover:bg-red-800 focus:ring-4 focus:ring-red-300">
                                 <i className="fas fa-file-pdf mr-1"></i> PDF
@@ -908,6 +913,8 @@ export default function ReportsPage() {
                     <Pagination meta={officersReportMeta} page={page} setPage={setPage} />
                 </div>
             )}
+
+            {reportType === 'interest' && <InterestDisbursementsReport />}
         </div>
     );
 }

@@ -12,6 +12,7 @@ use App\Services\CountersignService;
 use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
 use App\Services\TextBeeService;
+use App\Support\FinancialSettings;
 use App\Support\PersonPasswordPolicy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,6 +20,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Throwable;
 
 class SettingsController extends Controller
@@ -157,7 +159,9 @@ class SettingsController extends Controller
     {
         abort_unless(Auth::user()?->can('settings.update'), 403);
 
-        $services = ['deposit', 'withdrawal', 'loan_application', 'loan_payment'];
+        // Withdrawal is intentionally absent: it now lives in the Financial
+        // Accounts settings tab, which manages its own limits and toggles.
+        $services = ['deposit', 'loan_application', 'loan_payment'];
         $result = [];
 
         foreach ($services as $service) {
@@ -167,12 +171,9 @@ class SettingsController extends Controller
                 'officer' => (bool) SystemSetting::get("service_{$service}_officer_enabled", true),
             ];
 
-            if (in_array($service, ['deposit', 'withdrawal', 'loan_payment'], true)) {
+            if (in_array($service, ['deposit', 'loan_payment'], true)) {
                 $base['counter'] = (bool) SystemSetting::get("service_{$service}_counter_enabled", true);
                 $base['online'] = (bool) SystemSetting::get("service_{$service}_online_enabled", true);
-                if ($service === 'withdrawal') {
-                    $base['bank_transfer'] = (bool) SystemSetting::get('service_withdrawal_bank_transfer_enabled', true);
-                }
             }
 
             $result[$service] = $base;
@@ -209,7 +210,8 @@ class SettingsController extends Controller
             'notify_affected' => 'boolean',
         ]);
 
-        $allowedServices = ['deposit', 'withdrawal', 'loan_application', 'loan_payment', 'registration', 'login'];
+        // Withdrawal is no longer managed here — see updateFinancialSettings().
+        $allowedServices = ['deposit', 'loan_application', 'loan_payment', 'registration', 'login'];
         $unknownServices = array_diff(array_keys($validated['services']), $allowedServices);
 
         if ($unknownServices !== []) {
@@ -238,12 +240,9 @@ class SettingsController extends Controller
                     'officer' => "service_{$service}_officer_enabled",
                 ];
 
-                if (in_array($service, ['deposit', 'withdrawal', 'loan_payment'], true)) {
+                if (in_array($service, ['deposit', 'loan_payment'], true)) {
                     $settings['counter'] = "service_{$service}_counter_enabled";
                     $settings['online'] = "service_{$service}_online_enabled";
-                    if ($service === 'withdrawal') {
-                        $settings['bank_transfer'] = 'service_withdrawal_bank_transfer_enabled';
-                    }
                 }
             }
 
@@ -275,6 +274,175 @@ class SettingsController extends Controller
             'request_id' => $pending->id,
             'status' => 'pending',
         ], 202);
+    }
+
+    public function getFinancialSettings(): JsonResponse
+    {
+        abort_unless(Auth::user()?->can('financial_settings.view'), 403);
+
+        return response()->json(['data' => $this->financialSettingsPayload()]);
+    }
+
+    public function updateFinancialSettings(Request $request): JsonResponse
+    {
+        abort_unless(Auth::user()?->can('financial_settings.update'), 403);
+
+        $validated = $request->validate([
+            'savings.rate' => 'required|numeric|min:0|max:100',
+            'savings.interval' => ['required', Rule::in(FinancialSettings::INTERVALS)],
+            'savings.min_balance' => 'required|numeric|min:0',
+            'share_capital.rate' => 'required|numeric|min:0|max:100',
+            'share_capital.interval' => ['required', Rule::in(FinancialSettings::INTERVALS)],
+            'share_capital.min_balance' => 'required|numeric|min:0',
+            'interest.min_payout' => 'required|numeric|min:0',
+            'interest.notify_members' => 'required|boolean',
+            'withdrawal.min_amount' => 'required|numeric|min:0',
+            'withdrawal.max_amount' => 'required|numeric|min:0',
+            'withdrawal.savings_enabled' => 'required|boolean',
+            'withdrawal.share_capital_enabled' => 'required|boolean',
+            'withdrawal.enabled' => 'required|boolean',
+            'withdrawal.member' => 'required|boolean',
+            'withdrawal.officer' => 'required|boolean',
+            'withdrawal.counter' => 'required|boolean',
+            'withdrawal.online' => 'required|boolean',
+            'withdrawal.bank_transfer' => 'required|boolean',
+            'notify_affected' => 'boolean',
+        ]);
+
+        if ((float) $validated['withdrawal']['max_amount'] > 0
+            && (float) $validated['withdrawal']['min_amount'] > (float) $validated['withdrawal']['max_amount']) {
+            return response()->json(['message' => 'Minimum withdrawal cannot exceed the maximum withdrawal.'], 422);
+        }
+
+        $flatSettings = [
+            'financial_savings_interest_rate' => (float) $validated['savings']['rate'],
+            'financial_savings_interest_interval' => $validated['savings']['interval'],
+            'financial_savings_min_balance_to_earn' => (float) $validated['savings']['min_balance'],
+            'financial_share_capital_interest_rate' => (float) $validated['share_capital']['rate'],
+            'financial_share_capital_interest_interval' => $validated['share_capital']['interval'],
+            'financial_share_capital_min_balance_to_earn' => (float) $validated['share_capital']['min_balance'],
+            'financial_interest_min_payout' => (float) $validated['interest']['min_payout'],
+            'financial_interest_notify_members' => (bool) $validated['interest']['notify_members'],
+            'financial_withdrawal_min_amount' => (float) $validated['withdrawal']['min_amount'],
+            'financial_withdrawal_max_amount' => (float) $validated['withdrawal']['max_amount'],
+            'financial_withdrawal_savings_enabled' => (bool) $validated['withdrawal']['savings_enabled'],
+            'financial_withdrawal_share_capital_enabled' => (bool) $validated['withdrawal']['share_capital_enabled'],
+            'service_withdrawal_enabled' => (bool) $validated['withdrawal']['enabled'],
+            'service_withdrawal_member_enabled' => (bool) $validated['withdrawal']['member'],
+            'service_withdrawal_officer_enabled' => (bool) $validated['withdrawal']['officer'],
+            'service_withdrawal_counter_enabled' => (bool) $validated['withdrawal']['counter'],
+            'service_withdrawal_online_enabled' => (bool) $validated['withdrawal']['online'],
+            'service_withdrawal_bank_transfer_enabled' => (bool) $validated['withdrawal']['bank_transfer'],
+        ];
+
+        // Only the withdrawal service is affected by this tab, so its flag tree
+        // is what notifyAffectedUsers() needs — and only when asked.
+        $services = [
+            'withdrawal' => [
+                'global' => (bool) $validated['withdrawal']['enabled'],
+                'member' => (bool) $validated['withdrawal']['member'],
+                'officer' => (bool) $validated['withdrawal']['officer'],
+                'counter' => (bool) $validated['withdrawal']['counter'],
+                'online' => (bool) $validated['withdrawal']['online'],
+                'bank_transfer' => (bool) $validated['withdrawal']['bank_transfer'],
+            ],
+        ];
+
+        $countersign = app(CountersignService::class);
+        $pending = $countersign->request('financial.settings.update', [
+            'settings' => $flatSettings,
+            'services' => $services,
+            'notify_affected' => $validated['notify_affected'] ?? false,
+        ], Auth::user());
+
+        app(AuditLogService::class)->log(
+            'financial.settings.requested',
+            'Financial account settings change requested and queued for countersign approval.',
+            'financial',
+            null,
+            Auth::user(),
+            ['request_id' => $pending->id, 'keys' => array_keys($flatSettings)],
+        );
+
+        return response()->json([
+            'message' => 'Financial account settings update requested and requires countersign approval.',
+            'request_id' => $pending->id,
+            'status' => 'pending',
+        ], 202);
+    }
+
+    public function runInterestNow(Request $request): JsonResponse
+    {
+        abort_unless(Auth::user()?->can('interest.run'), 403);
+
+        $validated = $request->validate([
+            'account_type' => ['required', Rule::in(FinancialSettings::ACCOUNT_TYPES)],
+        ]);
+
+        if (FinancialSettings::rate($validated['account_type']) <= 0) {
+            return response()->json(['message' => 'Set an interest rate before running an interest batch.'], 422);
+        }
+
+        $countersign = app(CountersignService::class);
+        $pending = $countersign->request('financial.interest.run', [
+            'account_type' => $validated['account_type'],
+            'requested_by' => Auth::id(),
+        ], Auth::user());
+
+        app(AuditLogService::class)->log(
+            'financial.interest.manual_requested',
+            'Manual interest run requested and queued for countersign approval.',
+            'financial',
+            null,
+            Auth::user(),
+            ['request_id' => $pending->id, 'account_type' => $validated['account_type']],
+        );
+
+        return response()->json([
+            'message' => 'Interest run requested and requires countersign approval.',
+            'request_id' => $pending->id,
+            'status' => 'pending',
+        ], 202);
+    }
+
+    /**
+     * Shape the financial settings for the SPA. Kept in one place so the read
+     * and write endpoints cannot drift.
+     */
+    private function financialSettingsPayload(): array
+    {
+        return [
+            'savings' => [
+                'rate' => FinancialSettings::rate('savings'),
+                'interval' => FinancialSettings::interval('savings'),
+                'min_balance' => FinancialSettings::minBalance('savings'),
+            ],
+            'share_capital' => [
+                'rate' => FinancialSettings::rate('share-capital'),
+                'interval' => FinancialSettings::interval('share-capital'),
+                'min_balance' => FinancialSettings::minBalance('share-capital'),
+            ],
+            'interest' => [
+                'min_payout' => FinancialSettings::minPayout(),
+                'notify_members' => FinancialSettings::notifyMembers(),
+            ],
+            'withdrawal' => [
+                'min_amount' => FinancialSettings::withdrawalMin(),
+                'max_amount' => FinancialSettings::withdrawalMax(),
+                'savings_enabled' => FinancialSettings::savingsWithdrawalEnabled(),
+                'share_capital_enabled' => FinancialSettings::shareCapitalWithdrawalEnabled(),
+                'enabled' => (bool) SystemSetting::get('service_withdrawal_enabled', true),
+                'member' => (bool) SystemSetting::get('service_withdrawal_member_enabled', true),
+                'officer' => (bool) SystemSetting::get('service_withdrawal_officer_enabled', true),
+                'counter' => (bool) SystemSetting::get('service_withdrawal_counter_enabled', true),
+                'online' => (bool) SystemSetting::get('service_withdrawal_online_enabled', true),
+                'bank_transfer' => (bool) SystemSetting::get('service_withdrawal_bank_transfer_enabled', true),
+            ],
+            'last_credited' => [
+                'savings' => FinancialSettings::lastCreditedAt('savings')?->toDateTimeString(),
+                'share_capital' => FinancialSettings::lastCreditedAt('share-capital')?->toDateTimeString(),
+            ],
+        ];
     }
 
     public function notifyAffectedUsers(array $services): void

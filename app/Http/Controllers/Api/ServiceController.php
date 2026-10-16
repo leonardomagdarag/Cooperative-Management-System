@@ -13,6 +13,7 @@ use App\Services\AuditLogService;
 use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
 use App\Support\BranchScope;
+use App\Support\FinancialSettings;
 use App\Support\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -42,6 +43,12 @@ class ServiceController extends Controller
                 $flags['online'] = (bool) SystemSetting::get("service_{$service}_online_enabled", true);
                 if ($service === 'withdrawal') {
                     $flags['bank_transfer'] = (bool) SystemSetting::get('service_withdrawal_bank_transfer_enabled', true);
+                    // Configurable limits + the savings-account withdrawal switch,
+                    // owned by the Financial Accounts settings tab.
+                    $flags['min_amount'] = FinancialSettings::withdrawalMin();
+                    $flags['max_amount'] = FinancialSettings::withdrawalMax();
+                    $flags['savings_enabled'] = FinancialSettings::savingsWithdrawalEnabled();
+                    $flags['share_capital_enabled'] = FinancialSettings::shareCapitalWithdrawalEnabled();
                 }
             }
 
@@ -179,10 +186,19 @@ class ServiceController extends Controller
         $user = Auth::user();
         abort_unless($user && ($user->can('withdrawals.create') || $user->can('services.create')), 403, 'Unauthorized to request withdrawals.');
 
+        // Savings-account withdrawals can be switched off entirely from the
+        // Financial Accounts settings tab.
+        if (! FinancialSettings::savingsWithdrawalEnabled()) {
+            return response()->json(['message' => 'Withdrawals to savings accounts are currently disabled.'], 422);
+        }
+
+        $minWithdrawal = FinancialSettings::withdrawalMin();
+        $maxWithdrawal = FinancialSettings::withdrawalMax();
+
         $validated = $request->validate([
             'member_id' => 'nullable|exists:users,id',
             'user_id' => 'nullable|exists:users,id',
-            'amount' => 'required|numeric|min:100',
+            'amount' => ['required', 'numeric', 'gt:0', 'min:'.$minWithdrawal],
             'reason' => 'nullable|string|max:500',
             'note' => 'nullable|string|max:500',
             'transaction_mode' => 'required|in:counter,online,bank_transfer',
@@ -216,7 +232,7 @@ class ServiceController extends Controller
             return response()->json(['message' => 'Member has no savings account.'], 422);
         }
 
-        $transaction = DB::transaction(function () use ($account, $validated, $user, $targetBranchId) {
+        $transaction = DB::transaction(function () use ($account, $validated, $user, $targetBranchId, $maxWithdrawal) {
             // Lock the account row so concurrent withdrawals cannot overdraw.
             $lockedAccount = Account::whereKey($account->id)->lockForUpdate()->firstOrFail();
 
@@ -227,8 +243,13 @@ class ServiceController extends Controller
                 ->sum('amount');
             $available = (float) $lockedAccount->balance - $pendingWithdrawals;
 
-            if ($validated['amount'] > $available) {
-                abort(422, 'Insufficient available balance. Available: ₱'.number_format($available, 2));
+            $cap = $maxWithdrawal > 0 ? min($available, $maxWithdrawal) : $available;
+
+            if ($validated['amount'] > $cap) {
+                $message = ($maxWithdrawal > 0 && $maxWithdrawal <= $available)
+                    ? 'Amount exceeds the maximum withdrawal limit of ₱'.number_format($maxWithdrawal, 2).'.'
+                    : 'Insufficient available balance. Available: ₱'.number_format($available, 2);
+                abort(422, $message);
             }
 
             $transaction = Transaction::create([

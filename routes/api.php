@@ -209,6 +209,8 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     Route::get('/reports/balance-sheet/download', [ReportController::class, 'downloadBalanceSheet']);
     Route::get('/reports/members', [ReportController::class, 'members']);
     Route::get('/reports/officers', [ReportController::class, 'officers']);
+    Route::get('/reports/interest-disbursements', [ReportController::class, 'interestDisbursements']);
+    Route::get('/reports/interest-disbursements/{interestDisbursement}', [ReportController::class, 'interestDisbursementDetail']);
     Route::post('/reports/export', [ReportController::class, 'export']);
 
     // Loans
@@ -304,6 +306,11 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     // Service Availability Settings
     Route::get('/settings/service-availability', [SettingsController::class, 'getServiceAvailability']);
     Route::put('/settings/service-availability', [SettingsController::class, 'updateServiceAvailability']);
+
+    // Financial Accounts settings (high-security; escalated through countersign)
+    Route::get('/settings/financial', [SettingsController::class, 'getFinancialSettings']);
+    Route::put('/settings/financial', [SettingsController::class, 'updateFinancialSettings']);
+    Route::post('/settings/financial/interest/run', [SettingsController::class, 'runInterestNow']);
 
     // Backups (admin only — permission-gated inside the controller)
     Route::get('/backups', [BackupController::class, 'index']);

@@ -130,6 +130,12 @@ class PermissionCatalog
             'Receipts' => [
                 'receipts.reissue',
             ],
+            'Financial Accounts' => [
+                'financial_settings.view',
+                'financial_settings.update',
+                'interest.view',
+                'interest.run',
+            ],
         ];
     }
 
@@ -208,6 +214,10 @@ class PermissionCatalog
                 'oversight.request',
                 'collections.view-all',
                 'collections.workflow.update',
+                'financial_settings.view',
+                'financial_settings.update',
+                'interest.view',
+                'interest.run',
             ],
             'chairman' => [
                 'dashboard.view',
@@ -276,6 +286,8 @@ class PermissionCatalog
                 'collections.review',
                 'collections.approve',
                 'receipts.reissue',
+                'financial_settings.view',
+                'interest.view',
             ],
             'manager' => [
                 'dashboard.view',
@@ -329,6 +341,7 @@ class PermissionCatalog
                 'collections.review',
                 'collections.approve',
                 'receipts.reissue',
+                'interest.view',
             ],
             'accountant' => [
                 'dashboard.view',
@@ -368,6 +381,7 @@ class PermissionCatalog
                 'profile.view',
                 'profile.update',
                 'collections.review',
+                'interest.view',
             ],
             'loan' => [
                 'dashboard.view',

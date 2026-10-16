@@ -14,6 +14,9 @@ interface AvailabilityFlags {
     counter?: boolean;
     online?: boolean;
     bank_transfer?: boolean;
+    min_amount?: number;
+    max_amount?: number;
+    savings_enabled?: boolean;
 }
 
 const peso = (n: number | string) => `₱${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
@@ -70,8 +73,8 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
         return availability[mode] !== false;
     };
 
-    const schema = withdrawalSchema(availableBalance);
-    const baseSchema = withdrawalBaseSchema(availableBalance);
+    const schema = withdrawalSchema(availableBalance, availability?.min_amount ?? 100, availability?.max_amount ?? 0);
+    const baseSchema = withdrawalBaseSchema(availableBalance, availability?.min_amount ?? 100, availability?.max_amount ?? 0);
 
     const validateStep = (toStep: number) => {
         let stepErrors: FieldErrors = {};
@@ -176,8 +179,8 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
                             <input
                                 type="number"
                                 step="0.01"
-                                min="100"
-                                max={availableBalance}
+                                min={availability?.min_amount ?? 100}
+                                max={availability?.max_amount && availability.max_amount > 0 ? Math.min(availableBalance, availability.max_amount) : availableBalance}
                                 value={form.amount}
                                 onChange={e => setField('amount', e.target.value)}
                                 placeholder="0.00"

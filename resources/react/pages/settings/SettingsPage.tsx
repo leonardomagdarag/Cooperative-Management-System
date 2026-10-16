@@ -15,6 +15,7 @@ import PublicContentPage from '../public-content/PublicContentPage';
 import LoanProductsPage from '../loan-products/LoanProductsPage';
 import RolePermissionsPage from '../role-permissions/RolePermissionsPage';
 import ServiceAvailabilityPage from './ServiceAvailabilityPage';
+import FinancialAccountsPage from './FinancialAccountsPage';
 import BackupPage from './BackupPage';
 import PayMongoPage from './PayMongoPage';
 import HelpSupportTab from './HelpSupportTab';
@@ -40,6 +41,7 @@ export default function SettingsPage() {
     const canManagePermissions = isAdmin || user?.permissions?.includes('officers.manage-permissions');
     const canManageBackups = isAdmin || user?.permissions?.includes('backups.manage') || user?.permissions?.includes('backups.view');
     const canViewLoans = canViewSettings || user?.permissions?.includes('loans.view');
+    const canManageFinancial = isAdmin || user?.permissions?.includes('financial_settings.update');
 
     const tabs: SettingsTab[] = [
         { key: 'account', label: 'My Account', icon: 'fas fa-user-cog', visible: true },
@@ -48,6 +50,7 @@ export default function SettingsPage() {
         { key: 'loan-products', label: 'Loan Products', icon: 'fa-solid fa-hand-holding-dollar', visible: !isMember && canViewLoans },
         { key: 'role-permissions', label: 'Roles & Permissions', icon: 'fas fa-user-shield', visible: !isMember && canManagePermissions },
         { key: 'service-availability', label: 'Service Availability', icon: 'fas fa-toggle-on', visible: isAdmin },
+        { key: 'financial-accounts', label: 'Financial Accounts', icon: 'fas fa-piggy-bank', visible: canManageFinancial },
         { key: 'sms', label: 'SMS Service', icon: 'fas fa-comment-sms', visible: isAdmin },
         { key: 'email', label: 'Email Service', icon: 'fas fa-envelope', visible: !isMember && canManageSettings },
         { key: 'paymongo', label: 'Payment Gateway', icon: 'fas fa-credit-card', visible: isAdmin },
@@ -78,6 +81,7 @@ export default function SettingsPage() {
               activeTab === 'loan-products' ? <LoanProductsPage /> :
               activeTab === 'role-permissions' ? <RolePermissionsPage /> :
               activeTab === 'service-availability' ? <ServiceAvailabilityPage /> :
+              activeTab === 'financial-accounts' ? <FinancialAccountsPage /> :
               activeTab === 'sms' ? <SmsSettingsPage /> :
               activeTab === 'email' ? <EmailSettingsPage /> :
               activeTab === 'paymongo' ? <PayMongoPage /> :

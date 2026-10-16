@@ -32,6 +32,14 @@ Schedule::command('backup:ping')
     ->withoutOverlapping()
     ->description('Run scheduled backups that are due');
 
+// Credit member interest on the configured cadence. Like backup:ping, this
+// command decides what is due and only dispatches the work; the actual
+// crediting runs as a queue job so it is drained by the worker tick below.
+Schedule::command('interest:accrue')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->description('Credit any member interest that is due');
+
 // Shared hosting (Namecheap) has no persistent queue worker, so drain the
 // queue on every scheduler tick instead. `--stop-when-empty` exits as soon as
 // the queue is drained. `--max-time` keeps the run inside the 60s window so it

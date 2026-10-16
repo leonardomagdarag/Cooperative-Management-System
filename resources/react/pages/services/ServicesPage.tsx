@@ -201,6 +201,10 @@ export default function ServicesPage() {
         if (!flags.global) return false;
         if (!flags[userType as keyof typeof flags]) return false;
 
+        // Savings withdrawals can be switched off independently from the
+        // service-availability toggles, from the Financial Accounts tab.
+        if (availKey === 'withdrawal' && flags.savings_enabled === false) return false;
+
         return true;
     };
 

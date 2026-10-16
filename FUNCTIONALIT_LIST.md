@@ -267,7 +267,7 @@ do not treat old secretary-specific behavior as a separate role contract.
 ### 6.3 Services & Transactions (`ServicesPage`, `services.*`, `transactions.*`, `deposits.*`, `withdrawals.*`)
 - Availability-gated wizards (Deposit/Withdrawal/Loan Application/Loan Payment) for self (member) or selected member (officer).
 - Pending queue: `GET /api/services/pending` + `TransactionApproval` modal; approve: `POST /api/services/approve/{transaction}` (`transactions.approve`/`deposits.approve`/`withdrawals.approve`).
-- Account types: `savings`, `share-capital`; transaction types: `deposit`, `withdrawal`, `loan_payment`, `loan_disbursement`, `fee`.
+- Account types: `savings`, `share-capital`; transaction types: `deposit`, `withdrawal`, `loan_payment`, `loan_disbursement`, `interest`, `fee`.
 - Channels/modes: Counter (OTC), Online, Bank Transfer (withdrawal).
 
 ### 6.4 Loans & Loan Products (`LoansPage`, `MemberLoansPage`, `LoanProductsPage`, `loans.*`)
@@ -283,7 +283,8 @@ do not treat old secretary-specific behavior as a separate role contract.
 - `GET/POST /api/expenses`, `PUT/DELETE /api/expenses/{expense}` — record operating expenses, categorize, filter, view in reports.
 
 ### 6.7 Reports (`ReportsPage`, `reports.*`)
-- Types (`GET /api/reports/*`): `financial`, `expenses`, `member-activity`, `member-savings`, `loans`, `payments`, `balance-sheet` (+ `download`), `options` (filter metadata).
+- Types (`GET /api/reports/*`): `financial`, `expenses`, `member-activity`, `member-savings`, `loans`, `payments`, `balance-sheet` (+ `download`), `interest-disbursements` (+ `{id}` drill-down), `options` (filter metadata).
+- Interest Disbursements (`interest.view`): paginated batch list (date, account, period, rate, members, skipped, total, trigger, status) with a drill-down modal showing each member's credited amount, balance before/after, and skip reason. Exportable as `interest_disbursements`.
 - Controls: report-type switcher, range presets (day/week/month/year/custom), date pickers, member/loan/category/activity filters, per-report pagination, charts (Chart.js Bar/Doughnut), currency/date formatting, export (`reports.export`, `reports.financial`, `reports.audit`).
 
 ### 6.8 Announcements (`AnnouncementsPage`, `announcements.*`)
@@ -348,6 +349,7 @@ do not treat old secretary-specific behavior as a separate role contract.
 | Loan Products | `loan-products` | Non-members with `settings.view` or `loans.view` | CRUD + enable/disable loan products |
 | Roles & Permissions | `role-permissions` | Non-members, admin or `officers.manage-permissions` | Manage roles + permission sets + restore presets |
 | Service Availability | `service-availability` | Admin | Toggle services/channels/audiences through a countersigned request (see §8) |
+| Financial Accounts | `financial-accounts` | Non-members with `financial_settings.update` (admin) | Interest rates/intervals/min balance, withdrawal limits and account toggles, manual interest run; all countersigned (see §8.1) |
 | SMS Service | `sms` | Admin | Configure and test SMS settings |
 | Email Service | `email` | Non-members with `settings.update` | Configure and test email settings |
 | Payment Gateway | `paymongo` | Admin | Configure PayMongo, credentials, methods, connection test, and webhook guidance |
@@ -366,11 +368,29 @@ The Settings tab accepts admins and users with `officers.manage-permissions` for
 | Member Registration | `global`, `member` |
 | Login | `global`, `member`, `officer` |
 | Deposits | `global`, `member`, `officer`, `counter` (OTC), `online` |
-| Withdrawals | `global`, `member`, `officer`, `counter`, `online`, `bank_transfer` |
 | Loan Applications | `global`, `member`, `officer` |
 | Loan Payments | `global`, `member`, `officer`, `counter`, `online` |
 
+The **Withdrawals** card was moved to §8.1; its `service_withdrawal_*` keys and `service.availability:withdrawal` middleware behaviour are unchanged, but `GET/PUT /api/settings/service-availability` no longer exposes or accepts `withdrawal`.
+
 Disabled services block the corresponding wizard/API (`service.availability` middleware) and show `ServiceMaintenanceModal`. Optionally notifies all/members/officers via in-app notification.
+
+### 8.1 Financial Accounts (`FinancialAccountsPage`, `SettingsController`, `InterestService`)
+
+High-security settings owned by the admin and applied only after **chairman countersign** approval. Endpoints: `GET/PUT /api/settings/financial`, `POST /api/settings/financial/interest/run` (gated by `financial_settings.view` / `financial_settings.update` / `interest.run`).
+
+| Setting | Keys |
+|---|---|
+| Savings interest | `financial_savings_interest_rate`, `financial_savings_interest_interval`, `financial_savings_min_balance_to_earn` |
+| Share-capital interest | `financial_share_capital_interest_rate`, `financial_share_capital_interest_interval`, `financial_share_capital_min_balance_to_earn` |
+| Interest run options | `financial_interest_min_payout`, `financial_interest_notify_members` |
+| Withdrawal rules | `financial_withdrawal_min_amount`, `financial_withdrawal_max_amount`, `financial_withdrawal_savings_enabled`, `financial_withdrawal_share_capital_enabled` (stored, inert while share capital is non-withdrawable) |
+| Withdrawal channels (relocated) | `service_withdrawal_enabled`, `service_withdrawal_member_enabled`, `service_withdrawal_officer_enabled`, `service_withdrawal_counter_enabled`, `service_withdrawal_online_enabled`, `service_withdrawal_bank_transfer_enabled` |
+| Idempotency markers | `financial_savings_last_credited_at`, `financial_share_capital_last_credited_at` |
+
+- Interest is a nominal **annual** rate prorated by the interval (`daily = /365`, `monthly = /12`, `yearly = /1`). Only active members (Spatie role `member`) with an account balance at or above the minimum-to-earn are eligible.
+- `interest:accrue` is scheduled every minute and dispatches `DisburseInterestJob` (queue `default`) only when the interval is due. The countersigned **Run now** action dispatches the same job for a dated manual batch.
+- Each batch creates one `interest_disbursements` header plus `interest_disbursement_items` lines and a completed **`interest`** transaction per member. Per-member amounts below `financial_interest_min_payout` are recorded as skipped. `batch_key` + `financial_{type}_last_credited_at` make a run idempotent per period. Withdrawals to savings return **422** when `financial_withdrawal_savings_enabled` is off, and enforce the configured min/max.
 
 Other system settings (seeded, `SystemSettingSeeder`): site name/tagline, maintenance mode, loan min/max/interest/OTP/due reminders, notifications (email/SMS/retention), security (failed logins, session timeout, password strength/min-length, OTP expiry/attempts, trusted-device days, withdrawal OTP threshold), payments (online enabled, GCash/PayMaya/bank), business hours/closed days, backup encryption/schedules/scopes/retention.
 
@@ -401,7 +421,7 @@ Other system settings (seeded, `SystemSettingSeeder`): site name/tagline, mainte
 
 ## 10. Permission Catalog (Summary)
 
-`PermissionCatalog::groups()` is the canonical list. It includes dashboard; member detail facets (`members.view-loans`, `members.view-ids`, `members.view-activity`, `members.view-financial`); services; loan lifecycle; transaction reversal; deposits; withdrawals; announcements; reports; officers; branches; logs; settings; backups; tickets; notifications; profile; oversight; collections; and receipt reissue permissions. `logs.export` remains a declared permission without a current log-export route or UI.
+`PermissionCatalog::groups()` is the canonical list. It includes dashboard; member detail facets (`members.view-loans`, `members.view-ids`, `members.view-activity`, `members.view-financial`); services; loan lifecycle; transaction reversal; deposits; withdrawals; announcements; reports; officers; branches; logs; settings; financial accounts (`financial_settings.view`, `financial_settings.update`, `interest.view`, `interest.run`); backups; tickets; notifications; profile; oversight; collections; and receipt reissue permissions. `logs.export` remains a declared permission without a current log-export route or UI.
 
 Current officer presets are `admin`, `chairman`, `manager`, `accountant`, and `loan`; the effective permission returned to the SPA also includes permitted officer overrides. Member, inactive, and terminated behavior is established by the user/role seeders and authorization code. Use `PermissionCatalog::rolePresets()` and `$user->can(...)` as the authority instead of this summary when testing access.
 

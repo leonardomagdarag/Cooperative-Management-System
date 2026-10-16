@@ -4,11 +4,13 @@ namespace App\Services;
 
 use App\Http\Controllers\Api\MemberController;
 use App\Http\Controllers\Api\SettingsController;
+use App\Jobs\DisburseInterestJob;
 use App\Models\Notification;
 use App\Models\OfficerPermissionOverride;
 use App\Models\PrivilegedActionRequest;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Support\FinancialSettings;
 use App\Support\MaintenanceState;
 use App\Support\PermissionCatalog;
 use Illuminate\Support\Facades\Auth;
@@ -398,6 +400,38 @@ class CountersignService
                 }
 
                 return ['status' => 'success', 'updated_keys' => array_keys($payload['settings'])];
+
+            case 'financial.settings.update':
+                $allowedKeys = FinancialSettings::EDITABLE_KEYS;
+                $updated = [];
+
+                foreach ($payload['settings'] ?? [] as $key => $value) {
+                    if (! in_array($key, $allowedKeys, true)) {
+                        throw new \RuntimeException("Disallowed financial setting key: {$key}");
+                    }
+
+                    SystemSetting::set($key, $value);
+                    $updated[] = $key;
+                }
+
+                if (($payload['notify_affected'] ?? false) && isset($payload['services'])) {
+                    app(SettingsController::class)->notifyAffectedUsers($payload['services']);
+                }
+
+                return ['status' => 'success', 'updated_keys' => $updated];
+
+            case 'financial.interest.run':
+                $accountType = $payload['account_type'] ?? null;
+                if (! in_array($accountType, FinancialSettings::ACCOUNT_TYPES, true)) {
+                    throw new \RuntimeException("Unknown interest account type: {$accountType}");
+                }
+
+                DisburseInterestJob::dispatch($accountType, $payload['requested_by'] ?? null, 'manual');
+
+                return [
+                    'status' => 'queued',
+                    'account_type' => $accountType,
+                ];
 
             default:
                 throw new \RuntimeException("Unknown privileged action type: {$actionType}");
