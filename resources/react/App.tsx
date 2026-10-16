@@ -37,6 +37,8 @@ import OfficerOverview from './pages/overviews/OfficerOverview';
 import MemberLoansPage from './pages/member-loans/MemberLoansPage';
 import CollectionsPage from './pages/collections/CollectionsPage';
 import MembersPage from './pages/members/MembersPage';
+import OversightApprovalsPage from './pages/oversight/OversightApprovalsPage';
+import ChairmanOverview from './pages/overviews/ChairmanOverview';
 import TicketsPage from './pages/tickets/TicketsPage';
 import LoadingScreen from './components/LoadingScreen';
 import EmptyState from './components/ui/EmptyState';
@@ -95,6 +97,7 @@ function DashboardRouter() {
         'settings': <SettingsPage />,
         'member-loans': <MemberLoansPage />,
         'collections': <CollectionsPage />,
+        'approvals': <PermissionGate role="chairman"><OversightApprovalsPage /></PermissionGate>,
     };
 
     const permissionMap: Record<string, { permission?: string; role?: string; multiPermission?: string[] }> = {
@@ -167,6 +170,7 @@ function DashboardRouter() {
 function DefaultOverview({ role, isOfficer }: { role: string; isOfficer?: boolean }) {
     switch (role) {
         case 'admin': return <AdminOverview />;
+        case 'chairman': return <ChairmanOverview />;
         case 'manager': return <ManagerOverview />;
         case 'accountant': case 'treasurer': return <TreasurerOverview />;
         case 'loan': return <LoanOverview />;

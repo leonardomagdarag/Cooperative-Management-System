@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
-import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import { useToast } from '../../contexts/ToastContext';
 
@@ -42,7 +41,7 @@ function requestChanges(item: RequestItem): string[] {
     return [];
 }
 
-export default function OversightApprovalModal({ open, onClose, canDecide }: { open: boolean; onClose: () => void; canDecide: boolean }) {
+export default function OversightApprovalsPage() {
     const [selected, setSelected] = useState<RequestItem | null>(null);
     const [decision, setDecision] = useState<Decision>('approve');
     const [otp, setOtp] = useState('');
@@ -52,7 +51,6 @@ export default function OversightApprovalModal({ open, onClose, canDecide }: { o
     const client = useQueryClient();
     const requests = useQuery({
         queryKey: ['oversight-requests'],
-        enabled: open,
         queryFn: async () => (await api.get('/api/oversight/requests')).data.data as RequestItem[],
     });
     const sendOtp = useMutation({
@@ -76,8 +74,13 @@ export default function OversightApprovalModal({ open, onClose, canDecide }: { o
         sendOtp.mutate({ item, decision: next });
     };
 
-    return <Modal open={open} onClose={onClose} title="Privileged action approvals" size="lg">
-        {selected ? <div className="space-y-4">
+    return <div className="space-y-6">
+        <header>
+            <p className="text-sm font-medium uppercase tracking-wide text-emerald-700">Chairman oversight</p>
+            <h1 className="mt-1 text-2xl font-bold text-slate-900">Privileged action approvals</h1>
+            <p className="mt-2 text-sm text-slate-600">Review requests that require your countersign, or reconcile actions whose execution status needs verification.</p>
+        </header>
+        {selected ? <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
             <button type="button" className="text-sm text-emerald-700" onClick={() => { setSelected(null); setOtpSent(false); }}>← Back to requests</button>
             <p className="text-sm text-gray-700">{decision === 'approve' ? 'Approve' : decision === 'reject' ? 'Reject' : 'Reconcile'} <strong>{requestSummary(selected)}</strong>, requested by {selected.requested_by}?</p>
             {requestChanges(selected).length > 0 && <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Requested permission changes</p><ul className="mt-2 max-h-48 space-y-1 overflow-y-auto text-sm text-slate-700">{requestChanges(selected).map(change => <li key={change}>{change}</li>)}</ul></div>}
@@ -85,10 +88,9 @@ export default function OversightApprovalModal({ open, onClose, canDecide }: { o
             {otpSent ? <label className="block text-sm">Email verification code<input autoComplete="one-time-code" inputMode="numeric" value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} maxLength={6} className="mt-1 w-full rounded border p-2" /></label> : <p className="text-sm text-gray-500">Sending a one-time code to your account email…</p>}
             <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => { setSelected(null); setOtpSent(false); }}>Cancel</Button><Button disabled={!otpSent || otp.length !== 6 || decide.isPending || sendOtp.isPending || (decision.startsWith('reconcile_') && !note.trim())} onClick={() => decide.mutate()}>{decide.isPending ? 'Submitting…' : decision === 'approve' ? 'Verify and approve' : decision === 'reject' ? 'Verify and reject' : 'Verify reconciliation'}</Button></div>
         </div> : <div className="space-y-3">
-            {requests.isLoading ? <p>Loading requests…</p> : requests.data?.length ? requests.data.map(item => <article key={item.id} className={`rounded-lg border p-4 ${item.status === 'executing' ? 'border-amber-300 bg-amber-50' : ''}`}>
-                <div className="flex flex-wrap justify-between gap-2"><div><h3 className="font-semibold">{requestSummary(item)}{item.status === 'executing' && <span className="ml-2 rounded bg-amber-200 px-2 py-0.5 text-xs text-amber-900">In doubt</span>}</h3><p className="text-sm text-gray-600">Requested by {item.requested_by} · {new Date(item.created_at).toLocaleString()}</p>{item.status === 'executing' && <p className="mt-2 max-w-xl text-sm text-amber-900">Execution has been running for over {15} minutes. Check the affected system before recording whether it completed. It will not be retried automatically.</p>}</div>{canDecide && (item.status === 'executing' ? <div className="flex flex-col gap-2"><Button size="sm" onClick={() => select(item, 'reconcile_executed')}>I verified it completed</Button><Button size="sm" variant="danger" onClick={() => select(item, 'reconcile_failed')}>I verified it did not complete</Button></div> : <div className="flex gap-2"><Button size="sm" onClick={() => select(item, 'approve')}>Approve</Button><Button size="sm" variant="danger" onClick={() => select(item, 'reject')}>Reject</Button></div>)}</div>
+            {requests.isLoading ? <p>Loading requests…</p> : requests.isError ? <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">Could not load approval requests. Refresh the page to try again.</p> : requests.data?.length ? requests.data.map(item => <article key={item.id} className={`rounded-lg border p-4 ${item.status === 'executing' ? 'border-amber-300 bg-amber-50' : ''}`}>
+                <div className="flex flex-wrap justify-between gap-2"><div><h3 className="font-semibold">{requestSummary(item)}{item.status === 'executing' && <span className="ml-2 rounded bg-amber-200 px-2 py-0.5 text-xs text-amber-900">In doubt</span>}</h3><p className="text-sm text-gray-600">Requested by {item.requested_by} · {new Date(item.created_at).toLocaleString()}</p>{item.status === 'executing' && <p className="mt-2 max-w-xl text-sm text-amber-900">Execution has been running for over {15} minutes. Check the affected system before recording whether it completed. It will not be retried automatically.</p>}</div>{item.status === 'executing' ? <div className="flex flex-col gap-2"><Button size="sm" onClick={() => select(item, 'reconcile_executed')}>I verified it completed</Button><Button size="sm" variant="danger" onClick={() => select(item, 'reconcile_failed')}>I verified it did not complete</Button></div> : <div className="flex gap-2"><Button size="sm" onClick={() => select(item, 'approve')}>Approve</Button><Button size="sm" variant="danger" onClick={() => select(item, 'reject')}>Reject</Button></div>}</div>
             </article>) : <p className="py-8 text-center text-sm text-gray-500">No pending requests.</p>}
-            {!canDecide && !!requests.data?.length && <p className="text-sm text-gray-500">Only the chairman can approve or reject these requests.</p>}
         </div>}
-    </Modal>;
+    </div>;
 }

@@ -5,6 +5,7 @@ use App\Models\BackupRun;
 use App\Models\Branch;
 use App\Models\User;
 use Database\Seeders\AccountSeeder;
+use Database\Seeders\QaChairmanSeeder;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\UserSeeder;
 
@@ -100,6 +101,18 @@ test('F015-2b: admin dashboard backup status reflects per-tier backup runs', fun
         ->assertJsonPath('backup_status.tiers.offsite.last_status', 'failed')
         ->assertJsonPath('backup_status.tiers.offsite.message', 'Could not reach Backblaze B2.')
         ->assertJsonPath('backup_status.tiers.daily.last_status', null);
+});
+
+test('chairman dashboard gives a cooperative-wide overview without administrator backup details', function () {
+    $this->seed(QaChairmanSeeder::class);
+    $this->chairman = User::where('email', 'leo.baluyot039+chairman@gmail.com')->firstOrFail();
+    $memberCount = User::query()->memberUsers()->count();
+    $this->actingAs($this->chairman)
+        ->getJson('/api/dashboard?branch_id='.$this->officeBranch->id)
+        ->assertOk()
+        ->assertJsonStructure(['total_members', 'total_savings', 'total_share_capital', 'pending_transactions', 'pending_loans', 'loans_active', 'month_net', 'loan_status_series'])
+        ->assertJsonPath('total_members', $memberCount)
+        ->assertJsonMissingPath('backup_status');
 });
 
 // ---------------------------------------------------------------------------

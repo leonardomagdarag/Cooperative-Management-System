@@ -14,6 +14,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
     { label: 'Dashboard', path: '/dashboard', icon: 'fas fa-tachometer-alt' },
     { label: 'Members', path: '/dashboard/members', icon: 'fas fa-users', permission: 'members.view' },
+    { label: 'Approvals', path: '/dashboard/approvals', icon: 'fas fa-clipboard-check', roles: ['chairman'] },
     { label: 'Officers', path: '/dashboard/officers', icon: 'fas fa-user-tie', permission: 'officers.view' },
     { label: 'Branches', path: '/dashboard/branches', icon: 'fas fa-building', permission: 'branches.view' },
     { label: 'Services', path: '/dashboard/services', icon: 'fas fa-briefcase', permission: 'services.view' },

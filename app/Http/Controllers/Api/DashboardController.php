@@ -32,6 +32,7 @@ class DashboardController extends Controller
 
         return match ($role) {
             'admin' => $this->admin($branchId),
+            'chairman' => $this->admin(null, false),
             'manager' => $this->manager($branchId),
             'accountant', 'treasurer' => $this->treasurer($branchId),
             'secretary' => $this->secretary($branchId),
@@ -134,7 +135,7 @@ class DashboardController extends Controller
 
     // ─── Admin ─────────────────────────────────────────────────
 
-    private function admin(?int $branchId = null): JsonResponse
+    private function admin(?int $branchId = null, bool $includeBackupStatus = true): JsonResponse
     {
         $now = now();
         $start = $now->copy()->startOfMonth();
@@ -267,7 +268,7 @@ class DashboardController extends Controller
             'pending_transactions_list' => $pendingTransactions,
             'recent_expenses' => $recentExpenses,
             'recent_announcements' => $recentAnnouncements,
-            'backup_status' => $this->buildBackupStatus(),
+            ...($includeBackupStatus ? ['backup_status' => $this->buildBackupStatus()] : []),
         ]);
     }
 
