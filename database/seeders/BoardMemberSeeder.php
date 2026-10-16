@@ -9,11 +9,11 @@ use Illuminate\Database\Seeder;
 /**
  * The elected board of the cooperative.
  *
- * Four members of the seeded roster sit on the board, and the chairperson and
- * secretary are the same people the UserSeeder makes officers, so a name that
- * appears in the officer list is the same person here. Terms are dated to a
- * current three-year cycle and the mottos are the members' own, in the Taglish
- * that members of a Calauan cooperative actually speak.
+ * Five people sit on the board: the chairman officer seeded by
+ * ChairmanSeeder takes the chairperson seat, and four rostered members fill
+ * the other seats, so an officer name and a board name always agree. Terms
+ * are dated to a current three-year cycle and the mottos are the members'
+ * own, in the Taglish that members of a Calauan cooperative actually speak.
  */
 class BoardMemberSeeder extends Seeder
 {
@@ -26,11 +26,11 @@ class BoardMemberSeeder extends Seeder
     {
         $board = [
             [
-                'user_number' => 'USR000008',
+                'user_number' => 'USR000006',
                 'position' => 'chairperson',
                 'title' => 'Chairperson',
-                'motto' => "<i>'Boku ang kagandahan ng Calauan.'</i>",
-                'bio' => 'Rice trader and founding member. Chairs the general assembly and leads the credit committee.',
+                'motto' => "<i>'Serbisyo muna, hindi negosyo.'</i>",
+                'bio' => 'Founding chairman and long-time community leader. Presides over the general assembly and the credit committee.',
                 'order' => 1,
             ],
             [
@@ -38,7 +38,7 @@ class BoardMemberSeeder extends Seeder
                 'position' => 'vice_chairperson',
                 'title' => 'Vice Chairperson',
                 'motto' => "<i>'Kung may tinutulong, may kailangan.'</i>",
-                'bio' => 'Sari-sari store owner. Deputises for the chairperson and oversees the member services committee.',
+                'bio' => 'Public school teacher and long-standing member. Deputises for the chairperson and oversees the member services committee.',
                 'order' => 2,
             ],
             [

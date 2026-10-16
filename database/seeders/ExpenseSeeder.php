@@ -28,7 +28,7 @@ class ExpenseSeeder extends Seeder
      * Recurring monthly costs, per branch.
      *
      * `Main` is the larger office; the satellite branch office in Barangay
-     * Halang pays for its own power and connection but shares the bookkeeper.
+     * Prinza pays for its own power and connection but shares the bookkeeper.
      *
      * @var list<array{category: string, description: string, main: float, branch: float}>
      */

@@ -45,7 +45,7 @@ class AccountSeeder extends Seeder
         }
 
         $ledger = new LedgerWriter;
-        $accountant = $ledger->officer('USR000006');
+        $accountant = $ledger->officer('USR000004');
 
         foreach (MemberRoster::all() as $member) {
             $user = $members[$member['user_number']] ?? null;

@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
  * Every balance-affecting row has to be posted through here so the seeded data
  * obeys the rules LedgerController::applyBalanceEffect() enforces at runtime:
  *
- *  - deposits and loan disbursements credit an account;
+ *  - deposits, loan disbursements and interest credits credit an account;
  *  - withdrawals and loan payments debit it;
  *  - membership fees never move a balance at all;
  *  - only `completed` rows count, so `pending` and `rejected` rows must not
@@ -100,7 +100,7 @@ final class LedgerWriter
     public static function balanceEffect(string $type, float $amount): float
     {
         return match ($type) {
-            'deposit', 'loan_disbursement' => $amount,
+            'deposit', 'loan_disbursement', 'interest' => $amount,
             'withdrawal', 'loan_payment' => -$amount,
             default => 0.0,
         };
@@ -151,7 +151,8 @@ final class LedgerWriter
             ->where('status', 'completed')
             ->where(function ($query) {
                 $query->where('transaction_type', 'deposit')
-                    ->orWhere('transaction_type', 'loan_disbursement');
+                    ->orWhere('transaction_type', 'loan_disbursement')
+                    ->orWhere('transaction_type', 'interest');
             })
             ->where('transaction_date', '<=', $asOf)
             ->sum('amount');

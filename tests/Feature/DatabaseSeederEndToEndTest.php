@@ -4,11 +4,19 @@ use App\Models\Account;
 use App\Models\Beneficiary;
 use App\Models\BoardMember;
 use App\Models\Branch;
+use App\Models\CollectionRun;
 use App\Models\Expense;
+use App\Models\InterestDisbursement;
 use App\Models\Loan;
+use App\Models\LoanDocument;
 use App\Models\LoanProduct;
+use App\Models\MemberApplication;
 use App\Models\Notification;
+use App\Models\PrivilegedActionRequest;
+use App\Models\Ticket;
 use App\Models\Transaction;
+use App\Models\TransactionReceipt;
+use App\Models\TrustedDevice;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\Support\MemberRoster;
@@ -33,7 +41,7 @@ test('the whole seeder runs on an empty database and produces a coherent coopera
     $this->seed(DatabaseSeeder::class);
 
     // Nothing should be missing.
-    expect(User::count())->toBe(15)
+    expect(User::count())->toBe(16)
         ->and(Branch::count())->toBe(2)
         ->and(LoanProduct::count())->toBe(3)
         ->and(Account::count())->toBe(20)
@@ -43,6 +51,23 @@ test('the whole seeder runs on an empty database and produces a coherent coopera
         ->and(Expense::count())->toBeGreaterThan(0)
         ->and(Notification::count())->toBeGreaterThan(0)
         ->and(Transaction::count())->toBeGreaterThan(0);
+
+    // The previously empty modules carry data too.
+    expect(MemberApplication::count())->toBeGreaterThan(0)
+        ->and(Ticket::count())->toBeGreaterThan(0)
+        ->and(CollectionRun::count())->toBe(2)
+        ->and(TrustedDevice::count())->toBeGreaterThan(0)
+        ->and(PrivilegedActionRequest::count())->toBeGreaterThan(0)
+        ->and(LoanDocument::count())->toBeGreaterThan(0)
+        ->and(TransactionReceipt::count())->toBeGreaterThan(0)
+        ->and(InterestDisbursement::count())->toBe(2)
+        ->and(Transaction::where('transaction_type', 'interest')->where('status', 'completed')->count())->toBeGreaterThan(0);
+
+    // The chairman is the fifth officer and can countersign privileged actions.
+    $chairman = User::where('user_number', 'USR000006')->firstOrFail();
+    expect($chairman->getRoleNames()->first())->toBe('chairman')
+        ->and($chairman->hasRole('chairman'))->toBeTrue()
+        ->and($chairman->can('oversight.approve'))->toBeTrue();
 
     // Every member has both accounts and a complete profile.
     foreach (MemberRoster::all() as $member) {
@@ -91,17 +116,26 @@ test('the whole seeder runs on an empty database and produces a coherent coopera
         $t = $totals[$account->id] ?? [];
         $expected = ($t['deposit'] ?? 0)
             + ($t['loan_disbursement'] ?? 0)
+            + ($t['interest'] ?? 0)
             - ($t['withdrawal'] ?? 0)
             - ($t['loan_payment'] ?? 0);
 
         expect(round((float) $account->balance, 2))->toBe(round($expected, 2));
     }
 
-    // Savings balances land on the roster's targets.
+    // Savings balances land on the roster's targets, plus any interest this
+    // month's crediting run added on top.
     foreach (MemberRoster::all() as $member) {
         $user = User::where('user_number', $member['user_number'])->firstOrFail();
         $savings = $user->accounts()->where('account_type', 'savings')->firstOrFail();
-        expect(abs((float) $savings->balance - $member['savings']['target_balance']))->toBeLessThan(1.0);
+
+        $interest = (float) Transaction::query()
+            ->where('account_id', $savings->id)
+            ->where('transaction_type', 'interest')
+            ->where('status', 'completed')
+            ->sum('amount');
+
+        expect(abs((float) $savings->balance - ($member['savings']['target_balance'] + $interest)))->toBeLessThan(1.0);
     }
 
     // No completed entry is dated in the future, and no number is reused.
@@ -130,6 +164,14 @@ test('seeding twice changes nothing', function () {
         'branches' => Branch::count(),
         'activity' => DB::table('activity_log')->count(),
         'settings' => DB::table('system_settings')->count(),
+        'applications' => MemberApplication::count(),
+        'tickets' => Ticket::count(),
+        'runs' => CollectionRun::count(),
+        'receipts' => TransactionReceipt::count(),
+        'documents' => LoanDocument::count(),
+        'devices' => TrustedDevice::count(),
+        'oversight' => PrivilegedActionRequest::count(),
+        'interest_batches' => InterestDisbursement::count(),
     ];
 
     $before = $counts();

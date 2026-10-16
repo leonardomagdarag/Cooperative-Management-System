@@ -82,6 +82,24 @@ class AnnouncementSeeder extends Seeder
                 'visibility' => [Announcement::VISIBILITY_MEMBERS],
                 'created_at' => now()->subDay(),
             ],
+            [
+                'title' => 'Withdrawals Above ₱2,000 Need a One-Time Code',
+                'content' => 'For your protection, any withdrawal of ₱2,000 or more is released only after a one-time '
+                    .'code is entered. The code is sent to the mobile number on file, so please keep your contact '
+                    .'details current at the counter. Smaller withdrawals are released without a code.',
+                'type' => Announcement::TYPE_ANNOUNCEMENT,
+                'visibility' => [Announcement::VISIBILITY_MEMBERS],
+                'created_at' => now()->subDays(5),
+            ],
+            [
+                'title' => 'Interest on Savings and Share Capital Credited Monthly',
+                'content' => 'Interest on savings and share-capital accounts is now credited on a monthly cycle and '
+                    .'recorded in the ledger. Members may view the credit in their account history or have it stamped on '
+                    .'the passbook. Rates are set by the board and posted at both offices.',
+                'type' => Announcement::TYPE_ANNOUNCEMENT,
+                'visibility' => [Announcement::VISIBILITY_MEMBERS, Announcement::VISIBILITY_OFFICERS],
+                'created_at' => now()->subDays(2),
+            ],
 
             // ── Public news ───────────────────────────────────────────────
             [
@@ -95,9 +113,9 @@ class AnnouncementSeeder extends Seeder
                 'created_at' => now()->subDays(60),
             ],
             [
-                'title' => 'Branch Office Opens in Barangay Prizon',
+                'title' => 'Branch Office Opens in Barangay Prinza',
                 'content' => 'To bring the service closer to the members living east of the national highway, a collection '
-                    .'point now operates in Prizon on Wednesdays and Fridays. Loan releases remain at the Main Office; '
+                    .'point now operates in Prinza on Wednesdays and Fridays. Loan releases remain at the Main Office; '
                     .'deposits, withdrawals and passbook updates can be settled at the branch.',
                 'type' => Announcement::TYPE_NEWS,
                 'category' => 'Branch',
@@ -113,6 +131,16 @@ class AnnouncementSeeder extends Seeder
                 'category' => 'Patronage',
                 'visibility' => [Announcement::VISIBILITY_PUBLIC, Announcement::VISIBILITY_MEMBERS],
                 'created_at' => now()->subDays(6),
+            ],
+            [
+                'title' => 'Cooperative Joins the Municipal Agri-Trade Fair',
+                'content' => 'Settlers Credit Cooperative will host a booth at the Calauan agri-trade fair to promote '
+                    .'membership and explain the group lending programme to farmers and market vendors. Members are '
+                    .'welcome to drop by and bring a neighbour who wants to join.',
+                'type' => Announcement::TYPE_NEWS,
+                'category' => 'Community',
+                'visibility' => [Announcement::VISIBILITY_PUBLIC, Announcement::VISIBILITY_MEMBERS],
+                'created_at' => now()->subDays(12),
             ],
 
             // ── Upcoming events ───────────────────────────────────────────
