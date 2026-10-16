@@ -87,8 +87,8 @@ vendor/bin/pint     # formatter, laravel preset (no pint.json in repo)
 - **`FUNCTIONALIT_LIST.md` (repo root) is the system-functionality reference** for workflows and role capabilities; `app/Support/PermissionCatalog.php`, seeders, and active backend authorization remain authoritative for actual access. Read the functionality reference before changing access rules, then verify expectations against code.
 - `docs/QA/CODE_DOCUMENT_ALIGNMENT.md` records known code/documentation drift; `docs/QA/QA_RESULT_1.md`, `docs/QA/QA_LOG.md`, and role-specific reports under `docs/QA/` hold browser QA findings and their current statuses. Check the latest register before repeating or closing a finding.
 - `docs/BACKUPS.md` covers the three backup tiers, B2 off-site setup, restore safety, and ops commands; `docs/DATABASE_DICTIONARY.csv` documents table/column meanings when changing schema.
-- Root `*_REWORK.md` files (`COLLECTIONS_REWORK`, `ROLE_REWORK`, `LEDGER_OTP_REWORK`, `TRANSACTION_APPROVAL_REWORK`, `FINANCIAL_ACCOUNTS_REWORK`, `REWORK_IMPLEMENTATION_SUMMARY`) are uncommitted working notes for the current rework — orientation only, verify against code.
-- `Leo/` (gitignored; only `Leo/audit_pipeline.ps1` is tracked) and the untracked `scratch/` hold planning/audit material. Not authoritative.
+- Rework files under `docs/Implementations and Reworks/system-reworks/` (`COLLECTIONS_REWORK`, `ROLE_REWORK`, `LEDGER_OTP_REWORK`, `TRANSACTION_APPROVAL_REWORK`, `FINANCIAL_ACCOUNTS_REWORK`, `REWORK_IMPLEMENTATION_SUMMARY`, `SMS_FALLBACK_REWORK`) are uncommitted working notes for the current rework — orientation only, verify against code.
+- `Leo/` (gitignored; pipeline runner and state) and `docs/diagrams/scripts/` (diagram generation scripts) hold planning, audit, and generation tools. Not authoritative.
 - `README.md` references a `setup.sh` that does not exist in this repo. Ignore it.
 - Commit messages use Conventional Commits: `feat(auth):`, `fix(loans):`, `chore(gitignore):`, `test(audit):`.
 - There is no `opencode.json`, CI workflow, or pre-commit hook. Nothing runs verification automatically.

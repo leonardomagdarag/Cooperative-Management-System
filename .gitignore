@@ -33,10 +33,10 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 
-# Non-system planning/audit material (kept on disk, never committed).
+# Documentation, non-system planning, and QA material (kept on disk, never committed).
+/docs/
 /*_REWORK.md
 /REWORK_IMPLEMENTATION_SUMMARY.md
-/docs/diagrams/
 /tests/e2e/screenshot.spec.ts
 
 # Local scratch and debug artifacts.
@@ -46,11 +46,5 @@ Thumbs.db
 /scratch/
 
 # Local frontend audit outputs (kept on disk, never committed).
-/docs/FRONTEND_AUDIT_REPORT.md
 /frontend_audit_screenshots/
 /tests/e2e/frontend-audit.spec.ts
-
-# Local QA reports and evidence (kept on disk, never committed).
-/docs/QA/
-/docs/QA_RESULT_1.md
-/docs/CMS - Magdarag Jr., Leonardo B (Capstone 1).pdf
