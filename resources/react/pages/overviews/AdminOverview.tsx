@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { api } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
+import { formatBytes } from '../../lib/format';
 
 const peso = (n: number | string | undefined | null, d = 2) =>
     '₱' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -207,7 +208,7 @@ export default function AdminOverview() {
                                     </div>
                                     {b.last_status ? (
                                         <>
-                                            <p className="text-xs text-gray-500 mt-2">Last run {dt(b.last_run_at)}</p>
+                                            <p className="text-xs text-gray-500 mt-2">Last run {dt(b.last_run_at)}{b.last_size != null ? <> · <span className="tabular-nums">{formatBytes(b.last_size)}</span></> : null}</p>
                                             {b.last_filename && <p className="text-xs text-gray-700 font-mono truncate mt-1" title={b.last_filename}>{b.last_filename.split('/').pop()}</p>}
                                             {b.last_status === 'failed' && b.message && <p className="text-xs text-red-600 mt-1 line-clamp-2">{b.message}</p>}
                                         </>

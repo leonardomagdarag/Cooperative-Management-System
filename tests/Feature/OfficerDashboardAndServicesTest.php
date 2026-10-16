@@ -96,6 +96,7 @@ test('F015-2b: admin dashboard backup status reflects per-tier backup runs', fun
         ->assertJsonPath('backup_status.health', 'attention')
         ->assertJsonPath('backup_status.tiers.hourly.last_status', 'success')
         ->assertJsonPath('backup_status.tiers.hourly.last_scope', 'both')
+        ->assertJsonPath('backup_status.tiers.hourly.last_size', 2048)
         ->assertJsonPath('backup_status.tiers.offsite.last_status', 'failed')
         ->assertJsonPath('backup_status.tiers.offsite.message', 'Could not reach Backblaze B2.')
         ->assertJsonPath('backup_status.tiers.daily.last_status', null);

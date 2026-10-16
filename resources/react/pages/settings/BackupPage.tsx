@@ -19,6 +19,7 @@ import {
     type BackupScope,
     type BackupTier,
 } from '../../api/backups';
+import { formatBytes, formatDate } from '../../lib/format';
 
 const SCOPE_LABELS: Record<string, string> = { db: 'Database', files: 'Files', both: 'Database + Files' };
 
@@ -43,19 +44,6 @@ function retentionLabel(tier: BackupTier): string {
         case 'offsite': return 'Retain 7 days';
         default: return '';
     }
-}
-
-function formatBytes(bytes: number | null): string {
-    if (bytes === null || bytes === undefined) return '—';
-    if (bytes === 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
-    return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-}
-
-function formatDate(iso: string | null): string {
-    if (!iso) return '—';
-    return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 function StatusBadge({ status }: { status: BackupRun['status'] }) {
@@ -172,6 +160,14 @@ export default function BackupPage() {
 
     const shownEncryption = draftEncryption ?? settings.encryption_enabled;
 
+    const tierTotal = (tier: BackupTier) =>
+        payload!.tiers[tier].items.reduce((sum, item) => sum + (item.size ?? 0), 0);
+    const onServerTotal = tierTotal('hourly') + tierTotal('daily');
+    const offsiteTotal = tierTotal('offsite');
+    const onServerCount = payload!.tiers.hourly.items.length + payload!.tiers.daily.items.length;
+    const offsiteCount = payload!.tiers.offsite.items.length;
+    const totalArchives = onServerCount + offsiteCount;
+
     return (
         <div className="space-y-6">
             <SettingsTabHeader
@@ -239,6 +235,35 @@ export default function BackupPage() {
                     </div>
                 )}
             </div>
+            {/* Storage summary */}
+            <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="grid grid-cols-1 divide-y divide-gray-100 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+                    <div className="flex items-center gap-3 px-5 py-4">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><i className="fas fa-server"></i></div>
+                        <div className="min-w-0">
+                            <p className="text-xs uppercase tracking-wide text-gray-500">On-server storage</p>
+                            <p className="text-lg font-semibold tabular-nums text-gray-900">{formatBytes(onServerTotal)}</p>
+                            <p className="text-xs text-gray-500">{onServerCount} archive{onServerCount === 1 ? '' : 's'} (hourly + daily)</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3 px-5 py-4">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600"><i className="fas fa-cloud"></i></div>
+                        <div className="min-w-0">
+                            <p className="text-xs uppercase tracking-wide text-gray-500">Off-site storage</p>
+                            <p className="text-lg font-semibold tabular-nums text-gray-900">{formatBytes(offsiteTotal)}</p>
+                            <p className="text-xs text-gray-500">{offsiteCount} archive{offsiteCount === 1 ? '' : 's'} (Backblaze B2)</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3 px-5 py-4">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600"><i className="fas fa-box-archive"></i></div>
+                        <div className="min-w-0">
+                            <p className="text-xs uppercase tracking-wide text-gray-500">Total archives</p>
+                            <p className="text-lg font-semibold tabular-nums text-gray-900">{totalArchives}</p>
+                            <p className="text-xs text-gray-500">Across all tiers</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
             {/* Tier lists */}
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
                 {(Object.keys(TIER_DEFS) as BackupTier[]).map(tier => {
@@ -254,6 +279,12 @@ export default function BackupPage() {
                                         <p className="mt-0.5 text-xs text-gray-500">{TIER_DEFS[tier].description}</p>
                                     </div>
                                 </div>
+                                {!offsiteUnconfigured && (
+                                    <div className="shrink-0 text-right">
+                                        <p className="text-sm font-semibold tabular-nums text-gray-900">{formatBytes(tierTotal(tier))}</p>
+                                        <p className="mt-0.5 text-xs text-gray-500">{t.items.length} archive{t.items.length === 1 ? '' : 's'}</p>
+                                    </div>
+                                )}
                             </div>
                             {offsiteUnconfigured ? (
                                 <div className="p-5 text-center text-sm text-gray-500">
@@ -268,7 +299,7 @@ export default function BackupPage() {
                                             <div key={item.path} className="flex items-center justify-between gap-3 px-5 py-3">
                                                 <div className="min-w-0">
                                                     <p className="truncate text-sm font-medium text-gray-800" title={item.path}>{item.name}</p>
-                                                    <p className="mt-0.5 text-xs text-gray-500">{formatDate(item.created_at)} · {formatBytes(item.size)}</p>
+                                                    <p className="mt-0.5 text-xs text-gray-500">{formatDate(item.created_at)} · <span className="tabular-nums" title={`${item.size ?? 'unknown'} bytes · ${item.path}`}>{formatBytes(item.size)}</span></p>
                                                 </div>
                                                 <div className="flex shrink-0 flex-wrap justify-end gap-2">
                                                     {canRestore && (
@@ -319,7 +350,7 @@ export default function BackupPage() {
                         <div key={run.id} className="flex items-center justify-between gap-3 px-5 py-3">
                             <div className="min-w-0">
                                 <p className="text-sm font-medium text-gray-800 capitalize">{TIER_DEFS[run.tier]?.title ?? run.tier} · {SCOPE_LABELS[run.scope]}</p>
-                                <p className="mt-0.5 truncate text-xs text-gray-500">{run.filename || (run.status === 'failed' ? (run.message || 'Failed') : 'Pending')} · {formatDate(run.started_at)}</p>
+                                <p className="mt-0.5 truncate text-xs text-gray-500">{run.filename || (run.status === 'failed' ? (run.message || 'Failed') : 'Pending')} · <span className="tabular-nums">{formatBytes(run.size)}</span> · {formatDate(run.started_at)}</p>
                             </div>
                             <StatusBadge status={run.status} />
                         </div>

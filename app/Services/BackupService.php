@@ -355,7 +355,11 @@ class BackupService
             $lastModified = null;
 
             try {
-                $size = $disk->size($path);
+                // Some drivers (e.g. a local disk with 'throw' => false) return
+                // false instead of throwing when metadata is unavailable. Keep
+                // only genuine numeric sizes so the API never emits a boolean.
+                $rawSize = $disk->size($path);
+                $size = is_numeric($rawSize) ? (int) $rawSize : null;
                 $lastModified = $disk->lastModified($path);
             } catch (Throwable) {
                 // Metadata may be unavailable for remote drivers.

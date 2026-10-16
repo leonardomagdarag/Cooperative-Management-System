@@ -74,7 +74,23 @@ test('admin with backups.view can read backup index and recent runs', function (
                 'tiers' => ['hourly', 'daily', 'offsite'],
             ],
         ])
-        ->assertJsonCount(1, 'data.recent_runs');
+        ->assertJsonCount(1, 'data.recent_runs')
+        ->assertJsonPath('data.recent_runs.0.size', 123);
+});
+
+test('backup index reports the on-disk size of each archive', function () {
+    Storage::fake('local_backups');
+
+    $base = (string) config('backup.backup.name');
+    Storage::disk('local_backups')->put("{$base}/backup-hourly-2026-10-16-01-00-00.zip", 'abcdef');
+
+    $admin = backupAdminWith('backups.view');
+
+    $this->actingAs($admin)
+        ->getJson('/api/backups')
+        ->assertOk()
+        ->assertJsonPath('data.tiers.hourly.items.0.name', 'backup-hourly-2026-10-16-01-00-00.zip')
+        ->assertJsonPath('data.tiers.hourly.items.0.size', 6);
 });
 
 test('admin can toggle backup encryption from settings', function () {
