@@ -108,7 +108,7 @@ class AuthController extends Controller
         $fingerprint = $this->securityOtpService->buildDeviceFingerprint($request);
         $redirect = $request->session()->pull('url.intended', route('dashboard', absolute: false));
 
-        if ($this->securityOtpService->shouldEnforceOtpForUser($user)
+        if ($this->securityOtpService->shouldEnforceNewDeviceOtp()
             && ! $this->securityOtpService->isTrustedDevice($user, $fingerprint)) {
             $purpose = $this->securityOtpService->newDevicePurpose();
             $issued = $this->securityOtpService->issueChallenge($user, $purpose, ['fingerprint' => $fingerprint]);

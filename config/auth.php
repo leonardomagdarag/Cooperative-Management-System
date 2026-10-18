@@ -4,6 +4,10 @@ use App\Models\User;
 
 return [
 
+    // When enabled, skip only the new-device login OTP challenge. Other OTP
+    // protected actions remain enforced.
+    'login_otp_bypass' => filter_var(env('LOGIN_OTP_BYPASS') ?: false, FILTER_VALIDATE_BOOLEAN),
+
     /*
     |--------------------------------------------------------------------------
     | Authentication Defaults

@@ -44,6 +44,37 @@ test('new member device login requires otp and blocks protected api access', fun
         ->assertJsonPath('redirect', route('otp.challenge.show'));
 });
 
+test('login OTP bypass lets every user skip new-device verification when enabled', function () {
+    config(['auth.login_otp_bypass' => true]);
+    $user = User::factory()->create([
+        'email' => 'otp-bypass-member@example.com',
+        'password' => 'password',
+        'role' => 'member',
+    ]);
+
+    $this->postJson('/api/login', [
+        'email' => $user->email,
+        'password' => 'password',
+    ])->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonMissingPath('requires_otp');
+});
+
+test('new-device login OTP is required for officer accounts when bypass is disabled', function () {
+    config(['auth.login_otp_bypass' => false]);
+    $user = User::factory()->create([
+        'email' => 'otp-officer@example.com',
+        'password' => 'password',
+        'role' => 'admin',
+    ]);
+
+    $this->postJson('/api/login', [
+        'email' => $user->email,
+        'password' => 'password',
+    ])->assertOk()
+        ->assertJsonPath('requires_otp', true);
+});
+
 test('public announcement api returns json visibility records', function () {
     $creator = User::factory()->create();
 

@@ -19,12 +19,9 @@ class SecurityOtpService
 {
     public function __construct(private readonly AuditLogService $auditLogService) {}
 
-    public function shouldEnforceOtpForUser(User $user): bool
+    public function shouldEnforceNewDeviceOtp(): bool
     {
-        // Some legacy users still carry their role on the users table rather
-        // than in the Spatie pivot. Keep the security decision consistent for
-        // both representations.
-        return $user->hasRole('member') || $user->primary_role === 'member';
+        return ! config('auth.login_otp_bypass', false);
     }
 
     public function newDevicePurpose(): string

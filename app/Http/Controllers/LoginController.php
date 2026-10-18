@@ -139,7 +139,7 @@ class LoginController extends Controller
             $redirectUrl = route('dashboard', absolute: false);
 
             $fingerprint = $this->securityOtpService->buildDeviceFingerprint($request);
-            if ($this->securityOtpService->shouldEnforceOtpForUser($user) && ! $this->securityOtpService->isTrustedDevice($user, $fingerprint)) {
+            if ($this->securityOtpService->shouldEnforceNewDeviceOtp() && ! $this->securityOtpService->isTrustedDevice($user, $fingerprint)) {
                 $issued = $this->securityOtpService->issueChallenge(
                     $user,
                     $this->securityOtpService->newDevicePurpose(),
