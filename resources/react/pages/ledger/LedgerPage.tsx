@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import DatePicker from '../../components/DatePicker';
-import BranchBadge from '../../components/BranchBadge';
 import BranchSelect from '../../components/BranchSelect';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -28,6 +27,7 @@ export default function LedgerPage() {
     const [reversalTarget, setReversalTarget] = useState<{ id: number; transactionNumber: string } | null>(null);
     const [reversalOtp, setReversalOtp] = useState('');
     const [receipt, setReceipt] = useState<TransactionReceiptData | null>(null);
+    const [viewingTransaction, setViewingTransaction] = useState<any | null>(null);
     const [reissueTarget, setReissueTarget] = useState<{ id: number; transactionNumber: string } | null>(null);
     const [reissueNote, setReissueNote] = useState('');
     const [form, setForm] = useState({ transaction_type: 'deposit', amount: '', note: '', account_id: '', loan_id: '', branch_id: '' as number | '', transaction_date: new Date().toISOString().slice(0, 10) });
@@ -57,7 +57,7 @@ export default function LedgerPage() {
 
     const { data: summaryData } = useQuery({
         queryKey: ['ledger-summary', branchFilter],
-        queryFn: () => api.get('/api/ledger/summary', { params: { range: 'today', branch_id: branchFilter || undefined } }),
+        queryFn: () => api.get('/api/ledger/summary', { params: { range: 'all', branch_id: branchFilter || undefined } }),
     });
 
     const saveMutation = useMutation({
@@ -251,26 +251,23 @@ export default function LedgerPage() {
                                     <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Member</th>
                                     <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Type</th>
                                     <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Amount</th>
-                                    <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Status</th>
-                                    {canAssignBranch && <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Branch</th>}
-                                    <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Note</th>
-                                    <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Date</th>
-                                    {canEdit && <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Actions</th>}
+                                    <th className="w-20 p-3 text-xs font-medium text-left text-gray-500 uppercase">Status</th>
+                                    <th className="w-28 p-3 text-xs font-medium text-left text-gray-500 uppercase">Date</th>
+                                    <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {transactions.map((t: any) => (
                                     <tr key={t.id} className="hover:bg-gray-50">
-                                        <td className="p-4 text-sm font-medium text-gray-900 truncate" title={t.transaction_number}>{t.transaction_number}</td>
-                                        <td className="p-4 text-sm text-gray-900 truncate" title={t.account_holder || '—'}>{t.account_holder || '—'}{t.user_number && <div className="text-xs text-gray-500">{t.user_number}</div>}</td>
-                                        <td className="p-4"><span className={`px-2.5 py-0.5 text-xs font-medium rounded ${getTypeColor(t.transaction_type)}`}>{t.reversal_of_id ? `Reversal · ${getTypeLabel(t.transaction_type)}` : getTypeLabel(t.transaction_type)}</span>{t.reversal_of_id && <div className="text-xs text-gray-500 mt-1">Reverses {t.reversal_of_transaction_number || `transaction #${t.reversal_of_id}`}</div>}</td>
+                                        <td className="p-4 text-sm font-medium text-gray-900"><span className="block truncate" title={t.transaction_number}>{t.transaction_number}</span></td>
+                                        <td className="p-4 text-sm text-gray-900"><span className="block truncate" title={t.account_holder || '—'}>{t.account_holder || '—'}</span>{t.user_number && <div className="text-xs text-gray-500 truncate" title={t.user_number}>{t.user_number}</div>}</td>
+                                        <td className="p-4 overflow-hidden"><span className={`inline-block max-w-full truncate px-2.5 py-0.5 text-xs font-medium rounded ${getTypeColor(t.transaction_type)}`}>{t.reversal_of_id ? `Reversal · ${getTypeLabel(t.transaction_type)}` : getTypeLabel(t.transaction_type)}</span>{t.reversal_of_id && <div className="text-xs text-gray-500 mt-1 truncate" title={t.reversal_of_transaction_number}>Reverses {t.reversal_of_transaction_number || `transaction #${t.reversal_of_id}`}</div>}</td>
                                         <td className={`p-4 text-sm font-semibold whitespace-nowrap ${(['withdrawal', 'fee'].includes(t.transaction_type) !== !!t.reversal_of_id) ? 'text-red-600' : 'text-green-600'}`}>{(['withdrawal', 'fee'].includes(t.transaction_type) !== !!t.reversal_of_id) ? '-' : '+'}₱{Number(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                        <td className="p-4"><span className={`text-xs font-medium ${t.status === 'completed' ? 'text-emerald-600' : 'text-amber-600'}`}>{t.status}</span></td>
-                                        {canAssignBranch && <td className="p-4 truncate" title={t.branch_name}><BranchBadge name={t.branch_name} /></td>}
-                                        <td className="p-4 text-sm text-gray-500">{t.note || '—'}</td>
-                                        <td className="p-4 text-sm text-gray-500">{t.transaction_date || '—'}</td>
+                                        <td className="w-20 p-3"><span className={`block truncate text-xs font-medium ${t.status === 'completed' ? 'text-emerald-600' : 'text-amber-600'}`} title={t.status}>{t.status}</span></td>
+                                        <td className="w-28 p-3 text-sm text-gray-500"><span className="block truncate" title={t.transaction_date || '—'}>{t.transaction_date || '—'}</span></td>
                                         <td className="p-4">
                                             <div className="flex gap-1 items-center">
+                                                <button onClick={() => setViewingTransaction(t)} className="p-1.5 text-gray-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors" title="View details" aria-label="View transaction details"><i className="fas fa-eye text-xs"></i></button>
                                                 {t.status === 'completed' && (
                                                     <>
                                                         <button
@@ -431,6 +428,24 @@ export default function LedgerPage() {
                 }}
                 onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
             />
+            <Modal open={!!viewingTransaction} onClose={() => setViewingTransaction(null)} title="Transaction details" size="xl">
+                {viewingTransaction && <div className="grid grid-cols-1 gap-4 p-1 sm:grid-cols-2">
+                    {[
+                        ['Transaction number', viewingTransaction.transaction_number], ['Type', getTypeLabel(viewingTransaction.transaction_type)],
+                        ['Amount', `₱${Number(viewingTransaction.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+                        ['Status', viewingTransaction.status], ['Member', viewingTransaction.account_holder || '—'],
+                        ['Member number', viewingTransaction.user_number || '—'], ['Account ID', viewingTransaction.account_id ?? '—'],
+                        ['Loan number', viewingTransaction.loan_number || '—'], ['Branch', viewingTransaction.branch_name || '—'],
+                        ['Transaction date', viewingTransaction.transaction_date || '—'], ['Recorded by', viewingTransaction.recorded_by || '—'],
+                        ['Created at', viewingTransaction.created_at ? new Date(viewingTransaction.created_at).toLocaleString() : '—'],
+                        ['Reverses', viewingTransaction.reversal_of_transaction_number || '—'],
+                    ].map(([label, value]) => <div key={label} className="min-w-0">
+                        <div className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</div>
+                        <div className="mt-1 break-words text-sm text-gray-900">{value}</div>
+                    </div>)}
+                    <div className="sm:col-span-2"><div className="text-xs font-medium uppercase tracking-wide text-gray-500">Note</div><div className="mt-1 whitespace-pre-wrap break-words text-sm text-gray-900">{viewingTransaction.note || '—'}</div></div>
+                </div>}
+            </Modal>
             <Modal
                 open={!!reversalTarget}
                 onClose={() => !reverseMutation.isPending && setReversalTarget(null)}
