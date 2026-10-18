@@ -13,6 +13,7 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Pagination from '../../components/ui/Pagination';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
+import TransactionReceiptModal, { type TransactionReceiptData } from '../../components/TransactionReceiptModal';
 
 export default function LedgerPage() {
     const [category, setCategory] = useState('all');
@@ -23,6 +24,9 @@ export default function LedgerPage() {
     const [editingId, setEditingId] = useState<number | null>(null);
     const [reversalTarget, setReversalTarget] = useState<{ id: number; transactionNumber: string } | null>(null);
     const [reversalOtp, setReversalOtp] = useState('');
+    const [receipt, setReceipt] = useState<TransactionReceiptData | null>(null);
+    const [reissueTarget, setReissueTarget] = useState<{ id: number; transactionNumber: string } | null>(null);
+    const [reissueNote, setReissueNote] = useState('');
     const [form, setForm] = useState({ transaction_type: 'deposit', amount: '', note: '', account_id: '', loan_id: '', branch_id: '' as number | '', transaction_date: new Date().toISOString().slice(0, 10) });
     const [formErrors, setFormErrors] = useState<FieldErrors>({});
     const [confirmState, setConfirmState] = useState<{
@@ -86,6 +90,23 @@ export default function LedgerPage() {
             addToast(response.data.message, 'success');
         },
         onError: (err: any) => addToast(err.response?.data?.message || 'Reversal failed', 'error'),
+    });
+
+    const reprintMutation = useMutation({
+        mutationFn: (transactionId: number) => api.post(`/api/transactions/${transactionId}/receipts/reprint`),
+        onSuccess: (response) => setReceipt(response.data.data),
+        onError: (err: any) => addToast(err.response?.data?.message || 'Failed to reprint receipt', 'error'),
+    });
+
+    const reissueMutation = useMutation({
+        mutationFn: ({ transactionId, note }: { transactionId: number; note: string }) =>
+            api.post(`/api/transactions/${transactionId}/receipts/reissue`, { note }),
+        onSuccess: (response) => {
+            setReissueTarget(null);
+            setReissueNote('');
+            setReceipt(response.data.data);
+        },
+        onError: (err: any) => addToast(err.response?.data?.message || 'Failed to issue certified replacement', 'error'),
     });
 
     const transactions = data?.data?.data ?? [];
@@ -231,32 +252,16 @@ export default function LedgerPage() {
                                                 {t.status === 'completed' && (
                                                     <>
                                                         <button
-                                                            onClick={async () => {
-                                                                try {
-                                                                    const res = await api.post(`/api/transactions/${t.id}/receipts/reprint`);
-                                                                    addToast(res.data.message, 'success');
-                                                                } catch (err: any) {
-                                                                    addToast(err.response?.data?.message || 'Failed to reprint', 'error');
-                                                                }
-                                                            }}
-                                                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                            onClick={() => reprintMutation.mutate(t.id)}
+                                                            disabled={reprintMutation.isPending}
+                                                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
                                                             title="Reprint Receipt"
                                                         >
                                                             <i className="fas fa-print text-xs"></i>
                                                         </button>
                                                         {user?.permissions?.includes('receipts.reissue') && (
                                                             <button
-                                                                onClick={async () => {
-                                                                    const note = prompt('Reason for certified reissue:');
-                                                                    if (note) {
-                                                                        try {
-                                                                            const res = await api.post(`/api/transactions/${t.id}/receipts/reissue`, { note });
-                                                                            addToast(res.data.message, 'success');
-                                                                        } catch (err: any) {
-                                                                            addToast(err.response?.data?.message || 'Failed to reissue', 'error');
-                                                                        }
-                                                                    }
-                                                                }}
+                                                                onClick={() => { setReissueTarget({ id: t.id, transactionNumber: t.transaction_number }); setReissueNote(''); }}
                                                                 className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
                                                                 title="Issue Certified Replacement"
                                                             >
@@ -393,6 +398,45 @@ export default function LedgerPage() {
                     </label>
                 </div>
             </Modal>
+
+            <Modal
+                open={!!reissueTarget}
+                onClose={() => !reissueMutation.isPending && setReissueTarget(null)}
+                title="Issue Certified Replacement"
+                footer={
+                    <div className="flex justify-end gap-2">
+                        <Button variant="secondary" onClick={() => setReissueTarget(null)} disabled={reissueMutation.isPending}>Cancel</Button>
+                        <Button
+                            onClick={() => reissueTarget && reissueMutation.mutate({ transactionId: reissueTarget.id, note: reissueNote.trim() })}
+                            disabled={reissueNote.trim().length < 5 || reissueMutation.isPending}
+                        >
+                            {reissueMutation.isPending ? 'Issuing…' : 'Issue replacement'}
+                        </Button>
+                    </div>
+                }
+            >
+                <div className="space-y-3">
+                    <p className="text-sm text-slate-600">
+                        A certified replacement receipt will be issued for transaction <strong>{reissueTarget?.transactionNumber}</strong>.
+                        The reason is stored in the audit trail and printed on the receipt.
+                    </p>
+                    <label className="block text-sm font-medium text-slate-700">
+                        Reason for replacement
+                        <textarea
+                            value={reissueNote}
+                            onChange={event => setReissueNote(event.target.value)}
+                            rows={3}
+                            placeholder="e.g. Member reported the original receipt was lost"
+                            className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                        />
+                    </label>
+                    <p className="text-xs text-slate-500">
+                        {reissueNote.trim().length < 5 ? 'At least 5 characters are required.' : `${reissueNote.trim().length} characters.`}
+                    </p>
+                </div>
+            </Modal>
+
+            <TransactionReceiptModal receipt={receipt} onClose={() => setReceipt(null)} />
         </>
     );
 }

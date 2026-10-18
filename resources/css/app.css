@@ -268,3 +268,50 @@ html {
         linear-gradient(120deg, rgba(10, 28, 22, 0.78), rgba(10, 28, 22, 0.36)),
         url('/images/hero_banner.jpg') center / cover no-repeat;
 }
+
+/* Printing a receipt from the SPA prints only the receipt paper, never the app chrome. */
+@media print {
+    body * {
+        visibility: hidden !important;
+    }
+
+    .receipt-print-area,
+    .receipt-print-area * {
+        visibility: visible !important;
+    }
+
+    .receipt-print-area {
+        position: absolute !important;
+        top: 0;
+        left: 0;
+        right: 0;
+        width: 100% !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .ui-modal-backdrop {
+        position: static !important;
+        padding: 0 !important;
+        background: none !important;
+        backdrop-filter: none !important;
+    }
+
+    .ui-modal {
+        max-height: none !important;
+        overflow: visible !important;
+        border: 0 !important;
+        box-shadow: none !important;
+    }
+
+    .ui-modal-body {
+        padding: 0 !important;
+    }
+
+    .no-print {
+        display: none !important;
+    }
+}

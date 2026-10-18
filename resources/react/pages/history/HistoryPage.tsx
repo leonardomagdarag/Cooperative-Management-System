@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getHistory, Transaction } from '../../api/history';
+import { api } from '../../api/client';
+import { useToast } from '../../contexts/ToastContext';
+import TransactionReceiptModal, { type TransactionReceiptData } from '../../components/TransactionReceiptModal';
 
 export default function HistoryPage() {
     const [category, setCategory] = useState('all');
@@ -9,6 +12,8 @@ export default function HistoryPage() {
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
     const [direction, setDirection] = useState('desc');
+    const [receipt, setReceipt] = useState<TransactionReceiptData | null>(null);
+    const { addToast } = useToast();
 
     const { data, isLoading, refetch } = useQuery({
         queryKey: ['history', category, status, dateFilter, search, page, direction],
@@ -152,10 +157,10 @@ export default function HistoryPage() {
                                             <button 
                                                 onClick={async () => {
                                                     try {
-                                                        const res = await (await import('../../api/client')).api.post(`/api/transactions/${t.id}/receipts/reprint`);
-                                                        alert(res.data.message);
+                                                        const res = await api.post(`/api/transactions/${t.id}/receipts/reprint`);
+                                                        setReceipt(res.data.data);
                                                     } catch (err: any) {
-                                                        alert(err.response?.data?.message || 'Failed to reprint');
+                                                        addToast(err.response?.data?.message || 'Failed to reprint', 'error');
                                                     }
                                                 }}
                                                 className="p-1 rounded-md text-blue-600 hover:bg-blue-50 transition-colors"
@@ -181,6 +186,8 @@ export default function HistoryPage() {
                     <button onClick={() => setPage(p => Math.min(pagination.last_page, p + 1))} disabled={page === pagination.last_page} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50">Next</button>
                 </div>
             )}
+
+            <TransactionReceiptModal receipt={receipt} onClose={() => setReceipt(null)} />
         </div>
     );
 }
