@@ -116,6 +116,7 @@ export default function ReportsPage() {
     const [startDate, setStartDate] = useState(() => `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`);
     const [endDate, setEndDate] = useState(() => toISO(new Date(now.getFullYear(), now.getMonth() + 1, 0)));
     const [memberId, setMemberId] = useState('');
+    const [branchId, setBranchId] = useState('');
     const [loanFilter, setLoanFilter] = useState('all');
     const [expenseCategory, setExpenseCategory] = useState('');
     const [activityType, setActivityType] = useState('all');
@@ -136,7 +137,7 @@ export default function ReportsPage() {
     }, [reportType]);
 
     const { from, to } = reportWindow(rangePreset, startDate, endDate);
-    const rangeParams = { from, to };
+    const rangeParams = { from, to, branch_id: branchId || undefined };
 
     const reportTypes = [
         { key: 'financial', label: 'Financial Summary', icon: 'fas fa-chart-line' },
@@ -151,71 +152,69 @@ export default function ReportsPage() {
         ...(canViewInterest ? [{ key: 'interest', label: 'Interest Disbursements', icon: 'fas fa-coins' }] : []),
     ];
 
-    const needsOptions = ['member_savings', 'member_activity', 'expenses'].includes(reportType);
-
     const { data: financialData } = useQuery({
-        queryKey: ['reports-financial', from, to, refreshKey],
+        queryKey: ['reports-financial', from, to, branchId, refreshKey],
         queryFn: () => api.get('/api/reports/financial', { params: rangeParams }),
         enabled: reportType === 'financial',
     });
 
     const { data: optionsData } = useQuery({
-        queryKey: ['reports-options', refreshKey],
-        queryFn: () => api.get('/api/reports/options'),
-        enabled: needsOptions,
+        queryKey: ['reports-options', branchId, refreshKey],
+        queryFn: () => api.get('/api/reports/options', { params: { branch_id: branchId || undefined } }),
+        enabled: true,
     });
 
     const { data: dashboardData } = useQuery({
-        queryKey: ['reports-dashboard', refreshKey],
-        queryFn: () => api.get('/api/dashboard'),
+        queryKey: ['reports-dashboard', branchId, refreshKey],
+        queryFn: () => api.get('/api/dashboard', { params: { branch_id: branchId || undefined } }),
         enabled: reportType === 'loans' || reportType === 'payments',
     });
 
     const { data: memberSavingsData } = useQuery({
-        queryKey: ['reports-member-savings', from, to, memberId, page, refreshKey],
-        queryFn: () => api.get('/api/reports/member-savings', { params: { from, to, member_id: memberId || undefined, page } }),
+        queryKey: ['reports-member-savings', from, to, branchId, memberId, page, refreshKey],
+        queryFn: () => api.get('/api/reports/member-savings', { params: { from, to, branch_id: branchId || undefined, member_id: memberId || undefined, page } }),
         enabled: reportType === 'member_savings',
     });
 
     const { data: loansData } = useQuery({
-        queryKey: ['reports-loans', from, to, loanFilter, page, refreshKey],
-        queryFn: () => api.get('/api/reports/loans', { params: { from, to, filter: loanFilter, page } }),
+        queryKey: ['reports-loans', from, to, branchId, loanFilter, page, refreshKey],
+        queryFn: () => api.get('/api/reports/loans', { params: { from, to, branch_id: branchId || undefined, filter: loanFilter, page } }),
         enabled: reportType === 'loans',
     });
 
     const { data: paymentsData } = useQuery({
-        queryKey: ['reports-payments', from, to, page, refreshKey],
-        queryFn: () => api.get('/api/reports/payments', { params: { from, to, page } }),
+        queryKey: ['reports-payments', from, to, branchId, page, refreshKey],
+        queryFn: () => api.get('/api/reports/payments', { params: { from, to, branch_id: branchId || undefined, page } }),
         enabled: reportType === 'payments',
     });
 
     const { data: expensesData } = useQuery({
-        queryKey: ['reports-expenses', from, to, expenseCategory, page, refreshKey],
-        queryFn: () => api.get('/api/reports/expenses', { params: { from, to, category: expenseCategory || undefined, page } }),
+        queryKey: ['reports-expenses', from, to, branchId, expenseCategory, page, refreshKey],
+        queryFn: () => api.get('/api/reports/expenses', { params: { from, to, branch_id: branchId || undefined, category: expenseCategory || undefined, page } }),
         enabled: reportType === 'expenses',
     });
 
     const { data: memberActivityData } = useQuery({
-        queryKey: ['reports-member-activity', from, to, memberId, activityType, page, refreshKey],
-        queryFn: () => api.get('/api/reports/member-activity', { params: { from, to, member_id: memberId || undefined, activity_type: activityType, page } }),
+        queryKey: ['reports-member-activity', from, to, branchId, memberId, activityType, page, refreshKey],
+        queryFn: () => api.get('/api/reports/member-activity', { params: { from, to, branch_id: branchId || undefined, member_id: memberId || undefined, activity_type: activityType, page } }),
         enabled: reportType === 'member_activity',
     });
 
     const { data: balanceSheetData } = useQuery({
-        queryKey: ['reports-balance-sheet', from, to, refreshKey],
+        queryKey: ['reports-balance-sheet', from, to, branchId, refreshKey],
         queryFn: () => api.get('/api/reports/balance-sheet', { params: rangeParams }),
         enabled: reportType === 'balance_sheet',
     });
 
     const { data: membersReportData } = useQuery({
-        queryKey: ['reports-members-list', from, to, page, refreshKey],
-        queryFn: () => api.get('/api/reports/members', { params: { from, to, page } }),
+        queryKey: ['reports-members-list', from, to, branchId, page, refreshKey],
+        queryFn: () => api.get('/api/reports/members', { params: { from, to, branch_id: branchId || undefined, page } }),
         enabled: reportType === 'members',
     });
 
     const { data: officersReportData } = useQuery({
-        queryKey: ['reports-officers-list', from, to, page, refreshKey],
-        queryFn: () => api.get('/api/reports/officers', { params: { from, to, page } }),
+        queryKey: ['reports-officers-list', from, to, branchId, page, refreshKey],
+        queryFn: () => api.get('/api/reports/officers', { params: { from, to, branch_id: branchId || undefined, page } }),
         enabled: reportType === 'officers',
     });
 
@@ -274,6 +273,7 @@ export default function ReportsPage() {
     const downloadReport = async (format: 'pdf' | 'excel') => {
         const exportType = reportType === 'interest' ? 'interest_disbursements' : reportType;
         const params: any = { from, to, report_type: exportType, format };
+        params.branch_id = branchId || undefined;
         if (reportType === 'member_savings' || reportType === 'member_activity') params.member_id = memberId || undefined;
         if (reportType === 'loans') params.filter = loanFilter === 'all' ? undefined : loanFilter;
         if (reportType === 'expenses') params.category = expenseCategory || undefined;
@@ -350,6 +350,16 @@ export default function ReportsPage() {
                     <select id="report-range" value={rangePreset} onChange={e => { setRangePreset(e.target.value); setPage(1); }} className={selectCls}>
                         {Object.entries(RANGE_PRESETS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                     </select>
+
+                    {(optionsData?.data?.branches || []).length > 0 && (
+                        <div className="flex items-center gap-2">
+                            <label htmlFor="report-branch" className="text-xs font-medium text-gray-500">Branch</label>
+                            <select id="report-branch" value={branchId} onChange={e => { setBranchId(e.target.value); setPage(1); }} className={selectCls}>
+                                <option value="">All Branches</option>
+                                {(optionsData?.data?.branches || []).map((branch: any) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                            </select>
+                        </div>
+                    )}
 
                     {rangePreset === 'custom' && (
                         <div className="flex items-center gap-2">
@@ -926,7 +936,7 @@ export default function ReportsPage() {
                 </div>
             )}
 
-            {reportType === 'interest' && <InterestDisbursementsReport />}
+            {reportType === 'interest' && <InterestDisbursementsReport branchId={branchId} />}
         </div>
     );
 }

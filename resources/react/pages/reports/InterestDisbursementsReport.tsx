@@ -35,20 +35,20 @@ interface DisbursementItemRow {
 const peso = (n: number | string) => `₱${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const formatDateTime = (iso?: string | null) => (iso ? new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—');
 
-export default function InterestDisbursementsReport() {
+export default function InterestDisbursementsReport({ branchId }: { branchId: string }) {
     const [page, setPage] = useState(1);
     const [accountType, setAccountType] = useState('');
     const [selected, setSelected] = useState<DisbursementRow | null>(null);
     const [detailPage, setDetailPage] = useState(1);
 
     const { data, isLoading, isError, error } = useQuery({
-        queryKey: ['reports-interest-disbursements', page, accountType],
-        queryFn: () => api.get('/api/reports/interest-disbursements', { params: { page, account_type: accountType || undefined } }),
+        queryKey: ['reports-interest-disbursements', branchId, page, accountType],
+        queryFn: () => api.get('/api/reports/interest-disbursements', { params: { page, branch_id: branchId || undefined, account_type: accountType || undefined } }),
     });
 
     const { data: detailData, isLoading: detailLoading } = useQuery({
-        queryKey: ['reports-interest-disbursement', selected?.id, detailPage],
-        queryFn: () => api.get(`/api/reports/interest-disbursements/${selected!.id}`, { params: { page: detailPage } }),
+        queryKey: ['reports-interest-disbursement', selected?.id, branchId, detailPage],
+        queryFn: () => api.get(`/api/reports/interest-disbursements/${selected!.id}`, { params: { page: detailPage, branch_id: branchId || undefined } }),
         enabled: !!selected,
     });
 

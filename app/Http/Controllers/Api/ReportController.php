@@ -370,6 +370,9 @@ class ReportController extends Controller
         return response()->json([
             'members' => $members,
             'expense_categories' => $categories,
+            'branches' => Branch::query()
+                ->when(! BranchScope::isUnrestricted(Auth::user()), fn ($q) => $q->whereKey(Auth::user()->branch_id))
+                ->active()->orderBy('name')->get(['id', 'name']),
         ]);
     }
 
@@ -468,8 +471,11 @@ class ReportController extends Controller
     {
         abort_unless(Auth::user()?->can('interest.view'), 403);
 
+        $branchId = BranchScope::resolveBranchId(Auth::user(), $request->integer('branch_id'));
+
         $query = InterestDisbursement::query()
             ->with(['requestedBy.personalData', 'approvedBy.personalData'])
+            ->when($branchId !== null, fn ($q) => $q->whereHas('items.user', fn ($u) => $u->where('users.branch_id', $branchId)))
             ->when($request->filled('account_type'), fn ($q) => $q->where('account_type', $request->string('account_type')->toString()))
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')->toString()));
 
@@ -507,8 +513,12 @@ class ReportController extends Controller
     {
         abort_unless(Auth::user()?->can('interest.view'), 403);
 
+        $branchId = BranchScope::resolveBranchId(Auth::user(), $request->integer('branch_id'));
+        abort_unless($branchId === null || $interestDisbursement->items()->whereHas('user', fn ($q) => $q->where('users.branch_id', $branchId))->exists(), 404);
+
         $query = $interestDisbursement->items()
             ->with(['user.personalData', 'account:id,account_number,account_type'])
+            ->when($branchId !== null, fn ($q) => $q->whereHas('user', fn ($u) => $u->where('users.branch_id', $branchId)))
             ->when($request->has('include_skipped') && ! $request->boolean('include_skipped'),
                 fn ($q) => $q->where('skipped', false))
             ->orderByDesc('skipped')
@@ -608,7 +618,7 @@ class ReportController extends Controller
             'member_activity' => array_merge($base, $this->memberActivityExportPayload($request, $start, $end, $branchId, $rangeLabel)),
             'members' => array_merge($base, $this->membersExportPayload($start, $end, $branchId, $rangeLabel)),
             'officers' => array_merge($base, $this->officersExportPayload($start, $end, $branchId, $rangeLabel)),
-            'interest_disbursements' => array_merge($base, $this->interestDisbursementsExportPayload($request, $start, $end, $rangeLabel)),
+            'interest_disbursements' => array_merge($base, $this->interestDisbursementsExportPayload($request, $start, $end, $branchId, $rangeLabel)),
         };
     }
 
@@ -1060,11 +1070,12 @@ class ReportController extends Controller
         );
     }
 
-    private function interestDisbursementsExportPayload(Request $request, Carbon $start, Carbon $end, string $rangeLabel): array
+    private function interestDisbursementsExportPayload(Request $request, Carbon $start, Carbon $end, ?int $branchId, string $rangeLabel): array
     {
         $accountType = $request->string('account_type')->toString();
 
         $rows = InterestDisbursement::query()
+            ->when($branchId !== null, fn ($q) => $q->whereHas('items.user', fn ($u) => $u->where('users.branch_id', $branchId)))
             ->when($accountType !== '', fn ($q) => $q->where('account_type', $accountType))
             ->whereBetween('created_at', [$start, $end])
             ->orderByDesc('created_at')
