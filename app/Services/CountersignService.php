@@ -5,10 +5,12 @@ namespace App\Services;
 use App\Http\Controllers\Api\MemberController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Jobs\DisburseInterestJob;
+use App\Models\Expense;
 use App\Models\Notification;
 use App\Models\OfficerPermissionOverride;
 use App\Models\PrivilegedActionRequest;
 use App\Models\SystemSetting;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Support\FinancialSettings;
 use App\Support\MaintenanceState;
@@ -432,6 +434,51 @@ class CountersignService
                     'status' => 'queued',
                     'account_type' => $accountType,
                 ];
+
+            case 'expense.update':
+                $expense = Expense::find($payload['expense_id'] ?? null);
+                abort_unless($expense, 404, 'The target expense no longer exists.');
+
+                $changes = $payload['changes'] ?? [];
+                abort_unless(is_array($changes), 422, 'Expense changes are invalid.');
+                abort_unless(is_string($changes['category'] ?? null) && $changes['category'] !== '', 422, 'Expense category is required.');
+                abort_unless(is_numeric($changes['amount'] ?? null) && (float) $changes['amount'] >= 0.01, 422, 'Invalid expense amount.');
+                abort_unless(is_string($changes['expense_date'] ?? null) && strtotime($changes['expense_date']) !== false, 422, 'Invalid expense date.');
+
+                $expense->update([
+                    'category' => $changes['category'],
+                    'description' => $changes['description'] ?? null,
+                    'amount' => $changes['amount'],
+                    'expense_date' => $changes['expense_date'],
+                    'branch_id' => $changes['branch_id'] ?? null,
+                ]);
+
+                return ['status' => 'success', 'expense_id' => $expense->id];
+
+            case 'transaction.update':
+                $transaction = Transaction::find($payload['transaction_id'] ?? null);
+                abort_unless($transaction, 404, 'The target transaction no longer exists.');
+                abort_unless($transaction->status === 'pending', 409, 'Only pending transactions can be edited.');
+
+                $changes = $payload['changes'] ?? [];
+                abort_unless(is_array($changes), 422, 'Transaction changes are invalid.');
+                abort_unless(
+                    in_array($changes['transaction_type'] ?? null, ['deposit', 'withdrawal', 'loan_payment', 'loan_disbursement', 'fee'], true),
+                    422,
+                    'Invalid transaction type.'
+                );
+                abort_unless(is_numeric($changes['amount'] ?? null) && (float) $changes['amount'] >= 0.01, 422, 'Invalid transaction amount.');
+
+                $transaction->update([
+                    'transaction_type' => $changes['transaction_type'],
+                    'amount' => $changes['amount'],
+                    'note' => $changes['note'] ?? null,
+                    'account_id' => $changes['account_id'] ?? null,
+                    'loan_id' => $changes['loan_id'] ?? null,
+                    'branch_id' => $changes['branch_id'] ?? null,
+                ]);
+
+                return ['status' => 'success', 'transaction_id' => $transaction->id];
 
             default:
                 throw new \RuntimeException("Unknown privileged action type: {$actionType}");

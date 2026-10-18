@@ -8,6 +8,7 @@ use App\Models\Loan;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Services\CountersignService;
 use App\Services\SecurityOtpService;
 use App\Support\BranchScope;
 use App\Support\SearchFilter;
@@ -253,16 +254,41 @@ class LedgerController extends Controller
             abort_unless($user?->can('loans.create') || $user?->can('loans.encode') || $user?->can('loans.update') || $user?->can('loans.approve'), 403, 'Missing loan management permission.');
         }
 
-        $transaction->update([
-            'transaction_type' => $validated['transaction_type'],
-            'amount' => $validated['amount'],
-            'note' => $validated['note'] ?? null,
-            'account_id' => $validated['account_id'] ?? null,
-            'loan_id' => $validated['loan_id'] ?? null,
-            'branch_id' => $validated['branch_id'] ?? $this->resolveTransactionBranch($validated),
-        ]);
+        // Edits are privileged: they never mutate directly. A countersign
+        // request is recorded and the change is applied only after an active
+        // chairman with oversight.approve countersigns it (see CountersignService).
+        $pending = app(CountersignService::class)->request(
+            'transaction.update',
+            [
+                'transaction_id' => $transaction->id,
+                'transaction_number' => $transaction->transaction_number,
+                'requested_by' => $user->id,
+                'changes' => [
+                    'transaction_type' => $validated['transaction_type'],
+                    'amount' => $validated['amount'],
+                    'note' => $validated['note'] ?? null,
+                    'account_id' => $validated['account_id'] ?? null,
+                    'loan_id' => $validated['loan_id'] ?? null,
+                    'branch_id' => $validated['branch_id'] ?? $this->resolveTransactionBranch($validated),
+                ],
+            ],
+            $user
+        );
 
-        return response()->json(['message' => 'Transaction updated.', 'data' => $transaction->fresh()]);
+        app(AuditLogService::class)->log(
+            'transaction.update_requested',
+            'Transaction edit submitted for chairman approval.',
+            'transaction',
+            $transaction,
+            $user,
+            ['request_id' => $pending->id]
+        );
+
+        return response()->json([
+            'message' => "Transaction {$transaction->transaction_number} edit is awaiting chairman approval.",
+            'request_id' => $pending->id,
+            'status' => 'pending',
+        ], 202);
     }
 
     public function destroy(Transaction $transaction): JsonResponse

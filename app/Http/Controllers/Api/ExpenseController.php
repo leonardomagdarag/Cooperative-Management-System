@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Expense;
 use App\Services\AuditLogService;
+use App\Services\CountersignService;
 use App\Support\BranchScope;
 use App\Support\SearchFilter;
 use Illuminate\Http\JsonResponse;
@@ -115,17 +116,40 @@ class ExpenseController extends Controller
             'branch_id' => 'nullable|exists:branches,id',
         ]);
 
-        $expense->update([
-            'category' => $validated['category'],
-            'description' => $validated['description'] ?? null,
-            'amount' => $validated['amount'],
-            'expense_date' => $validated['expense_date'],
-            'branch_id' => $validated['branch_id'] ?? $expense->branch_id,
-        ]);
+        // Expense edits are privileged, mirroring ledger transaction edits
+        // (see LedgerController::update). They never mutate directly: a
+        // countersign request is recorded and the change is applied only once
+        // an active chairman holding oversight.approve approves it.
+        $pending = app(CountersignService::class)->request(
+            'expense.update',
+            [
+                'expense_id' => $expense->id,
+                'requested_by' => Auth::id(),
+                'changes' => [
+                    'category' => $validated['category'],
+                    'description' => $validated['description'] ?? null,
+                    'amount' => $validated['amount'],
+                    'expense_date' => $validated['expense_date'],
+                    'branch_id' => $validated['branch_id'] ?? $expense->branch_id,
+                ],
+            ],
+            Auth::user()
+        );
 
-        app(AuditLogService::class)->log('expense.updated', 'Expense updated.', 'expense', $expense, Auth::user());
+        app(AuditLogService::class)->log(
+            'expense.update_requested',
+            'Expense edit submitted for chairman approval.',
+            'expense',
+            $expense,
+            Auth::user(),
+            ['request_id' => $pending->id]
+        );
 
-        return response()->json(['message' => 'Expense updated.', 'data' => $expense]);
+        return response()->json([
+            'message' => 'Expense edit is awaiting chairman approval.',
+            'request_id' => $pending->id,
+            'status' => 'pending',
+        ], 202);
     }
 
     public function destroy(Expense $expense): JsonResponse

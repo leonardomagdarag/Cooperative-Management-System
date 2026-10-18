@@ -278,6 +278,7 @@ do not treat old secretary-specific behavior as a separate role contract.
 
 ### 6.5 Ledger (`LedgerPage`, `transactions.*`)
 - `GET /api/ledger` (filterable ledger), `GET /api/ledger/summary`, `GET /api/ledger/export` (CSV/Excel), `POST/PUT/DELETE /api/ledger*` (`transactions.view|create|update|void|export`, `transactions.view-all` for all branches).
+- **Edits are countersigned.** `PUT /api/ledger/{transaction}` does not mutate directly; it records a `transaction.update` privileged-action request and returns 202. The change is applied only after an active chairman holding `oversight.approve` approves it through `/api/oversight/requests*` (`CountersignService::performAction`). The requester cannot approve their own edit. Only `pending` transactions can be edited or deleted, so the SPA shows Edit/Delete only on pending rows and system-generated `interest`/`fee` entries are never editable.
 
 ### 6.6 Expenses (`ExpensesPage`)
 - `GET/POST /api/expenses`, `PUT/DELETE /api/expenses/{expense}` — record operating expenses, categorize, filter, view in reports.

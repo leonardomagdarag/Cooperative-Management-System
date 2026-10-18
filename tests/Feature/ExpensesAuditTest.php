@@ -2,10 +2,13 @@
 
 use App\Models\Branch;
 use App\Models\Expense;
+use App\Models\PrivilegedActionRequest;
 use App\Models\User;
+use App\Services\CountersignService;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\SystemSettingSeeder;
 use Database\Seeders\UserSeeder;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 beforeEach(function () {
     $this->seed(SpatieRolePermissionSeeder::class);
@@ -15,6 +18,9 @@ beforeEach(function () {
     $this->admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
     $this->accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
     $this->member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+
+    $this->chairman = User::factory()->create(['role' => 'chairman', 'is_officer' => true]);
+    $this->chairman->assignRole('chairman');
 
     $this->mainBranch = Branch::where('code', 'BR000001')->firstOrFail();
     $this->officeBranch = Branch::where('code', 'BR000002')->firstOrFail();
@@ -135,7 +141,7 @@ test('F026-5: expense creation rejects invalid or missing fields with 422', func
         ->assertJsonValidationErrors(['category', 'amount', 'expense_date']);
 });
 
-test('F026-6: accountant updates an existing expense', function () {
+test('F026-6: accountant edit of an existing expense is applied only after chairman countersign', function () {
     $expense = Expense::create([
         'category' => 'Travel',
         'description' => 'Bus fare to regional summit',
@@ -154,12 +160,77 @@ test('F026-6: accountant updates an existing expense', function () {
         'expense_date' => now()->toDateString(),
     ]);
 
-    $response->assertOk()
-        ->assertJson(['message' => 'Expense updated.']);
+    $response->assertStatus(202)
+        ->assertJsonPath('status', 'pending')
+        ->assertJsonStructure(['request_id', 'message']);
+
+    // The edit is staged as a countersign request, not applied directly.
+    $request = PrivilegedActionRequest::findOrFail($response->json('request_id'));
+    expect($request->action_type)->toBe('expense.update')
+        ->and($request->status)->toBe('pending')
+        ->and($request->payload['changes']['amount'])->toEqual(550.00);
+
+    $expense->refresh();
+    expect($expense->category)->toBe('Travel')
+        ->and((float) $expense->amount)->toBe(350.00);
+
+    app(CountersignService::class)->approve($request, $this->chairman);
 
     $expense->refresh();
     expect($expense->category)->toBe('Travel & Transportation')
         ->and((float) $expense->amount)->toBe(550.00);
+});
+
+test('F026-6b: rejected expense edit leaves the expense unchanged', function () {
+    $expense = Expense::create([
+        'category' => 'Utilities',
+        'amount' => 1200.00,
+        'expense_date' => now()->toDateString(),
+        'branch_id' => $this->mainBranch->id,
+        'recorded_by' => $this->accountant->id,
+    ]);
+
+    $this->actingAs($this->accountant);
+
+    $response = $this->putJson("/api/expenses/{$expense->id}", [
+        'category' => 'Utilities',
+        'amount' => 9000.00,
+        'expense_date' => now()->toDateString(),
+    ]);
+    $response->assertStatus(202);
+
+    $request = PrivilegedActionRequest::findOrFail($response->json('request_id'));
+    app(CountersignService::class)->reject($request, $this->chairman, 'Amount not supported by receipts.');
+
+    $expense->refresh();
+    expect((float) $expense->amount)->toBe(1200.00)
+        ->and($request->fresh()->status)->toBe('rejected');
+});
+
+test('F026-6c: expense edit cannot be countersigned by its own requester', function () {
+    $expense = Expense::create([
+        'category' => 'Supplies',
+        'amount' => 250.00,
+        'expense_date' => now()->toDateString(),
+        'branch_id' => $this->mainBranch->id,
+        'recorded_by' => $this->chairman->id,
+    ]);
+
+    $this->actingAs($this->chairman);
+
+    $response = $this->putJson("/api/expenses/{$expense->id}", [
+        'category' => 'Supplies',
+        'amount' => 400.00,
+        'expense_date' => now()->toDateString(),
+    ]);
+    $response->assertStatus(202);
+
+    $request = PrivilegedActionRequest::findOrFail($response->json('request_id'));
+
+    expect(fn () => app(CountersignService::class)->approve($request, $this->chairman))
+        ->toThrow(HttpException::class, 'Self-approval is forbidden.');
+
+    expect((float) $expense->fresh()->amount)->toBe(250.00);
 });
 
 test('F026-7: accountant deletes an existing expense', function () {

@@ -20,9 +20,19 @@ function requestSummary(item: RequestItem): string {
             const roles = Array.isArray(payload.roles) ? payload.roles.map(String).join(', ') : role;
             return `Assign ${roles} to account #${String(payload.user_id ?? '—')}`;
         }
+        case 'transaction.update': {
+            const txnNumber = String(payload.transaction_number ?? `#${String(payload.transaction_id ?? '—')}`);
+            return `Apply edits to ledger transaction ${txnNumber}`;
+        }
+        case 'expense.update': {
+            const changes = (payload.changes as Record<string, unknown>) ?? {};
+            return `Apply edits to expense #${String(payload.expense_id ?? '—')} (${String(changes.category ?? '—')})`;
+        }
         default: return `${item.action_type.replaceAll('.', ' ')} for account #${String(payload.user_id ?? '—')}`;
     }
 }
+
+const EDIT_CHANGES_TYPES = ['transaction.update', 'expense.update'];
 
 function requestChanges(item: RequestItem): string[] {
     if (item.action_type === 'officer.permissions.update') {
@@ -31,8 +41,16 @@ function requestChanges(item: RequestItem): string[] {
     if (item.action_type === 'permissions.update') {
         return (Array.isArray(item.payload.permissions) ? item.payload.permissions : []).map(String);
     }
+    if (EDIT_CHANGES_TYPES.includes(item.action_type)) {
+        const changes = (item.payload.changes as Record<string, unknown>) ?? {};
+        return Object.entries(changes)
+            .filter(([, value]) => value !== null && value !== undefined && value !== '')
+            .map(([key, value]) => `${key.replaceAll('_', ' ')}: ${key === 'amount' ? `₱${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : String(value)}`);
+    }
     return [];
 }
+
+const itemActionIsPermissions = (item: RequestItem) => ['permissions.update', 'officer.permissions.update'].includes(item.action_type);
 
 export default function OversightApprovalsPage() {
     const [selected, setSelected] = useState<RequestItem | null>(null);
@@ -93,7 +111,7 @@ export default function OversightApprovalsPage() {
             </div>
             <div className="space-y-5 p-5 sm:p-6">
                 <p className="text-sm text-slate-700">You are about to <strong>{decision === 'approve' ? 'approve' : decision === 'reject' ? 'reject' : decision === 'reconcile_executed' ? 'confirm the action completed' : 'confirm the action did not complete'}</strong> this request.</p>
-                {requestChanges(selected).length > 0 && <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Requested permission changes</p><ul className="mt-3 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">{requestChanges(selected).map(change => <li key={change} className="rounded-lg border border-slate-200 bg-white px-3 py-2">{change}</li>)}</ul></div>}
+                {requestChanges(selected).length > 0 && <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{itemActionIsPermissions(selected) ? 'Requested permission changes' : 'Requested changes'}</p><ul className="mt-3 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">{requestChanges(selected).map(change => <li key={change} className="rounded-lg border border-slate-200 bg-white px-3 py-2">{change}</li>)}</ul></div>}
                 {decision !== 'approve' && <label className="block text-sm font-medium text-slate-700">{decision.startsWith('reconcile_') ? 'Reconciliation evidence (required)' : 'Reason (optional)'}<textarea value={note} onChange={e => setNote(e.target.value)} maxLength={1000} rows={3} className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" /></label>}
                 <div className="max-w-sm">
                     {otpSent ? <label className="block text-sm font-medium text-slate-700">Email verification code<input autoComplete="one-time-code" inputMode="numeric" value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} maxLength={6} className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm tracking-[0.35em] shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" /></label> : <p role="status" className="text-sm text-slate-500"><i className="fa-solid fa-spinner fa-spin mr-2 text-emerald-600" aria-hidden="true" />Sending a one-time code to your account email…</p>}
@@ -110,7 +128,7 @@ export default function OversightApprovalsPage() {
                                 <div className="flex min-w-0 gap-4">
                                     <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${item.status === 'executing' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}><i className={`fa-solid ${item.status === 'executing' ? 'fa-triangle-exclamation' : 'fa-file-signature'}`} aria-hidden="true" /></span>
                                     <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-slate-900">{requestSummary(item)}</h3><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${item.status === 'executing' ? 'bg-amber-100 text-amber-800' : 'bg-sky-100 text-sky-800'}`}>{item.status === 'executing' ? 'Execution needs review' : 'Pending approval'}</span></div><p className="mt-1 text-sm text-slate-600">Requested by <span className="font-medium text-slate-800">{item.requested_by}</span></p><p className="mt-1 text-xs text-slate-500">{new Date(item.created_at).toLocaleString()}</p>
-                                        {requestChanges(item).length > 0 && <p className="mt-2 text-xs text-slate-500">{requestChanges(item).length} permission change{requestChanges(item).length === 1 ? '' : 's'} requested</p>}
+                                        {requestChanges(item).length > 0 && <p className="mt-2 text-xs text-slate-500">{requestChanges(item).length} {itemActionIsPermissions(item) ? 'permission change' : 'change'}{requestChanges(item).length === 1 ? '' : 's'} requested</p>}
                                         {item.status === 'executing' && <p className="mt-3 max-w-2xl rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">This action has been running for more than 15 minutes. Check the affected system before recording whether it completed. It will not be retried automatically.</p>}
                                     </div>
                                 </div>

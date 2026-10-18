@@ -2,17 +2,23 @@
 
 use App\Models\Account;
 use App\Models\Loan;
+use App\Models\PrivilegedActionRequest;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\CountersignService;
 use App\Services\SecurityOtpService;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\UserSeeder;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 beforeEach(function () {
     $this->seed(SpatieRolePermissionSeeder::class);
     $this->seed(UserSeeder::class);
 
     $this->manager = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
+
+    $this->chairman = User::factory()->create(['role' => 'chairman', 'is_officer' => true]);
+    $this->chairman->assignRole('chairman');
 
     $this->member = User::factory()->create();
     $this->member->assignRole('member');
@@ -60,7 +66,7 @@ test('ledger store creates pending transaction without affecting balance', funct
         ->and($transaction->account_id)->toBe($this->account->id);
 });
 
-test('ledger update modifies pending transaction without affecting balance', function () {
+test('ledger update is applied only after chairman countersign', function () {
     $this->actingAs($this->manager);
 
     $createResponse = $this->postJson('/api/ledger', [
@@ -71,14 +77,76 @@ test('ledger update modifies pending transaction without affecting balance', fun
     $transactionId = $createResponse->json('data.id');
     expect($this->account->fresh()->balance)->toBe('1000.00');
 
-    $this->putJson("/api/ledger/{$transactionId}", [
+    $updateResponse = $this->putJson("/api/ledger/{$transactionId}", [
         'transaction_type' => 'deposit',
         'amount' => 800.00,
         'account_id' => $this->account->id,
-    ])->assertOk();
+    ]);
+    $updateResponse->assertStatus(202)
+        ->assertJsonPath('status', 'pending')
+        ->assertJsonStructure(['request_id', 'message']);
 
+    // The edit is staged as a countersign request, not applied directly.
+    $request = PrivilegedActionRequest::findOrFail($updateResponse->json('request_id'));
+    expect($request->action_type)->toBe('transaction.update')
+        ->and($request->status)->toBe('pending')
+        ->and($request->payload['changes']['amount'])->toEqual(800.00);
+    expect((float) Transaction::find($transactionId)->amount)->toBe(500.00);
     expect($this->account->fresh()->balance)->toBe('1000.00');
-    expect(Transaction::find($transactionId)->amount)->toBe('800.00');
+
+    app(CountersignService::class)->approve($request, $this->chairman);
+
+    expect((float) Transaction::find($transactionId)->amount)->toBe(800.00);
+    expect($this->account->fresh()->balance)->toBe('1000.00'); // pending entry still leaves balance untouched
+});
+
+test('rejected ledger edit leaves the transaction unchanged', function () {
+    $this->actingAs($this->manager);
+
+    $createResponse = $this->postJson('/api/ledger', [
+        'transaction_type' => 'deposit',
+        'amount' => 500.00,
+        'account_id' => $this->account->id,
+    ]);
+    $transactionId = $createResponse->json('data.id');
+
+    $updateResponse = $this->putJson("/api/ledger/{$transactionId}", [
+        'transaction_type' => 'deposit',
+        'amount' => 900.00,
+        'account_id' => $this->account->id,
+    ]);
+    $updateResponse->assertStatus(202);
+
+    $request = PrivilegedActionRequest::findOrFail($updateResponse->json('request_id'));
+    app(CountersignService::class)->reject($request, $this->chairman, 'Amount was not agreed with the member.');
+
+    expect((float) Transaction::find($transactionId)->amount)->toBe(500.00);
+    expect($request->fresh()->status)->toBe('rejected');
+});
+
+test('ledger edit cannot be countersigned by its own requester', function () {
+    $this->actingAs($this->chairman);
+
+    $createResponse = $this->postJson('/api/ledger', [
+        'transaction_type' => 'deposit',
+        'amount' => 500.00,
+        'account_id' => $this->account->id,
+    ]);
+    $transactionId = $createResponse->json('data.id');
+
+    $updateResponse = $this->putJson("/api/ledger/{$transactionId}", [
+        'transaction_type' => 'deposit',
+        'amount' => 700.00,
+        'account_id' => $this->account->id,
+    ]);
+    $updateResponse->assertStatus(202);
+
+    $request = PrivilegedActionRequest::findOrFail($updateResponse->json('request_id'));
+
+    expect(fn () => app(CountersignService::class)->approve($request, $this->chairman))
+        ->toThrow(HttpException::class, 'Self-approval is forbidden.');
+
+    expect((float) Transaction::find($transactionId)->amount)->toBe(500.00);
 });
 
 test('ledger update rejects modifying non-pending transaction', function () {

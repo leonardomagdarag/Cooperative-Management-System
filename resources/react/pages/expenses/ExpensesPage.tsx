@@ -46,12 +46,12 @@ export default function ExpensesPage() {
 
     const saveMutation = useMutation({
         mutationFn: (payload: any) => editing ? api.put(`/api/expenses/${editing.id}`, payload) : api.post('/api/expenses', payload),
-        onSuccess: () => {
+        onSuccess: (res: any) => {
             queryClient.invalidateQueries({ queryKey: ['expenses'] });
             reset();
             setShowModal(false);
             setEditing(null);
-            addToast(editing ? 'Expense updated' : 'Expense recorded', 'success');
+            addToast(res?.data?.message || (editing ? 'Expense updated' : 'Expense recorded'), 'success');
         },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed', 'error'),
     });
@@ -196,6 +196,12 @@ export default function ExpensesPage() {
                         </div>
                         <div className="flex-1 overflow-y-auto p-6">
                             <form id="expense-form" onSubmit={handleSave} className="space-y-4">
+                                {editing && (
+                                    <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                        <i className="fas fa-user-check mr-1"></i>
+                                        Edits are applied only after a chairman approves them.
+                                    </p>
+                                )}
                                 <div>
                                     <label className="mb-1 block text-sm font-medium text-gray-700">Category <span className="text-red-500">*</span></label>
                                     <input type="text" list="expense-categories" value={form.category} onChange={e => set('category', e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 ${errors.category ? 'border-red-400' : 'border-gray-200'}`} placeholder="e.g., Utilities, Salaries" />
@@ -225,7 +231,7 @@ export default function ExpensesPage() {
                         </div>
                         <div className="flex shrink-0 items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 rounded-b-2xl">
                             <button type="button" onClick={() => requestClose(() => setShowModal(false))} className="rounded-lg border border-gray-200 px-4 py-2 text-sm hover:bg-gray-100 cursor-pointer">Cancel</button>
-                            <button type="submit" form="expense-form" disabled={saveMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700 rounded-lg focus:ring-2 focus:ring-emerald-500/20 text-white px-4 py-2 text-sm font-medium shadow-xs disabled:opacity-50 transition-colors cursor-pointer">{saveMutation.isPending ? 'Saving...' : 'Save'}</button>
+                            <button type="submit" form="expense-form" disabled={saveMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700 rounded-lg focus:ring-2 focus:ring-emerald-500/20 text-white px-4 py-2 text-sm font-medium shadow-xs disabled:opacity-50 transition-colors cursor-pointer">{saveMutation.isPending ? 'Saving...' : editing ? 'Submit for approval' : 'Save'}</button>
                         </div>
                     </div>
                     {renderDialog()}

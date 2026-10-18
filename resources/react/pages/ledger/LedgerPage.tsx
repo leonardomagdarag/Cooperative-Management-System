@@ -15,6 +15,9 @@ import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import TransactionReceiptModal, { type TransactionReceiptData } from '../../components/TransactionReceiptModal';
 
+/** Mirrors the backend's editable list in LedgerController/CountersignService. */
+const EDITABLE_TYPES = ['deposit', 'withdrawal', 'loan_payment', 'loan_disbursement', 'fee'];
+
 export default function LedgerPage() {
     const [category, setCategory] = useState('all');
     const [search, setSearch] = useState('');
@@ -61,7 +64,12 @@ export default function LedgerPage() {
         mutationFn: (payload: any) => editingId
             ? api.put(`/api/ledger/${editingId}`, payload)
             : api.post('/api/ledger', payload),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['ledger'] }); setShowAddModal(false); setEditingId(null); addToast(editingId ? 'Updated' : 'Created', 'success'); },
+        onSuccess: (res: any) => {
+            queryClient.invalidateQueries({ queryKey: ['ledger'] });
+            setShowAddModal(false);
+            setEditingId(null);
+            addToast(res?.data?.message || 'Saved', 'success');
+        },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed', 'error'),
     });
 
@@ -125,7 +133,21 @@ export default function LedgerPage() {
     };
 
     const openAdd = () => { reset(); setEditingId(null); setForm({ transaction_type: 'deposit', amount: '', note: '', account_id: '', loan_id: '', branch_id: '', transaction_date: new Date().toISOString().slice(0, 10) }); setShowAddModal(true); };
-    const openEdit = (t: any) => { reset(); setEditingId(t.id); setForm({ transaction_type: t.transaction_type, amount: t.amount, note: t.note || '', account_id: t.account_id != null ? String(t.account_id) : '', loan_id: t.loan_id != null ? String(t.loan_id) : '', branch_id: t.branch_id || '', transaction_date: t.transaction_date || new Date().toISOString().slice(0, 10) }); setShowAddModal(true); };
+    /** Reasons a row cannot be edited; kept alongside the button tooltips in the table. */
+    const editBlockReason = (t: any): string | null => {
+        if (t.status !== 'pending') return 'Only pending transactions can be edited.';
+        if (!EDITABLE_TYPES.includes(t.transaction_type)) return `${getTypeLabel(t.transaction_type)} entries are system-generated and cannot be edited.`;
+        return null;
+    };
+
+    const openEdit = (t: any) => {
+        const reason = editBlockReason(t);
+        if (reason) {
+            addToast(reason, 'error');
+            return;
+        }
+        reset(); setEditingId(t.id); setForm({ transaction_type: t.transaction_type, amount: t.amount, note: t.note || '', account_id: t.account_id != null ? String(t.account_id) : '', loan_id: t.loan_id != null ? String(t.loan_id) : '', branch_id: t.branch_id || '', transaction_date: t.transaction_date || new Date().toISOString().slice(0, 10) }); setShowAddModal(true);
+    };
 
     const exportCsv = async () => {
         try {
@@ -272,15 +294,33 @@ export default function LedgerPage() {
                                                 )}
                                                 {canEdit && (
                                                     <>
-                                                        <button onClick={() => openEdit(t)} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"><i className="fas fa-edit text-xs"></i></button>
-                                                        <button onClick={() => setConfirmState({
-                                                            isOpen: true,
-                                                            title: 'Delete Transaction',
-                                                            message: `Are you sure you want to delete transaction "${t.transaction_number}"? This action cannot be undone.`,
-                                                            confirmText: 'Delete',
-                                                            variant: 'danger',
-                                                            onConfirm: () => deleteMutation.mutate(t.id)
-                                                        })} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><i className="fas fa-trash text-xs"></i></button>
+                                                        {(() => {
+                                                            const isSystemGenerated = !EDITABLE_TYPES.includes(t.transaction_type);
+                                                            // Completed rows stay hidden to avoid a wall of inert pencils;
+                                                            // system-generated types keep a blocked button so the reason is discoverable.
+                                                            if (t.status !== 'pending' && !isSystemGenerated) return null;
+                                                            const blockedReason = editBlockReason(t);
+                                                            return (
+                                                                <button
+                                                                    onClick={() => openEdit(t)}
+                                                                    title={blockedReason ?? 'Edit transaction'}
+                                                                    aria-label={blockedReason ?? 'Edit transaction'}
+                                                                    className={`p-1.5 rounded-lg transition-colors ${blockedReason ? 'text-gray-300 hover:text-amber-600 hover:bg-amber-50' : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
+                                                                >
+                                                                    <i className={`fas fa-edit text-xs ${blockedReason ? 'opacity-70' : ''}`}></i>
+                                                                </button>
+                                                            );
+                                                        })()}
+                                                        {t.status === 'pending' && (
+                                                            <button onClick={() => setConfirmState({
+                                                                isOpen: true,
+                                                                title: 'Delete Transaction',
+                                                                message: `Are you sure you want to delete transaction "${t.transaction_number}"? This action cannot be undone.`,
+                                                                confirmText: 'Delete',
+                                                                variant: 'danger',
+                                                                onConfirm: () => deleteMutation.mutate(t.id)
+                                                            })} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><i className="fas fa-trash text-xs"></i></button>
+                                                        )}
                                                     </>
                                                 )}
                                                 {canReverse && t.status === 'completed' && !t.reversal_of_id && (
@@ -328,6 +368,12 @@ export default function LedgerPage() {
                         </div>
                         <div className="flex-1 overflow-y-auto p-6">
                             <form id="ledger-form" onSubmit={handleSave} className="space-y-4">
+                                {editingId && (
+                                    <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                        <i className="fas fa-user-check mr-1"></i>
+                                        Edits are applied only after a chairman approves them. The transaction stays pending until then.
+                                    </p>
+                                )}
                                 <div>
                                     <label className="mb-1 block text-sm font-medium text-gray-700">Type</label>
                                     <select value={form.transaction_type} onChange={e => setFormD(f => ({ ...f, transaction_type: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500">
@@ -366,7 +412,7 @@ export default function LedgerPage() {
                         </div>
                         <div className="flex shrink-0 items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 rounded-b-2xl">
                             <button type="button" onClick={requestCloseGuard} className="rounded-lg border border-gray-200 px-4 py-2 text-sm hover:bg-gray-100 transition-colors">Cancel</button>
-                            <button type="submit" form="ledger-form" disabled={saveMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700 rounded-lg focus:ring-4 focus:ring-emerald-200 text-white px-4 py-2 text-sm font-medium disabled:opacity-50 transition-colors">{saveMutation.isPending ? 'Saving...' : 'Save'}</button>
+                            <button type="submit" form="ledger-form" disabled={saveMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700 rounded-lg focus:ring-4 focus:ring-emerald-200 text-white px-4 py-2 text-sm font-medium disabled:opacity-50 transition-colors">{saveMutation.isPending ? 'Saving...' : editingId ? 'Submit for approval' : 'Save'}</button>
                         </div>
                     </div>
                     {renderDialog()}
