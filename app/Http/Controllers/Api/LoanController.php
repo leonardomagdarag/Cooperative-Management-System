@@ -27,7 +27,7 @@ class LoanController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = Auth::user();
-        $canViewAll = (bool) ($user && ($user->can('loans.view') || $user->hasRole('admin')));
+        $canViewAll = (bool) ($user && $user->can('loans.view'));
 
         $query = Loan::with(['branch', 'user.personalData', 'reviewer.personalData', 'groupMembers.personalData', 'product']);
 
@@ -110,7 +110,7 @@ class LoanController extends Controller
                 'per_page' => $paginator->perPage(),
                 'total' => $paginator->total(),
             ],
-            'can_encode' => (bool) ($user && ($user->can('loans.encode') || $user->hasRole('admin'))),
+            'can_encode' => (bool) ($user && $user->can('loans.encode')),
         ]);
     }
 

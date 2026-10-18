@@ -169,8 +169,11 @@ All officers are `is_officer=true` with `dashboard.view, settings.view, notifica
 
 ## 5. Officer — Role-Specific Functionalities
 
-### 5.1 Administrator (`admin`) — Full Access (all permissions)
-Exclusive / primary owner of:
+### 5.1 Administrator (`admin`) — System administration
+The admin preset is limited to system configuration, backups, security logs, troubleshooting tickets, and officer account administration. It does not grant routine member, loan, service, transaction, branch, or financial account workflows; those remain with operational officers and the manager. Admin can still access explicitly admin-owned configuration such as roles, backups, public content, loan products, service availability, SMS/email, and payment gateway settings.
+- **Monitoring:** dashboard, reports, audit reports, and logs (view/export).
+- **Troubleshooting:** tickets and support configuration.
+- **System administration:** officer account and permission management, settings, backups, and oversight requests.
 - **Roles & Permissions** (`Settings → Roles & Permissions`, `/dashboard/role-permissions`, `role:admin` only):
   - `GET /api/roles` — list roles + permissions.
   - `POST /api/roles` — create custom role.
@@ -190,7 +193,7 @@ Exclusive / primary owner of:
   - `GET /api/settings/service-availability`, `PUT /api/settings/service-availability` (`settings.update`) — all services incl. registration/login (see §8).
   - `PUT /api/public-content` — edit public website CMS (`PublicContentPage`).
   - `POST/PUT/DELETE /api/loan-products*` — manage loan products (`LoanProductsPage`).
-- **All operational modules:** members (CRUD + approve/decline + restore/force-delete + export + password OTP + special-loan toggle), officers (CRUD + delete), branches (CRUD), ledger (CRUD + export), expenses (CRUD), loans (full lifecycle), reports (all + balance sheet download), announcements (CRUD), logs (view/export), tickets (view/edit/close/assign).
+- **Admin-owned system actions:** officer management, logs, backups, role/permission configuration, service availability, and system integrations. Operational member, branch, transaction, loan, and financial account work belongs to the manager and other assigned officers.
 
 ### 5.1.1 Chairman (`chairman`)
 Preset: operational member, service, loan, transaction, deposit, withdrawal, branch, announcement, and report permissions; `oversight.approve`; collections review/approval; and receipt reissue. The chairman is the countersign approver for privileged actions and is subject to the same server-side branch, OTP, separation-of-duty, and workflow checks as every other user.
@@ -282,6 +285,7 @@ do not treat old secretary-specific behavior as a separate role contract.
 
 ### 6.6 Expenses (`ExpensesPage`)
 - `GET/POST /api/expenses`, `PUT/DELETE /api/expenses/{expense}` — record operating expenses, categorize, filter, view in reports.
+- **Changes and deletions are countersigned.** Both `PUT /api/expenses/{expense}` and `DELETE /api/expenses/{expense}` do not mutate directly; they record `expense.update` or `expense.delete` privileged-action requests and return 202. The change or deletion is applied only after an active chairman holding `oversight.approve` approves it through `/api/oversight/requests*` (`CountersignService::performAction`). Self-approval is forbidden. While a request is pending, duplicate updates/deletions on the same expense return 409 Conflict, and the Expenses SPA displays an "Awaiting approval" badge on the expense row and disables further edit/delete actions until approved or rejected.
 
 ### 6.7 Reports (`ReportsPage`, `reports.*`)
 - Types (`GET /api/reports/*`): `financial`, `expenses`, `member-activity`, `member-savings`, `loans`, `payments`, `balance-sheet` (+ `download`), `interest-disbursements` (+ `{id}` drill-down), `options` (filter metadata).

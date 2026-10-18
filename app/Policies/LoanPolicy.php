@@ -26,8 +26,7 @@ class LoanPolicy
 
     public function encode(User $user): bool
     {
-        return $user->hasRole('admin')
-            || ($this->isOfficerUser($user) && $user->can('loans.encode'));
+        return $this->isOfficerUser($user) && $user->can('loans.encode');
     }
 
     public function update(User $user, Loan $loan): bool

@@ -17,12 +17,9 @@ class RolePermissionSeeder extends Seeder
         $rolePermissions = [
             // ADMIN
             ['role' => 'admin', 'section' => 'dashboard', 'permissions' => ['view']],
-            ['role' => 'admin', 'section' => 'officers', 'permissions' => ['view', 'create', 'edit']],
-            ['role' => 'admin', 'section' => 'members', 'permissions' => ['view', 'create', 'edit']],
+            ['role' => 'admin', 'section' => 'officers', 'permissions' => ['view']],
             ['role' => 'admin', 'section' => 'tickets', 'permissions' => ['view', 'edit', 'close']],
-            ['role' => 'admin', 'section' => 'ledger', 'permissions' => ['view', 'export']],
             ['role' => 'admin', 'section' => 'logs', 'permissions' => ['view', 'export']],
-            ['role' => 'admin', 'section' => 'announcements', 'permissions' => ['view', 'create', 'edit', 'delete']],
             ['role' => 'admin', 'section' => 'reports', 'permissions' => ['view', 'export']],
             ['role' => 'admin', 'section' => 'settings', 'permissions' => ['view', 'edit']],
 

@@ -41,7 +41,7 @@ export default function SettingsPage() {
     const canManagePermissions = isAdmin || user?.permissions?.includes('officers.manage-permissions');
     const canManageBackups = isAdmin || user?.permissions?.includes('backups.manage') || user?.permissions?.includes('backups.view');
     const canViewLoans = canViewSettings || user?.permissions?.includes('loans.view');
-    const canManageFinancial = isAdmin || user?.permissions?.includes('financial_settings.update');
+    const canManageFinancial = user?.permissions?.includes('financial_settings.update');
 
     const tabs: SettingsTab[] = [
         { key: 'account', label: 'My Account', icon: 'fas fa-user-cog', visible: true },
