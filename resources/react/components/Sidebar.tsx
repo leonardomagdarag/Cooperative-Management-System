@@ -32,6 +32,16 @@ const NAV_ITEMS: NavItem[] = [
     { label: 'Settings', path: '/dashboard/settings', icon: 'fas fa-cog' },
 ];
 
+const ADMIN_NAV_PATHS = new Set([
+    '/dashboard',
+    '/dashboard/officers',
+    '/dashboard/notifications',
+    '/dashboard/tickets',
+    '/dashboard/reports',
+    '/dashboard/logs',
+    '/dashboard/settings',
+]);
+
 export default function Sidebar() {
     const { user, logout } = useAuth();
     const { isOpen, isMobileOpen, closeMobile } = useSidebar();
@@ -42,6 +52,9 @@ export default function Sidebar() {
         : 'max-w-64 opacity-100 lg:max-w-0 lg:opacity-0 lg:group-hover:max-w-64 lg:group-hover:opacity-100';
 
     const filteredItems = NAV_ITEMS.filter(item => {
+        if (user?.primary_role === 'admin' && !ADMIN_NAV_PATHS.has(item.path)) {
+            return false;
+        }
         if (item.roles && (!user || !item.roles.includes(user.primary_role))) {
             return false;
         }
