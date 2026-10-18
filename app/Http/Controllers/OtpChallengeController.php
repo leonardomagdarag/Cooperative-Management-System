@@ -3,13 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Models\OtpChallenge;
+use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class OtpChallengeController extends Controller
 {
-    public function __construct(private readonly SecurityOtpService $securityOtpService) {}
+    public function __construct(
+        private readonly SecurityOtpService $securityOtpService,
+        private readonly NotificationService $notificationService,
+    ) {}
 
     public function show(Request $request)
     {
@@ -54,6 +58,10 @@ class OtpChallengeController extends Controller
                 $request->userAgent(),
                 $request->ip()
             );
+
+            if ($purpose === $this->securityOtpService->newDevicePurpose()) {
+                $this->notificationService->notifyNewDeviceLogin($user, $request->ip(), 'verified');
+            }
         }
 
         $request->session()->forget([

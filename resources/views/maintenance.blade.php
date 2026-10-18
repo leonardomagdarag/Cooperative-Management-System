@@ -37,7 +37,7 @@
     @endif
     {{-- Assets are compiled, not built here: the dev manifest may not exist
          while the application is down. --}}
-    <link rel="icon" href="/favicon.ico">
+    <link rel="icon" type="image/png" href="/images/Logo.png">
     <style>
         :root {
             --brand-600: #059669;

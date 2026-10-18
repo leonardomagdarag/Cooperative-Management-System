@@ -32,7 +32,11 @@
         <a href="{{ config('app.url') }}/notifications" class="button">Review Notifications</a>
     @elseif($alertType === 'new_login')
         <div class="alert-box alert-warning">
-            <strong>NEW SIGN-IN DETECTED:</strong> A login was detected from a new IP address.
+            @if (!empty($data['is_new_device']))
+                <strong>NEW DEVICE SIGN-IN:</strong> A sign-in was detected from a device not previously used with your account.
+            @else
+                <strong>NEW SIGN-IN DETECTED:</strong> A sign-in was detected from a new IP address.
+            @endif
         </div>
 
         <p>
@@ -41,6 +45,19 @@
 
         <p><strong>IP Address:</strong> {{ $data['ip_address'] ?? 'Unknown' }}</p>
         <p><strong>Time:</strong> {{ now()->format('F d, Y h:i A') }}</p>
+
+        @if (!empty($data['is_new_device']))
+            @switch($data['otp_status'] ?? 'trusted')
+            @case('bypassed')
+                <p><strong>New-device OTP was skipped because the testing bypass is enabled.</strong></p>
+                @break
+            @case('verified')
+                <p>This device was verified with a one-time code.</p>
+                @break
+            @default
+                <p>No one-time code was needed because this device was already trusted.</p>
+            @endswitch
+        @endif
 
         <p>
             If this was you, no further action is required.

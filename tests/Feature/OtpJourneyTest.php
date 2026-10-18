@@ -2,6 +2,7 @@
 
 use App\Mail\EmailVerificationMail;
 use App\Mail\OtpCodeMail;
+use App\Mail\SecurityAlert;
 use App\Models\User;
 use App\Services\SecurityOtpService;
 use App\Services\TextBeeService;
@@ -53,6 +54,10 @@ test('new device member login completes OTP exactly once and is not redirected a
     // 4. Submitting the emailed code completes verification and clears the flag.
     $this->post('/security/verify-otp', ['otp' => otpJourneyCode()])->assertRedirect();
     expect(session('security.pending_otp'))->toBeNull();
+    Mail::assertSent(SecurityAlert::class, fn (SecurityAlert $mail) => $mail->alertType === 'new_login'
+        && $mail->data['otp_status'] === 'verified'
+        && $mail->data['is_new_device'] === true
+    );
 
     // 5. Protected API, dashboard, and homepage reloads are no longer redirected.
     $this->getJson('/api/user')->assertOk()->assertJsonPath('email', $user->email);

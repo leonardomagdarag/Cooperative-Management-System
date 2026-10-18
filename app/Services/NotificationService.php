@@ -512,7 +512,7 @@ class NotificationService
         }
     }
 
-    public function notifyNewLogin(User $user, string $ipAddress, bool $sendEmail = true): void
+    public function notifyNewLogin(User $user, string $ipAddress, bool $sendEmail = true, string $otpStatus = 'trusted', bool $isNewDevice = false): void
     {
         $this->create(
             $user,
@@ -525,13 +525,22 @@ class NotificationService
 
         if ($sendEmail) {
             try {
-                SendSecurityAlertJob::dispatchSync($user->id, 'new_login', ['ip_address' => $ipAddress]);
+                SendSecurityAlertJob::dispatchSync($user->id, 'new_login', [
+                    'ip_address' => $ipAddress,
+                    'otp_status' => $otpStatus,
+                    'is_new_device' => $isNewDevice,
+                ]);
             } catch (Throwable $e) {
                 Log::warning("Failed to dispatch security alert job: {$e->getMessage()}");
             }
         }
 
         $this->safeSendSecuritySms($user, "Settlers CC Alert: A new login was detected on your account from IP: {$ipAddress}.");
+    }
+
+    public function notifyNewDeviceLogin(User $user, string $ipAddress, string $otpStatus): void
+    {
+        $this->notifyNewLogin($user, $ipAddress, true, $otpStatus, true);
     }
 
     public function notifyFailedLogins(User $user, int $attempts, string $ipAddress, bool $sendEmail = true): void

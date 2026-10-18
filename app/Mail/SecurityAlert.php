@@ -36,6 +36,9 @@ class SecurityAlert extends Mailable
     public function envelope(): Envelope
     {
         $subject = match ($this->alertType) {
+            'new_login' => ! empty($this->data['is_new_device'])
+                ? 'Security Alert: New Device Sign-in'
+                : 'Security Alert: New Sign-in Detected',
             'failed_login' => 'Security Alert: Multiple Failed Login Attempts',
             'password_changed' => 'Security Alert: Password Changed',
             'email_changed' => 'Security Alert: Email Address Changed',

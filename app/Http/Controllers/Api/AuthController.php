@@ -107,9 +107,10 @@ class AuthController extends Controller
 
         $fingerprint = $this->securityOtpService->buildDeviceFingerprint($request);
         $redirect = $request->session()->pull('url.intended', route('dashboard', absolute: false));
+        $isNewDevice = ! $this->securityOtpService->isTrustedDevice($user, $fingerprint);
+        $otpBypassed = ! $this->securityOtpService->shouldEnforceNewDeviceOtp();
 
-        if ($this->securityOtpService->shouldEnforceNewDeviceOtp()
-            && ! $this->securityOtpService->isTrustedDevice($user, $fingerprint)) {
+        if (! $otpBypassed && $isNewDevice) {
             $purpose = $this->securityOtpService->newDevicePurpose();
             $issued = $this->securityOtpService->issueChallenge($user, $purpose, ['fingerprint' => $fingerprint]);
             $this->securityOtpService->sendOtpMail($user, $purpose, $issued['otp_code']);
@@ -130,6 +131,9 @@ class AuthController extends Controller
         }
 
         $this->securityOtpService->trustDevice($user, $fingerprint, $request->userAgent(), $request->ip());
+        if ($isNewDevice) {
+            $this->notificationService->notifyNewDeviceLogin($user, $request->ip(), $otpBypassed ? 'bypassed' : 'trusted');
+        }
         $this->auditLogService->log('auth.login_success', 'User logged in successfully.', 'auth', $user, $user, [
             'role' => $user->primary_role,
             'ip_address' => $request->ip(),

@@ -139,7 +139,9 @@ class LoginController extends Controller
             $redirectUrl = route('dashboard', absolute: false);
 
             $fingerprint = $this->securityOtpService->buildDeviceFingerprint($request);
-            if ($this->securityOtpService->shouldEnforceNewDeviceOtp() && ! $this->securityOtpService->isTrustedDevice($user, $fingerprint)) {
+            $isNewDevice = ! $this->securityOtpService->isTrustedDevice($user, $fingerprint);
+            $otpBypassed = ! $this->securityOtpService->shouldEnforceNewDeviceOtp();
+            if (! $otpBypassed && $isNewDevice) {
                 $issued = $this->securityOtpService->issueChallenge(
                     $user,
                     $this->securityOtpService->newDevicePurpose(),
@@ -177,7 +179,11 @@ class LoginController extends Controller
                 $ipAddress
             );
 
-            $this->handleSuccessfulLoginSignals($user, $ipAddress);
+            if ($isNewDevice) {
+                $this->notificationService->notifyNewDeviceLogin($user, $ipAddress, $otpBypassed ? 'bypassed' : 'trusted');
+            }
+
+            $this->handleSuccessfulLoginSignals($user, $ipAddress, $isNewDevice);
 
             $this->auditLogService->log(
                 'auth.login_success',
@@ -259,14 +265,14 @@ class LoginController extends Controller
         );
     }
 
-    private function handleSuccessfulLoginSignals(User $user, string $ipAddress): void
+    private function handleSuccessfulLoginSignals(User $user, string $ipAddress, bool $isNewDevice): void
     {
         Cache::forget($this->failedLoginAttemptsKey($user));
 
         $lastIpKey = $this->lastLoginIpKey($user);
         $previousIp = Cache::get($lastIpKey);
 
-        if ($previousIp && $previousIp !== $ipAddress) {
+        if (! $isNewDevice && $previousIp && $previousIp !== $ipAddress) {
             $this->notificationService->notifyNewLogin($user, $ipAddress);
         }
 

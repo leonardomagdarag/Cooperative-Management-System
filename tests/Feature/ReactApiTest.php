@@ -1,9 +1,11 @@
 <?php
 
+use App\Mail\SecurityAlert;
 use App\Models\Announcement;
 use App\Models\User;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\UserSeeder;
+use Illuminate\Support\Facades\Mail;
 
 test('react api login establishes an authenticated session', function () {
     $user = User::factory()->create([
@@ -45,6 +47,7 @@ test('new member device login requires otp and blocks protected api access', fun
 });
 
 test('login OTP bypass lets every user skip new-device verification when enabled', function () {
+    Mail::fake();
     config(['auth.login_otp_bypass' => true]);
     $user = User::factory()->create([
         'email' => 'otp-bypass-member@example.com',
@@ -58,6 +61,12 @@ test('login OTP bypass lets every user skip new-device verification when enabled
     ])->assertOk()
         ->assertJsonPath('success', true)
         ->assertJsonMissingPath('requires_otp');
+
+    Mail::assertSent(SecurityAlert::class, fn (SecurityAlert $mail) => $mail->alertType === 'new_login'
+        && $mail->data['otp_status'] === 'bypassed'
+        && $mail->data['is_new_device'] === true
+        && str_contains($mail->render(), 'New-device OTP was skipped because the testing bypass is enabled.')
+    );
 });
 
 test('new-device login OTP is required for officer accounts when bypass is disabled', function () {
