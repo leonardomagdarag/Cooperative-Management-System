@@ -66,7 +66,8 @@ test('admin with backups.view can read backup index and recent runs', function (
     $this->actingAs($admin)
         ->getJson('/api/backups')
         ->assertOk()
-        ->assertJsonPath('data.settings.encryption_enabled', true)
+        ->assertJsonPath('data.settings.tiers.hourly.enabled', false)
+        ->assertJsonPath('data.settings.tiers.daily.retention.days', 30)
         ->assertJsonPath('data.settings.offsite.configured', false)
         ->assertJsonStructure([
             'data' => [
@@ -93,15 +94,15 @@ test('backup index reports the on-disk size of each archive', function () {
         ->assertJsonPath('data.tiers.hourly.items.0.size', 6);
 });
 
-test('admin can toggle backup encryption from settings', function () {
+test('admin can enable automatic hourly backups from settings', function () {
     $admin = backupAdminWith('backups.manage');
 
     $this->actingAs($admin)
-        ->putJson('/api/backups/settings', ['encryption_enabled' => false])
+        ->putJson('/api/backups/settings', ['hourly_enabled' => true])
         ->assertOk()
         ->assertJsonPath('message', 'Backup settings updated.');
 
-    expect(SystemSetting::get('backup_encryption_enabled'))->toBeFalse();
+    expect(SystemSetting::get('backup_hourly_enabled'))->toBeTrue();
 });
 
 test('backup settings rejects an empty payload', function () {

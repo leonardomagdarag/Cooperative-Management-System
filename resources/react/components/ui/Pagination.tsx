@@ -1,9 +1,12 @@
 import Button from './Button';
 
 export interface PaginationProps {
-    page: number;
-    lastPage: number;
-    onChange: (page: number) => void;
+    page?: number;
+    currentPage?: number;
+    lastPage?: number;
+    totalPages?: number;
+    onChange?: (page: number) => void;
+    onPageChange?: (page: number) => void;
     total?: number;
     perPage?: number;
     className?: string;
@@ -12,29 +15,46 @@ export interface PaginationProps {
 
 export default function Pagination({
     page,
+    currentPage,
     lastPage,
+    totalPages,
     onChange,
+    onPageChange,
     total,
     perPage,
     className = '',
     scrollToTop = true,
 }: PaginationProps) {
-    if (lastPage <= 1 && (!total || total <= (perPage ?? 15))) return null;
+    const activePage = page ?? currentPage ?? 1;
+    const finalLastPage = Math.max(1, lastPage ?? totalPages ?? 1);
+    const handleChange = onChange ?? onPageChange;
+
+    if (finalLastPage <= 1 && (!total || total <= (perPage ?? 15))) return null;
 
     const handlePageChange = (newPage: number) => {
-        onChange(newPage);
+        if (handleChange) {
+            handleChange(newPage);
+        }
         if (scrollToTop) {
             const main = document.querySelector('main');
             if (main) {
-                main.scrollTo({ top: 0, behavior: 'smooth' });
-            } else {
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                if (typeof main.scrollTo === 'function') {
+                    main.scrollTo({ top: 0, behavior: 'smooth' });
+                } else {
+                    main.scrollTop = 0;
+                }
+            } else if (typeof window !== 'undefined') {
+                if (typeof window.scrollTo === 'function') {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                } else {
+                    window.scrollY = 0;
+                }
             }
         }
     };
 
-    const from = perPage && total ? Math.min((page - 1) * perPage + 1, total) : null;
-    const to = perPage && total ? Math.min(page * perPage, total) : null;
+    const from = perPage && total ? Math.min((activePage - 1) * perPage + 1, total) : null;
+    const to = perPage && total ? Math.min(activePage * perPage, total) : null;
 
     return (
         <nav
@@ -50,8 +70,8 @@ export default function Pagination({
                     </span>
                 ) : (
                     <span>
-                        Page <span className="font-semibold text-slate-900">{page}</span> of{' '}
-                        <span className="font-semibold text-slate-900">{lastPage}</span>
+                        Page <span className="font-semibold text-slate-900">{activePage}</span> of{' '}
+                        <span className="font-semibold text-slate-900">{finalLastPage}</span>
                     </span>
                 )}
             </div>
@@ -59,21 +79,21 @@ export default function Pagination({
                 <Button
                     variant="secondary"
                     size="sm"
-                    disabled={page <= 1}
-                    onClick={() => handlePageChange(Math.max(1, page - 1))}
+                    disabled={activePage <= 1}
+                    onClick={() => handlePageChange(Math.max(1, activePage - 1))}
                     aria-label="Previous page"
                 >
                     <i className="fas fa-chevron-left text-xs" />
                     <span className="hidden sm:inline">Previous</span>
                 </Button>
                 <span className="px-2 text-xs font-medium text-slate-600 sm:hidden">
-                    {page} / {lastPage}
+                    {activePage} / {finalLastPage}
                 </span>
                 <Button
                     variant="secondary"
                     size="sm"
-                    disabled={page >= lastPage}
-                    onClick={() => handlePageChange(Math.min(lastPage, page + 1))}
+                    disabled={activePage >= finalLastPage}
+                    onClick={() => handlePageChange(Math.min(finalLastPage, activePage + 1))}
                     aria-label="Next page"
                 >
                     <span className="hidden sm:inline">Next</span>
@@ -83,4 +103,3 @@ export default function Pagination({
         </nav>
     );
 }
-

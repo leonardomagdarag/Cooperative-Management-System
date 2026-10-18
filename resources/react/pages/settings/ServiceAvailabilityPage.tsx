@@ -8,9 +8,7 @@ type ServiceKey = keyof SettingsServiceAvailabilityData;
 type AvailabilityFlag = keyof ServiceAvailabilityFlags;
 
 const serviceConfig: Record<ServiceKey, { label: string; description: string; icon: string; flags: Array<{ key: AvailabilityFlag; label: string; description: string }> }> = {
-    registration: { label: 'Member Registration', description: 'Control whether visitors can create member accounts from the public website.', icon: 'fas fa-user-plus', flags: [
-        { key: 'member', label: 'Members', description: 'Allow new member registration from the public site.' },
-    ] },
+    registration: { label: 'Member Registration', description: 'Control whether visitors can create member accounts from the public website.', icon: 'fas fa-user-plus', flags: [] },
     login: { label: 'Login', description: 'Control whether users can log in to the system.', icon: 'fas fa-sign-in-alt', flags: [
         { key: 'member', label: 'Members', description: 'Allow members to log in.' },
         { key: 'officer', label: 'Officers', description: 'Allow officers to log in.' },
@@ -54,9 +52,18 @@ export default function ServiceAvailabilityPage() {
         (Object.keys(serviceConfig) as ServiceKey[]).forEach(service => {
             const before = originalFlags[service]; const after = editedFlags[service];
             if (!before || !after) return;
+            const config = serviceConfig[service];
+            if (config.flags.length === 0) {
+                const previous = before.global ?? true;
+                const current = after.global ?? true;
+                if (previous !== current) {
+                    result.push({ service, label: config.label, flag: '', enabled: current });
+                }
+                return;
+            }
             new Set([...Object.keys(before), ...Object.keys(after)]).forEach(key => {
                 const flag = key as AvailabilityFlag; const previous = before[flag] ?? true; const current = after[flag] ?? true;
-                if (previous !== current) result.push({ service, label: serviceConfig[service].label, flag: flagLabel[flag] || flag, enabled: current });
+                if (previous !== current) result.push({ service, label: config.label, flag: flagLabel[flag] || flag, enabled: current });
             });
         });
         return result;
@@ -79,7 +86,16 @@ export default function ServiceAvailabilityPage() {
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed to update service availability.', 'error'),
     });
 
-    const updateFlag = (service: ServiceKey, flag: AvailabilityFlag, value: boolean) => setEditedFlags(previous => ({ ...previous, [service]: { ...previous[service], [flag]: value } }));
+    const updateFlag = (service: ServiceKey, flag: AvailabilityFlag, value: boolean) => {
+        setEditedFlags(previous => {
+            const currentService = previous[service] || {};
+            const nextService = { ...currentService, [flag]: value };
+            if (service === 'registration' && flag === 'global') {
+                nextService.member = value;
+            }
+            return { ...previous, [service]: nextService };
+        });
+    };
     const cancelChanges = () => { setEditedFlags(originalFlags); setNotifyAffected(false); };
     const confirmSave = () => { if (changes.length > 0) saveMutation.mutate({ services: editedFlags as SettingsServiceAvailabilityData, notify_affected: notifyAffected }); };
 
@@ -92,18 +108,21 @@ export default function ServiceAvailabilityPage() {
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             {(Object.keys(serviceConfig) as ServiceKey[]).map(service => {
                 const config = serviceConfig[service]; const flags = editedFlags[service]; if (!flags) return null;
+                const hasSubFlags = config.flags.length > 0;
                 return <section key={service} className="rounded-xl border border-gray-200 bg-white shadow-sm">
-                    <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
+                    <div className={`flex items-start justify-between gap-4 px-5 py-4 ${hasSubFlags ? 'border-b border-gray-100' : ''}`}>
                         <div className="flex min-w-0 items-center gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><i className={config.icon}></i></div><div className="min-w-0"><h3 className="font-semibold text-gray-900">{config.label}</h3><p className="mt-0.5 text-xs text-gray-500">{config.description}</p></div></div>
                         <StatusPill enabled={flags.global ?? true} onClick={() => updateFlag(service, 'global', !(flags.global ?? true))} />
                     </div>
-                    <div className="divide-y divide-gray-100">{config.flags.map(item => { const enabled = flags[item.key] ?? true; return <div key={item.key} className="flex items-center justify-between gap-4 px-5 py-3"><div className="min-w-0"><p className="text-sm font-medium text-gray-800">{item.label}</p><p className="mt-0.5 text-xs text-gray-500">{item.description}</p></div><StatusPill enabled={enabled} onClick={() => updateFlag(service, item.key, !enabled)} /></div>; })}</div>
+                    {hasSubFlags && (
+                        <div className="divide-y divide-gray-100">{config.flags.map(item => { const enabled = flags[item.key] ?? true; return <div key={item.key} className="flex items-center justify-between gap-4 px-5 py-3"><div className="min-w-0"><p className="text-sm font-medium text-gray-800">{item.label}</p><p className="mt-0.5 text-xs text-gray-500">{item.description}</p></div><StatusPill enabled={enabled} onClick={() => updateFlag(service, item.key, !enabled)} /></div>; })}</div>
+                    )}
                 </section>;
             })}
         </div>
 
         {changes.length > 0 && <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6"><div className="mx-auto flex max-w-7xl items-center justify-between gap-3"><p className="text-sm font-medium text-amber-800">{changes.length} unsaved change{changes.length === 1 ? '' : 's'}</p><div className="flex gap-2"><button type="button" onClick={cancelChanges} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button><button type="button" onClick={() => setShowConfirm(true)} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">Save Changes</button></div></div></div>}
 
-        {showConfirm && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" onClick={() => setShowConfirm(false)}><div className="w-full max-w-lg rounded-xl bg-white shadow-2xl" onClick={event => event.stopPropagation()}><div className="flex items-center justify-between border-b border-gray-100 px-5 py-4"><div><h3 className="font-semibold text-gray-900">Apply availability changes?</h3><p className="mt-0.5 text-sm text-gray-500">Review the changes before they take effect.</p></div><button type="button" onClick={() => setShowConfirm(false)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100" aria-label="Close"><i className="fas fa-times"></i></button></div><div className="max-h-72 space-y-2 overflow-y-auto p-5">{changes.map((change, index) => <div key={`${change.service}-${change.flag}-${index}`} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 text-sm"><span className="text-gray-700">{change.label} · {change.flag}</span><span className={`font-semibold ${change.enabled ? 'text-emerald-600' : 'text-red-600'}`}>{change.enabled ? 'Enable' : 'Disable'}</span></div>)}<label className="flex cursor-pointer items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><input type="checkbox" checked={notifyAffected} onChange={event => setNotifyAffected(event.target.checked)} className="mt-0.5 rounded border-amber-300 text-emerald-600 focus:ring-emerald-500" /><span>Automatically message affected users when a service or channel becomes unavailable.</span></label></div><div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-4"><button type="button" onClick={() => setShowConfirm(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button><button type="button" onClick={confirmSave} disabled={saveMutation.isPending} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">{saveMutation.isPending ? 'Applying...' : 'Confirm Changes'}</button></div></div></div>}
+        {showConfirm && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" onClick={() => setShowConfirm(false)}><div className="w-full max-w-lg rounded-xl bg-white shadow-2xl" onClick={event => event.stopPropagation()}><div className="flex items-center justify-between border-b border-gray-100 px-5 py-4"><div><h3 className="font-semibold text-gray-900">Apply availability changes?</h3><p className="mt-0.5 text-sm text-gray-500">Review the changes before they take effect.</p></div><button type="button" onClick={() => setShowConfirm(false)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100" aria-label="Close"><i className="fas fa-times"></i></button></div><div className="max-h-72 space-y-2 overflow-y-auto p-5">{changes.map((change, index) => <div key={`${change.service}-${change.flag}-${index}`} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 text-sm"><span className="text-gray-700">{change.label}{change.flag ? ` · ${change.flag}` : ''}</span><span className={`font-semibold ${change.enabled ? 'text-emerald-600' : 'text-red-600'}`}>{change.enabled ? 'Enable' : 'Disable'}</span></div>)}<label className="flex cursor-pointer items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><input type="checkbox" checked={notifyAffected} onChange={event => setNotifyAffected(event.target.checked)} className="mt-0.5 rounded border-amber-300 text-emerald-600 focus:ring-emerald-500" /><span>Automatically message affected users when a service or channel becomes unavailable.</span></label></div><div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-4"><button type="button" onClick={() => setShowConfirm(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button><button type="button" onClick={confirmSave} disabled={saveMutation.isPending} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">{saveMutation.isPending ? 'Applying...' : 'Confirm Changes'}</button></div></div></div>}
     </div>;
 }

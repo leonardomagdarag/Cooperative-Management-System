@@ -122,7 +122,13 @@ export default function LogsPage() {
                 )}
 
                 {pagination && pagination.last_page > 1 && (
-                    <Pagination page={page} lastPage={pagination.last_page} onChange={setPage} />
+                    <Pagination
+                        page={page}
+                        lastPage={pagination.last_page}
+                        onChange={setPage}
+                        total={pagination.total}
+                        perPage={pagination.per_page}
+                    />
                 )}
             </div>
 

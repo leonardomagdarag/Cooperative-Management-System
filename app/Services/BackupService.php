@@ -78,7 +78,9 @@ class BackupService
     /**
      * How many days of archives to retain for the daily and off-site jobs.
      */
-    public const RETENTION_DAYS = 7;
+    public const DAILY_RETENTION_DAYS = 30;
+
+    public const OFFSITE_RETENTION_DAYS = 7;
 
     public const VALID_SCOPES = [self::SCOPE_DB, self::SCOPE_FILES, self::SCOPE_BOTH];
 
@@ -273,7 +275,7 @@ class BackupService
             throw new InvalidArgumentException("Unknown backup tier [{$tier}].");
         }
 
-        if (! $this->isDue($tier)) {
+        if (! $this->isEnabled($tier) || ! $this->isDue($tier)) {
             return null;
         }
 
@@ -323,6 +325,11 @@ class BackupService
         }
 
         return now()->gte($nextRun);
+    }
+
+    public function isEnabled(string $tier): bool
+    {
+        return $tier !== self::TIER_HOURLY || (bool) SystemSetting::get('backup_hourly_enabled', false);
     }
 
     /**
@@ -454,7 +461,8 @@ class BackupService
                 // Keep the newest HOURLY_KEEP archives; oldest filenames sort first.
                 $toDelete = $archives->sort()->take(max(0, $archives->count() - self::HOURLY_KEEP));
             } else {
-                $cutoff = now()->subDays(self::RETENTION_DAYS);
+                $retentionDays = $tier === self::TIER_DAILY ? self::DAILY_RETENTION_DAYS : self::OFFSITE_RETENTION_DAYS;
+                $cutoff = now()->subDays($retentionDays);
                 $toDelete = $archives->filter(function (string $path) use ($disk, $cutoff) {
                     $lastModified = $disk->lastModified($path);
 
@@ -549,9 +557,7 @@ class BackupService
         }
 
         $configuredPassword = config('backup.backup.password');
-        $encryptionEnabled = (bool) SystemSetting::get('backup_encryption_enabled', true);
-
-        if ($encryptionEnabled && (! is_string($configuredPassword) || $configuredPassword === '' || ! hash_equals($configuredPassword, $password))) {
+        if (! is_string($configuredPassword) || $configuredPassword === '' || ! hash_equals($configuredPassword, $password)) {
             throw new RuntimeException('The archive encryption password does not match BACKUP_ARCHIVE_PASSWORD.');
         }
 
@@ -660,13 +666,13 @@ class BackupService
 
             if ($tier === self::TIER_HOURLY) {
                 $tiers[$tier]['retention'] = ['keep' => self::HOURLY_KEEP];
+                $tiers[$tier]['enabled'] = $this->isEnabled($tier);
             } else {
-                $tiers[$tier]['retention'] = ['days' => self::RETENTION_DAYS];
+                $tiers[$tier]['retention'] = ['days' => $tier === self::TIER_DAILY ? self::DAILY_RETENTION_DAYS : self::OFFSITE_RETENTION_DAYS];
             }
         }
 
         return [
-            'encryption_enabled' => (bool) SystemSetting::get('backup_encryption_enabled', true),
             'tiers' => $tiers,
             'offsite' => $this->offsiteStatus(),
         ];
@@ -675,9 +681,9 @@ class BackupService
     /**
      * Persist the encryption toggle from the Settings UI.
      */
-    public function updateEncryption(bool $enabled): void
+    public function updateHourlyEnabled(bool $enabled): void
     {
-        SystemSetting::set('backup_encryption_enabled', $enabled);
+        SystemSetting::set('backup_hourly_enabled', $enabled);
     }
 
     /**
@@ -718,20 +724,11 @@ class BackupService
             'backup.cleanup.default_strategy.delete_oldest_backups_when_using_more_megabytes_than' => null,
         ]);
 
-        if ((bool) SystemSetting::get('backup_encryption_enabled', true)) {
-            $archivePassword = config('backup.backup.password');
-
-            if (! is_string($archivePassword) || $archivePassword === '') {
-                throw new RuntimeException('Backup encryption is enabled but BACKUP_ARCHIVE_PASSWORD is empty. Set it in .env (and keep it safe).');
-            }
-
-            config(['backup.backup.encryption' => 'default']);
-        } else {
-            config([
-                'backup.backup.password' => null,
-                'backup.backup.encryption' => 'none',
-            ]);
+        $archivePassword = config('backup.backup.password');
+        if (! is_string($archivePassword) || $archivePassword === '') {
+            throw new RuntimeException('Backup encryption is required but BACKUP_ARCHIVE_PASSWORD is empty. Set it in .env (and keep it safe).');
         }
+        config(['backup.backup.encryption' => 'default']);
     }
 
     private function clearCaches(): void

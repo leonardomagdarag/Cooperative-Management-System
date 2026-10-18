@@ -28,6 +28,9 @@ function requestSummary(item: RequestItem): string {
             const changes = (payload.changes as Record<string, unknown>) ?? {};
             return `Apply edits to expense #${String(payload.expense_id ?? '—')} (${String(changes.category ?? '—')})`;
         }
+        case 'expense.delete': {
+            return `Delete expense #${String(payload.expense_id ?? '—')} (${String(payload.category ?? '—')})`;
+        }
         default: return `${item.action_type.replaceAll('.', ' ')} for account #${String(payload.user_id ?? '—')}`;
     }
 }
@@ -46,6 +49,15 @@ function requestChanges(item: RequestItem): string[] {
         return Object.entries(changes)
             .filter(([, value]) => value !== null && value !== undefined && value !== '')
             .map(([key, value]) => `${key.replaceAll('_', ' ')}: ${key === 'amount' ? `₱${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : String(value)}`);
+    }
+    if (item.action_type === 'expense.delete') {
+        const payload = item.payload;
+        const details: string[] = [];
+        if (payload.category) details.push(`category: ${String(payload.category)}`);
+        if (payload.amount !== undefined) details.push(`amount: ₱${Number(payload.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}`);
+        if (payload.expense_date) details.push(`expense date: ${String(payload.expense_date)}`);
+        if (payload.description) details.push(`description: ${String(payload.description)}`);
+        return details;
     }
     return [];
 }
@@ -76,6 +88,7 @@ export default function OversightApprovalsPage() {
             setSelected(null); setOtp(''); setNote(''); setOtpSent(false);
             client.invalidateQueries({ queryKey: ['oversight-requests'] });
             client.invalidateQueries({ queryKey: ['members'] });
+            client.invalidateQueries({ queryKey: ['expenses'] });
         },
         onError: (error: any) => addToast(error.response?.data?.message || 'Could not decide this request.', 'error'),
     });

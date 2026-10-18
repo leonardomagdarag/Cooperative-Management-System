@@ -489,7 +489,11 @@ class LoanController extends Controller
                 break;
 
             case 'reject':
+                // A review rejection is terminal for the application: move the
+                // loan out of 'pending' so it stops counting as an open
+                // application (review queue, eligibility checks, status pills).
                 $loan->update([
+                    'loan_status' => 'rejected',
                     'review_status' => 'review_rejected',
                     'reviewed_by' => $user->id,
                     'reviewed_at' => now(),

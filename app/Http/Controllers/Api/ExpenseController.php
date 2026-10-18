@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Expense;
+use App\Models\PrivilegedActionRequest;
 use App\Services\AuditLogService;
 use App\Services\CountersignService;
 use App\Support\BranchScope;
@@ -49,6 +50,22 @@ class ExpenseController extends Controller
         $perPage = max(5, min((int) $request->integer('per_page', 15), 50));
         $paginator = $query->paginate($perPage);
 
+        $pendingRequests = PrivilegedActionRequest::query()
+            ->whereIn('action_type', ['expense.update', 'expense.delete'])
+            ->where('status', 'pending')
+            ->where('expires_at', '>', now())
+            ->get();
+
+        $pendingMap = [];
+        foreach ($pendingRequests as $pr) {
+            if (! empty($pr->payload['expense_id'])) {
+                $pendingMap[$pr->payload['expense_id']] = [
+                    'request_id' => $pr->id,
+                    'action_type' => $pr->action_type,
+                ];
+            }
+        }
+
         return response()->json([
             'data' => $paginator->getCollection()->map(fn (Expense $e) => [
                 'id' => $e->id,
@@ -61,6 +78,7 @@ class ExpenseController extends Controller
                     : null,
                 'branch_id' => $e->branch_id,
                 'branch_name' => $e->branch?->name,
+                'pending_request' => $pendingMap[$e->id] ?? null,
             ]),
             'pagination' => [
                 'current_page' => $paginator->currentPage(),
@@ -107,6 +125,15 @@ class ExpenseController extends Controller
     public function update(Request $request, Expense $expense): JsonResponse
     {
         abort_unless(Auth::user()?->can('transactions.update'), 403);
+
+        $hasPending = PrivilegedActionRequest::query()
+            ->whereIn('action_type', ['expense.update', 'expense.delete'])
+            ->where('status', 'pending')
+            ->where('expires_at', '>', now())
+            ->get()
+            ->contains(fn ($req) => ($req->payload['expense_id'] ?? null) == $expense->id);
+
+        abort_if($hasPending, 409, 'This expense already has a pending approval request.');
 
         $validated = $request->validate([
             'category' => 'required|string|max:100',
@@ -156,10 +183,47 @@ class ExpenseController extends Controller
     {
         abort_unless(Auth::user()?->can('transactions.update'), 403);
 
-        app(AuditLogService::class)->log('expense.deleted', 'Expense deleted.', 'expense', $expense, Auth::user());
-        $expense->delete();
+        $hasPending = PrivilegedActionRequest::query()
+            ->whereIn('action_type', ['expense.update', 'expense.delete'])
+            ->where('status', 'pending')
+            ->where('expires_at', '>', now())
+            ->get()
+            ->contains(fn ($req) => ($req->payload['expense_id'] ?? null) == $expense->id);
 
-        return response()->json(['message' => 'Expense deleted.']);
+        abort_if($hasPending, 409, 'This expense already has a pending approval request.');
+
+        // Expense deletions are privileged, mirroring expense updates.
+        // They never mutate directly: a countersign request is recorded
+        // and the expense is deleted only once an active chairman holding
+        // oversight.approve approves it.
+        $pending = app(CountersignService::class)->request(
+            'expense.delete',
+            [
+                'expense_id' => $expense->id,
+                'requested_by' => Auth::id(),
+                'category' => $expense->category,
+                'description' => $expense->description,
+                'amount' => (float) $expense->amount,
+                'expense_date' => $expense->expense_date?->format('Y-m-d'),
+                'branch_id' => $expense->branch_id,
+            ],
+            Auth::user()
+        );
+
+        app(AuditLogService::class)->log(
+            'expense.delete_requested',
+            'Expense deletion submitted for chairman approval.',
+            'expense',
+            $expense,
+            Auth::user(),
+            ['request_id' => $pending->id]
+        );
+
+        return response()->json([
+            'message' => 'Expense deletion is awaiting chairman approval.',
+            'request_id' => $pending->id,
+            'status' => 'pending',
+        ], 202);
     }
 
     private function categories(): array

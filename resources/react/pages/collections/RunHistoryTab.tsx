@@ -163,10 +163,12 @@ export default function RunHistoryTab({ canViewAll }: { canViewAll: boolean }) {
                         </table>
                     </div>
                     
-                    <Pagination 
-                        currentPage={pagination.current_page} 
-                        lastPage={pagination.last_page} 
-                        onPageChange={fetchHistory} 
+                    <Pagination
+                        page={pagination.current_page}
+                        lastPage={pagination.last_page}
+                        onChange={fetchHistory}
+                        total={pagination.total}
+                        perPage={15}
                     />
                 </>
             )}

@@ -35,6 +35,12 @@ class BackupPingCommand extends Command
                 return self::INVALID;
             }
 
+            if (! $backupService->isEnabled($tier)) {
+                $handled[] = "{$tier}: disabled, skipping.";
+
+                continue;
+            }
+
             if (! $backupService->isDue($tier)) {
                 $this->line("{$tier}: not due yet, skipping.");
 

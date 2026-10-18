@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\User;
 use App\Models\Notification;
+use App\Models\User;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\SystemSettingSeeder;
 use Database\Seeders\UserSeeder;

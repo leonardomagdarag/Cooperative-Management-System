@@ -4,6 +4,7 @@ import { getHistory, Transaction } from '../../api/history';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
 import TransactionReceiptModal, { type TransactionReceiptData } from '../../components/TransactionReceiptModal';
+import Pagination from '../../components/ui/Pagination';
 
 export default function HistoryPage() {
     const [category, setCategory] = useState('all');
@@ -180,10 +181,14 @@ export default function HistoryPage() {
             )}
 
             {pagination && pagination.last_page > 1 && (
-                <div className="flex items-center justify-center gap-2">
-                    <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50">Previous</button>
-                    <span className="text-sm text-gray-500">Page {page} of {pagination.last_page}</span>
-                    <button onClick={() => setPage(p => Math.min(pagination.last_page, p + 1))} disabled={page === pagination.last_page} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50">Next</button>
+                <div className="mt-4">
+                    <Pagination
+                        page={page}
+                        lastPage={pagination.last_page}
+                        onChange={setPage}
+                        total={pagination.total}
+                        perPage={pagination.per_page}
+                    />
                 </div>
             )}
 

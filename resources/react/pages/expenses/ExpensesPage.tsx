@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router';
 import { api } from '../../api/client';
 import BranchBadge from '../../components/BranchBadge';
 import BranchSelect from '../../components/BranchSelect';
@@ -64,8 +65,11 @@ export default function ExpensesPage() {
 
     const deleteMutation = useMutation({
         mutationFn: (id: number) => api.delete(`/api/expenses/${id}`),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['expenses'] }); addToast('Expense deleted', 'success'); },
-        onError: (err: any) => addToast(err.response?.data?.message || 'Failed to delete expense', 'error'),
+        onSuccess: (res: any) => {
+            queryClient.invalidateQueries({ queryKey: ['expenses'] });
+            addToast(res?.data?.message || 'Expense deletion is awaiting chairman approval.', 'success');
+        },
+        onError: (err: any) => addToast(err.response?.data?.message || 'Failed to submit delete request', 'error'),
     });
 
     const set = (key: string, value: string) => { markDirty(); setForm(f => ({ ...f, [key]: value })); setErrors(prev => { if (!prev[key]) return prev; const n = { ...prev }; delete n[key]; return n; }); };
@@ -87,7 +91,7 @@ export default function ExpensesPage() {
                 <div className="w-full mb-1">
                     <div className="mb-4">
                         <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl">Expenses</h1>
-                        <p className="text-sm text-gray-500">Track cooperative operating expenses</p>
+                        <p className="text-sm text-gray-500">Track cooperative operating expenses · Changing or deleting an expense requires chairman countersign approval</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
                         <div className="relative mt-1 w-full sm:w-64">
@@ -117,6 +121,20 @@ export default function ExpensesPage() {
                     <p className="text-2xl font-bold text-amber-900">₱{totalAmount.toLocaleString()}</p>
                 </div>
 
+                {expenses.some((e: any) => !!e.pending_request) && (
+                    <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/90 p-4 text-xs text-amber-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                        <div className="flex items-center gap-2">
+                            <i className="fas fa-file-signature text-amber-700 text-sm"></i>
+                            <span>One or more expense changes/deletions are currently awaiting chairman countersign approval.</span>
+                        </div>
+                        {user?.permissions?.includes('oversight.approve') && (
+                            <Link to="/dashboard/approvals" className="font-semibold text-amber-800 underline hover:text-amber-950 inline-flex items-center gap-1">
+                                Review in Approvals <i className="fas fa-arrow-right text-[10px]"></i>
+                            </Link>
+                        )}
+                    </div>
+                )}
+
                 {isLoading ? (
                     <div className="space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-14 animate-pulse rounded-lg bg-gray-100" />)}</div>
                 ) : expenses.length === 0 ? (
@@ -142,27 +160,49 @@ export default function ExpensesPage() {
                                 {expenses.map((e: any) => (
                                     <tr key={e.id} className="hover:bg-gray-50">
                                         <td className="p-4 text-sm text-gray-500 whitespace-nowrap">{e.expense_date}</td>
-                                        <td className="p-4"><span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-amber-100 text-amber-700">{e.category}</span></td>
+                                        <td className="p-4">
+                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-amber-100 text-amber-700">{e.category}</span>
+                                                {e.pending_request && (
+                                                    <span
+                                                        className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-amber-50 text-amber-800 border border-amber-200"
+                                                        title="Awaiting chairman countersign approval"
+                                                    >
+                                                        <i className="fas fa-clock text-[10px]"></i>
+                                                        {e.pending_request.action_type === 'expense.delete' ? 'Pending deletion' : 'Pending edit'}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </td>
                                         <td className="p-4 text-sm text-gray-700 truncate max-w-[300px]" title={e.description}>{e.description || '—'}</td>
                                         <td className="p-4 text-sm font-medium text-right text-gray-900">₱{Number(e.amount).toLocaleString()}</td>
                                         <td className="p-4 text-sm text-gray-500 whitespace-nowrap truncate max-w-[180px]" title={e.recorded_by || '—'}>{e.recorded_by || '—'}</td>
                                         {canAssignBranch && <td className="p-4 truncate" title={e.branch_name}><BranchBadge name={e.branch_name} /></td>}
                                         {canManage && (
                                             <td className="p-4">
-                                                <div className="flex gap-1">
-                                                    <button onClick={() => openEdit(e)} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="Edit"><i className="fas fa-edit text-xs"></i></button>
-                                                    <button onClick={() => setConfirmState({
-                                                        isOpen: true,
-                                                        title: 'Delete Expense',
-                                                        message: `Delete this expense record of ₱${Number(e.amount).toLocaleString()} (${e.category})?`,
-                                                        confirmText: 'Delete',
-                                                        variant: 'danger',
-                                                        onConfirm: () => {
-                                                            setConfirmState(s => ({ ...s, isOpen: false }));
-                                                            deleteMutation.mutate(e.id);
-                                                        },
-                                                    })} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer" title="Delete"><i className="fas fa-trash text-xs"></i></button>
-                                                </div>
+                                                {e.pending_request ? (
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-md" title="Awaiting chairman countersign approval">
+                                                            <i className="fas fa-lock text-[10px]"></i>
+                                                            Awaiting approval
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex gap-1">
+                                                        <button onClick={() => openEdit(e)} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="Edit"><i className="fas fa-edit text-xs"></i></button>
+                                                        <button onClick={() => setConfirmState({
+                                                            isOpen: true,
+                                                            title: 'Request Expense Deletion',
+                                                            message: `Submit a request to delete this expense record of ₱${Number(e.amount).toLocaleString()} (${e.category})? Deletion requires chairman countersign approval before taking effect.`,
+                                                            confirmText: 'Submit for approval',
+                                                            variant: 'danger',
+                                                            onConfirm: () => {
+                                                                setConfirmState(s => ({ ...s, isOpen: false }));
+                                                                deleteMutation.mutate(e.id);
+                                                            },
+                                                        })} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer" title="Delete"><i className="fas fa-trash text-xs"></i></button>
+                                                    </div>
+                                                )}
                                             </td>
                                         )}
                                     </tr>
@@ -176,8 +216,8 @@ export default function ExpensesPage() {
                     <div className="mt-4">
                         <Pagination
                             page={page}
-                            totalPages={pagination.last_page || 1}
-                            onPageChange={setPage}
+                            lastPage={pagination.last_page || 1}
+                            onChange={setPage}
                             total={pagination.total}
                             perPage={pagination.per_page}
                         />

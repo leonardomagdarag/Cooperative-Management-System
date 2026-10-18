@@ -198,8 +198,8 @@ export default function NotificationsPage() {
                 <div className="mt-6">
                     <Pagination
                         page={page}
-                        totalPages={pagination.last_page || 1}
-                        onPageChange={setPage}
+                        lastPage={pagination.last_page || 1}
+                        onChange={setPage}
                         total={pagination.total}
                         perPage={pagination.per_page}
                     />

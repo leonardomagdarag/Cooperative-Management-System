@@ -223,10 +223,11 @@ class SettingsController extends Controller
 
         foreach ($validated['services'] as $service => $flags) {
             if ($service === 'registration') {
-                $settings = [
-                    'global' => 'service_registration_enabled',
-                    'member' => 'service_registration_member_enabled',
-                ];
+                $registrationEnabled = (bool) ($flags['global'] ?? $flags['member'] ?? true);
+                $flatSettings['service_registration_enabled'] = (bool) ($flags['global'] ?? $registrationEnabled);
+                $flatSettings['service_registration_member_enabled'] = (bool) ($flags['member'] ?? $registrationEnabled);
+
+                continue;
             } elseif ($service === 'login') {
                 $settings = [
                     'global' => 'service_login_enabled',

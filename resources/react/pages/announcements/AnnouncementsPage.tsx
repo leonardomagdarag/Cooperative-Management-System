@@ -115,8 +115,8 @@ export default function AnnouncementsPage() {
                 <div className="mt-6">
                     <Pagination
                         page={page}
-                        totalPages={pagination.last_page}
-                        onPageChange={setPage}
+                        lastPage={pagination.last_page}
+                        onChange={setPage}
                         total={pagination.total}
                         perPage={pagination.per_page}
                     />

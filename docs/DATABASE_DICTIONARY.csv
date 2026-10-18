@@ -280,7 +280,7 @@ loans,loan_amount,decimal,15,2,Principal amount requested or approved.
 loans,interest_rate,decimal,5,2,Annual interest rate percentage applied to the loan.
 loans,term_months,int,N/A,Repayment term expressed in months.
 loans,payment_frequency,enum,N/A,Amortisation schedule: weekly / bi-weekly / monthly / quarterly / annually. Defaults to monthly.
-loans,loan_status,enum,N/A,Lifecycle state: pending / approved / active / paid_off. Defaults to pending.
+loans,loan_status,enum,N/A,Lifecycle state: pending / approved / active / paid_off / rejected. Defaults to pending. Set to rejected when the application is rejected during credit review.
 loans,review_status,enum,N/A,Credit-review outcome: under_review / endorsed_for_approval / review_rejected.
 loans,reviewed_by,bigint,N/A,Foreign key to users.id - the officer who endorsed or rejected. Set to NULL on user delete.
 loans,reviewed_at,timestamp,N/A,Timestamp when the credit review was completed.

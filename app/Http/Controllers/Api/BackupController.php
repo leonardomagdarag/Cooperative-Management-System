@@ -89,10 +89,10 @@ class BackupController extends Controller
         abort_unless(Auth::user()?->can('backups.manage'), 403);
 
         $validated = $request->validate([
-            'encryption_enabled' => 'required|boolean',
+            'hourly_enabled' => 'required|boolean',
         ]);
 
-        $this->backupService->updateEncryption((bool) ($validated['encryption_enabled'] ?? true));
+        $this->backupService->updateHourlyEnabled((bool) $validated['hourly_enabled']);
 
         return response()->json(['message' => 'Backup settings updated.']);
     }

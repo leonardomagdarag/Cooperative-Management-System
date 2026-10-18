@@ -16,6 +16,7 @@ export interface BackupTierInfo {
     scope: BackupScope;
     retention: { keep?: number; days?: number };
     last_auto_run: string | null;
+    enabled?: boolean;
 }
 
 export interface OffsiteStatus {
@@ -25,7 +26,6 @@ export interface OffsiteStatus {
 }
 
 export interface BackupSettings {
-    encryption_enabled: boolean;
     tiers: Record<BackupTier, BackupTierInfo>;
     offsite: OffsiteStatus;
 }
@@ -59,7 +59,7 @@ export async function getBackups() {
     return api.get('/api/backups');
 }
 
-export async function updateBackupSettings(data: { encryption_enabled: boolean }) {
+export async function updateBackupSettings(data: { hourly_enabled: boolean }) {
     return api.put('/api/backups/settings', data);
 }
 

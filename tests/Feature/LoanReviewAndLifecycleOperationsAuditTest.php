@@ -93,6 +93,7 @@ test('F024-4: loan officer can reject loan during review with notes', function (
     $response->assertOk();
     $loan->refresh();
     expect($loan->review_status)->toBe('review_rejected')
+        ->and($loan->loan_status)->toBe('rejected')
         ->and($loan->review_notes)->toBe('Credit score does not meet minimum threshold.')
         ->and($loan->reviewed_by)->toBe($this->loanOfficer->id);
 });

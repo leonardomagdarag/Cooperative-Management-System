@@ -219,6 +219,12 @@ class LoanSeeder extends Seeder
             return 'active';
         }
 
+        // A loan rejected during credit review is no longer a pending
+        // application — mirrors LoanController::review() case 'reject'.
+        if (($plan['review_status'] ?? null) === 'review_rejected') {
+            return 'rejected';
+        }
+
         // Signed off but still waiting for the money to be released.
         return $isApproved ? 'approved' : 'pending';
     }

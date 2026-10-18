@@ -455,6 +455,22 @@ class CountersignService
 
                 return ['status' => 'success', 'expense_id' => $expense->id];
 
+            case 'expense.delete':
+                $expense = Expense::find($payload['expense_id'] ?? null);
+                abort_unless($expense, 404, 'The target expense no longer exists.');
+
+                app(AuditLogService::class)->log(
+                    'expense.deleted',
+                    'Expense deleted.',
+                    'expense',
+                    $expense,
+                    User::find($payload['requested_by'] ?? null) ?? Auth::user()
+                );
+
+                $expense->delete();
+
+                return ['status' => 'success', 'expense_id' => $payload['expense_id']];
+
             case 'transaction.update':
                 $transaction = Transaction::find($payload['transaction_id'] ?? null);
                 abort_unless($transaction, 404, 'The target transaction no longer exists.');

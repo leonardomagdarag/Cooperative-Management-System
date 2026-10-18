@@ -1,13 +1,13 @@
 # Backups & Restore
 
 The cooperative uses [spatie/laravel-backup](https://spatie.be/docs/laravel-backup) with three
-independent, **fixed-cadence** backup jobs. Schedules and retention are deliberate system defaults
-and are not configurable from the UI.
+independent backup jobs. Cadences and retention are fixed system defaults; hourly automatic runs
+can be enabled or disabled in the UI.
 
 | Tier | Disk | Schedule | Retention |
 |------|------|----------|-----------|
 | `hourly` | `local_backups` (`storage/app/backups`) | every hour, on the hour | keep the newest **3** copies |
-| `daily` | `local_backups` (`storage/app/backups`) | every day at 03:00 | keep **7 days** |
+| `daily` | `local_backups` (`storage/app/backups`) | every day at 03:00 | keep **30 days** |
 | `offsite` | `b2` (Backblaze B2, S3-compatible) | every day at 03:00 | keep **7 days** |
 
 The `hourly` and `daily` jobs share the on-server disk. At 03:00 the daily archive is created once
@@ -15,14 +15,15 @@ locally, verified, and then copied to B2; the off-site job never creates a dupli
 New B2 files use `backup-offsite-*`. Existing `backup-offsight-*` archives remain visible,
 downloadable, restorable, and subject to retention until they age out.
 
-All archives are password-encrypted (ZipCrypto) using `BACKUP_ARCHIVE_PASSWORD` when the
-`backup_encryption_enabled` setting is on (default). The encryption toggle remains editable in
-**Settings → Backup & Restore**.
+All archives are password-encrypted (ZipCrypto) using `BACKUP_ARCHIVE_PASSWORD`. Encryption is always enabled.
+Hourly backups are disabled by default and can be enabled in the Backup & Restore settings. Daily
+and off-site backups continue on their fixed schedules. Keep backup copies on a local machine as
+well, and store the password safely because it is required for restores.
 
 ## Environment variables
 
 ```dotenv
-# Required when encryption is enabled
+# Required for encrypted backups and restores
 BACKUP_ARCHIVE_PASSWORD=change-me-to-a-long-secret
 
 # Optional: email notifications would have used this (emails are disabled)

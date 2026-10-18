@@ -21,8 +21,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     useEffect(() => () => timersRef.current.forEach(clearTimeout), []);
 
     const addToast = useCallback((message: string, type: Toast['type'] = 'info') => {
+        let msg = message;
+        let toastType = type;
+        if (['success', 'error', 'info', 'warning'].includes(message) && typeof type === 'string' && !['success', 'error', 'info', 'warning'].includes(type)) {
+            msg = type;
+            toastType = message as Toast['type'];
+        }
         const id = crypto.randomUUID();
-        setToasts(prev => [...prev, { id, message, type }]);
+        setToasts(prev => [...prev, { id, message: msg, type: toastType }]);
         const timer = setTimeout(() => {
             setToasts(prev => prev.filter(t => t.id !== id));
         }, 4000);

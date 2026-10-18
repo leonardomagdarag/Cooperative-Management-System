@@ -25,7 +25,7 @@ const SCOPE_LABELS: Record<string, string> = { db: 'Database', files: 'Files', b
 
 const TIER_DEFS: Record<BackupTier, { title: string; description: string; icon: string }> = {
     hourly: { title: 'Hourly Backups', description: 'Every hour on this server. Only the 3 most recent copies are kept.', icon: 'fas fa-clock' },
-    daily: { title: 'Daily Backups', description: 'Every day at 3:00 AM on this server. Retained for 7 days.', icon: 'fas fa-server' },
+    daily: { title: 'Daily Backups', description: 'Every day at 3:00 AM on this server. Retained for 30 days.', icon: 'fas fa-server' },
     offsite: { title: 'Off-Site Backups', description: 'Daily at 3:00 AM, stored in Backblaze B2 for 7 days.', icon: 'fas fa-cloud' },
 };
 
@@ -40,7 +40,7 @@ function scheduleLabel(schedule: string): string {
 function retentionLabel(tier: BackupTier): string {
     switch (tier) {
         case 'hourly': return 'Keep the 3 newest copies';
-        case 'daily': return 'Retain 7 days';
+        case 'daily': return 'Retain 30 days';
         case 'offsite': return 'Retain 7 days';
         default: return '';
     }
@@ -95,7 +95,6 @@ export default function BackupPage() {
     const canManage = user?.permissions?.includes('backups.manage');
     const canRestore = user?.permissions?.includes('backups.restore');
 
-    const [draftEncryption, setDraftEncryption] = useState<boolean | null>(null);
     const [runTarget, setRunTarget] = useState<{ tier: BackupTier; scope: BackupScope } | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<{ tier: BackupTier; item: BackupItem } | null>(null);
     const [restoreTarget, setRestoreTarget] = useState<{ tier: BackupTier; item: BackupItem } | null>(null);
@@ -110,8 +109,8 @@ export default function BackupPage() {
     const invalidate = () => queryClient.invalidateQueries({ queryKey: ['backups'] });
 
     const saveSettingsMutation = useMutation({
-        mutationFn: (enabled: boolean) => updateBackupSettings({ encryption_enabled: enabled }),
-        onSuccess: () => { invalidate(); setDraftEncryption(null); addToast('Backup settings saved.', 'success'); },
+        mutationFn: (enabled: boolean) => updateBackupSettings({ hourly_enabled: enabled }),
+        onSuccess: () => { invalidate(); addToast('Backup settings saved.', 'success'); },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed to save backup settings.', 'error'),
     });
 
@@ -157,8 +156,6 @@ export default function BackupPage() {
 
     const settings = payload!.settings;
     const offsiteStatus = settings.offsite;
-
-    const shownEncryption = draftEncryption ?? settings.encryption_enabled;
 
     const tierTotal = (tier: BackupTier) =>
         payload!.tiers[tier].items.reduce((sum, item) => sum + (item.size ?? 0), 0);
@@ -213,27 +210,10 @@ export default function BackupPage() {
                     )}
                 </div>
             </section>
-            {/* Encryption notice */}
-            <div className={`rounded-xl border p-4 text-sm ${settings.encryption_enabled ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-gray-200 bg-gray-50 text-gray-600'}`}>
-                <p className="font-semibold flex items-center gap-2"><i className="fas fa-lock"></i> Encryption is {settings.encryption_enabled ? 'ENABLED' : 'disabled'}</p>
-                <p className="mt-1">Archives are encrypted with the <code className="rounded bg-white/70 px-1">BACKUP_ARCHIVE_PASSWORD</code> environment value. Keep it safe — backups cannot be decrypted without it.</p>
-                {canManage && (
-                    <label className="mt-3 flex w-fit cursor-pointer items-center gap-2 text-sm text-gray-700">
-                        <input
-                            type="checkbox"
-                            checked={shownEncryption}
-                            onChange={e => setDraftEncryption(e.target.checked)}
-                            className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                        />
-                        Encrypt archives
-                    </label>
-                )}
-                {canManage && draftEncryption !== null && (
-                    <div className="mt-3 flex items-center gap-2">
-                        <button type="button" onClick={() => saveSettingsMutation.mutate(draftEncryption)} disabled={saveSettingsMutation.isPending} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">{saveSettingsMutation.isPending ? 'Saving...' : 'Save'}</button>
-                        <button type="button" onClick={() => setDraftEncryption(null)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
-                    </div>
-                )}
+            {/* Encryption and local-copy guidance */}
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                <p className="font-semibold flex items-center gap-2"><i className="fas fa-lock"></i> Backups are encrypted by default</p>
+                <p className="mt-1">Keep a copy of your backups on your local machine as well. Store <code className="rounded bg-white/70 px-1">BACKUP_ARCHIVE_PASSWORD</code> safely; it is required to restore encrypted archives.</p>
             </div>
             {/* Storage summary */}
             <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -293,6 +273,10 @@ export default function BackupPage() {
                                 </div>
                             ) : (
                                 <>
+                                    {tier === 'hourly' && canManage && <label className="flex cursor-pointer items-center gap-2 border-b border-gray-100 px-5 py-3 text-sm text-gray-700">
+                                        <input type="checkbox" checked={Boolean(t.enabled)} disabled={saveSettingsMutation.isPending} onChange={e => saveSettingsMutation.mutate(e.target.checked)} className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" />
+                                        Enable automatic hourly backups
+                                    </label>}
                                     <div className="divide-y divide-gray-100">
                                         {t.items.length === 0 && <p className="px-5 py-6 text-center text-sm text-gray-400">No backups yet. The scheduler will create one automatically, or run one manually.</p>}
                                         {t.items.map(item => (

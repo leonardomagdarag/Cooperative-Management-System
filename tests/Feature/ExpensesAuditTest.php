@@ -233,7 +233,7 @@ test('F026-6c: expense edit cannot be countersigned by its own requester', funct
     expect((float) $expense->fresh()->amount)->toBe(250.00);
 });
 
-test('F026-7: accountant deletes an existing expense', function () {
+test('F026-7: accountant delete of an existing expense is applied only after chairman countersign', function () {
     $expense = Expense::create([
         'category' => 'Miscellaneous',
         'description' => 'One-time courier delivery',
@@ -246,10 +246,119 @@ test('F026-7: accountant deletes an existing expense', function () {
     $this->actingAs($this->accountant);
 
     $response = $this->deleteJson("/api/expenses/{$expense->id}");
-    $response->assertOk()
-        ->assertJson(['message' => 'Expense deleted.']);
+    $response->assertStatus(202)
+        ->assertJsonPath('status', 'pending')
+        ->assertJsonStructure(['request_id', 'message']);
+
+    // The deletion is staged as a countersign request, not deleted directly.
+    $request = PrivilegedActionRequest::findOrFail($response->json('request_id'));
+    expect($request->action_type)->toBe('expense.delete')
+        ->and($request->status)->toBe('pending')
+        ->and($request->payload['expense_id'])->toEqual($expense->id);
+
+    expect(Expense::find($expense->id))->not->toBeNull();
+
+    app(CountersignService::class)->approve($request, $this->chairman);
 
     expect(Expense::find($expense->id))->toBeNull();
+});
+
+test('F026-7b: rejected expense deletion leaves the expense intact', function () {
+    $expense = Expense::create([
+        'category' => 'Utilities',
+        'amount' => 800.00,
+        'expense_date' => now()->toDateString(),
+        'branch_id' => $this->mainBranch->id,
+        'recorded_by' => $this->accountant->id,
+    ]);
+
+    $this->actingAs($this->accountant);
+
+    $response = $this->deleteJson("/api/expenses/{$expense->id}");
+    $response->assertStatus(202);
+
+    $request = PrivilegedActionRequest::findOrFail($response->json('request_id'));
+    app(CountersignService::class)->reject($request, $this->chairman, 'Keep for audit records.');
+
+    expect(Expense::find($expense->id))->not->toBeNull()
+        ->and($request->fresh()->status)->toBe('rejected');
+});
+
+test('F026-7c: expense deletion cannot be countersigned by its own requester', function () {
+    $expense = Expense::create([
+        'category' => 'Supplies',
+        'amount' => 150.00,
+        'expense_date' => now()->toDateString(),
+        'branch_id' => $this->mainBranch->id,
+        'recorded_by' => $this->chairman->id,
+    ]);
+
+    $this->actingAs($this->chairman);
+
+    $response = $this->deleteJson("/api/expenses/{$expense->id}");
+    $response->assertStatus(202);
+
+    $request = PrivilegedActionRequest::findOrFail($response->json('request_id'));
+
+    expect(fn () => app(CountersignService::class)->approve($request, $this->chairman))
+        ->toThrow(HttpException::class, 'Self-approval is forbidden.');
+
+    expect(Expense::find($expense->id))->not->toBeNull();
+});
+
+test('F026-7d: duplicate pending countersign request on the same expense is rejected with 409', function () {
+    $expense = Expense::create([
+        'category' => 'Utilities',
+        'amount' => 500.00,
+        'expense_date' => now()->toDateString(),
+        'branch_id' => $this->mainBranch->id,
+        'recorded_by' => $this->accountant->id,
+    ]);
+
+    $this->actingAs($this->accountant);
+
+    // Initial update request
+    $first = $this->putJson("/api/expenses/{$expense->id}", [
+        'category' => 'Utilities',
+        'amount' => 600.00,
+        'expense_date' => now()->toDateString(),
+    ]);
+    $first->assertStatus(202);
+
+    // Attempting a second update while first is pending returns 409
+    $secondUpdate = $this->putJson("/api/expenses/{$expense->id}", [
+        'category' => 'Utilities',
+        'amount' => 700.00,
+        'expense_date' => now()->toDateString(),
+    ]);
+    $secondUpdate->assertStatus(409);
+
+    // Attempting a delete while update is pending returns 409
+    $deleteAttempt = $this->deleteJson("/api/expenses/{$expense->id}");
+    $deleteAttempt->assertStatus(409);
+});
+
+test('F026-7e: expense listing returns pending_request metadata when countersign is active', function () {
+    $expense = Expense::create([
+        'category' => 'Legal',
+        'amount' => 3000.00,
+        'expense_date' => now()->toDateString(),
+        'branch_id' => $this->mainBranch->id,
+        'recorded_by' => $this->accountant->id,
+    ]);
+
+    $this->actingAs($this->accountant);
+
+    $resBefore = $this->getJson('/api/expenses');
+    $itemBefore = collect($resBefore->json('data'))->firstWhere('id', $expense->id);
+    expect($itemBefore['pending_request'])->toBeNull();
+
+    $this->deleteJson("/api/expenses/{$expense->id}")->assertStatus(202);
+
+    $resAfter = $this->getJson('/api/expenses');
+    $itemAfter = collect($resAfter->json('data'))->firstWhere('id', $expense->id);
+    expect($itemAfter['pending_request'])->not->toBeNull()
+        ->and($itemAfter['pending_request']['action_type'])->toBe('expense.delete');
 });
 
 test('F026-8: branch accountant sees expenses from their branch only', function () {

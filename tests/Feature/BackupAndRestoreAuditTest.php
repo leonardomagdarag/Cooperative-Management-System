@@ -86,11 +86,11 @@ test('backups settings validation rules', function () {
     // Invalid values
     $this->actingAs($admin)
         ->putJson('/api/backups/settings', [
-            'encryption_enabled' => 'not-a-boolean',
+            'hourly_enabled' => 'not-a-boolean',
             'unexpected' => 'ignored field should still allow saving',
         ])
         ->assertStatus(422)
-        ->assertJsonValidationErrors(['encryption_enabled']);
+        ->assertJsonValidationErrors(['hourly_enabled']);
 });
 
 test('run rejects invalid tier or invalid scope', function () {

@@ -159,8 +159,8 @@ export default function OfficersPage() {
             <div className="bg-white border-t border-gray-200 px-4 py-3">
                 <Pagination
                     page={page}
-                    totalPages={pagination.last_page || 1}
-                    onPageChange={setPage}
+                    lastPage={pagination.last_page || 1}
+                    onChange={setPage}
                     total={pagination.total}
                     perPage={pagination.per_page}
                 />

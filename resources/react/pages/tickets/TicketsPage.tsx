@@ -359,9 +359,11 @@ export default function TicketsPage() {
                 {ticketData?.pagination && ticketData.pagination.last_page > 1 && (
                     <div className="p-4 border-t border-gray-200">
                         <Pagination
-                            currentPage={ticketData.pagination.current_page}
+                            page={ticketData.pagination.current_page}
                             lastPage={ticketData.pagination.last_page}
-                            onPageChange={setPage}
+                            onChange={setPage}
+                            total={ticketData.pagination.total}
+                            perPage={ticketData.pagination.per_page}
                         />
                     </div>
                 )}
