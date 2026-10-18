@@ -41,6 +41,10 @@ Thumbs.db
 /REWORK_IMPLEMENTATION_SUMMARY.md
 /tests/e2e/screenshot.spec.ts
 
+# Fix records for shipped defects are part of the repository history.
+!/docs/Fixes/
+!/docs/Fixes/**
+
 # Local scratch and debug artifacts.
 /login-failure.png
 /revoke.php
