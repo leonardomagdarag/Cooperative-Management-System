@@ -22,11 +22,6 @@ export async function forgotPassword(email: string, turnstileToken?: string | nu
     return api.post('/forgot-password', { email, 'cf-turnstile-response': turnstileToken });
 }
 
-export async function verifyResetToken(email: string, token: string) {
-    await fetchCsrf();
-    return api.post('/verify-token', { email, token });
-}
-
 export async function resetPassword(payload: {
     token: string;
     email: string;

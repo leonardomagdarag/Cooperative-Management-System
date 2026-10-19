@@ -57,7 +57,7 @@ Route::prefix('/')->group(function () {
 // === Authentication Routes ===
 
 // Handle Login Submission
-Route::post('/login', [LoginController::class, 'login'])->middleware(['public.login.enabled', 'throttle:10,1'])->name('login');
+Route::post('/login', [LoginController::class, 'login'])->middleware(['public.login.enabled', 'throttle:5,1'])->name('login');
 // Handle Registration Submission
 Route::post('/register', [LoginController::class, 'register'])->middleware(['public.registration.enabled', 'throttle:5,10'])->name('register');
 Route::post('/contact', [PageController::class, 'submitContactMessage'])->middleware('throttle:5,10')->name('contact.send');
@@ -69,9 +69,6 @@ Route::get('/forgot-password', [PageController::class, 'forgotPassword'])->name(
 Route::post('/forgot-password', [PasswordResetController::class, 'sendResetLink'])->middleware('throttle:5,10')->name('password.email');
 Route::get('/reset-password/{token}', [PasswordResetController::class, 'showBrokerResetForm'])->name('password.reset');
 Route::get('/reset-password', [PageController::class, 'resetPassword'])->name('password.reset.form');
-Route::post('/verify-token', [PasswordResetController::class, 'verifyToken'])
-    ->middleware('throttle:5,1')
-    ->name('password.verify');
 Route::post('/reset-password', [PasswordResetController::class, 'reset'])
     ->middleware('throttle:5,1')
     ->name('password.update');

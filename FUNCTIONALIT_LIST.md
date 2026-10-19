@@ -55,11 +55,11 @@ Public layout routes (`PublicLayout` in `App.tsx`, `PageController` in `web.php`
    - Controlled by Service Availability toggles: `service_registration_enabled` (global) + `service_registration_member_enabled`.
 3. **Login (if enabled)**
    - `GET /login` gated by `public.login.enabled`.
-   - `POST /login` (`throttle:10,1`) and `POST /api/login` (`throttle:10,1`).
+   - `POST /login` and `POST /api/login` (`throttle:5,1`).
    - Controlled by toggles: `service_login_enabled` (global), `service_login_member_enabled`, `service_login_officer_enabled`.
 4. **Password recovery**
    - `GET /forgot-password`, `POST /forgot-password` (send reset link, `throttle:5,10`).
-   - `GET /reset-password`, `GET /reset-password/{token}`, `POST /verify-token`, `POST /reset-password` (`throttle:5,1`).
+   - `GET /reset-password`, `GET /reset-password/{token}`, and `POST /reset-password` (`throttle:5,1`); reset links expire after 30 minutes.
 5. **Contact the cooperative**
    - `POST /contact` (web, `throttle:5,10`) and `POST /api/contact` (`throttle:5,1`) — name/email/message, dispatched via `SendEmailJob` + `ContactMessageMail` (queued).
 6. **Redirect behavior**
@@ -248,7 +248,7 @@ do not treat old secretary-specific behavior as a separate role contract.
 | Public login toggle | `public.login.enabled` + `service_login_*` |
 | Email verification | `GET /verify-email`, `GET /verify-email/{id}/{hash}`, `VerifyEmailPage`, resend API |
 | OTP challenge (login-sensitive actions) | `GET/POST /security/verify-otp`, resend, `SecurityOtpService`; successful challenge completion is required by the `otp.verified` middleware on protected routes |
-| Password reset | forgot/verify-token/reset routes + pages |
+| Password reset | Broker generated email link, 30 minute expiry, reset routes + pages |
 | Password change (OTP-gated) | Settings → My Account, `sendPasswordOtp` + `changePassword` |
 | Email change (OTP-gated) | Profile → `sendEmailChangeOtp` + `EmailChangeVerification` |
 | Withdrawal approval OTP | `POST /api/services/transactions/{transaction}/send-otp` (threshold `security_withdrawal_otp_threshold`, default ₱2,000) |

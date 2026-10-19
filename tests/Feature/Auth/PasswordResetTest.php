@@ -1,53 +1,51 @@
 <?php
 
-use App\Jobs\SendPasswordResetEmailJob;
 use App\Models\User;
-use Illuminate\Support\Facades\Bus;
+use Illuminate\Auth\Notifications\ResetPassword;
+use Illuminate\Support\Facades\Notification;
 
 test('reset password link can be requested', function () {
-    Bus::fake([SendPasswordResetEmailJob::class]);
+    Notification::fake();
 
     $user = User::factory()->create();
 
-    $this->post('/forgot-password', ['email' => $user->email]);
+    $this->postJson('/forgot-password', ['email' => $user->email])->assertOk();
 
-    Bus::assertDispatchedSync(SendPasswordResetEmailJob::class, fn ($job) => $job->userId === $user->id);
+    Notification::assertSentTo($user, ResetPassword::class);
 });
 
 test('reset password screen can be rendered', function () {
-    Bus::fake([SendPasswordResetEmailJob::class]);
+    Notification::fake();
 
     $user = User::factory()->create();
 
-    $this->post('/forgot-password', ['email' => $user->email]);
+    $this->postJson('/forgot-password', ['email' => $user->email])->assertOk();
 
-    Bus::assertDispatchedSync(SendPasswordResetEmailJob::class, function ($job) {
-        $response = $this->get('/reset-password/'.$job->token);
+    Notification::assertSentTo($user, ResetPassword::class, function ($notification) use ($user) {
+        $response = $this->get(route('password.reset', ['token' => $notification->token, 'email' => $user->email]));
 
-        $response->assertStatus(200);
+        $response->assertRedirect('/reset-password?token='.$notification->token.'&email='.urlencode($user->email));
 
         return true;
     });
 });
 
 test('password can be reset with valid token', function () {
-    Bus::fake([SendPasswordResetEmailJob::class]);
+    Notification::fake();
 
     $user = User::factory()->create();
 
-    $this->post('/forgot-password', ['email' => $user->email]);
+    $this->postJson('/forgot-password', ['email' => $user->email])->assertOk();
 
-    Bus::assertDispatchedSync(SendPasswordResetEmailJob::class, function ($job) use ($user) {
-        $response = $this->post('/reset-password', [
-            'token' => $job->token,
+    Notification::assertSentTo($user, ResetPassword::class, function ($notification) use ($user) {
+        $response = $this->postJson('/reset-password', [
+            'token' => $notification->token,
             'email' => $user->email,
             'password' => 'Password123',
             'password_confirmation' => 'Password123',
         ]);
 
-        $response
-            ->assertSessionHasNoErrors()
-            ->assertRedirect(route('login'));
+        $response->assertOk();
 
         return true;
     });

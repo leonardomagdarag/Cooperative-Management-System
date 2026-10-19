@@ -38,7 +38,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 // Public auth routes (rate-limited)
-Route::post('/login', [AuthController::class, 'login'])->middleware(['web', 'throttle:10,1']);
+Route::post('/login', [AuthController::class, 'login'])->middleware(['web', 'throttle:5,1']);
 Route::post('/logout', [AuthController::class, 'logout'])->middleware(['web', 'auth:web']);
 
 // Public routes (no auth required, rate-limited, CSRF-protected)

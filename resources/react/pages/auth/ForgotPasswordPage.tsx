@@ -29,7 +29,7 @@ export default function ForgotPasswordPage() {
         // The widget mints its token asynchronously, so an impatient submit would
         // otherwise send an empty value and bounce off the server's `required` rule.
         if (!token) {
-            setError('Please complete the captcha verification before sending the code.');
+            setError('Please complete the captcha verification before requesting a reset link.');
             return;
         }
 
@@ -46,7 +46,7 @@ export default function ForgotPasswordPage() {
             setError(
                 err.response?.data?.errors?.['cf-turnstile-response']
                     || err.response?.data?.message
-                    || 'Failed to send reset code. Please try again.'
+                    || 'Failed to request a reset link. Please try again.'
             );
         } finally {
             setIsSubmitting(false);
@@ -63,7 +63,7 @@ export default function ForgotPasswordPage() {
                         </div>
                         <h1 className="text-2xl md:text-3xl font-bold text-slate-800 mb-2">Forgot Password?</h1>
                         <p className="text-sm text-slate-600">
-                            Enter your email to receive a verification code
+                            Enter your email to receive a password reset link
                         </p>
                     </div>
 
@@ -93,20 +93,20 @@ export default function ForgotPasswordPage() {
                                     <i className="fas fa-check-circle text-emerald-600 text-xl shrink-0 mt-0.5"></i>
                                     <div className="flex-1">
                                         <p className="text-sm font-semibold text-emerald-900">
-                                            Verification Code Sent!
+                                            Check your email
                                         </p>
                                         <p className="text-xs text-emerald-700 mt-1">
-                                            We sent a 6-digit PIN to <span className="font-semibold">{submittedEmail}</span>. Please check your inbox and spam folder.
+                                            If an active account exists for <span className="font-semibold">{submittedEmail}</span>, we sent a reset link. Check your inbox and spam folder. The link expires in 30 minutes.
                                         </p>
                                     </div>
                                 </div>
                             </div>
 
                             <Link
-                                to={`/reset-password?email=${encodeURIComponent(submittedEmail)}`}
+                                to="/login"
                                 className="public-btn public-btn-primary w-full flex items-center justify-center gap-2"
                             >
-                                <span>Proceed to Enter PIN</span>
+                                <span>Back to Login</span>
                                 <i className="fas fa-arrow-right text-sm"></i>
                             </Link>
 
@@ -116,7 +116,7 @@ export default function ForgotPasswordPage() {
                                     onClick={() => setSent(false)}
                                     className="text-xs text-emerald-600 hover:text-emerald-700 font-medium cursor-pointer"
                                 >
-                                    Didn't receive a code? Try another email
+                                            Didn't receive a link? Try another email
                                 </button>
                             </div>
 
@@ -162,7 +162,7 @@ export default function ForgotPasswordPage() {
                                     <div className="flex gap-3">
                                         <i className="fas fa-info-circle text-emerald-600 text-lg shrink-0"></i>
                                         <p className="text-sm text-emerald-800 leading-relaxed">
-                                            A 6-digit verification code will be sent to your email. The code expires in 30 minutes.
+                                            If your account exists, we’ll email you a reset link that expires in 30 minutes.
                                         </p>
                                     </div>
                                 </div>
@@ -174,7 +174,7 @@ export default function ForgotPasswordPage() {
                                 <button type="submit" disabled={isSubmitting} className="public-btn public-btn-primary w-full mt-2">
                                     <span className="flex items-center justify-center gap-2">
                                         <i className={`fas ${isSubmitting ? 'fa-spinner fa-spin' : 'fa-paper-plane'}`}></i>
-                                        {isSubmitting ? 'Sending...' : 'Send Verification Code'}
+                                    {isSubmitting ? 'Sending...' : 'Send Reset Link'}
                                     </span>
                                 </button>
 
