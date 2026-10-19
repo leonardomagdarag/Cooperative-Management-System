@@ -1,45 +1,44 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate, useParams, useNavigate, useLocation } from 'react-router';
 import { useAuth } from './contexts/AuthContext';
 import DashboardLayout from './layouts/DashboardLayout';
 import PublicLayout from './layouts/PublicLayout';
-import LoginPage from './pages/auth/LoginPage';
-import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
-import ResetPasswordPage from './pages/auth/ResetPasswordPage';
-import VerifyEmailPage from './pages/auth/VerifyEmailPage';
-import HomePage from './pages/public/HomePage';
-import AboutPage from './pages/public/AboutPage';
-import NewsPage from './pages/public/NewsPage';
-import StoriesPage from './pages/public/StoriesPage';
-import RegisterPage from './pages/public/RegisterPage';
-import ContactPage from './pages/public/ContactPage';
-import NotificationsPage from './pages/notifications/NotificationsPage';
-import HistoryPage from './pages/history/HistoryPage';
-import LogsPage from './pages/logs/LogsPage';
-import ProfilePage from './pages/profile/ProfilePage';
-import ProfileCompletionPage from './pages/profile/ProfileCompletionPage';
-import SettingsPage from './pages/settings/SettingsPage';
-import AnnouncementsPage from './pages/announcements/AnnouncementsPage';
-import LedgerPage from './pages/ledger/LedgerPage';
-import ExpensesPage from './pages/expenses/ExpensesPage';
-import OfficersPage from './pages/officers/OfficersPage';
-import BranchesPage from './pages/branches/BranchesPage';
-import LoansPage from './pages/loans/LoansPage';
-import ReportsPage from './pages/reports/ReportsPage';
-import ServicesPage from './pages/services/ServicesPage';
-import MemberOverview from './pages/overviews/MemberOverview';
-import AdminOverview from './pages/overviews/AdminOverview';
-import ManagerOverview from './pages/overviews/ManagerOverview';
-import TreasurerOverview from './pages/overviews/TreasurerOverview';
-
-import LoanOverview from './pages/overviews/LoanOverview';
-import OfficerOverview from './pages/overviews/OfficerOverview';
-import MemberLoansPage from './pages/member-loans/MemberLoansPage';
-import CollectionsPage from './pages/collections/CollectionsPage';
-import MembersPage from './pages/members/MembersPage';
-import OversightApprovalsPage from './pages/oversight/OversightApprovalsPage';
-import ChairmanOverview from './pages/overviews/ChairmanOverview';
-import TicketsPage from './pages/tickets/TicketsPage';
+const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/auth/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage'));
+const VerifyEmailPage = lazy(() => import('./pages/auth/VerifyEmailPage'));
+const HomePage = lazy(() => import('./pages/public/HomePage'));
+const AboutPage = lazy(() => import('./pages/public/AboutPage'));
+const NewsPage = lazy(() => import('./pages/public/NewsPage'));
+const StoriesPage = lazy(() => import('./pages/public/StoriesPage'));
+const RegisterPage = lazy(() => import('./pages/public/RegisterPage'));
+const ContactPage = lazy(() => import('./pages/public/ContactPage'));
+const NotificationsPage = lazy(() => import('./pages/notifications/NotificationsPage'));
+const HistoryPage = lazy(() => import('./pages/history/HistoryPage'));
+const LogsPage = lazy(() => import('./pages/logs/LogsPage'));
+const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'));
+const ProfileCompletionPage = lazy(() => import('./pages/profile/ProfileCompletionPage'));
+const SettingsPage = lazy(() => import('./pages/settings/SettingsPage'));
+const AnnouncementsPage = lazy(() => import('./pages/announcements/AnnouncementsPage'));
+const LedgerPage = lazy(() => import('./pages/ledger/LedgerPage'));
+const ExpensesPage = lazy(() => import('./pages/expenses/ExpensesPage'));
+const OfficersPage = lazy(() => import('./pages/officers/OfficersPage'));
+const BranchesPage = lazy(() => import('./pages/branches/BranchesPage'));
+const LoansPage = lazy(() => import('./pages/loans/LoansPage'));
+const ReportsPage = lazy(() => import('./pages/reports/ReportsPage'));
+const ServicesPage = lazy(() => import('./pages/services/ServicesPage'));
+const MemberOverview = lazy(() => import('./pages/overviews/MemberOverview'));
+const AdminOverview = lazy(() => import('./pages/overviews/AdminOverview'));
+const ManagerOverview = lazy(() => import('./pages/overviews/ManagerOverview'));
+const TreasurerOverview = lazy(() => import('./pages/overviews/TreasurerOverview'));
+const LoanOverview = lazy(() => import('./pages/overviews/LoanOverview'));
+const OfficerOverview = lazy(() => import('./pages/overviews/OfficerOverview'));
+const MemberLoansPage = lazy(() => import('./pages/member-loans/MemberLoansPage'));
+const CollectionsPage = lazy(() => import('./pages/collections/CollectionsPage'));
+const MembersPage = lazy(() => import('./pages/members/MembersPage'));
+const OversightApprovalsPage = lazy(() => import('./pages/oversight/OversightApprovalsPage'));
+const ChairmanOverview = lazy(() => import('./pages/overviews/ChairmanOverview'));
+const TicketsPage = lazy(() => import('./pages/tickets/TicketsPage'));
 import LoadingScreen from './components/LoadingScreen';
 import EmptyState from './components/ui/EmptyState';
 import ToastContainer from './components/ui/ToastContainer';
@@ -196,28 +195,30 @@ export default function App() {
         <>
             <ScrollToTop />
             <ToastContainer />
-            <Routes>
-                <Route element={<PublicLayout />}>
-                    <Route path="/" element={<IsolatedPage><HomePage /></IsolatedPage>} />
-                    <Route path="/about" element={<IsolatedPage><AboutPage /></IsolatedPage>} />
-                    <Route path="/news" element={<IsolatedPage><NewsPage /></IsolatedPage>} />
-                    <Route path="/stories" element={<IsolatedPage><StoriesPage /></IsolatedPage>} />
-                    <Route path="/register" element={<IsolatedPage><RegisterPage /></IsolatedPage>} />
-                    <Route path="/contact" element={<IsolatedPage><ContactPage /></IsolatedPage>} />
-                </Route>
+            <Suspense fallback={<LoadingScreen />}>
+                <Routes>
+                    <Route element={<PublicLayout />}>
+                        <Route path="/" element={<IsolatedPage><HomePage /></IsolatedPage>} />
+                        <Route path="/about" element={<IsolatedPage><AboutPage /></IsolatedPage>} />
+                        <Route path="/news" element={<IsolatedPage><NewsPage /></IsolatedPage>} />
+                        <Route path="/stories" element={<IsolatedPage><StoriesPage /></IsolatedPage>} />
+                        <Route path="/register" element={<IsolatedPage><RegisterPage /></IsolatedPage>} />
+                        <Route path="/contact" element={<IsolatedPage><ContactPage /></IsolatedPage>} />
+                    </Route>
 
-                <Route path="/login" element={<IsolatedPage><GuestRoute><LoginPage /></GuestRoute></IsolatedPage>} />
-                <Route path="/forgot-password" element={<IsolatedPage><GuestRoute><ForgotPasswordPage /></GuestRoute></IsolatedPage>} />
-                <Route path="/reset-password" element={<IsolatedPage><GuestRoute><ResetPasswordPage /></GuestRoute></IsolatedPage>} />
-                <Route path="/verify-email" element={<IsolatedPage><ProtectedRoute><VerifyEmailPage /></ProtectedRoute></IsolatedPage>} />
+                    <Route path="/login" element={<IsolatedPage><GuestRoute><LoginPage /></GuestRoute></IsolatedPage>} />
+                    <Route path="/forgot-password" element={<IsolatedPage><GuestRoute><ForgotPasswordPage /></GuestRoute></IsolatedPage>} />
+                    <Route path="/reset-password" element={<IsolatedPage><GuestRoute><ResetPasswordPage /></GuestRoute></IsolatedPage>} />
+                    <Route path="/verify-email" element={<IsolatedPage><ProtectedRoute><VerifyEmailPage /></ProtectedRoute></IsolatedPage>} />
 
-                <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
-                    <Route index element={<IsolatedPage><DashboardRouter /></IsolatedPage>} />
-                    <Route path=":section" element={<IsolatedPage><DashboardRouter /></IsolatedPage>} />
-                </Route>
+                    <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
+                        <Route index element={<IsolatedPage><DashboardRouter /></IsolatedPage>} />
+                        <Route path=":section" element={<IsolatedPage><DashboardRouter /></IsolatedPage>} />
+                    </Route>
 
-                <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+            </Suspense>
         </>
     );
 }
