@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import FallbackImage from '../../components/FallbackImage';
 
 const TABS = [
     { key: 'overview', label: 'Overview' },
@@ -96,7 +97,7 @@ export default function OfficerProfileModal({ officer, onClose, onEdit, onManage
                             <div className="flex flex-col gap-6 md:flex-row">
                                 <div className="w-full md:w-64 flex-shrink-0">
                                     {pd.profile_picture ? (
-                                        <img src={pd.profile_picture} alt="Profile" className="w-full h-64 rounded-lg shadow-lg object-cover border-4 border-cyan-100" />
+                                        <FallbackImage src={pd.profile_picture} alt="Profile" kind="avatar" className="w-full h-64 rounded-lg shadow-lg object-cover border-4 border-cyan-100" />
                                     ) : (
                                         <div className="w-full h-64 rounded-lg shadow-lg bg-gradient-to-br from-cyan-100 to-emerald-100 flex items-center justify-center border-4 border-cyan-100">
                                             <svg className="w-32 h-32 text-cyan-600" fill="currentColor" viewBox="0 0 20 20">
@@ -160,7 +161,7 @@ export default function OfficerProfileModal({ officer, onClose, onEdit, onManage
                                 <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">Profile Photo</h4>
                                 {pd.profile_picture ? (
                                     <div className="flex items-center gap-4">
-                                        <img src={pd.profile_picture} alt="Profile photo" className="w-32 h-32 rounded-full object-cover border-2 border-gray-200 shadow-sm" />
+                                    <FallbackImage src={pd.profile_picture} alt="Profile photo" kind="avatar" className="w-32 h-32 rounded-full object-cover border-2 border-gray-200 shadow-sm" />
                                         <div>
                                             <p className="text-sm text-gray-600">Profile photo on file</p>
                                             <a href={pd.profile_picture} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800">

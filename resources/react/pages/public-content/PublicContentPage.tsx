@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import FallbackImage from '../../components/FallbackImage';
 import { useToast } from '../../contexts/ToastContext';
 import SettingsTabHeader from '../settings/SettingsTabHeader';
 
@@ -40,6 +41,54 @@ function cardImageSrc(image: string): string | null {
     if (!image) return null;
     if (/^https?:\/\//i.test(image)) return image;
     return '/' + image.replace(/^\/+/, '');
+}
+
+function ImageUploadField({ value, uploadKey, disabled, onUploaded }: {
+    value: string;
+    uploadKey: string;
+    disabled: boolean;
+    onUploaded: (url: string) => void;
+}) {
+    const [isUploading, setIsUploading] = useState(false);
+    const { addToast } = useToast();
+    const preview = cardImageSrc(value);
+
+    const upload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const payload = new FormData();
+        payload.append('key', uploadKey);
+        payload.append('image', file);
+        setIsUploading(true);
+
+        try {
+            const { data } = await api.post('/api/public-content/images', payload);
+            onUploaded(data.image_url);
+            addToast('Image uploaded and published.', 'success');
+        } catch (error: any) {
+            addToast(error.response?.data?.message || 'Image upload failed.', 'error');
+        } finally {
+            setIsUploading(false);
+            event.target.value = '';
+        }
+    };
+
+    return (
+        <div className="space-y-3">
+            {preview ? (
+                <FallbackImage src={preview} alt="Current page image preview" className="h-48 w-full max-w-xl rounded-xl border border-gray-200 object-cover" />
+            ) : (
+                <div className="flex h-48 w-full max-w-xl items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50 text-sm text-gray-500">No image selected</div>
+            )}
+            <label className={`relative inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-within:ring-2 focus-within:ring-emerald-500 focus-within:ring-offset-2 ${disabled || isUploading ? 'pointer-events-none opacity-60' : ''}`}>
+                <i className={`fas ${isUploading ? 'fa-spinner fa-spin' : 'fa-upload'}`} aria-hidden="true"></i>
+                {isUploading ? 'Uploading...' : 'Choose image'}
+                <input type="file" accept="image/jpeg,image/png,image/webp" disabled={disabled || isUploading} onChange={upload} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label="Choose image file" />
+            </label>
+            <p className="text-xs text-gray-500">JPG, PNG, or WebP. Maximum file size: 5 MB. Uploads publish immediately.</p>
+        </div>
+    );
 }
 
 export default function PublicContentPage() {
@@ -174,7 +223,17 @@ export default function PublicContentPage() {
                                             {(group.fields || []).map((field: any) => (
                                                 <div key={field.path} className={`${(field.columnSpan ?? 1) === 2 ? 'lg:col-span-2' : ''} ${field.hidden ? 'hidden' : ''}`}>
                                                     <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">{field.label}</label>
-                                                    {(field.control || 'text') === 'toggle' || field.storage === 'boolean' ? (
+                                                    {field.control === 'image' ? (
+                                                        <ImageUploadField
+                                                            value={sectionValue(field.path)}
+                                                            uploadKey={field.upload_key}
+                                                            disabled={!canManage}
+                                                            onUploaded={value => {
+                                                                setSectionValue(field.path, value);
+                                                                queryClient.invalidateQueries({ queryKey: ['public-content'] });
+                                                            }}
+                                                        />
+                                                    ) : (field.control || 'text') === 'toggle' || field.storage === 'boolean' ? (
                                                         <Switch
                                                             checked={sectionValue(field.path) === true || sectionValue(field.path) === '1'}
                                                             disabled={!canManage}
@@ -310,7 +369,7 @@ function CardsEditor({ meta, cards, isVisible, canManage, onToggle, onField, onA
                                     <div className="grid gap-5 xl:grid-cols-[200px_minmax(0,1fr)]">
                                         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
                                             {imageSrc ? (
-                                                <img src={imageSrc} alt={displayName} className="h-52 w-full object-cover" loading="lazy" decoding="async" />
+                                                <FallbackImage src={imageSrc} alt={displayName} className="h-52 w-full object-cover" />
                                             ) : (
                                                 <div className="flex h-52 items-center justify-center bg-gradient-to-br from-slate-700 to-emerald-700">
                                                     <i className="fas fa-user text-5xl text-white/60"></i>

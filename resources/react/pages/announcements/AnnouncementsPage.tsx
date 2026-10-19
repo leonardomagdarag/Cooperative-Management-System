@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement, Announcement } from '../../api/announcements';
 import DatePicker from '../../components/DatePicker';
+import FallbackImage from '../../components/FallbackImage';
 import { useToast } from '../../contexts/ToastContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
 import { validate, announcementSchema, type FieldErrors } from '../../lib/validation';
@@ -134,7 +135,7 @@ export default function AnnouncementsPage() {
                             </div>
                         </div>
                         <div className="p-6">
-                            {viewing.image_url && <img src={viewing.image_url} alt="" className="mb-4 w-full rounded-lg object-cover" />}
+                            <FallbackImage src={viewing.image_url} alt="" className="mb-4 w-full rounded-lg object-cover" />
                             <div className="prose prose-sm text-gray-600 whitespace-pre-wrap">{viewing.content}</div>
                             <div className="mt-4 flex items-center gap-4 text-xs text-gray-400">
                                 <span>By {viewing.creator_name}</span>

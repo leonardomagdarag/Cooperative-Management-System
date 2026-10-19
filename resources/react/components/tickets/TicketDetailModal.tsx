@@ -372,10 +372,11 @@ export default function TicketDetailModal({
                                                             className="group/att relative rounded-lg overflow-hidden border border-black/10 bg-black/5 hover:opacity-90 transition-all text-left"
                                                             title="Click to view full image"
                                                         >
-                                                            <img
+                                                            <FallbackImage
                                                                 src={att.url}
                                                                 alt={att.file_name}
                                                                 className="h-20 w-24 object-cover"
+                                                                kind="document"
                                                             />
                                                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/att:opacity-100 flex items-center justify-center text-white text-xs transition-opacity">
                                                                 <i className="fas fa-search-plus text-sm mr-1"></i> Zoom
@@ -503,3 +504,4 @@ export default function TicketDetailModal({
         </>
     );
 }
+import FallbackImage from '../FallbackImage';

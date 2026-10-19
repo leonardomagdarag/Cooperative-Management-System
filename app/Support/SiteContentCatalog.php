@@ -22,6 +22,14 @@ class SiteContentCatalog
                         'title' => 'Hero',
                         'fields' => [
                             [
+                                'path' => 'hero_image',
+                                'label' => 'Hero image',
+                                'description' => 'Background image shown on the public home page.',
+                                'control' => 'image',
+                                'upload_key' => 'home.hero_image',
+                                'default' => '/images/hero_banner.jpg',
+                            ],
+                            [
                                 'path' => 'hero_subtitle',
                                 'label' => 'Hero subtitle',
                                 'description' => 'Landing page subtitle shown below the cooperative name.',
@@ -91,6 +99,14 @@ class SiteContentCatalog
                         'title' => 'Overview',
                         'fields' => [
                             [
+                                'path' => 'about_image',
+                                'label' => 'About Us image',
+                                'description' => 'Image displayed beside the cooperative history on the About Us page.',
+                                'control' => 'image',
+                                'upload_key' => 'about.about_image',
+                                'default' => '/images/hero_banner.jpg',
+                            ],
+                            [
                                 'path' => 'about1',
                                 'label' => 'About paragraph 1',
                                 'description' => 'Primary introductory description.',
@@ -152,6 +168,25 @@ class SiteContentCatalog
                             ['path' => 'values.3.description', 'label' => 'Value 4 description', 'description' => 'Fourth value supporting description.'],
                             ['path' => 'values.4.title', 'label' => 'Value 5 title', 'description' => 'Fifth value title.'],
                             ['path' => 'values.4.description', 'label' => 'Value 5 description', 'description' => 'Fifth value supporting description.'],
+                        ],
+                    ],
+                ],
+            ],
+            'login' => [
+                'label' => 'Login',
+                'description' => 'Choose the image shown behind the sign-in form.',
+                'groups' => [
+                    [
+                        'title' => 'Background',
+                        'fields' => [
+                            [
+                                'path' => 'login_image',
+                                'label' => 'Login page image',
+                                'description' => 'Background image displayed behind the login form.',
+                                'control' => 'image',
+                                'upload_key' => 'login.login_image',
+                                'default' => '/images/hero_banner.jpg',
+                            ],
                         ],
                     ],
                 ],
@@ -521,6 +556,7 @@ class SiteContentCatalog
         return [
             'home' => [
                 'hero_subtitle' => 'Homing Strength in members through financial excellence and community partnership',
+                'hero_image' => '/images/hero_banner.jpg',
                 'stats_visible' => true,
                 'stats_use_cooperative' => false,
                 'founding_year' => '2016',
@@ -530,6 +566,7 @@ class SiteContentCatalog
                 'service_done' => '10k+',
             ],
             'about' => [
+                'about_image' => '/images/hero_banner.jpg',
                 'about1' => 'Services and community support. Our mission is to provide accessible and affordable financial solutions that help our members achieve their goals.',
                 'about2' => "Founded with a vision to strengthen ottlers Credit Cooperative is dedicated to empowering our members through financial sur community, we've been serving our members with integrity, innovation, and unwavering commitment to their financial well-being.",
                 'history' => 'Founded in 2016, Settlers Credit Cooperative (previously known as Southville 7 Credit Cooperative) has grown from a small group of community members into a trusted financial organization serving hundreds of members. <br><br> Over the years, we have expanded our services and strengthened our commitment to member satisfaction and community development. Our journey reflects our dedication to financial excellence and community empowerment. ',
@@ -542,6 +579,9 @@ class SiteContentCatalog
                     ['title' => 'Innovation', 'description' => 'Continuous improvement'],
                     ['title' => 'Collaboration', 'description' => 'Strength in unity'],
                 ],
+            ],
+            'login' => [
+                'login_image' => '/images/hero_banner.jpg',
             ],
             'board' => [
                 'is_visible' => true,

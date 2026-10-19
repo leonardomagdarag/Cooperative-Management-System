@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getProfile, updateProfile, type ProfileData } from '../../api/profile';
 import EmailChangeVerification from '../../components/EmailChangeVerification';
+import FallbackImage from '../../components/FallbackImage';
 import DatePicker from '../../components/DatePicker';
 import { useToast } from '../../contexts/ToastContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
@@ -129,7 +130,7 @@ export default function ProfilePage() {
                             onClick={() => setEditModal('photo')}
                         >
                             {personal_data?.profile_picture ? (
-                                <img src={personal_data.profile_picture} alt="Profile" className="h-full w-full object-cover group-hover:opacity-75 transition-opacity" />
+                                <FallbackImage src={personal_data.profile_picture} alt="Profile" kind="avatar" className="h-full w-full object-cover group-hover:opacity-75 transition-opacity" />
                             ) : (
                                 <div className="h-full w-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-2xl font-bold text-white group-hover:opacity-90 transition-opacity">
                                     {personal_data?.first_name?.charAt(0)}{personal_data?.last_name?.charAt(0)}

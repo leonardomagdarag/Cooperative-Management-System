@@ -75,7 +75,7 @@ export default function NewsPage() {
                                     <div key={a.id} className="public-card public-card-hover overflow-hidden md:flex cursor-pointer" onClick={() => setSelected(a)}>
                                         <div className={`md:w-1/4 h-48 md:h-auto shrink-0 relative overflow-hidden flex items-center justify-center ${bannerBg}`}>
                                             {a.image_url ? (
-                                                <img src={a.image_url} alt={a.title} className="w-full h-full object-cover" />
+                                                <FallbackImage src={a.image_url} alt={a.title} className="w-full h-full object-cover" />
                                             ) : (
                                                 <i className={`fas fa-${iconMap[category] || 'bullhorn'} text-5xl text-white opacity-30`}></i>
                                             )}
@@ -137,7 +137,7 @@ export default function NewsPage() {
                                                 <div key={e.id} className="public-card public-card-hover overflow-hidden flex flex-col">
                                                     <div className={`h-48 shrink-0 relative overflow-hidden ${e.image_url ? 'bg-gray-200' : bg}`}>
                                                         {e.image_url ? (
-                                                            <img src={e.image_url} alt={e.title} className="w-full h-full object-cover" />
+                                                            <FallbackImage src={e.image_url} alt={e.title} className="w-full h-full object-cover" />
                                                         ) : (
                                                             <div className="absolute inset-0 flex items-center justify-center">
                                                                 <i className={`fas fa-${categoryIcons[e.category] || 'calendar-alt'} text-7xl text-white opacity-20`}></i>
@@ -179,7 +179,7 @@ export default function NewsPage() {
                                             <div key={e.id} className="public-card public-card-hover overflow-hidden opacity-90 flex flex-col">
                                                 <div className={`h-48 shrink-0 relative overflow-hidden ${e.image_url ? 'bg-gray-300' : 'bg-gray-400'}`}>
                                                     {e.image_url ? (
-                                                        <img src={e.image_url} alt={e.title} className="w-full h-full object-cover opacity-80" />
+                                                        <FallbackImage src={e.image_url} alt={e.title} className="w-full h-full object-cover opacity-80" />
                                                     ) : (
                                                         <div className="absolute inset-0 flex items-center justify-center">
                                                             <i className={`fas fa-${categoryIcons[e.category] || 'calendar-check'} text-7xl text-white opacity-20`}></i>
@@ -226,7 +226,7 @@ export default function NewsPage() {
                             <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">{selected.type}</span>
                             <button onClick={() => setSelected(null)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><i className="fas fa-times"></i></button>
                         </div>
-                        {selected.image_url && <img src={selected.image_url} alt="" className="mb-4 w-full rounded-xl object-cover" />}
+                        <FallbackImage src={selected.image_url} alt="" className="mb-4 w-full rounded-xl object-cover" />
                         <h2 className="mb-3 text-2xl font-bold text-slate-900">{selected.title}</h2>
                         <p className="mb-2 text-sm text-slate-400">By {selected.creator_name} · {new Date(selected.created_at).toLocaleDateString()}</p>
                         <p className="whitespace-pre-wrap leading-relaxed text-slate-600">{selected.content}</p>
@@ -236,3 +236,4 @@ export default function NewsPage() {
         </div>
     );
 }
+import FallbackImage from '../../components/FallbackImage';

@@ -14,6 +14,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 class PublicContentController extends Controller
 {
@@ -96,6 +98,69 @@ class PublicContentController extends Controller
         return response()->json(['message' => 'Public content updated successfully.']);
     }
 
+    public function uploadImage(Request $request): JsonResponse
+    {
+        abort_unless(Auth::user()?->hasRole('admin'), 403);
+
+        $validated = $request->validate([
+            'key' => ['required', 'string', 'in:home.hero_image,about.about_image,login.login_image'],
+            'image' => ['required', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ], [
+            'image.mimes' => 'Upload a JPG, PNG, or WebP image.',
+            'image.max' => 'The image must be 5 MB or smaller.',
+        ]);
+
+        [$section, $key] = explode('.', $validated['key'], 2);
+        $path = $request->file('image')->store('public-pages', 'public');
+
+        if (! $path) {
+            return response()->json(['message' => 'The image could not be stored. Please try again.'], 500);
+        }
+
+        $imageUrl = '/storage/'.$path;
+        $oldValue = SiteContent::query()
+            ->where('section', $section)
+            ->where('key', $key)
+            ->value('value');
+        $field = collect(SiteContentCatalog::fieldDefinitions())->first(
+            fn (array $field) => $field['section'] === $section && $field['path'] === $key
+        );
+
+        try {
+            DB::transaction(fn () => SiteContent::query()->updateOrCreate(
+                ['section' => $section, 'key' => $key],
+                [
+                    'value' => $imageUrl,
+                    'type' => 'text',
+                    'description' => $field['description'] ?? $field['label'],
+                    'order' => (int) $field['order'],
+                    'is_active' => true,
+                ]
+            ));
+        } catch (Throwable $exception) {
+            Storage::disk('public')->delete($path);
+            throw $exception;
+        }
+
+        if (is_string($oldValue) && preg_match('#^/storage/public-pages/[A-Za-z0-9._-]+$#', $oldValue)) {
+            Storage::disk('public')->delete(substr($oldValue, strlen('/storage/')));
+        }
+
+        app(AuditLogService::class)->log(
+            'public_content.image_updated',
+            'A public page image was uploaded.',
+            'public_content',
+            null,
+            Auth::user(),
+            ['section' => $section, 'key' => $key],
+        );
+
+        return response()->json([
+            'message' => 'Public page image uploaded successfully.',
+            'image_url' => $imageUrl,
+        ]);
+    }
+
     private function rules(): array
     {
         $rules = [];
@@ -106,6 +171,7 @@ class PublicContentController extends Controller
             $control = $field['control'] ?? 'text';
 
             $rules[$ruleKey] = match (true) {
+                $control === 'image' => ['nullable', 'string', 'max:2048', 'regex:#^/(?:images/hero_banner\\.jpg|storage/public-pages/[A-Za-z0-9._-]+)$#'],
                 $storage === 'boolean' => 'boolean',
                 $storage === 'json' => 'nullable|array',
                 $control === 'email' => 'nullable|email|max:255',

@@ -251,7 +251,7 @@ export default function NewTicketModal({ open, onClose, onSuccess }: NewTicketMo
                         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
                             {previews.map((src, index) => (
                                 <div key={index} className="relative group rounded-lg overflow-hidden border border-gray-200 bg-gray-100 aspect-square shadow-xs">
-                                    <img src={src} alt={`Preview ${index + 1}`} className="w-full h-full object-cover" />
+                                    <FallbackImage src={src} alt={`Preview ${index + 1}`} className="w-full h-full object-cover" kind="document" />
                                     <button
                                         type="button"
                                         onClick={() => removeFile(index)}
@@ -279,3 +279,4 @@ export default function NewTicketModal({ open, onClose, onSuccess }: NewTicketMo
         </Modal>
     );
 }
+import FallbackImage from '../FallbackImage';

@@ -239,6 +239,7 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     Route::put('/roles/{role}/rename', [RolePermissionController::class, 'renameRole']);
 
     // Public Content (admin edit only — read is public)
+    Route::post('/public-content/images', [PublicContentController::class, 'uploadImage']);
     Route::put('/public-content', [PublicContentController::class, 'save']);
 
     // Branches / Offices

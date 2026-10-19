@@ -20,12 +20,13 @@ export default function HomePage() {
 function HeroSection() {
     const { data: pc } = useQuery({ queryKey: ['public-content'], queryFn: () => api.get('/api/public-content') });
     const home = pc?.data?.form?.home || {};
+    const heroImage = home.hero_image || '/images/hero_banner.jpg';
     const registrationEnabled = pc?.data?.availability?.registration?.global !== false && pc?.data?.availability?.registration?.member !== false;
 
     return (
         <section className="relative flex min-h-[100vh] items-center overflow-hidden pt-24">
             <div className="absolute inset-0 z-0">
-                <img src="/images/hero_banner.jpg" alt="Hero background" className="w-full h-full object-cover" fetchPriority="high" />
+                <FallbackImage src={heroImage} alt="Hero background" className="w-full h-full object-cover" />
                 <div className="absolute inset-0 public-gradient-hero"></div>
             </div>
 
@@ -213,7 +214,7 @@ function NewsSection() {
                             <Link key={a.id} to="/news" className="group public-card public-card-hover overflow-hidden flex flex-col">
                                 <div className={`h-40 w-full shrink-0 overflow-hidden relative ${bannerBg}`}>
                                     {a.image_url ? (
-                                        <img src={a.image_url} alt={a.title} className="w-full h-full object-cover" />
+                                        <FallbackImage src={a.image_url} alt={a.title} className="w-full h-full object-cover" />
                                     ) : (
                                         <div className="absolute inset-0 flex items-center justify-center">
                                             <i className={`fas fa-${iconMap[category] || 'bullhorn'} text-5xl text-white opacity-20`}></i>
@@ -368,3 +369,4 @@ function ContactSection() {
         </section>
     );
 }
+import FallbackImage from '../../components/FallbackImage';

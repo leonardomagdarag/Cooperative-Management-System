@@ -10,6 +10,18 @@ export default function DashboardLayout() {
     const mainRef = useRef<HTMLElement>(null);
 
     useEffect(() => {
+        const htmlOverflow = document.documentElement.style.overflow;
+        const bodyOverflow = document.body.style.overflow;
+        document.documentElement.style.overflow = 'hidden';
+        document.body.style.overflow = 'hidden';
+
+        return () => {
+            document.documentElement.style.overflow = htmlOverflow;
+            document.body.style.overflow = bodyOverflow;
+        };
+    }, []);
+
+    useEffect(() => {
         if (mainRef.current) {
             mainRef.current.scrollTop = 0;
             mainRef.current.scrollLeft = 0;
@@ -17,7 +29,7 @@ export default function DashboardLayout() {
     }, [location.pathname]);
 
     return (
-        <div className="dashboard-shell flex h-screen overflow-hidden bg-gray-50">
+        <div className="dashboard-shell fixed inset-0 flex overflow-hidden bg-gray-50">
             {isMobileOpen && (
                 <div
                     className="fixed inset-0 z-30 bg-black/50 lg:hidden"

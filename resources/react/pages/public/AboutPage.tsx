@@ -5,6 +5,7 @@ import { api } from '../../api/client';
 export default function AboutPage() {
     const { data } = useQuery({ queryKey: ['public-content'], queryFn: () => api.get('/api/public-content') });
     const about = data?.data?.form?.about || {};
+    const aboutImage = about.about_image || '/images/hero_banner.jpg';
     const board = data?.data?.form?.board || {};
     const officers = data?.data?.form?.officers || {};
     const memberStatements = data?.data?.form?.member_statements || {};
@@ -52,7 +53,7 @@ export default function AboutPage() {
                         </div>
                         <div className="relative">
                             <div className="absolute -inset-4 rounded-3xl bg-emerald-50 -z-10"></div>
-                            <img src="/images/hero_banner.jpg" alt="Cooperative member Pictures" className="w-full h-80 md:h-[420px] object-cover rounded-2xl shadow-xl" loading="lazy" decoding="async" />
+                            <FallbackImage src={aboutImage} alt="Cooperative member Pictures" className="w-full h-80 md:h-[420px] object-cover rounded-2xl shadow-xl" />
                         </div>
                     </div>
                 </div>
@@ -130,7 +131,7 @@ export default function AboutPage() {
                                     <div className="relative">
                                         {card.image_url ? (
                                             <>
-                                                <img src={card.image_url} alt={card.name} className="h-64 w-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" decoding="async" />
+                                                <FallbackImage src={card.image_url} alt={card.name} className="h-64 w-full object-cover transition-transform duration-500 group-hover:scale-105" />
                                                 <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/50 to-transparent"></div>
                                             </>
                                         ) : (
@@ -169,7 +170,7 @@ export default function AboutPage() {
                                     <div className="relative">
                                         {card.image_url ? (
                                             <>
-                                                <img src={card.image_url} alt={card.name} className="h-64 w-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" decoding="async" />
+                                                <FallbackImage src={card.image_url} alt={card.name} className="h-64 w-full object-cover transition-transform duration-500 group-hover:scale-105" />
                                                 <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/50 to-transparent"></div>
                                             </>
                                         ) : (
@@ -242,3 +243,4 @@ export default function AboutPage() {
         </div>
     );
 }
+import FallbackImage from '../../components/FallbackImage';

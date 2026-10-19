@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import FallbackImage from '../../components/FallbackImage';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import TurnstileWidget from '../../components/TurnstileWidget';
@@ -30,6 +31,7 @@ export default function LoginPage() {
         queryKey: ['public-content'],
         queryFn: () => api.get('/api/public-content'),
     });
+    const loginImage = pc?.data?.form?.login?.login_image || '/images/hero_banner.jpg';
     const registrationEnabled = pc?.data?.availability?.registration?.global !== false && pc?.data?.availability?.registration?.member !== false;
     const loginEnabled = pc?.data?.availability?.login?.global !== false;
 
@@ -60,7 +62,7 @@ export default function LoginPage() {
     return (
         <div className="public-page relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-16 sm:py-12">
             <div className="absolute inset-0" aria-hidden="true">
-                <img src="/images/hero_banner.jpg" alt="" className="h-full w-full object-cover" />
+                <FallbackImage src={loginImage} alt="" className="h-full w-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-br from-emerald-950/85 via-teal-900/65 to-slate-950/70" />
                 <div className="absolute -left-24 -top-24 h-96 w-96 rounded-full bg-emerald-400/20 blur-3xl" />
                 <div className="absolute -bottom-32 -right-20 h-[28rem] w-[28rem] rounded-full bg-cyan-400/20 blur-3xl" />
@@ -73,7 +75,7 @@ export default function LoginPage() {
                 <div className="p-5 sm:p-6">
                     <div className="text-center mb-4">
                         <div className="mb-3 flex justify-center">
-                            <img src="/images/Logo.png" alt="Settlers Logo" className="h-12 w-12 rounded-full object-cover shadow-sm" />
+                            <FallbackImage src="/images/Logo.png" alt="Settlers Logo" className="h-12 w-12 rounded-full object-cover shadow-sm" />
                         </div>
                         <h1 className="text-2xl font-extrabold text-slate-900 mb-1">Welcome back</h1>
                         <p className="text-sm text-slate-600">
