@@ -234,6 +234,16 @@ export default function Header() {
                     <NotificationDropdown />
 
                     <button
+                        type="button"
+                        onClick={() => navigate('/dashboard/settings?tab=help-support', { state: { tab: 'help-support' } })}
+                        className="flex items-center justify-center w-10 h-10 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors cursor-pointer"
+                        title="Help & Support"
+                        aria-label="Help and Support"
+                    >
+                        <i className="fas fa-question-circle text-base"></i>
+                    </button>
+
+                    <button
                         onClick={() => navigate('/dashboard/profile')}
                         className="flex items-center gap-2 sm:gap-3 pl-2 sm:pl-4 border-l border-gray-200 hover:opacity-80 transition-opacity cursor-pointer"
                         title="View my profile"

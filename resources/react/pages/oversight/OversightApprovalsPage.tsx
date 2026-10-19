@@ -83,12 +83,18 @@ export default function OversightApprovalsPage() {
     });
     const decide = useMutation({
         mutationFn: async () => api.post(`/api/oversight/requests/${selected!.id}/decision`, { decision, otp_code: otp, note }),
-        onSuccess: () => {
-            addToast(decision === 'approve' ? 'Request approved.' : decision === 'reject' ? 'Request rejected.' : 'Execution outcome recorded for reconciliation.', 'success');
+        onSuccess: (res: any) => {
+            const defaultMsg = decision === 'approve' ? 'Request approved.' : decision === 'reject' ? 'Request rejected.' : 'Execution outcome recorded for reconciliation.';
+            addToast(res?.data?.message || defaultMsg, 'success', 6000);
             setSelected(null); setOtp(''); setNote(''); setOtpSent(false);
             client.invalidateQueries({ queryKey: ['oversight-requests'] });
             client.invalidateQueries({ queryKey: ['members'] });
             client.invalidateQueries({ queryKey: ['expenses'] });
+            client.invalidateQueries({ queryKey: ['ledger'] });
+            client.invalidateQueries({ queryKey: ['roles'] });
+            client.invalidateQueries({ queryKey: ['service-availability'] });
+            client.invalidateQueries({ queryKey: ['financial-settings'] });
+            client.invalidateQueries({ queryKey: ['backups'] });
         },
         onError: (error: any) => addToast(error.response?.data?.message || 'Could not decide this request.', 'error'),
     });

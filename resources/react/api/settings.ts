@@ -13,8 +13,20 @@ export async function sendPasswordOtp() {
     return api.post('/api/settings/password/send-otp');
 }
 
-export async function revokeDevices() {
-    return api.post('/api/settings/revoke-devices');
+export async function sendTrustedDeviceRevocationOtp(deviceId: number) {
+    return api.post(`/api/settings/trusted-devices/${deviceId}/revoke/send-otp`);
+}
+
+export async function revokeTrustedDevice(deviceId: number, otp_code: string) {
+    return api.post(`/api/settings/trusted-devices/${deviceId}/revoke`, { otp_code });
+}
+
+export async function sendRevokeAllDevicesOtp() {
+    return api.post('/api/settings/revoke-devices/send-otp');
+}
+
+export async function revokeDevices(otp_code: string) {
+    return api.post('/api/settings/revoke-devices', { otp_code });
 }
 
 export async function deactivateAccount(data: { current_password: string }) {

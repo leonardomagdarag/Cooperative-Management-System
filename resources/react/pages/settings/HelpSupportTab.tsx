@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useLocation } from 'react-router';
+import { useLocation, useSearchParams } from 'react-router';
 import { getFaqs, getTickets, updateFaqs, type FaqCategory, type HelpContent, type TicketSummary } from '../../api/tickets';
 import NewTicketModal from '../../components/tickets/NewTicketModal';
 import TicketDetailModal from '../../components/tickets/TicketDetailModal';
@@ -15,9 +15,34 @@ export default function HelpSupportTab() {
     const { addToast } = useToast();
     const queryClient = useQueryClient();
     const location = useLocation();
-    const initialSubTab = (location.state as { subTab?: 'faqs' | 'tickets' } | null)?.subTab || 'faqs';
+    const [searchParams, setSearchParams] = useSearchParams();
+
+    const subTabParam = searchParams.get('subTab');
+    const stateSubTab = (location.state as { subTab?: 'faqs' | 'tickets' } | null)?.subTab;
+    const initialSubTab = (subTabParam === 'faqs' || subTabParam === 'tickets')
+        ? subTabParam
+        : (stateSubTab === 'faqs' || stateSubTab === 'tickets')
+        ? stateSubTab
+        : 'faqs';
 
     const [activeSubTab, setActiveSubTab] = useState<'faqs' | 'tickets'>(initialSubTab);
+
+    const handleSubTabChange = (sub: 'faqs' | 'tickets') => {
+        setActiveSubTab(sub);
+        setSearchParams(prev => {
+            const next = new URLSearchParams(prev);
+            next.set('subTab', sub);
+            return next;
+        }, { replace: true });
+    };
+
+    useEffect(() => {
+        if (subTabParam === 'faqs' || subTabParam === 'tickets') {
+            if (activeSubTab !== subTabParam) {
+                setActiveSubTab(subTabParam);
+            }
+        }
+    }, [subTabParam]);
     const [ticketFilter, setTicketFilter] = useState<'active' | 'closed' | 'all'>('active');
 
     // FAQ state
@@ -133,7 +158,7 @@ export default function HelpSupportTab() {
                             if (isEditing) {
                                 setIsEditing(false);
                             } else {
-                                setActiveSubTab('faqs');
+                                handleSubTabChange('faqs');
                                 setIsEditing(true);
                             }
                         }}
@@ -148,7 +173,7 @@ export default function HelpSupportTab() {
             <div className="flex items-center gap-2 border-b border-gray-200">
                 <button
                     type="button"
-                    onClick={() => setActiveSubTab('faqs')}
+                    onClick={() => handleSubTabChange('faqs')}
                     className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
                         activeSubTab === 'faqs'
                             ? 'border-emerald-600 text-emerald-600'
@@ -162,7 +187,7 @@ export default function HelpSupportTab() {
                 <button
                     type="button"
                     onClick={() => {
-                        setActiveSubTab('tickets');
+                        handleSubTabChange('tickets');
                         setIsEditing(false);
                     }}
                     className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
@@ -267,7 +292,7 @@ export default function HelpSupportTab() {
                                 variant="primary"
                                 size="sm"
                                 onClick={() => {
-                                    setActiveSubTab('tickets');
+                                    handleSubTabChange('tickets');
                                     setIsNewTicketOpen(true);
                                 }}
                                 className="mt-4"
@@ -354,7 +379,7 @@ export default function HelpSupportTab() {
                             variant="primary"
                             size="md"
                             onClick={() => {
-                                setActiveSubTab('tickets');
+                                handleSubTabChange('tickets');
                                 setIsNewTicketOpen(true);
                             }}
                             className="shrink-0"

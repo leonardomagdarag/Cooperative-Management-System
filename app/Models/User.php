@@ -282,6 +282,20 @@ class User extends Authenticatable implements MustVerifyEmail
         $query->delete();
     }
 
+    public function activateSession(string $sessionId): void
+    {
+        $this->forceFill(['current_session_id' => $sessionId])->save();
+    }
+
+    public function clearCurrentSession(?string $sessionId = null): void
+    {
+        $query = static::query()->whereKey($this->getKey());
+        if (filled($sessionId)) {
+            $query->where('current_session_id', $sessionId);
+        }
+        $query->update(['current_session_id' => null]);
+    }
+
     public function permissionOverrides()
     {
         return $this->hasMany(OfficerPermissionOverride::class);

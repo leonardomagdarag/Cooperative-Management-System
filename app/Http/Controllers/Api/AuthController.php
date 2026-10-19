@@ -130,7 +130,9 @@ class AuthController extends Controller
             ]);
         }
 
-        $this->securityOtpService->trustDevice($user, $fingerprint, $request->userAgent(), $request->ip());
+        $this->securityOtpService->trustDevice($user, $fingerprint, $request->userAgent(), $request->ip(), $request->session()->getId());
+        $user->activateSession($request->session()->getId());
+        $user->invalidateOtherSessions($request->session()->getId());
         if ($isNewDevice) {
             $this->notificationService->notifyNewDeviceLogin($user, $request->ip(), $otpBypassed ? 'bypassed' : 'trusted');
         }
@@ -150,6 +152,8 @@ class AuthController extends Controller
     {
         $user = $request->user('web');
         $this->auditLogService->log('auth.logout', 'User logged out.', 'auth', $user, $user);
+
+        $user?->clearCurrentSession($request->session()->getId());
 
         Auth::guard('web')->logout();
         $request->session()->invalidate();

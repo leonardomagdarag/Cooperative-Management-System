@@ -176,8 +176,11 @@ class LoginController extends Controller
                 $user,
                 $fingerprint,
                 $request->userAgent(),
-                $ipAddress
+                $ipAddress,
+                $request->session()->getId()
             );
+            $user->activateSession($request->session()->getId());
+            $user->invalidateOtherSessions($request->session()->getId());
 
             if ($isNewDevice) {
                 $this->notificationService->notifyNewDeviceLogin($user, $ipAddress, $otpBypassed ? 'bypassed' : 'trusted');
@@ -290,6 +293,7 @@ class LoginController extends Controller
                 $user,
                 $user
             );
+            $user->clearCurrentSession($request->session()->getId());
         }
 
         Auth::logout();

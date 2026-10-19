@@ -56,12 +56,18 @@ class OtpChallengeController extends Controller
                 $user,
                 $fingerprint,
                 $request->userAgent(),
-                $request->ip()
+                $request->ip(),
+                $request->session()->getId()
             );
 
             if ($purpose === $this->securityOtpService->newDevicePurpose()) {
                 $this->notificationService->notifyNewDeviceLogin($user, $request->ip(), 'verified');
             }
+        }
+
+        if ($purpose === $this->securityOtpService->newDevicePurpose()) {
+            $user->activateSession($request->session()->getId());
+            $user->invalidateOtherSessions($request->session()->getId());
         }
 
         $request->session()->forget([

@@ -52,7 +52,9 @@ export default function ExpensesPage() {
             reset();
             setShowModal(false);
             setEditing(null);
-            addToast(res?.data?.message || (editing ? 'Expense updated' : 'Expense recorded'), 'success');
+            const isPending = res?.data?.status === 'pending' || res?.status === 202;
+            const message = res?.data?.message || (editing ? (isPending ? 'Expense edit is awaiting chairman approval.' : 'Expense updated') : 'Expense recorded');
+            addToast(message, isPending ? 'info' : 'success', isPending ? 8000 : undefined);
         },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed', 'error'),
     });
@@ -67,7 +69,9 @@ export default function ExpensesPage() {
         mutationFn: (id: number) => api.delete(`/api/expenses/${id}`),
         onSuccess: (res: any) => {
             queryClient.invalidateQueries({ queryKey: ['expenses'] });
-            addToast(res?.data?.message || 'Expense deletion is awaiting chairman approval.', 'success');
+            const isPending = res?.data?.status === 'pending' || res?.status === 202;
+            const message = res?.data?.message || (isPending ? 'Expense deletion is awaiting chairman approval.' : 'Expense deleted');
+            addToast(message, isPending ? 'info' : 'success', isPending ? 8000 : undefined);
         },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed to submit delete request', 'error'),
     });

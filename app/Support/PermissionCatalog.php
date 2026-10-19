@@ -167,9 +167,8 @@ class PermissionCatalog
             'admin' => [
                 'dashboard.view',
                 'announcements.view',
-                'reports.view',
-                'reports.export',
-                'reports.audit',
+                'announcements.create',
+                'announcements.update',
                 'officers.view',
                 'officers.create',
                 'officers.update',

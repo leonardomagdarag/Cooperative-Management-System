@@ -126,7 +126,10 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     // Settings
     Route::put('/settings/password', [SettingsController::class, 'changePassword']);
     Route::post('/settings/password/send-otp', [SettingsController::class, 'sendPasswordChangeOtp']);
-    Route::post('/settings/revoke-devices', [SettingsController::class, 'revokeDevices']);
+    Route::post('/settings/trusted-devices/{device}/revoke/send-otp', [SettingsController::class, 'sendTrustedDeviceRevocationOtp'])->middleware('throttle:3,1');
+    Route::post('/settings/trusted-devices/{device}/revoke', [SettingsController::class, 'revokeTrustedDevice'])->middleware('throttle:5,1');
+    Route::post('/settings/revoke-devices/send-otp', [SettingsController::class, 'sendRevokeAllDevicesOtp'])->middleware('throttle:3,1');
+    Route::post('/settings/revoke-devices', [SettingsController::class, 'revokeDevices'])->middleware('throttle:5,1');
     Route::post('/settings/deactivate-account', [SettingsController::class, 'deactivateAccount']);
     Route::delete('/settings/account', [SettingsController::class, 'deleteAccount']);
     Route::get('/settings/sms', [SettingsController::class, 'getSmsSettings']);

@@ -87,8 +87,11 @@ export interface ProfileData {
         id: number;
         device_label: string;
         last_ip_address: string;
-        last_used_at: string;
+        user_agent: string | null;
+        last_used_at: string | null;
+        trusted_until: string | null;
         is_active: boolean;
+        is_current: boolean;
     }>;
 }
 

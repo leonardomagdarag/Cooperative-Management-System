@@ -166,7 +166,9 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
         },
         onSuccess: (response) => {
             queryClient.invalidateQueries({ queryKey: ['members'] });
-            addToast(response.data?.message || (isEdit ? 'Member updated' : 'Member created'), 'success');
+            const isPending = response.data?.status === 'pending' || response?.status === 202;
+            const message = response.data?.message || (isEdit ? (isPending ? 'Profile updated and awaiting chairman approval.' : 'Member updated') : 'Member created');
+            addToast(message, isPending ? 'info' : 'success', isPending ? 8000 : undefined);
             onClose();
         },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed to save', 'error'),

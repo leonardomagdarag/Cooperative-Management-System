@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Routes, Route, Navigate, useParams, useNavigate } from 'react-router';
+import { Routes, Route, Navigate, useParams, useNavigate, useLocation } from 'react-router';
 import { useAuth } from './contexts/AuthContext';
 import DashboardLayout from './layouts/DashboardLayout';
 import PublicLayout from './layouts/PublicLayout';
@@ -44,6 +44,13 @@ import LoadingScreen from './components/LoadingScreen';
 import EmptyState from './components/ui/EmptyState';
 import ToastContainer from './components/ui/ToastContainer';
 import ScrollToTop from './components/ScrollToTop';
+import ErrorBoundary from './components/ErrorBoundary';
+
+function IsolatedPage({ children }: { children: React.ReactNode }) {
+    const location = useLocation();
+
+    return <ErrorBoundary resetKey={location.pathname}>{children}</ErrorBoundary>;
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const { user, isLoading } = useAuth();
@@ -72,7 +79,10 @@ function PermissionGate({ permission, role, multiPermission, children }: { permi
 
 function RedirectToSettingsTab({ tab, subTab }: { tab: string; subTab?: string }) {
     const navigate = useNavigate();
-    useEffect(() => { navigate('/dashboard/settings', { replace: true, state: { tab, subTab } }); }, [navigate, tab, subTab]);
+    useEffect(() => {
+        const query = subTab ? `?tab=${tab}&subTab=${subTab}` : `?tab=${tab}`;
+        navigate(`/dashboard/settings${query}`, { replace: true, state: { tab, subTab } });
+    }, [navigate, tab, subTab]);
     return null;
 }
 
@@ -188,22 +198,22 @@ export default function App() {
             <ToastContainer />
             <Routes>
                 <Route element={<PublicLayout />}>
-                    <Route path="/" element={<HomePage />} />
-                    <Route path="/about" element={<AboutPage />} />
-                    <Route path="/news" element={<NewsPage />} />
-                    <Route path="/stories" element={<StoriesPage />} />
-                    <Route path="/register" element={<RegisterPage />} />
-                    <Route path="/contact" element={<ContactPage />} />
+                    <Route path="/" element={<IsolatedPage><HomePage /></IsolatedPage>} />
+                    <Route path="/about" element={<IsolatedPage><AboutPage /></IsolatedPage>} />
+                    <Route path="/news" element={<IsolatedPage><NewsPage /></IsolatedPage>} />
+                    <Route path="/stories" element={<IsolatedPage><StoriesPage /></IsolatedPage>} />
+                    <Route path="/register" element={<IsolatedPage><RegisterPage /></IsolatedPage>} />
+                    <Route path="/contact" element={<IsolatedPage><ContactPage /></IsolatedPage>} />
                 </Route>
 
-                <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
-                <Route path="/forgot-password" element={<GuestRoute><ForgotPasswordPage /></GuestRoute>} />
-                <Route path="/reset-password" element={<GuestRoute><ResetPasswordPage /></GuestRoute>} />
-                <Route path="/verify-email" element={<ProtectedRoute><VerifyEmailPage /></ProtectedRoute>} />
+                <Route path="/login" element={<IsolatedPage><GuestRoute><LoginPage /></GuestRoute></IsolatedPage>} />
+                <Route path="/forgot-password" element={<IsolatedPage><GuestRoute><ForgotPasswordPage /></GuestRoute></IsolatedPage>} />
+                <Route path="/reset-password" element={<IsolatedPage><GuestRoute><ResetPasswordPage /></GuestRoute></IsolatedPage>} />
+                <Route path="/verify-email" element={<IsolatedPage><ProtectedRoute><VerifyEmailPage /></ProtectedRoute></IsolatedPage>} />
 
                 <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
-                    <Route index element={<DashboardRouter />} />
-                    <Route path=":section" element={<DashboardRouter />} />
+                    <Route index element={<IsolatedPage><DashboardRouter /></IsolatedPage>} />
+                    <Route path=":section" element={<IsolatedPage><DashboardRouter /></IsolatedPage>} />
                 </Route>
 
                 <Route path="*" element={<Navigate to="/" replace />} />

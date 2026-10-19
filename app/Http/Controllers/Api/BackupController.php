@@ -92,9 +92,15 @@ class BackupController extends Controller
             'hourly_enabled' => 'required|boolean',
         ]);
 
-        $this->backupService->updateHourlyEnabled((bool) $validated['hourly_enabled']);
+        $pending = app(CountersignService::class)->request('backup.hourly.update', [
+            'enabled' => (bool) $validated['hourly_enabled'],
+        ], Auth::user());
 
-        return response()->json(['message' => 'Backup settings updated.']);
+        return response()->json([
+            'message' => 'Hourly backup setting change is awaiting chairman countersign approval.',
+            'request_id' => $pending->id,
+            'status' => 'pending',
+        ], 202);
     }
 
     public function run(Request $request, string $tier): JsonResponse
@@ -230,20 +236,32 @@ class BackupController extends Controller
         abort_unless(Auth::user()?->can('backups.restore'), 403);
 
         $validated = $request->validate([
-            'tier' => 'required|in:hourly,daily,offsite',
-            'path' => 'required|string|max:500',
+            'tier' => 'required_without:archive|nullable|in:hourly,daily,offsite',
+            'path' => 'required_without:archive|nullable|string|max:500',
+            'archive' => 'required_without:tier|nullable|file|mimes:zip|max:512000',
             'scope' => 'required|in:db,files,both',
             'current_password' => ['required', 'current_password'],
             'confirmation' => 'required|string|in:RESTORE',
-            'archive_password' => 'nullable|string',
+            'archive_password' => 'required|string',
         ]);
+
+        abort_if(
+            $request->hasFile('archive') && ($request->filled('tier') || $request->filled('path')),
+            422,
+            'Choose either a stored backup or an uploaded archive.'
+        );
+
+        $tier = $validated['tier'] ?? BackupService::TIER_HOURLY;
+        $path = $request->file('archive')
+            ? $this->backupService->importRestoreArchive($request->file('archive'), Auth::user())
+            : $validated['path'];
 
         $countersign = app(CountersignService::class);
         $pending = $countersign->request('backup.restore', [
-            'tier' => $validated['tier'],
-            'path' => $validated['path'],
+            'tier' => $tier,
+            'path' => $path,
             'scope' => $validated['scope'],
-            'archive_password' => $validated['archive_password'] ?? '',
+            'archive_password' => $validated['archive_password'],
         ], Auth::user());
 
         return response()->json([

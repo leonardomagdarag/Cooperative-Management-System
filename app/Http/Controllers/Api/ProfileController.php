@@ -26,7 +26,7 @@ use Spatie\Activitylog\Models\Activity;
 
 class ProfileController extends Controller
 {
-    public function show(): JsonResponse
+    public function show(Request $request): JsonResponse
     {
         $user = Auth::user()->load([
             'personalData.address',
@@ -36,7 +36,7 @@ class ProfileController extends Controller
             'accounts',
             'loans.payments',
             'beneficiaries',
-            'trustedDevices',
+            'trustedDevices' => fn ($query) => $query->orderByDesc('last_used_at'),
         ]);
 
         $accounts = $user->accounts;
@@ -194,8 +194,11 @@ class ProfileController extends Controller
                 'id' => $d->id,
                 'device_label' => $d->device_label,
                 'last_ip_address' => $d->last_ip_address,
+                'user_agent' => $d->user_agent,
                 'last_used_at' => $d->last_used_at?->toISOString(),
+                'trusted_until' => $d->trusted_until?->toISOString(),
                 'is_active' => $d->is_active,
+                'is_current' => $d->session_id !== null && hash_equals($request->session()->getId(), $d->session_id),
             ]),
         ]);
     }

@@ -103,7 +103,11 @@ export default function FinancialAccountsPage() {
         onSuccess: (response) => {
             queryClient.invalidateQueries({ queryKey: ['financial-settings'] });
             const requestId = response.data?.request_id;
-            addToast(requestId ? `Financial settings change queued for countersign approval (Request #${requestId}).` : 'Financial settings updated.', 'success');
+            const isPending = response.data?.status === 'pending' || response?.status === 202;
+            const message = requestId
+                ? `Financial settings change queued for countersign approval (Request #${requestId}).`
+                : (response.data?.message || 'Financial settings updated.');
+            addToast(message, isPending ? 'info' : 'success', isPending ? 8000 : undefined);
         },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed to update financial settings.', 'error'),
     });
@@ -112,7 +116,9 @@ export default function FinancialAccountsPage() {
         mutationFn: (accountType: FinancialAccountType) => runInterestNow({ account_type: accountType }),
         onSuccess: (response, accountType) => {
             const requestId = response.data?.request_id;
-            addToast(`Interest run for ${accountType === 'share-capital' ? 'share capital' : 'savings'} queued for countersign approval${requestId ? ` (Request #${requestId})` : ''}.`, 'success');
+            const isPending = response.data?.status === 'pending' || response?.status === 202;
+            const message = response.data?.message || `Interest run for ${accountType === 'share-capital' ? 'share capital' : 'savings'} queued for countersign approval${requestId ? ` (Request #${requestId})` : ''}.`;
+            addToast(message, isPending ? 'info' : 'success', isPending ? 8000 : undefined);
         },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed to request an interest run.', 'error'),
     });

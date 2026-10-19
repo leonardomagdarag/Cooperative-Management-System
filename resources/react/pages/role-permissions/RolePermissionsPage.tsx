@@ -94,10 +94,12 @@ export default function RolePermissionsPage() {
                 return next;
             });
             setShowSaveModal(false);
-            if (response.data?.status === 'pending') {
-                addToast(`Permission changes for ${roleLabel(variables.role)} were submitted and are awaiting approval. They will take effect after approval.`, 'info');
+            const isPending = response.data?.status === 'pending' || response?.status === 202;
+            if (isPending) {
+                const message = response.data?.message || `Permission changes for ${roleLabel(variables.role)} were submitted and are awaiting approval. They will take effect after approval.`;
+                addToast(message, 'info', 8000);
             } else {
-                addToast(`Role permissions updated for ${roleLabel(variables.role)}.`, 'success');
+                addToast(response.data?.message || `Role permissions updated for ${roleLabel(variables.role)}.`, 'success');
             }
         },
         onError: () => {
@@ -115,9 +117,11 @@ export default function RolePermissionsPage() {
             setNewRoleTemplate('');
             setRoleErrors({});
             reset();
-            addToast(response.data?.status === 'pending'
+            const isPending = response.data?.status === 'pending' || response?.status === 202;
+            const message = response.data?.message || (isPending
                 ? 'Role creation is awaiting chairman approval.'
-                : 'Role created', response.data?.status === 'pending' ? 'info' : 'success');
+                : 'Role created');
+            addToast(message, isPending ? 'info' : 'success', isPending ? 8000 : undefined);
         },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed', 'error'),
     });
@@ -126,11 +130,12 @@ export default function RolePermissionsPage() {
         mutationFn: (role: string) => api.delete(`/api/roles/${role}`),
         onSuccess: (res) => {
             queryClient.invalidateQueries({ queryKey: ['roles'] });
-            if (res.data?.status === 'pending') {
-                setShowDeleteRoleModal(false);
-                addToast('Role deletion is awaiting chairman approval.', 'info');
+            const isPending = res.data?.status === 'pending' || res?.status === 202;
+            setShowDeleteRoleModal(false);
+            if (isPending) {
+                const message = res.data?.message || 'Role deletion is awaiting chairman approval.';
+                addToast(message, 'info', 8000);
             } else {
-                setShowDeleteRoleModal(false);
                 setSelectedRole('');
                 addToast(res.data?.message || 'Role deleted', 'success');
             }
@@ -144,11 +149,13 @@ export default function RolePermissionsPage() {
         mutationFn: ({ role, name }: { role: string; name: string }) => api.put(`/api/roles/${role}/rename`, { name }),
         onSuccess: (res) => {
             queryClient.invalidateQueries({ queryKey: ['roles'] });
-            if (res.data?.status === 'pending') {
-                addToast('Role rename is awaiting chairman approval.', 'info');
+            const isPending = res.data?.status === 'pending' || res?.status === 202;
+            if (isPending) {
+                const message = res.data?.message || 'Role rename is awaiting chairman approval.';
+                addToast(message, 'info', 8000);
             } else {
                 setSelectedRole(res.data.role);
-                addToast('Role renamed', 'success');
+                addToast(res.data?.message || 'Role renamed', 'success');
             }
         },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed to rename role', 'error'),

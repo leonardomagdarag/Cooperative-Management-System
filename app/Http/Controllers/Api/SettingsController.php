@@ -17,6 +17,7 @@ use App\Support\PersonPasswordPolicy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -79,13 +80,91 @@ class SettingsController extends Controller
         ]);
     }
 
-    public function revokeDevices(): JsonResponse
+    public function sendTrustedDeviceRevocationOtp(int $deviceId): JsonResponse
     {
         $user = Auth::user();
+        $device = TrustedDevice::query()->where('user_id', $user->id)->findOrFail($deviceId);
+        abort_unless($device->is_active, 422, 'This trusted device has already been revoked.');
+        $securityOtp = app(SecurityOtpService::class);
+        $context = ['device_id' => $device->id];
+        $issued = $securityOtp->issueChallenge($user, $securityOtp->trustedDeviceRevocationPurpose(), $context);
+        $securityOtp->sendOtpMail($user, $securityOtp->trustedDeviceRevocationPurpose(), $issued['otp_code']);
+
+        return response()->json([
+            'message' => 'A verification code was sent to your email.',
+            'expires_at' => $issued['challenge']->expires_at->toISOString(),
+        ]);
+    }
+
+    public function revokeTrustedDevice(Request $request, int $deviceId): JsonResponse
+    {
+        $validated = $request->validate(['otp_code' => ['required', 'string', 'digits:6']]);
+        $user = Auth::user();
+        $device = TrustedDevice::query()->where('user_id', $user->id)->findOrFail($deviceId);
+        abort_unless($device->is_active, 422, 'This trusted device has already been revoked.');
+        $securityOtp = app(SecurityOtpService::class);
+
+        if (! $securityOtp->verifyChallenge(
+            $user,
+            $securityOtp->trustedDeviceRevocationPurpose(),
+            $validated['otp_code'],
+            ['device_id' => $device->id]
+        )) {
+            return response()->json(['message' => 'Invalid or expired verification code.'], 422);
+        }
+
+        $sessionId = $device->session_id;
+        $device->forceFill(['is_active' => false, 'session_id' => null])->save();
+
+        if ($sessionId && config('session.driver') === 'database') {
+            $connection = config('session.connection') ?: config('database.default');
+            DB::connection($connection)->table(config('session.table', 'sessions'))->where('id', $sessionId)->delete();
+        }
+
+        app(AuditLogService::class)->log(
+            'member.security.device-revoked',
+            'Member revoked a trusted device from settings.',
+            'auth',
+            $device,
+            $user,
+            ['device_id' => $device->id]
+        );
+
+        $revokedCurrentSession = $sessionId !== null && hash_equals($request->session()->getId(), $sessionId);
+        if ($revokedCurrentSession) {
+            $user->clearCurrentSession($request->session()->getId());
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
+
+        return response()->json([
+            'message' => 'Trusted device revoked.',
+            'current_session_revoked' => $revokedCurrentSession,
+        ]);
+    }
+
+    public function revokeDevices(Request $request): JsonResponse
+    {
+        $validated = $request->validate(['otp_code' => ['required', 'string', 'digits:6']]);
+        $user = Auth::user();
+        $securityOtp = app(SecurityOtpService::class);
+
+        if (! $securityOtp->verifyChallenge(
+            $user,
+            $securityOtp->trustedDeviceRevocationPurpose(),
+            $validated['otp_code'],
+            ['device_id' => 'all']
+        )) {
+            return response()->json(['message' => 'Invalid or expired verification code.'], 422);
+        }
 
         TrustedDevice::query()
             ->where('user_id', $user->id)
-            ->update(['is_active' => false]);
+            ->update(['is_active' => false, 'session_id' => null]);
+
+        $user->invalidateOtherSessions();
+        $user->clearCurrentSession();
 
         $user->remember_token = Str::random(60);
         $user->save();
@@ -98,7 +177,28 @@ class SettingsController extends Controller
             $user,
         );
 
+        Auth::logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
         return response()->json(['message' => 'Trusted devices revoked.']);
+    }
+
+    public function sendRevokeAllDevicesOtp(): JsonResponse
+    {
+        $user = Auth::user();
+        $securityOtp = app(SecurityOtpService::class);
+        $issued = $securityOtp->issueChallenge(
+            $user,
+            $securityOtp->trustedDeviceRevocationPurpose(),
+            ['device_id' => 'all']
+        );
+        $securityOtp->sendOtpMail($user, $securityOtp->trustedDeviceRevocationPurpose(), $issued['otp_code']);
+
+        return response()->json([
+            'message' => 'A verification code was sent to your email.',
+            'expires_at' => $issued['challenge']->expires_at->toISOString(),
+        ]);
     }
 
     public function deactivateAccount(Request $request): JsonResponse
@@ -110,6 +210,7 @@ class SettingsController extends Controller
         $user = Auth::user();
         $user->account_status = 'inactive';
         $user->save();
+        $user->clearCurrentSession($request->session()->getId());
 
         TrustedDevice::query()
             ->where('user_id', $user->id)

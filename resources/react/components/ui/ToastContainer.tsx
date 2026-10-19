@@ -7,7 +7,7 @@ export default function ToastContainer() {
 
     return (
         <div
-            className="fixed bottom-4 right-4 z-50 flex max-w-[calc(100vw-2rem)] flex-col gap-2"
+            className="fixed top-4 right-4 z-[9999] flex max-w-[calc(100vw-2rem)] flex-col gap-2 pointer-events-none"
             aria-live="polite"
             aria-label="Notifications"
         >
@@ -15,7 +15,7 @@ export default function ToastContainer() {
                 <div
                     key={toast.id}
                     role="status"
-                    className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium shadow-xl transition-all animate__animated animate__fadeInUp animate__faster ${
+                    className={`pointer-events-auto flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-sm font-medium shadow-xl transition-all animate__animated animate__fadeInDown animate__faster ${
                         toast.type === 'success'
                             ? 'bg-emerald-600 text-white'
                             : toast.type === 'error'

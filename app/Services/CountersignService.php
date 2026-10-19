@@ -381,6 +381,12 @@ class CountersignService
 
                 return ['status' => 'queued', 'run_id' => $run->id];
 
+            case 'backup.hourly.update':
+                abort_unless(is_bool($payload['enabled'] ?? null), 422, 'Hourly backup state is invalid.');
+                app(BackupService::class)->updateHourlyEnabled($payload['enabled']);
+
+                return ['status' => 'success', 'enabled' => $payload['enabled']];
+
             case 'backup.delete':
                 app(BackupService::class)->delete(
                     $payload['tier'],

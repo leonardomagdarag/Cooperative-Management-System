@@ -65,7 +65,12 @@ export default function MembersPage() {
 
     const deleteMutation = useMutation({
         mutationFn: (id: number) => api.delete(`/api/members/${id}`),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['members'] }); addToast('Member deleted', 'success'); },
+        onSuccess: (res: any) => {
+            queryClient.invalidateQueries({ queryKey: ['members'] });
+            const isPending = res?.data?.status === 'pending' || res?.status === 202;
+            const message = res?.data?.message || (isPending ? 'Deletion requested and requires countersign approval.' : 'Member deleted');
+            addToast(message, isPending ? 'info' : 'success', isPending ? 8000 : undefined);
+        },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed', 'error'),
     });
 
@@ -83,13 +88,23 @@ export default function MembersPage() {
 
     const restoreMutation = useMutation({
         mutationFn: (id: number) => api.post(`/api/members/${id}/restore`),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['members'] }); addToast('Member restored', 'success'); },
+        onSuccess: (res: any) => {
+            queryClient.invalidateQueries({ queryKey: ['members'] });
+            const isPending = res?.data?.status === 'pending' || res?.status === 202;
+            const message = res?.data?.message || (isPending ? 'Restore requested and requires countersign approval.' : 'Member restored');
+            addToast(message, isPending ? 'info' : 'success', isPending ? 8000 : undefined);
+        },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed to restore member', 'error'),
     });
 
     const forceDeleteMutation = useMutation({
         mutationFn: (id: number) => api.delete(`/api/members/${id}/force`),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['members'] }); addToast('Member permanently deleted', 'success'); },
+        onSuccess: (res: any) => {
+            queryClient.invalidateQueries({ queryKey: ['members'] });
+            const isPending = res?.data?.status === 'pending' || res?.status === 202;
+            const message = res?.data?.message || (isPending ? 'Permanent deletion requested and requires countersign approval.' : 'Member permanently deleted');
+            addToast(message, isPending ? 'info' : 'success', isPending ? 8000 : undefined);
+        },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed to permanently delete member', 'error'),
     });
 

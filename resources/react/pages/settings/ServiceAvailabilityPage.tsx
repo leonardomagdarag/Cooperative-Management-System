@@ -76,11 +76,13 @@ export default function ServiceAvailabilityPage() {
             setShowConfirm(false);
             setNotifyAffected(false);
             const requestId = response.data?.request_id;
+            const isPending = response.data?.status === 'pending' || response?.status === 202;
             addToast(
                 requestId
                     ? `Service availability update requested and queued for countersign approval (Request #${requestId}).`
-                    : 'Service availability updated successfully.',
-                'success',
+                    : (response.data?.message || 'Service availability updated successfully.'),
+                isPending ? 'info' : 'success',
+                isPending ? 8000 : undefined,
             );
         },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed to update service availability.', 'error'),

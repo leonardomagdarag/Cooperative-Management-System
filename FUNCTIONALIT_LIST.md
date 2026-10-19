@@ -139,7 +139,7 @@ If a service is disabled, `ServiceMaintenanceModal` is shown.
 
 ### 3.10 Settings → My Account (`/dashboard/settings`, tab `account`, always visible)
 - Change password with OTP: `POST /api/settings/password/send-otp` → `PUT /api/settings/password` (current + new + confirm + 6-digit code, strength meter, revokes trusted devices).
-- Trusted devices: `POST /api/settings/revoke-devices` — invalidate all sessions/devices.
+- Trusted devices: My Account lists browser/device label, last IP, last login, and trust status; device revocation and revoke-all require email OTP. A user account has one active login session, and a successful login on another browser/device invalidates the prior session after any required new-device OTP is verified.
 - Deactivate account: `POST /api/settings/deactivate-account` (password confirm, sets `account_status=inactive`, logs out).
 - Delete account: `DELETE /api/settings/account` (backend-supported).
 - Privacy notice (Data Privacy Act).
@@ -170,8 +170,8 @@ All officers are `is_officer=true` with `dashboard.view, settings.view, notifica
 ## 5. Officer — Role-Specific Functionalities
 
 ### 5.1 Administrator (`admin`) — System administration
-The admin preset is limited to system configuration, backups, security logs, troubleshooting tickets, and officer account administration. It does not grant routine member, loan, service, transaction, branch, or financial account workflows; those remain with operational officers and the manager. Admin can still access explicitly admin-owned configuration such as roles, backups, public content, loan products, service availability, SMS/email, and payment gateway settings.
-- **Monitoring:** dashboard, reports, audit reports, and logs (view/export).
+The admin preset is limited to system configuration, backups, security logs, troubleshooting tickets, officer account administration, and creating or updating announcements. It does not grant routine member, loan, service, transaction, branch, or financial account workflows; those remain with operational officers and the manager. Admin can still access explicitly admin-owned configuration such as roles, backups, public content, loan products, service availability, SMS/email, and payment gateway settings.
+- **Monitoring:** dashboard and security logs (view/export).
 - **Troubleshooting:** tickets and support configuration.
 - **System administration:** officer account and permission management, settings, backups, and oversight requests.
 - **Roles & Permissions** (`Settings → Roles & Permissions`, `/dashboard/role-permissions`, `role:admin` only):
@@ -252,7 +252,7 @@ do not treat old secretary-specific behavior as a separate role contract.
 | Password change (OTP-gated) | Settings → My Account, `sendPasswordOtp` + `changePassword` |
 | Email change (OTP-gated) | Profile → `sendEmailChangeOtp` + `EmailChangeVerification` |
 | Withdrawal approval OTP | `POST /api/services/transactions/{transaction}/send-otp` (threshold `security_withdrawal_otp_threshold`, default ₱2,000) |
-| Trusted devices / revoke | `POST /api/settings/revoke-devices`, `TrustedDevice` (90-day default) |
+| Trusted devices / revoke | `GET /api/profile` device data; OTP-protected `POST /api/settings/trusted-devices/{device}/revoke*` and `/api/settings/revoke-devices*`; `TrustedDevice` (90-day default) |
 | Deactivate / delete own account | `POST /api/settings/deactivate-account`, `DELETE /api/settings/account` |
 | Turnstile / throttling | `Turnstile` service, `throttle:*` on auth/contact/OTP routes |
 

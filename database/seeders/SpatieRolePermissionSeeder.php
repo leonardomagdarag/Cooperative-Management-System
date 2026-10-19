@@ -84,18 +84,6 @@ class SpatieRolePermissionSeeder extends Seeder
             }
         }
 
-        // Retire the former broad admin defaults while preserving any unrelated
-        // custom permissions an operator deliberately added to the role.
-        $formerAdminOperationalPermissions = [
-            'members.view', 'members.view-loans', 'members.view-ids', 'members.view-activity', 'members.view-financial',
-            'services.view', 'loans.view', 'transactions.view', 'transactions.view-all', 'transactions.export',
-            'deposits.view', 'withdrawals.view', 'announcements.create', 'announcements.update', 'announcements.delete',
-            'reports.financial', 'branches.view', 'branches.create', 'branches.update', 'branches.delete', 'branches.bypass',
-            'oversight.view', 'collections.view-all', 'collections.workflow.update', 'financial_settings.view',
-            'financial_settings.update', 'interest.view', 'interest.run',
-        ];
-        Role::findByName('admin', 'web')->revokePermissionTo($formerAdminOperationalPermissions);
-
         // Branch-level staff are scoped by their assigned branch. Main-branch
         // officers receive their cross-branch access from BranchScope, while
         // manager roles retain the explicit bypass permission.

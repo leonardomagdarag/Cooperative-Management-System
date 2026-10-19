@@ -44,6 +44,11 @@ class SecurityOtpService
         return 'password_change';
     }
 
+    public function trustedDeviceRevocationPurpose(): string
+    {
+        return 'trusted_device_revocation';
+    }
+
     public function emailChangePurpose(): string
     {
         return 'email_change';
@@ -74,7 +79,7 @@ class SecurityOtpService
             ->exists();
     }
 
-    public function trustDevice(User $user, string $fingerprint, ?string $userAgent, ?string $ipAddress): void
+    public function trustDevice(User $user, string $fingerprint, ?string $userAgent, ?string $ipAddress, ?string $sessionId = null): void
     {
         $days = (int) SystemSetting::get('security_trusted_device_days', 90);
         $trustedUntil = now()->addDays(max(1, $days));
@@ -91,6 +96,7 @@ class SecurityOtpService
                 'trusted_until' => $trustedUntil,
                 'last_used_at' => now(),
                 'is_active' => true,
+                'session_id' => $sessionId,
             ]
         );
 
@@ -320,6 +326,7 @@ class SecurityOtpService
             'new_device_login' => 'new device login',
             'withdrawal_approval' => 'withdrawal approval',
             'password_change' => 'password change',
+            'trusted_device_revocation' => 'trusted device revocation',
             'email_change' => 'email address change',
             'member_password_change' => 'password reset',
             'officer_phone_verify', 'phone_verification' => 'phone verification',
@@ -368,23 +375,24 @@ class SecurityOtpService
             return 'Unknown device';
         }
 
-        if (str_contains($userAgent, 'Windows')) {
-            return 'Windows browser';
-        }
+        $os = match (true) {
+            str_contains($userAgent, 'Windows') => 'Windows',
+            str_contains($userAgent, 'Android') => 'Android',
+            str_contains($userAgent, 'iPhone'), str_contains($userAgent, 'iPad') => 'iOS',
+            str_contains($userAgent, 'Macintosh') => 'macOS',
+            str_contains($userAgent, 'Linux') => 'Linux',
+            default => 'Unknown system',
+        };
+        $browser = match (true) {
+            str_contains($userAgent, 'Edg/') => 'Edge',
+            str_contains($userAgent, 'OPR/') => 'Opera',
+            str_contains($userAgent, 'Firefox/') => 'Firefox',
+            str_contains($userAgent, 'Chrome/') && ! str_contains($userAgent, 'Edg/') => 'Chrome',
+            str_contains($userAgent, 'Safari/') && ! str_contains($userAgent, 'Chrome/') => 'Safari',
+            default => 'Browser',
+        };
 
-        if (str_contains($userAgent, 'Macintosh')) {
-            return 'Mac browser';
-        }
-
-        if (str_contains($userAgent, 'Android')) {
-            return 'Android device';
-        }
-
-        if (str_contains($userAgent, 'iPhone') || str_contains($userAgent, 'iPad')) {
-            return 'iOS device';
-        }
-
-        return 'Web browser';
+        return "{$browser} on {$os}";
     }
 
     private function notifyOtpIssued(User $user, string $purpose): void
@@ -395,6 +403,7 @@ class SecurityOtpService
             'new_device_login' => 'A one-time verification code was sent to your email to verify a new device login.',
             'withdrawal_approval' => 'A one-time verification code was sent to your email to approve a high-value withdrawal.',
             'password_change' => 'A one-time verification code was sent to your email to confirm changing your password.',
+            'trusted_device_revocation' => 'A one-time verification code was sent to your email to confirm revoking a trusted device.',
             'email_change' => 'A one-time verification code was sent to your current email to confirm changing it.',
             'member_password_change' => 'A one-time verification code was sent to your email to confirm changing a member password.',
             default => 'A one-time verification code was sent to your email.',

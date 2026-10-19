@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\CheckServiceAvailability;
 use App\Http\Middleware\EnsureOtpVerified;
+use App\Http\Middleware\EnsureCurrentSession;
 use App\Http\Middleware\EnsureProfileCompleted;
 use App\Http\Middleware\EnsurePublicLoginEnabled;
 use App\Http\Middleware\EnsurePublicMemberRegistrationEnabled;
@@ -22,6 +23,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        $middleware->web(append: [EnsureCurrentSession::class]);
+
         $middleware->trustProxies(
             at: '*',
             headers: Request::HEADER_X_FORWARDED_FOR

@@ -8,6 +8,9 @@ use App\Models\Announcement;
 use App\Models\BackupRun;
 use App\Models\Expense;
 use App\Models\Loan;
+use App\Models\PrivilegedActionRequest;
+use App\Models\SystemSetting;
+use App\Models\Ticket;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Support\BranchScope;
@@ -17,6 +20,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Spatie\Activitylog\Models\Activity;
 
 class DashboardController extends Controller
 {
@@ -241,6 +245,33 @@ class DashboardController extends Controller
                 ) ?: 'Unknown',
             ]);
 
+        $totalLoansCount = BranchScope::applyToLoans(Loan::query(), Auth::user(), $branchId)->count();
+        $totalLoanAmountDisbursed = (float) BranchScope::applyToLoans(Loan::query()->whereIn('loan_status', ['approved', 'active', 'paid', 'paid_off', 'paid-off']), Auth::user(), $branchId)->sum('loan_amount');
+
+        $pendingOversightCount = PrivilegedActionRequest::query()->where('status', 'pending')->count();
+        $pendingOversightRequests = PrivilegedActionRequest::query()
+            ->with('requestedBy.personalData')
+            ->where('status', 'pending')
+            ->latest()
+            ->take(5)
+            ->get()
+            ->map(fn ($r) => [
+                'id' => $r->id,
+                'action_type' => $r->action_type,
+                'status' => $r->status,
+                'requested_by' => trim(($r->requestedBy?->personalData?->first_name ?? '').' '.($r->requestedBy?->personalData?->last_name ?? '')) ?: ($r->requestedBy?->email ?? 'Officer'),
+                'created_at_diff' => $r->created_at?->diffForHumans(),
+                'created_at' => $r->created_at?->toISOString(),
+            ]);
+
+        $totalPendingApprovals = $pendingTransactionsCount + $pendingLoansCount + $pendingOversightCount;
+        $totalMemberFunds = $totalSavings + $totalShareCapital;
+
+        $backupStatus = $includeBackupStatus ? $this->buildBackupStatus() : null;
+        $telemetry = ($includeBackupStatus && (Auth::user()?->hasRole('admin') || Auth::user()?->primary_role === 'admin'))
+            ? $this->buildAdminSystemTelemetry($backupStatus ?? [])
+            : [];
+
         return response()->json([
             'greeting' => $this->greeting(),
             'period_label' => $start->format('M Y'),
@@ -252,8 +283,14 @@ class DashboardController extends Controller
             'savings_total' => $totalSavings,
             'total_share_capital' => $totalShareCapital,
             'share_capital_total' => $totalShareCapital,
+            'total_member_funds' => $totalMemberFunds,
+            'total_loans_count' => $totalLoansCount,
+            'total_loans_disbursed' => $totalLoanAmountDisbursed,
             'pending_transactions' => $pendingTransactionsCount,
             'pending_loans' => $pendingLoansCount,
+            'pending_oversight_approvals' => $pendingOversightCount,
+            'total_pending_approvals' => $totalPendingApprovals,
+            'pending_oversight_requests' => $pendingOversightRequests,
             'loans_active' => $activeLoansCount,
             'active_loans' => $activeLoansCount,
             'loans_outstanding' => $loanOutstanding,
@@ -269,8 +306,149 @@ class DashboardController extends Controller
             'pending_transactions_list' => $pendingTransactions,
             'recent_expenses' => $recentExpenses,
             'recent_announcements' => $recentAnnouncements,
-            ...($includeBackupStatus ? ['backup_status' => $this->buildBackupStatus()] : []),
+            ...($backupStatus !== null ? ['backup_status' => $backupStatus] : []),
+            ...$telemetry,
         ]);
+    }
+
+    // ─── Admin System Telemetry ────────────────────────────────
+
+    private function buildAdminSystemTelemetry(array $backupStatus): array
+    {
+        $dbOk = false;
+        $dbDriver = (string) config('database.default', 'mysql');
+        $dbName = (string) config("database.connections.{$dbDriver}.database", 'forge');
+        try {
+            DB::connection()->getPdo();
+            $dbOk = true;
+        } catch (\Throwable) {
+            $dbOk = false;
+        }
+
+        $services = [
+            'deposit' => (bool) SystemSetting::get('service_deposit_enabled', true),
+            'withdrawal' => (bool) SystemSetting::get('service_withdrawal_enabled', true),
+            'loan_application' => (bool) SystemSetting::get('service_loan_application_enabled', true),
+            'loan_payment' => (bool) SystemSetting::get('service_loan_payment_enabled', true),
+        ];
+        $allServicesOnline = ! in_array(false, $services, true);
+
+        $smsApiKey = (string) (SystemSetting::get('textbee_api_key') ?: config('services.textbee.api_key'));
+        $sms = [
+            'name' => 'TextBee SMS Gateway',
+            'enabled' => (bool) SystemSetting::get('sms_service_enabled', true),
+            'configured' => ! empty($smsApiKey),
+        ];
+
+        $paymongoSecret = (string) (SystemSetting::get('paymongo_secret_key') ?: config('paymongo.secret_key'));
+        $paymongo = [
+            'name' => 'PayMongo Payments',
+            'enabled' => (bool) SystemSetting::get('paymongo_enabled', false),
+            'mode' => (string) SystemSetting::get('paymongo_mode', 'sandbox'),
+            'configured' => ! empty($paymongoSecret),
+        ];
+
+        $email = [
+            'name' => 'System Mailer',
+            'mailer' => (string) config('mail.default', 'smtp'),
+            'from_address' => (string) config('mail.from.address', 'noreply@settlers.coop'),
+        ];
+
+        $officersBreakdown = User::query()
+            ->officerUsers()
+            ->get()
+            ->groupBy(fn ($u) => $u->primary_role ?: 'officer')
+            ->map->count()
+            ->all();
+
+        $recentLogs = Activity::query()
+            ->with('causer.personalData')
+            ->latest()
+            ->take(6)
+            ->get()
+            ->map(fn ($log) => [
+                'id' => $log->id,
+                'description' => $log->description,
+                'event' => $log->event,
+                'log_name' => $log->log_name,
+                'created_at_diff' => $log->created_at?->diffForHumans(),
+                'created_at_iso' => $log->created_at?->toISOString(),
+                'causer_name' => trim(($log->causer?->personalData?->first_name ?? '').' '.($log->causer?->personalData?->last_name ?? '')) ?: ($log->causer?->name ?: 'System'),
+            ]);
+
+        $openTicketsQuery = Ticket::query()->whereIn('status', ['open', 'pending', 'in_progress']);
+        $openTicketsCount = (clone $openTicketsQuery)->count();
+        $urgentTicketsCount = (clone $openTicketsQuery)->where('priority', 'urgent')->count();
+        $recentTickets = (clone $openTicketsQuery)
+            ->with(['user.personalData'])
+            ->latest()
+            ->take(5)
+            ->get()
+            ->map(fn ($t) => [
+                'id' => $t->id,
+                'ticket_number' => $t->ticket_number,
+                'subject' => $t->subject,
+                'category' => $t->category,
+                'priority' => $t->priority,
+                'status' => $t->status,
+                'created_at_diff' => $t->created_at?->diffForHumans(),
+                'user_name' => trim(($t->user?->personalData?->first_name ?? '').' '.($t->user?->personalData?->last_name ?? '')) ?: ($t->user?->name ?: 'Member'),
+            ]);
+
+        $pendingPrivilegedActionsCount = PrivilegedActionRequest::query()->where('status', 'pending')->count();
+
+        $hasFailedBackup = ($backupStatus['health'] ?? '') === 'attention';
+        $hasDisabledService = ! $allServicesOnline;
+        $isDown = app()->isDownForMaintenance() || ! $dbOk;
+
+        if ($isDown) {
+            $systemStatus = 'critical';
+        } elseif ($hasFailedBackup || $hasDisabledService || $urgentTicketsCount > 0) {
+            $systemStatus = 'attention';
+        } else {
+            $systemStatus = 'operational';
+        }
+
+        return [
+            'system_status' => $systemStatus,
+            'system_health' => [
+                'database' => [
+                    'status' => $dbOk ? 'healthy' : 'unhealthy',
+                    'driver' => $dbDriver,
+                    'name' => $dbName,
+                ],
+                'environment' => [
+                    'app_env' => (string) config('app.env'),
+                    'app_debug' => (bool) config('app.debug'),
+                    'php_version' => PHP_VERSION,
+                    'laravel_version' => app()->version(),
+                    'timezone' => (string) config('app.timezone'),
+                    'server_time' => now()->toISOString(),
+                ],
+                'maintenance' => [
+                    'active' => app()->isDownForMaintenance(),
+                    'public_login' => (bool) SystemSetting::get('public_login_enabled', true),
+                    'member_login' => (bool) SystemSetting::get('member_login_enabled', true),
+                    'officer_login' => (bool) SystemSetting::get('officer_login_enabled', true),
+                ],
+                'services' => $services,
+                'integrations' => [
+                    'sms' => $sms,
+                    'paymongo' => $paymongo,
+                    'mail' => $email,
+                ],
+            ],
+            'security_summary' => [
+                'officers_breakdown' => $officersBreakdown,
+                'recent_logs' => $recentLogs,
+                'pending_privileged_actions' => $pendingPrivilegedActionsCount,
+            ],
+            'operations_summary' => [
+                'open_tickets' => $openTicketsCount,
+                'urgent_tickets' => $urgentTicketsCount,
+                'recent_tickets' => $recentTickets,
+            ],
+        ];
     }
 
     // ─── Backup status ─────────────────────────────────────────

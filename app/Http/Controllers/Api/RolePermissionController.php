@@ -33,7 +33,7 @@ class RolePermissionController extends Controller
         $this->bootstrapPermissions();
 
         $editableRoles = Role::query()
-            ->whereNotIn('name', self::RESERVED_ROLES)
+            ->whereNotIn('name', array_values(array_diff(self::RESERVED_ROLES, ['admin'])))
             ->orderBy('name')
             ->pluck('name')
             ->values()
@@ -103,7 +103,7 @@ class RolePermissionController extends Controller
         ));
 
         abort_unless(Role::query()->where('name', $role)->where('guard_name', 'web')->exists(), 404, 'Role not found.');
-        abort_if(in_array($role, self::RESERVED_ROLES, true), 422, 'System roles cannot be edited here.');
+        abort_if(in_array($role, array_diff(self::RESERVED_ROLES, ['admin']), true), 422, 'System roles cannot be edited here.');
         $permissions = array_values(array_intersect(
             $allAllowed,
             array_unique(array_merge($validated['permissions'], $allLocked))

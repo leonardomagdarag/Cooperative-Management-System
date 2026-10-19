@@ -72,12 +72,14 @@ export default function OfficerFormModal({ officer, onClose }: { officer?: any; 
         },
         onSuccess: (response) => {
             queryClient.invalidateQueries({ queryKey: ['officers'] });
-            if (response.data?.status === 'pending') {
-                addToast(isEdit
+            const isPending = response.data?.status === 'pending' || response?.status === 202;
+            if (isPending) {
+                const message = response.data?.message || (isEdit
                     ? 'Profile saved. The role change is awaiting chairman approval; current access remains unchanged.'
-                    : 'Account created inactive. Role assignment is awaiting chairman approval.', 'info');
+                    : 'Account created inactive. Role assignment is awaiting chairman approval.');
+                addToast(message, 'info', 8000);
             } else {
-                addToast(isEdit ? 'Officer updated' : 'Officer created', 'success');
+                addToast(response.data?.message || (isEdit ? 'Officer updated' : 'Officer created'), 'success');
             }
             onClose();
         },

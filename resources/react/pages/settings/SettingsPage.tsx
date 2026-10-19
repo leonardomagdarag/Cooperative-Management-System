@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useLocation } from 'react-router';
-import { changePassword, revokeDevices, deactivateAccount, deleteAccount, sendPasswordOtp } from '../../api/settings';
+import { useLocation, useSearchParams } from 'react-router';
+import { changePassword, revokeDevices, revokeTrustedDevice, sendPasswordOtp, sendRevokeAllDevicesOtp, sendTrustedDeviceRevocationOtp, deactivateAccount, deleteAccount } from '../../api/settings';
 import { getProfile } from '../../api/profile';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
@@ -34,6 +34,7 @@ interface SettingsTab {
 export default function SettingsPage() {
     const { user } = useAuth();
     const location = useLocation();
+    const [searchParams, setSearchParams] = useSearchParams();
     const isMember = user?.primary_role === 'member';
     const isAdmin = user?.primary_role === 'admin';
     const canManageSettings = user?.permissions?.includes('settings.update') || isAdmin;
@@ -58,13 +59,84 @@ export default function SettingsPage() {
     ];
 
     const visibleTabs = tabs.filter(t => t.visible);
-    const initial = (location.state as { tab?: string } | null)?.tab;
-    const [activeTab, setActiveTab] = useState(visibleTabs.some(t => t.key === initial) ? initial! : 'account');
+
+    const resolveTab = (tabKey?: string | null) => {
+        if (tabKey && visibleTabs.some(t => t.key === tabKey)) {
+            return tabKey;
+        }
+        return null;
+    };
+
+    const isReload = typeof window !== 'undefined' &&
+        (window.performance?.getEntriesByType?.('navigation')?.[0] as PerformanceNavigationTiming | undefined)?.type === 'reload';
+
+    const sessionTab = typeof window !== 'undefined' ? sessionStorage.getItem('settings_active_tab') : null;
+
+    const initialTab =
+        resolveTab(searchParams.get('tab')) ||
+        resolveTab((location.state as { tab?: string } | null)?.tab) ||
+        (isReload ? resolveTab(sessionTab) : null) ||
+        (visibleTabs.some(t => t.key === 'account') ? 'account' : visibleTabs[0]?.key || 'account');
+
+    const [activeTab, setActiveTab] = useState(initialTab);
+    const activeTabRef = useRef<HTMLButtonElement | null>(null);
+
+    const handleTabChange = (key: string) => {
+        setActiveTab(key);
+        setSearchParams(prev => {
+            const next = new URLSearchParams(prev);
+            next.set('tab', key);
+            if (key !== 'help-support') {
+                next.delete('subTab');
+            }
+            return next;
+        }, { replace: true });
+        try {
+            sessionStorage.setItem('settings_active_tab', key);
+        } catch {
+            // ignore storage errors
+        }
+    };
+
+    // Keep URL searchParams and sessionStorage synced with active tab
+    useEffect(() => {
+        const currentParam = searchParams.get('tab');
+        if (currentParam !== activeTab) {
+            setSearchParams(prev => {
+                const next = new URLSearchParams(prev);
+                next.set('tab', activeTab);
+                return next;
+            }, { replace: true });
+        }
+        try {
+            sessionStorage.setItem('settings_active_tab', activeTab);
+        } catch {
+            // ignore storage errors
+        }
+    }, [activeTab]);
+
+    // Handle browser back/forward or external search param changes
+    useEffect(() => {
+        const currentParam = searchParams.get('tab');
+        if (currentParam && visibleTabs.some(t => t.key === currentParam) && currentParam !== activeTab) {
+            setActiveTab(currentParam);
+        }
+    }, [searchParams, visibleTabs]);
+
+    // If permissions change and active tab is no longer visible, fallback to account
+    useEffect(() => {
+        if (!visibleTabs.some(t => t.key === activeTab)) {
+            const fallback = visibleTabs.some(t => t.key === 'account') ? 'account' : visibleTabs[0]?.key || 'account';
+            setActiveTab(fallback);
+        }
+    }, [visibleTabs, activeTab]);
 
     useEffect(() => {
         const main = document.querySelector('main');
         if (main) main.scrollTop = 0;
         else window.scrollTo({ top: 0, behavior: 'instant' });
+
+        activeTabRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
     }, [activeTab]);
 
     return (
@@ -74,9 +146,18 @@ export default function SettingsPage() {
                 <p className="mt-1 text-sm text-white/80">Manage your account and configure the cooperative system</p>
             </div>
 
-            <div className="flex gap-2 border-b border-gray-200 overflow-x-auto">
+            <div className="flex min-w-0 gap-2 overflow-x-auto overflow-y-hidden border-b border-gray-200">
                 {visibleTabs.map(t => (
-                    <button key={t.key} onClick={() => setActiveTab(t.key)} className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${activeTab === t.key ? 'border-emerald-600 text-emerald-600' : 'text-gray-500 hover:text-gray-700 border-transparent'}`}>
+                    <button
+                        key={t.key}
+                        ref={activeTab === t.key ? activeTabRef : null}
+                        onClick={() => handleTabChange(t.key)}
+                        className={`flex shrink-0 items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
+                            activeTab === t.key
+                                ? 'border-emerald-600 text-emerald-600'
+                                : 'text-gray-500 hover:text-gray-700 border-transparent'
+                        }`}
+                    >
                         <i className={`${t.icon} text-xs`}></i>
                         {t.label}
                     </button>
@@ -109,6 +190,9 @@ function MemberSettings() {
     const [pwdErrors, setPwdErrors] = useState<FieldErrors>({});
     const [otpSent, setOtpSent] = useState(false);
     const [otpError, setOtpError] = useState('');
+    const [revokeOtpTarget, setRevokeOtpTarget] = useState<number | 'all' | null>(null);
+    const [revokeOtpCode, setRevokeOtpCode] = useState('');
+    const [revokeOtpReady, setRevokeOtpReady] = useState(false);
 
     const queryClient = useQueryClient();
 
@@ -158,10 +242,32 @@ function MemberSettings() {
         passwordMutation.mutate(pwd);
     };
 
+    const sendRevokeOtpMutation = useMutation({
+        mutationFn: (target: number | 'all') => target === 'all' ? sendRevokeAllDevicesOtp() : sendTrustedDeviceRevocationOtp(target),
+        onSuccess: (_, target) => {
+            setRevokeOtpTarget(target);
+            setRevokeOtpCode('');
+            setRevokeOtpReady(true);
+            addToast('Verification code sent to your email.', 'success');
+        },
+        onError: (err: any) => addToast(err.response?.data?.message || 'Failed to send verification code.', 'error'),
+    });
+
     const revokeMutation = useMutation({
-        mutationFn: revokeDevices,
-        onSuccess: () => addToast('Trusted devices revoked.', 'success'),
-        onError: () => addToast('Failed to revoke devices', 'error'),
+        mutationFn: ({ target, otp }: { target: number | 'all'; otp: string }) => target === 'all'
+            ? revokeDevices(otp)
+            : revokeTrustedDevice(target, otp),
+        onSuccess: (response) => {
+            queryClient.invalidateQueries({ queryKey: ['profile'] });
+            addToast(response.data.message || 'Trusted device revoked.', 'success');
+            setRevokeOtpTarget(null);
+            setRevokeOtpReady(false);
+            setRevokeOtpCode('');
+            if (response.data.current_session_revoked || revokeOtpTarget === 'all') {
+                window.location.href = '/login';
+            }
+        },
+        onError: (err: any) => addToast(err.response?.data?.message || 'Failed to revoke device.', 'error'),
     });
 
     const deactivateMutation = useMutation({
@@ -263,26 +369,58 @@ function MemberSettings() {
 
             <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
                 <h3 className="font-semibold text-gray-900">Trusted Devices</h3>
-                <p className="mt-1 text-sm text-gray-500">Revoke all trusted devices to force re-authentication.</p>
+                <p className="mt-1 text-sm text-gray-500">Review browsers that can sign in without a new-device code. Revoking a device requires email verification and ends its active session.</p>
+                <div className="mt-4 space-y-3">
+                    {(profileData?.data?.trusted_devices ?? []).length === 0 ? (
+                        <p className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-500">No trusted devices on record.</p>
+                    ) : profileData.data.trusted_devices.map((device: any) => (
+                        <div key={device.id} className="rounded-lg border border-gray-200 p-4">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <p className="font-medium text-gray-900">{device.device_label || 'Unknown device'} {device.is_current && <span className="ml-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">This device</span>}</p>
+                                    <p className="mt-1 text-xs text-gray-500">IP: {device.last_ip_address || 'Unavailable'} · Location: unavailable</p>
+                                    <p className="mt-1 text-xs text-gray-500">Last login: {device.last_used_at ? new Date(device.last_used_at).toLocaleString() : 'Unavailable'}</p>
+                                    <p className={`mt-1 text-xs font-medium ${device.is_active ? 'text-emerald-700' : 'text-gray-500'}`}>{device.is_active ? 'Trusted' : 'Revoked'}</p>
+                                </div>
+                                {device.is_active && <button
+                                    type="button"
+                                    onClick={() => { setRevokeOtpTarget(device.id); setRevokeOtpReady(false); setRevokeOtpCode(''); sendRevokeOtpMutation.mutate(device.id); }}
+                                    disabled={sendRevokeOtpMutation.isPending || revokeMutation.isPending}
+                                    className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                                >Send code to revoke</button>}
+                            </div>
+                            {revokeOtpTarget === device.id && revokeOtpReady && <form className="mt-3 flex flex-wrap gap-2" onSubmit={e => { e.preventDefault(); revokeMutation.mutate({ target: device.id, otp: revokeOtpCode }); }}>
+                                <input aria-label={`Verification code for ${device.device_label || 'device'}`} inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={revokeOtpCode} onChange={e => setRevokeOtpCode(e.target.value.replace(/\D/g, ''))} placeholder="6-digit email code" className="min-w-48 rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+                                <button type="submit" disabled={revokeOtpCode.length !== 6 || revokeMutation.isPending} className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">{revokeMutation.isPending ? 'Revoking...' : 'Confirm revoke'}</button>
+                                <button type="button" onClick={() => { setRevokeOtpTarget(null); setRevokeOtpReady(false); }} className="rounded-lg border border-gray-200 px-3 py-2 text-sm">Cancel</button>
+                            </form>}
+                        </div>
+                    ))}
+                </div>
                 <button
                     onClick={() => setConfirmRevoke(true)}
                     disabled={revokeMutation.isPending}
                     className="mt-4 rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
                 >
                     <i className="fas fa-shield-alt mr-1"></i>
-                    {revokeMutation.isPending ? 'Revoking...' : 'Revoke All Devices'}
+                    Revoke All Devices
                 </button>
+                {revokeOtpTarget === 'all' && revokeOtpReady && <form className="mt-3 flex flex-wrap gap-2" onSubmit={e => { e.preventDefault(); revokeMutation.mutate({ target: 'all', otp: revokeOtpCode }); }}>
+                    <input aria-label="Verification code to revoke all devices" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={revokeOtpCode} onChange={e => setRevokeOtpCode(e.target.value.replace(/\D/g, ''))} placeholder="6-digit email code" className="min-w-48 rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+                    <button type="submit" disabled={revokeOtpCode.length !== 6 || revokeMutation.isPending} className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">{revokeMutation.isPending ? 'Revoking...' : 'Confirm revoke all'}</button>
+                    <button type="button" onClick={() => { setRevokeOtpTarget(null); setRevokeOtpReady(false); }} className="rounded-lg border border-gray-200 px-3 py-2 text-sm">Cancel</button>
+                </form>}
             </div>
 
             <ConfirmDialog
                 isOpen={confirmRevoke}
                 title="Revoke All Trusted Devices?"
-                message="This will immediately invalidate active sessions across all your devices and browsers, requiring you to log in again."
-                confirmText="Revoke Devices"
+                message="A verification code will be sent to your email. Confirming it revokes all trusted browsers and ends your current session."
+                confirmText={sendRevokeOtpMutation.isPending ? 'Sending code...' : 'Send verification code'}
                 variant="danger"
                 onConfirm={() => {
                     setConfirmRevoke(false);
-                    revokeMutation.mutate();
+                    sendRevokeOtpMutation.mutate('all');
                 }}
                 onCancel={() => setConfirmRevoke(false)}
             />

@@ -12,6 +12,7 @@ use App\Support\MaintenanceState;
 use Cron\CronExpression;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
@@ -427,6 +428,54 @@ class BackupService
         }
 
         return $disk->download($path);
+    }
+
+    public function importRestoreArchive(UploadedFile $archive, Model|Authenticatable|null $actor = null): string
+    {
+        $zip = new \ZipArchive;
+        if (! $archive->isValid()
+            || strtolower($archive->getClientOriginalExtension()) !== 'zip'
+            || $zip->open($archive->getRealPath(), \ZipArchive::CHECKCONS) !== true) {
+            throw new InvalidArgumentException('Choose a valid backup ZIP archive.');
+        }
+
+        $hasEntries = $zip->numFiles > 0;
+        for ($index = 0; $hasEntries && $index < $zip->numFiles; $index++) {
+            $entry = $zip->getNameIndex($index);
+            $normalizedEntry = is_string($entry) ? str_replace('\\', '/', $entry) : '';
+            $isUnsafePath = $normalizedEntry === ''
+                || str_starts_with($normalizedEntry, '/')
+                || preg_match('/^[a-z]:/i', $normalizedEntry)
+                || in_array('..', explode('/', $normalizedEntry), true);
+            $operatingSystem = $attributes = 0;
+            $zip->getExternalAttributesIndex($index, $operatingSystem, $attributes);
+            $fileType = ($attributes >> 16) & 0170000;
+            if ($isUnsafePath || $fileType === 0120000) {
+                $hasEntries = false;
+            }
+        }
+        $zip->close();
+        if (! $hasEntries) {
+            throw new InvalidArgumentException('The uploaded ZIP is empty or contains unsafe paths.');
+        }
+
+        $base = (string) config('backup.backup.name');
+        $filename = self::prefixFor(self::TIER_HOURLY).'uploaded-'.now()->format('YmdHis').'-'.Str::uuid().'.zip';
+        $path = Storage::disk(self::diskFor(self::TIER_HOURLY))->putFileAs($base, $archive, $filename);
+        if (! is_string($path) || $path === '') {
+            throw new RuntimeException('The uploaded backup could not be stored.');
+        }
+
+        $this->auditLogService->log(
+            'backup.restore_upload_staged',
+            'An uploaded backup archive was staged for restore.',
+            'backup',
+            null,
+            $actor,
+            ['tier' => self::TIER_HOURLY, 'file' => basename($path)],
+        );
+
+        return $path;
     }
 
     /**

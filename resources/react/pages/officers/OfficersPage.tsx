@@ -45,7 +45,12 @@ export default function OfficersPage() {
 
     const deleteMutation = useMutation({
         mutationFn: (id: number) => api.delete(`/api/members/${id}`),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['officers'] }); addToast('Officer removed', 'success'); },
+        onSuccess: (res: any) => {
+            queryClient.invalidateQueries({ queryKey: ['officers'] });
+            const isPending = res?.data?.status === 'pending' || res?.status === 202;
+            const message = res?.data?.message || (isPending ? 'Officer deletion requested and requires countersign approval.' : 'Officer removed');
+            addToast(message, isPending ? 'info' : 'success', isPending ? 8000 : undefined);
+        },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed', 'error'),
     });
 

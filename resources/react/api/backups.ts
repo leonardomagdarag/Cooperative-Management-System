@@ -84,12 +84,23 @@ export async function deleteBackup(tier: BackupTier, path: string) {
 }
 
 export async function restoreBackup(data: {
-    tier: BackupTier;
-    path: string;
+    tier?: BackupTier;
+    path?: string;
+    archive?: File;
     scope: BackupScope;
     current_password: string;
     confirmation: string;
-    archive_password?: string;
+    archive_password: string;
 }) {
+    if (data.archive) {
+        const form = new FormData();
+        form.append('archive', data.archive);
+        form.append('scope', data.scope);
+        form.append('current_password', data.current_password);
+        form.append('confirmation', data.confirmation);
+        form.append('archive_password', data.archive_password);
+        return api.post('/api/backups/restore', form);
+    }
+
     return api.post('/api/backups/restore', data);
 }

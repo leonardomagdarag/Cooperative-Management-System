@@ -68,7 +68,9 @@ export default function LedgerPage() {
             queryClient.invalidateQueries({ queryKey: ['ledger'] });
             setShowAddModal(false);
             setEditingId(null);
-            addToast(res?.data?.message || 'Saved', 'success');
+            const isPending = res?.data?.status === 'pending' || res?.status === 202;
+            const message = res?.data?.message || (editingId ? (isPending ? 'Transaction edit is awaiting chairman approval.' : 'Transaction updated') : 'Saved');
+            addToast(message, isPending ? 'info' : 'success', isPending ? 8000 : undefined);
         },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed', 'error'),
     });
