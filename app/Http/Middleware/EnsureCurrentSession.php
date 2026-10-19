@@ -47,6 +47,7 @@ class EnsureCurrentSession
         if ($request->expectsJson()) {
             return response()->json([
                 'message' => 'Your account was signed in on another device. Please sign in again.',
+                'reason' => 'session_ended',
             ], 401);
         }
 

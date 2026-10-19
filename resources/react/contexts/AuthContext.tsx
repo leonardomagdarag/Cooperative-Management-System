@@ -19,6 +19,8 @@ interface User {
 interface AuthContextType {
     user: User | null;
     isLoading: boolean;
+    sessionEnded: boolean;
+    clearSessionEnded: () => void;
     login: (email: string, password: string, remember?: boolean, turnstileToken?: string | null) => Promise<{ requiresOtp: boolean; redirect?: string }>;
     logout: () => Promise<void>;
     refreshUser: () => Promise<void>;
@@ -29,6 +31,19 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [sessionEnded, setSessionEnded] = useState(false);
+
+    useEffect(() => {
+        const handleSessionEnded = () => {
+            setUser(null);
+            setSessionEnded(true);
+        };
+
+        window.addEventListener('auth:session-ended', handleSessionEnded);
+        return () => window.removeEventListener('auth:session-ended', handleSessionEnded);
+    }, []);
+
+    const clearSessionEnded = useCallback(() => setSessionEnded(false), []);
 
     const fetchUser = useCallback(async () => {
         try {
@@ -42,6 +57,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         fetchUser().finally(() => setIsLoading(false));
     }, [fetchUser]);
+
+    useEffect(() => {
+        if (!user || sessionEnded) return;
+
+        const interval = window.setInterval(() => {
+            void api.get('/api/user').catch(() => {});
+        }, 30_000);
+
+        return () => window.clearInterval(interval);
+    }, [user?.id, sessionEnded]);
 
     const login = async (email: string, password: string, remember: boolean = false, turnstileToken: string | null = null) => {
         await api.get('/sanctum/csrf-cookie');
@@ -63,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     return (
-        <AuthContext.Provider value={{ user, isLoading, login, logout, refreshUser }}>
+        <AuthContext.Provider value={{ user, isLoading, sessionEnded, clearSessionEnded, login, logout, refreshUser }}>
             {children}
         </AuthContext.Provider>
     );

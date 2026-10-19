@@ -25,6 +25,9 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
     (response) => response,
     (error) => {
+        if (error.response?.status === 401 && error.response?.data?.reason === 'session_ended') {
+            window.dispatchEvent(new CustomEvent('auth:session-ended'));
+        }
         // Don't hard-redirect on 401 — let React handle routing via AuthContext.
         // Only redirect on 419 (CSRF expired) which needs a full page reload.
         if (error.response?.status === 419) {

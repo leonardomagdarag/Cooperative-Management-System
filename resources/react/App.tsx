@@ -191,10 +191,45 @@ function DefaultOverview({ role, isOfficer }: { role: string; isOfficer?: boolea
 }
 
 export default function App() {
+    const { sessionEnded, clearSessionEnded } = useAuth();
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (!sessionEnded) return;
+
+        const timer = window.setTimeout(() => {
+            clearSessionEnded();
+            navigate('/login', { replace: true, state: { sessionEnded: true } });
+        }, 5000);
+
+        return () => window.clearTimeout(timer);
+    }, [sessionEnded, clearSessionEnded, navigate]);
+
+    const returnToLogin = () => {
+        clearSessionEnded();
+        navigate('/login', { replace: true, state: { sessionEnded: true } });
+    };
+
     return (
         <>
             <ScrollToTop />
             <ToastContainer />
+            {sessionEnded ? (
+                <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
+                    <section role="alert" aria-live="assertive" className="w-full max-w-lg rounded-2xl border border-amber-200 bg-white p-8 text-center shadow-sm">
+                        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+                            <i className="fas fa-right-from-bracket text-xl" aria-hidden="true"></i>
+                        </div>
+                        <h1 className="mt-5 text-xl font-bold text-slate-900">This session has ended</h1>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">
+                            Your account was signed in on another device. For your security, you have been signed out and will be returned to the login page shortly.
+                        </p>
+                        <button type="button" onClick={returnToLogin} className="mt-6 rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2">
+                            Return to login now
+                        </button>
+                    </section>
+                </main>
+            ) : (
             <Suspense fallback={<LoadingScreen />}>
                 <Routes>
                     <Route element={<PublicLayout />}>
@@ -219,6 +254,7 @@ export default function App() {
                     <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
             </Suspense>
+            )}
         </>
     );
 }
