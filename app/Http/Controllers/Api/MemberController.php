@@ -159,20 +159,23 @@ class MemberController extends Controller
     public function show(int $user): JsonResponse
     {
         $viewer = Auth::user();
-        abort_unless($viewer?->can('members.view') || (int) $viewer?->id === $user, 403);
+        $target = User::withTrashed()->findOrFail($user);
+        abort_unless(
+            $viewer?->can('members.view')
+                || ($target->is_officer && $viewer?->can('officers.view'))
+                || (int) $viewer?->id === $user,
+            403
+        );
 
         if ($viewer && ! BranchScope::isUnrestricted($viewer)) {
-            $target = User::withTrashed()->find($user);
-            abort_unless($target && (int) $target->branch_id === (int) $viewer->branch_id, 403);
+            abort_unless((int) $target->branch_id === (int) $viewer->branch_id, 403);
         }
 
-        $user = User::withTrashed()
-            ->with([
-                'branch',
-                'personalData.address', 'personalData.contact', 'personalData.employment',
-                'personalData.memberId', 'accounts', 'loans', 'beneficiaries', 'memberApplication',
-            ])
-            ->findOrFail($user);
+        $user = $target->load([
+            'branch',
+            'personalData.address', 'personalData.contact', 'personalData.employment',
+            'personalData.memberId', 'accounts', 'loans', 'beneficiaries', 'memberApplication',
+        ]);
 
         $pd = $user->personalData;
 
