@@ -32,7 +32,7 @@ class OversightController extends Controller
                 'created_at' => $request->created_at,
                 'requested_by' => $request->requestedBy?->name ?: $request->requestedBy?->email,
                 'requested_by_id' => $request->requested_by,
-                'payload' => collect($request->payload)->except(['password', 'password_confirmation', 'otp_code'])->all(),
+                'payload' => collect($request->payload)->except(['password', 'password_confirmation', 'otp_code', 'archive_password'])->all(),
             ]);
 
         return response()->json(['data' => $requests]);

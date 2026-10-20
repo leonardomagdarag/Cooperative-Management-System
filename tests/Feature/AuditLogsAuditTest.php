@@ -124,3 +124,35 @@ test('F032-8: audit logs sort by created_at, event, and log_name', function () {
     $resSortEvent = $this->getJson('/api/logs?sort=event&direction=desc');
     $resSortEvent->assertOk();
 });
+
+test('audit log export requires logs.export permission', function () {
+    $this->accountant->givePermissionTo('logs.view');
+
+    $this->actingAs($this->accountant)
+        ->get('/api/logs/export')
+        ->assertForbidden();
+});
+
+test('admin can export filtered audit logs as a spreadsheet-safe CSV', function () {
+    activity('finance')
+        ->causedBy($this->admin)
+        ->event('exported_action')
+        ->withProperties(['result' => 'saved'])
+        ->log('=SUM(1,1)');
+
+    activity('security')
+        ->causedBy($this->admin)
+        ->event('other_action')
+        ->log('This entry should not be exported.');
+
+    $response = $this->actingAs($this->admin)
+        ->get('/api/logs/export?tag=finance&event=exported_action');
+
+    $response->assertDownload('audit-logs-'.now()->format('Y-m-d').'.csv');
+    $csv = $response->streamedContent();
+
+    expect($csv)->toContain("\xEF\xBB\xBF")
+        ->and($csv)->toContain("'=SUM(1,1)")
+        ->and($csv)->toContain('saved')
+        ->and($csv)->not->toContain('This entry should not be exported.');
+});

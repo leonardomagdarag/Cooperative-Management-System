@@ -5,6 +5,7 @@ namespace App\Models;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Loan extends Model
@@ -20,6 +21,9 @@ class Loan extends Model
         'loan_product',
         'loan_amount',
         'interest_rate',
+        'penalty_type',
+        'penalty_amount',
+        'penalty_frequency',
         'term_months',
         'payment_frequency',
         'loan_status',
@@ -43,6 +47,7 @@ class Loan extends Model
     protected $casts = [
         'loan_amount' => 'decimal:2',
         'interest_rate' => 'decimal:2',
+        'penalty_amount' => 'decimal:2',
         'applied_at' => 'datetime',
         'approved_at' => 'datetime',
         'reviewed_at' => 'datetime',
@@ -107,6 +112,11 @@ class Loan extends Model
         return $this->hasMany(Transaction::class)->where('transaction_type', 'loan_payment');
     }
 
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(Transaction::class);
+    }
+
     public function completedPayments()
     {
         return $this->payments()->where('status', 'completed');
@@ -125,6 +135,37 @@ class Loan extends Model
 
         return (float) $this->completedPayments()
             ->selectRaw('COALESCE(SUM(CASE WHEN reversal_of_id IS NULL THEN amount ELSE -amount END), 0) as net_paid')
+            ->value('net_paid');
+    }
+
+    /** Net amount received, excluding the portion applied to overdue penalties. */
+    public function schedulePaid(): float
+    {
+        if ($this->relationLoaded('payments')) {
+            return (float) $this->payments
+                ->where('status', 'completed')
+                ->sum(fn ($p) => $p->reversal_of_id === null
+                    ? (float) $p->amount - (float) ($p->penalty_amount ?? 0)
+                    : -((float) $p->amount - (float) ($p->penalty_amount ?? 0)));
+        }
+
+        return (float) $this->completedPayments()
+            ->selectRaw('COALESCE(SUM(CASE WHEN reversal_of_id IS NULL THEN amount - penalty_amount ELSE -(amount - penalty_amount) END), 0) as net_paid')
+            ->value('net_paid');
+    }
+
+    public function penaltyPaid(): float
+    {
+        if ($this->relationLoaded('payments')) {
+            return (float) $this->payments
+                ->where('status', 'completed')
+                ->sum(fn ($p) => $p->reversal_of_id === null
+                    ? (float) ($p->penalty_amount ?? 0)
+                    : -(float) ($p->penalty_amount ?? 0));
+        }
+
+        return (float) $this->completedPayments()
+            ->selectRaw('COALESCE(SUM(CASE WHEN reversal_of_id IS NULL THEN penalty_amount ELSE -penalty_amount END), 0) as net_paid')
             ->value('net_paid');
     }
 
@@ -161,7 +202,7 @@ class Loan extends Model
 
     public function remainingBalance()
     {
-        return max(0, round($this->totalPayable() - $this->totalPaid(), 2));
+        return max(0, round($this->totalPayable() - $this->schedulePaid(), 2)) + $this->accruedPenalty();
     }
 
     /**
@@ -189,6 +230,9 @@ class Loan extends Model
         $totalInterestCents = 0;
         $totalPaymentCents = 0;
         $schedule = [];
+        $totalPaid = (float) $this->schedulePaid();
+        $paidBefore = 0.0;
+        $now = now()->startOfDay();
 
         for ($period = 1; $period <= $term; $period++) {
             $principal = $principalPerPeriod + ($period === $term ? $principalRemainder : 0);
@@ -199,12 +243,35 @@ class Loan extends Model
             $totalInterestCents += $interest;
             $totalPaymentCents += $payment;
 
+            $dueDate = $startDate?->copy()->addMonths($period)->startOfDay();
+            $paidForInstallment = min($payment / 100, max(0.0, $totalPaid - $paidBefore));
+            $unpaidInstallment = max(0.0, $payment / 100 - $paidForInstallment);
+            $paidBefore += $payment / 100;
+            $penalty = 0.0;
+
+            if ($dueDate && $dueDate->lessThan($now) && $unpaidInstallment > 0.001 && (float) $this->penalty_amount > 0) {
+                $daysLate = (int) $dueDate->diffInDays($now);
+                $periods = match ($this->penalty_frequency) {
+                    'daily' => $daysLate,
+                    'weekly' => intdiv($daysLate, 7),
+                    default => 1,
+                };
+
+                if ($periods > 0) {
+                    $chargePerPeriod = $this->penalty_type === 'percent'
+                        ? $unpaidInstallment * (float) $this->penalty_amount / 100
+                        : (float) $this->penalty_amount;
+                    $penalty = round(round($chargePerPeriod, 2) * $periods, 2);
+                }
+            }
+
             $schedule[] = [
                 'period' => $period,
-                'due_date' => $startDate?->copy()->addMonths($period)->format('M d, Y'),
+                'due_date' => $dueDate?->format('M d, Y'),
                 'payment' => $payment / 100,
                 'principal' => $principal / 100,
                 'interest' => $interest / 100,
+                'penalty' => $penalty,
                 'balance' => max(0, $balanceCents) / 100,
                 'total_interest' => $totalInterestCents / 100,
                 'total_payment' => $totalPaymentCents / 100,
@@ -218,16 +285,18 @@ class Loan extends Model
     {
         $schedule = $this->paymentSchedule();
         if (! $schedule) {
-            return ['amount_due' => 0.0, 'days_overdue' => 0];
+            return ['amount_due' => 0.0, 'days_overdue' => 0, 'accrued_penalty' => 0.0];
         }
 
-        $totalPaid = (float) $this->totalPaid();
+        $totalPaid = (float) $this->schedulePaid();
         $amountDue = 0.0;
         $daysOverdue = 0;
         $now = now()->startOfDay();
 
         $cumulativeDue = 0.0;
         $firstUnpaidDueDate = null;
+        $paidBefore = 0.0;
+        $accruedPenalty = 0.0;
 
         foreach ($schedule as $installment) {
             $dueDate = Carbon::createFromFormat('M d, Y', $installment['due_date'])->startOfDay();
@@ -235,15 +304,23 @@ class Loan extends Model
             if ($dueDate->lessThanOrEqualTo($now)) {
                 $cumulativeDue += (float) $installment['payment'];
 
-                if ($firstUnpaidDueDate === null && $totalPaid < ($cumulativeDue - 0.001)) { // tolerance for float precision
-                    $firstUnpaidDueDate = $dueDate;
+                $paidForInstallment = min((float) $installment['payment'], max(0.0, $totalPaid - $paidBefore));
+                $unpaidInstallment = max(0.0, (float) $installment['payment'] - $paidForInstallment);
+                $paidBefore += (float) $installment['payment'];
+
+                if ($unpaidInstallment > 0.001) {
+                    if ($firstUnpaidDueDate === null) {
+                        $firstUnpaidDueDate = $dueDate;
+                    }
+                    $accruedPenalty += (float) $installment['penalty'];
                 }
             } else {
                 break;
             }
         }
 
-        $amountDue = max(0.0, $cumulativeDue - $totalPaid);
+        $penaltyDue = max(0.0, $accruedPenalty - $this->penaltyPaid());
+        $amountDue = max(0.0, $cumulativeDue - $totalPaid) + $penaltyDue;
 
         if ($amountDue > 0 && $firstUnpaidDueDate !== null) {
             $daysOverdue = (int) $firstUnpaidDueDate->diffInDays($now);
@@ -252,7 +329,13 @@ class Loan extends Model
         return [
             'amount_due' => round($amountDue, 2),
             'days_overdue' => $daysOverdue,
+            'accrued_penalty' => round($penaltyDue, 2),
         ];
+    }
+
+    public function accruedPenalty(): float
+    {
+        return (float) ($this->getCollectionMetrics()['accrued_penalty'] ?? 0);
     }
 
     public function employment()
@@ -316,6 +399,40 @@ class Loan extends Model
     public function documents()
     {
         return $this->hasMany(LoanDocument::class)->latest('created_at');
+    }
+
+    public function collectionRunItems(): HasMany
+    {
+        return $this->hasMany(CollectionRunItem::class);
+    }
+
+    /** Explain why a loan must remain visible in the borrower's record. */
+    public function deletionBlockReason(): ?string
+    {
+        if ($this->loan_status !== 'pending' || $this->approved_at || $this->approved_by) {
+            return 'Only pending loans that have not been approved can be deleted.';
+        }
+
+        if ($this->review_status !== null || $this->reviewed_at || $this->reviewed_by) {
+            return 'Loans with review history cannot be deleted. Reject the application to preserve its history.';
+        }
+
+        foreach ([
+            ['transactions_count', 'transactions', 'financial transactions'],
+            ['documents_count', 'documents', 'uploaded documents'],
+            ['group_members_count', 'groupMembers', 'co-maker records'],
+            ['collection_run_items_count', 'collectionRunItems', 'collection records'],
+        ] as [$countAttribute, $relation, $description]) {
+            $hasRecords = array_key_exists($countAttribute, $this->getAttributes())
+                ? (int) $this->getAttribute($countAttribute) > 0
+                : $this->{$relation}()->exists();
+
+            if ($hasRecords) {
+                return "Loans with {$description} cannot be deleted.";
+            }
+        }
+
+        return null;
     }
 
     public function scopeApplyRange($query, ?string $range = 'today')

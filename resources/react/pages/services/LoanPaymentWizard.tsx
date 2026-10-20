@@ -29,7 +29,9 @@ interface LoanOption {
     loan_amount: number;
     loan_status: string;
     remaining_balance: number;
+    accrued_penalty: number;
     total_paid: number;
+    schedule_paid: number;
     payment_schedule: Array<{
         period: number;
         due_date: string | null;
@@ -49,6 +51,27 @@ const modeLabels: Record<string, { title: string; sub: string; icon: string }> =
     counter: { title: 'Over the Counter', sub: 'Visit our office to make payment', icon: 'fa-cash-register' },
     bank_transfer: { title: 'Bank Transfer', sub: 'Offline bank transfer with proof of payment', icon: 'fa-landmark' },
 };
+
+function unpaidSchedules(loan?: LoanOption) {
+    if (!loan?.payment_schedule) return [];
+    let cumulative = 0;
+    const schedules: Array<{ period: number; due_date: string | null; payment_amount: number; amount_due: number; penalty_amount: number }> = [];
+    for (const installment of loan.payment_schedule) {
+        const entry = Number(installment.payment);
+        const covered = Math.min(Math.max(Number(loan.schedule_paid ?? loan.total_paid ?? 0) - cumulative, 0), entry);
+        const amountDue = Math.round((entry - covered) * 100) / 100;
+        cumulative += entry;
+        if (amountDue > 0) schedules.push({ period: installment.period, due_date: installment.due_date, payment_amount: entry, amount_due: amountDue, penalty_amount: 0 });
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const overdueIndex = schedules.findIndex(s => s.due_date && new Date(s.due_date) < today);
+    if (overdueIndex >= 0 && Number(loan.accrued_penalty) > 0) {
+        schedules[overdueIndex].penalty_amount = Number(loan.accrued_penalty);
+        schedules[overdueIndex].amount_due = Math.round((schedules[overdueIndex].amount_due + schedules[overdueIndex].penalty_amount) * 100) / 100;
+    }
+    return schedules;
+}
 
 export default function LoanPaymentWizard({ onComplete, onRequestClose, selectedMember, onDirtyChange, availability }: {
     onComplete: () => void;
@@ -101,17 +124,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
     const selectedLoan = activeLoans.find(l => l.id === Number(form.loan_id));
 
     const availableSchedules = useMemo(() => {
-        if (!selectedLoan?.payment_schedule) return [];
-        let cumulative = 0;
-        const out: Array<{ period: number; due_date: string | null; payment_amount: number; amount_due: number }> = [];
-        for (const s of selectedLoan.payment_schedule) {
-            const entry = Number(s.payment);
-            const covered = Math.min(Math.max(Number(selectedLoan.total_paid ?? 0) - cumulative, 0), entry);
-            const amountDue = Math.round((entry - covered) * 100) / 100;
-            cumulative += entry;
-            if (amountDue > 0) out.push({ period: s.period, due_date: s.due_date, payment_amount: entry, amount_due: amountDue });
-        }
-        return out;
+        return unpaidSchedules(selectedLoan);
     }, [selectedLoan]);
 
     const selectedSchedule = availableSchedules.find(s => String(s.period) === form.schedule_key) ?? null;
@@ -120,15 +133,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
         const loan = activeLoans.find(l => l.id === Number(id));
         let value = { loan_id: id, schedule_key: '', amount: '' };
         if (!loan) { setForm(f => ({ ...f, ...value })); return; }
-        const schedules: Array<{ period: number; due_date: string | null; payment_amount: number; amount_due: number }> = [];
-        let cumulative = 0;
-        for (const s of loan.payment_schedule ?? []) {
-            const entry = Number(s.payment);
-            const covered = Math.min(Math.max(Number(loan.total_paid ?? 0) - cumulative, 0), entry);
-            const amountDue = Math.round((entry - covered) * 100) / 100;
-            cumulative += entry;
-            if (amountDue > 0) schedules.push({ period: s.period, due_date: s.due_date, payment_amount: entry, amount_due: amountDue });
-        }
+        const schedules = unpaidSchedules(loan);
         if (schedules.length === 1) {
             value = { loan_id: id, schedule_key: String(schedules[0].period), amount: String(schedules[0].amount_due) };
         }
@@ -356,6 +361,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                                 <span className="text-gray-600">Scheduled Amount:</span>
                                 <span className="font-semibold text-gray-900">{peso(selectedSchedule.payment_amount)}</span>
                             </div>
+                            {selectedSchedule.penalty_amount > 0 && <div className="flex justify-between"><span className="text-gray-600">Accrued Penalty:</span><span className="font-semibold text-amber-700">{peso(selectedSchedule.penalty_amount)}</span></div>}
                             <div className="flex justify-between">
                                 <span className="text-gray-600">Amount Due:</span>
                                 <span className="font-semibold text-blue-700">{peso(selectedSchedule.amount_due)}</span>

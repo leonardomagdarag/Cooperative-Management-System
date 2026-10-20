@@ -16,6 +16,9 @@ return new class extends Migration
             $table->enum('base_type', ['group', 'business', 'special'])->default('business');
             $table->string('icon', 50)->default('wallet');
             $table->decimal('interest_rate', 5, 2)->default(0);
+            $table->enum('penalty_type', ['flat', 'percent'])->default('flat');
+            $table->decimal('penalty_amount', 12, 2)->default(0);
+            $table->enum('penalty_frequency', ['daily', 'weekly', 'per_due'])->default('per_due');
             $table->decimal('max_amount', 15, 2)->default(0);
             $table->unsignedInteger('max_term')->default(1);
             $table->boolean('is_active')->default(true);

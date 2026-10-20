@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\MemberController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Jobs\DisburseInterestJob;
 use App\Models\Expense;
+use App\Models\Loan;
 use App\Models\Notification;
 use App\Models\OfficerPermissionOverride;
 use App\Models\PrivilegedActionRequest;
@@ -93,6 +94,11 @@ class CountersignService
     {
         if ($request->requested_by === $decider->id) {
             abort(403, 'Self-approval is forbidden.');
+        }
+
+        if ($request->action_type === 'loan.delete'
+            && (int) ($request->payload['borrower_id'] ?? 0) === (int) $decider->id) {
+            abort(403, 'A borrower cannot approve deletion of their own loan.');
         }
 
         abort_unless($this->canDecide($decider), 403, 'Only the chairman can approve privileged actions.');
@@ -477,6 +483,32 @@ class CountersignService
 
                 return ['status' => 'success', 'expense_id' => $payload['expense_id']];
 
+            case 'loan.delete':
+                $loan = Loan::query()->whereKey($payload['loan_id'] ?? null)->lockForUpdate()->firstOrFail();
+                $blockReason = $loan->deletionBlockReason();
+                abort_if($blockReason !== null, 409, $blockReason);
+                abort_unless(
+                    (int) $loan->user_id === (int) ($payload['borrower_id'] ?? 0)
+                        && $loan->loan_number === ($payload['loan_number'] ?? null)
+                        && number_format((float) $loan->loan_amount, 2, '.', '')
+                            === number_format((float) ($payload['loan_amount'] ?? -1), 2, '.', ''),
+                    409,
+                    'The loan changed after this deletion request. Submit a new request for the current loan details.'
+                );
+
+                $requester = User::find($payload['requested_by'] ?? null) ?? Auth::user();
+                app(AuditLogService::class)->log(
+                    'loan.deleted',
+                    'Unreviewed loan application deleted after chairman countersign.',
+                    'loan',
+                    $loan,
+                    $requester
+                );
+
+                $loan->delete();
+
+                return ['status' => 'success', 'loan_id' => $loan->id];
+
             case 'transaction.update':
                 $transaction = Transaction::find($payload['transaction_id'] ?? null);
                 abort_unless($transaction, 404, 'The target transaction no longer exists.');
@@ -491,9 +523,18 @@ class CountersignService
                 );
                 abort_unless(is_numeric($changes['amount'] ?? null) && (float) $changes['amount'] >= 0.01, 422, 'Invalid transaction amount.');
 
+                $penaltyAmount = 0;
+                if (($changes['transaction_type'] ?? null) === 'loan_payment' && ! empty($changes['loan_id'])) {
+                    $penaltyAmount = min(
+                        (float) Loan::findOrFail($changes['loan_id'])->accruedPenalty(),
+                        (float) $changes['amount']
+                    );
+                }
+
                 $transaction->update([
                     'transaction_type' => $changes['transaction_type'],
                     'amount' => $changes['amount'],
+                    'penalty_amount' => $penaltyAmount,
                     'note' => $changes['note'] ?? null,
                     'account_id' => $changes['account_id'] ?? null,
                     'loan_id' => $changes['loan_id'] ?? null,

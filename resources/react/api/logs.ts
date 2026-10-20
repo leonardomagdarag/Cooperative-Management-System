@@ -26,3 +26,13 @@ export async function getLogs(params?: {
 }) {
     return api.get('/api/logs', { params });
 }
+
+export async function exportLogs(params?: {
+    search?: string;
+    tag?: string;
+    event?: string;
+    user_id?: number;
+    date_range?: string;
+}) {
+    return api.get('/api/logs/export', { params, responseType: 'blob' });
+}

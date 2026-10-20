@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\Loan;
 use App\Models\LoanDocument;
 use App\Models\LoanProduct;
+use App\Models\PrivilegedActionRequest;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Services\CountersignService;
 use App\Services\NotificationService;
 use App\Support\BranchScope;
 use App\Support\SearchFilter;
@@ -29,7 +31,8 @@ class LoanController extends Controller
         $user = Auth::user();
         $canViewAll = (bool) ($user && $user->can('loans.view'));
 
-        $query = Loan::with(['branch', 'user.personalData', 'reviewer.personalData', 'groupMembers.personalData', 'product']);
+        $query = Loan::with(['branch', 'user.personalData', 'reviewer.personalData', 'groupMembers.personalData', 'product'])
+            ->withCount(['transactions', 'documents', 'groupMembers', 'collectionRunItems']);
 
         if (! $canViewAll) {
             $query->where('user_id', $user->id);
@@ -97,6 +100,7 @@ class LoanController extends Controller
                 'interview_status' => $l->interview_status,
                 'interview_schedule' => $l->interview_schedule?->format('Y-m-d\TH:i'),
                 'review_notes' => $l->review_notes,
+                'can_delete' => $l->deletionBlockReason() === null,
                 'reviewer' => $l->reviewer?->personalData ? trim($l->reviewer->personalData->first_name.' '.$l->reviewer->personalData->last_name) : null,
                 'co_makers' => $l->groupMembers->map(fn ($m) => [
                     'name' => $m->personalData ? trim($m->personalData->first_name.' '.$m->personalData->last_name) : ($m->user_number ?? "Member #{$m->id}"),
@@ -130,6 +134,7 @@ class LoanController extends Controller
         $schedule = $loan->paymentSchedule();
         $totalPaid = $loan->totalPaid();
         $totalPayable = $loan->totalPayable();
+        $collectionMetrics = $loan->getCollectionMetrics();
         $lastInstallment = $schedule ? $schedule[count($schedule) - 1] : null;
 
         return response()->json([
@@ -149,8 +154,14 @@ class LoanController extends Controller
             'approved_at' => $loan->approved_at?->format('Y-m-d'),
             'due_date' => $loan->due_date,
             'total_paid' => $totalPaid,
+            'schedule_paid' => $loan->schedulePaid(),
             'remaining_balance' => $loan->remainingBalance(),
-            'progress' => $totalPayable > 0 ? round(($totalPaid / $totalPayable) * 100, 1) : 0,
+            'accrued_penalty' => $collectionMetrics['accrued_penalty'],
+            'amount_due' => $collectionMetrics['amount_due'],
+            'penalty_type' => $loan->penalty_type,
+            'penalty_amount' => $loan->penalty_amount,
+            'penalty_frequency' => $loan->penalty_frequency,
+            'progress' => $totalPayable > 0 ? round(($loan->schedulePaid() / $totalPayable) * 100, 1) : 0,
             'estimated_interest' => $lastInstallment['total_interest'] ?? 0,
             'estimated_total_repayment' => $lastInstallment['total_payment'] ?? $loan->totalPayable(),
             'payment_schedule' => $schedule,
@@ -166,6 +177,7 @@ class LoanController extends Controller
                 'payment_number' => $idx + 1,
                 'transaction_number' => $p->transaction_number,
                 'amount' => $p->amount,
+                'penalty_amount' => $p->penalty_amount,
                 'payment_date' => ($p->transaction_date ?? $p->created_at)?->format('M d, Y'),
                 'status' => $p->status,
                 'is_reversal' => $p->reversal_of_id !== null,
@@ -296,6 +308,14 @@ class LoanController extends Controller
         ]);
 
         $product = LoanProduct::where('code', $validated['loan_product'])->first();
+        $borrower = User::findOrFail($validated['user_id']);
+        $loanBranchId = $validated['branch_id'] ?? $borrower->branch_id;
+        abort_unless(
+            BranchScope::canAccessBranch(Auth::user(), $borrower->branch_id)
+                && BranchScope::canAccessBranch(Auth::user(), $loanBranchId),
+            403,
+            'You can only encode loans for members and branches you can access.'
+        );
         $baseType = $product?->base_type ?? ($validated['loan_type'] ?? (in_array($validated['loan_product'], ['group', 'business', 'special'], true) ? $validated['loan_product'] : 'business'));
         $productCode = $product?->code ?? $validated['loan_product'];
 
@@ -303,11 +323,14 @@ class LoanController extends Controller
 
         $loan = Loan::create([
             'user_id' => $validated['user_id'],
-            'branch_id' => $validated['branch_id'] ?? User::whereKey($validated['user_id'])->value('branch_id'),
+            'branch_id' => $loanBranchId,
             'loan_type' => $baseType,
             'loan_product' => $productCode,
             'loan_amount' => $validated['loan_amount'],
             'interest_rate' => $validated['interest_rate'],
+            'penalty_type' => $product?->penalty_type ?? 'flat',
+            'penalty_amount' => $product?->penalty_amount ?? 0,
+            'penalty_frequency' => $product?->penalty_frequency ?? 'per_due',
             'term_months' => $validated['term_months'],
             'payment_frequency' => $validated['payment_frequency'],
             'loan_status' => 'pending',
@@ -370,6 +393,11 @@ class LoanController extends Controller
             $product = LoanProduct::where('code', $validated['loan_product'])->first();
             $updateData['loan_product'] = $product?->code ?? $validated['loan_product'];
             $updateData['loan_type'] = $product?->base_type ?? ($validated['loan_type'] ?? $loan->loan_type);
+            if ($product) {
+                $updateData['penalty_type'] = $product->penalty_type;
+                $updateData['penalty_amount'] = $product->penalty_amount;
+                $updateData['penalty_frequency'] = $product->penalty_frequency;
+            }
         } elseif (! empty($validated['loan_type'])) {
             $updateData['loan_type'] = $validated['loan_type'];
         }
@@ -458,10 +486,47 @@ class LoanController extends Controller
     {
         Gate::authorize('delete', $loan);
 
-        app(AuditLogService::class)->log('loan.deleted', 'Loan record deleted.', 'loan', $loan, Auth::user());
-        $loan->delete();
+        $blockReason = $loan->deletionBlockReason();
+        abort_if($blockReason !== null, 409, $blockReason);
 
-        return response()->json(['message' => 'Loan deleted.']);
+        $pendingRequestExists = PrivilegedActionRequest::query()
+            ->where('action_type', 'loan.delete')
+            ->where('status', 'pending')
+            ->where('expires_at', '>', now())
+            ->get()
+            ->contains(fn (PrivilegedActionRequest $request) => (int) ($request->payload['loan_id'] ?? 0) === (int) $loan->id);
+        abort_if($pendingRequestExists, 409, 'This loan already has a pending deletion request.');
+
+        $countersign = app(CountersignService::class);
+        $hasIndependentChairman = User::role('chairman')
+            ->where('account_status', 'active')
+            ->whereNotIn('id', array_filter([Auth::id(), $loan->user_id]))
+            ->get()
+            ->contains(fn (User $chairman) => $countersign->canDecide($chairman));
+        abort_unless($hasIndependentChairman, 422, 'A different active chairman who is not the borrower and has oversight approval is required to countersign this request.');
+
+        $pending = $countersign->request('loan.delete', [
+            'loan_id' => $loan->id,
+            'loan_number' => $loan->loan_number,
+            'borrower_id' => $loan->user_id,
+            'loan_amount' => (string) $loan->loan_amount,
+            'requested_by' => Auth::id(),
+        ], Auth::user());
+
+        app(AuditLogService::class)->log(
+            'loan.delete_requested',
+            'Loan deletion submitted for chairman countersign.',
+            'loan',
+            $loan,
+            Auth::user(),
+            ['request_id' => $pending->id]
+        );
+
+        return response()->json([
+            'message' => 'Loan deletion is awaiting countersign approval from another active chairman.',
+            'request_id' => $pending->id,
+            'status' => 'pending',
+        ], 202);
     }
 
     public function review(Request $request, Loan $loan): JsonResponse

@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\Transaction;
 use App\Models\User;
+use App\Support\BranchScope;
 
 class TransactionPolicy
 {
@@ -14,12 +15,10 @@ class TransactionPolicy
 
     public function view(User $user, Transaction $transaction): bool
     {
-        if ($user->can('transactions.view-all')) {
-            return true;
-        }
-
-        return $user->can('transactions.view')
-            && (int) optional($transaction->account)->user_id === (int) $user->id;
+        return BranchScope::canAccessBranch($user, $transaction->branch_id)
+            && ($user->can('transactions.view-all')
+                || ($user->can('transactions.view')
+                    && (int) optional($transaction->account)->user_id === (int) $user->id));
     }
 
     public function create(User $user): bool

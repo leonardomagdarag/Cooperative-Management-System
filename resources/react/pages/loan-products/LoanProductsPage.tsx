@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
@@ -6,11 +6,13 @@ import { useDiscardGuard } from '../../hooks/useDiscardGuard';
 import { validate, loanProductSchema, type FieldErrors } from '../../lib/validation';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import ModalHeader from '../../components/ui/ModalHeader';
+import HelpTip from '../../components/ui/HelpTip';
 import SettingsTabHeader from '../settings/SettingsTabHeader';
 
 interface LoanProduct {
     id: number; code: string; name: string; description: string; base_type: string;
     icon: string; interest_rate: number; max_amount: number; max_term: number;
+    penalty_type: 'flat' | 'percent'; penalty_amount: number; penalty_frequency: 'daily' | 'weekly' | 'per_due';
     is_active: boolean; requires_no_existing_loan: boolean; minimum_share_capital: number;
     minimum_membership_years: number; required_co_makers: number; requires_interview: boolean;
     requires_special_eligibility: boolean; sort_order: number;
@@ -19,9 +21,18 @@ interface LoanProduct {
 const emptyProduct: Partial<LoanProduct> = {
     code: '', name: '', description: '', base_type: 'business', icon: 'wallet',
     interest_rate: 0, max_amount: 0, max_term: 1, is_active: true,
+    penalty_type: 'flat', penalty_amount: 0, penalty_frequency: 'per_due',
     requires_no_existing_loan: false, minimum_share_capital: 0, minimum_membership_years: 0,
     required_co_makers: 0, requires_interview: false, requires_special_eligibility: false, sort_order: 0,
 };
+
+const loanProductIcons = [
+    { value: 'wallet', label: 'Wallet' },
+    { value: 'briefcase', label: 'Business' },
+    { value: 'users', label: 'Group' },
+    { value: 'seedling', label: 'Agriculture' },
+    { value: 'hand-holding-dollar', label: 'Support' },
+];
 
 const peso = (v: number) => '₱' + Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -30,6 +41,7 @@ export default function LoanProductsPage() {
     const [editing, setEditing] = useState<LoanProduct | null>(null);
     const [expandedId, setExpandedId] = useState<number | null>(null);
     const [form, setForm] = useState<Partial<LoanProduct>>(emptyProduct);
+    const [iconPickerOpen, setIconPickerOpen] = useState(false);
     const [errors, setErrors] = useState<FieldErrors>({});
     const [confirmState, setConfirmState] = useState<{
         isOpen: boolean;
@@ -42,6 +54,13 @@ export default function LoanProductsPage() {
     const { markDirty, reset, requestClose, renderDialog } = useDiscardGuard();
     const queryClient = useQueryClient();
     const { addToast } = useToast();
+
+    useEffect(() => {
+        if (!showModal) return;
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = previousOverflow; };
+    }, [showModal]);
 
     const { data, isLoading } = useQuery({
         queryKey: ['loan-products'],
@@ -243,6 +262,14 @@ export default function LoanProductsPage() {
                                                     Eligibility Requirements
                                                 </p>
                                                 <div className="flex flex-wrap gap-2">
+                                                    {Number(p.penalty_amount) > 0 ? (
+                                                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+                                                            <i className="fa-solid fa-triangle-exclamation text-xs"></i>
+                                                            {p.penalty_type === 'percent' ? `${Number(p.penalty_amount)}%` : peso(Number(p.penalty_amount))} {p.penalty_frequency === 'per_due' ? 'per overdue installment' : p.penalty_frequency}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-3 py-1 text-xs text-gray-500">No overdue penalty</span>
+                                                    )}
                                                     {p.requires_no_existing_loan && (
                                                         <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700">
                                                             <i className="fa-solid fa-ban text-xs"></i> No active loan
@@ -329,10 +356,10 @@ export default function LoanProductsPage() {
             )}
 
             {showModal && (
-                <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 pt-16" onClick={requestCloseGuard}>
+                <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden p-4" onClick={requestCloseGuard}>
                     <div className="absolute inset-0 bg-gray-900 opacity-50"></div>
-                    <div className="relative z-10 w-full max-w-2xl" onClick={e => e.stopPropagation()}>
-                        <div className="relative rounded-2xl bg-white shadow-2xl overflow-hidden">
+                    <div className="relative z-10 max-h-[calc(100dvh-2rem)] w-full max-w-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="relative flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
                             <ModalHeader
                                 title={editing ? 'Edit Loan Product' : 'Add Loan Product'}
                                 subtitle={editing ? 'Update product limits and eligibility rules.' : 'Define a new product with limits and member eligibility rules.'}
@@ -340,8 +367,11 @@ export default function LoanProductsPage() {
                                 onClose={requestCloseGuard}
                             />
 
-                            <div className="max-h-[70vh] overflow-y-auto px-6 py-5">
-                                <form id="loan-product-form" onSubmit={handleSubmit} className="space-y-4">
+                            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-5">
+                                <form id="loan-product-form" onSubmit={handleSubmit} className="space-y-5">
+                                    <fieldset className="space-y-4 rounded-xl border border-gray-200 p-4">
+                                        <legend className="px-2 text-sm font-semibold text-gray-900">Loan Details</legend>
+                                        <p className="-mt-2 text-xs text-gray-500">Set the product name, loan limits, and how it appears in the system.</p>
                                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                         <TextInput
                                             label="Code"
@@ -351,6 +381,7 @@ export default function LoanProductsPage() {
                                             maxLength={50}
                                             placeholder="agri_boost"
                                             helper="Unique slug, e.g. agri_boost"
+                                            helpText="A short unique identifier used by the system. It cannot contain spaces."
                                             error={errors.code}
                                         />
                                         <TextInput
@@ -360,13 +391,15 @@ export default function LoanProductsPage() {
                                             required
                                             maxLength={120}
                                             placeholder="Agriculture Boost Loan"
+                                            helpText="The name members and officers see when choosing this loan product."
                                             error={errors.name}
                                         />
                                     </div>
 
                                     <div>
-                                        <label className="mb-2 block text-sm font-medium text-gray-900">
+                                        <label className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-900">
                                             Base Type <span className="text-red-500">*</span>
+                                            <HelpTip text="Groups products into Group, Business, or Special loans. This type is used on member applications." />
                                         </label>
                                         <select
                                             value={form.base_type}
@@ -380,49 +413,81 @@ export default function LoanProductsPage() {
                                     </div>
 
                                     <div className="grid grid-cols-3 gap-3">
-                                        <NumberInput label="Interest Rate (%)" value={form.interest_rate} onChange={v => setField('interest_rate', v)} step="0.01" min={0} error={errors.interest_rate} />
+                                        <NumberInput label="Interest Rate (%)" value={form.interest_rate} onChange={v => setField('interest_rate', v)} step="0.01" min={0} helpText="The monthly rate used to estimate interest over the loan term." error={errors.interest_rate} />
                                         <NumberInput label="Max Amount (₱)" value={form.max_amount} onChange={v => setField('max_amount', v)} step="0.01" min={0} error={errors.max_amount} />
-                                        <NumberInput label="Max Term (months)" value={form.max_term} onChange={v => setField('max_term', v)} min={1} error={errors.max_term} />
+                                        <NumberInput label="Max Term (months)" value={form.max_term} onChange={v => setField('max_term', v)} min={1} helpText="The longest repayment term a member may select." error={errors.max_term} />
                                     </div>
 
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-900">Product Icon <HelpTip text="Choose the symbol shown beside this product in loan lists and selection screens." /></label>
+                                            <div className="relative">
+                                                <button type="button" aria-haspopup="listbox" aria-expanded={iconPickerOpen} onClick={() => setIconPickerOpen(open => !open)} className="flex w-full items-center justify-between rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm text-gray-800 hover:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                                                    <span className="flex items-center gap-2"><i className={`fa-solid fa-${form.icon || 'wallet'} w-5 text-center text-emerald-700`} aria-hidden="true" />{loanProductIcons.find(option => option.value === form.icon)?.label ?? 'Choose an icon'}</span>
+                                                    <i className={`fa-solid fa-chevron-down text-xs transition-transform ${iconPickerOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+                                                </button>
+                                                {iconPickerOpen && <div role="listbox" aria-label="Product icon choices" className="absolute left-0 right-0 top-full z-30 mt-1 grid grid-cols-2 gap-1 rounded-lg border border-gray-200 bg-white p-2 shadow-lg sm:grid-cols-1">
+                                                    {loanProductIcons.map(option => (
+                                                        <button key={option.value} type="button" role="option" aria-selected={form.icon === option.value} onClick={() => { setField('icon', option.value); setIconPickerOpen(false); }} className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm ${form.icon === option.value ? 'bg-emerald-50 font-medium text-emerald-800' : 'text-gray-700 hover:bg-gray-50'}`}>
+                                                            <i className={`fa-solid fa-${option.value} w-5 text-center text-base`} aria-hidden="true" />{option.label}
+                                                        </button>
+                                                    ))}
+                                                </div>}
+                                            </div>
+                                        </div>
+                                        <div className="max-w-sm">
+                                            <NumberInput label="Sort Order" value={form.sort_order} onChange={v => setField('sort_order', v)} min={0} helpText="Lower numbers appear earlier in product lists." error={errors.sort_order} />
+                                        </div>
+                                        <div>
+                                            <label className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-900">Description <HelpTip text="A short explanation of who the product is for or what it is intended to support." /></label>
+                                            <textarea value={form.description || ''} onChange={e => { markDirty(); setForm(f => ({ ...f, description: e.target.value })); }} rows={4} maxLength={500} placeholder="Briefly describe this loan product..." className="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-emerald-500 focus:ring-emerald-500" />
+                                        </div>
+                                    </div>
+                                    </fieldset>
+
+                                    <fieldset className="rounded-lg border border-gray-200 p-4">
+                                        <legend className="px-1 text-sm font-semibold text-gray-900">Overdue Penalty</legend>
+                                        <p className="mb-3 text-xs text-gray-500">Set to zero to disable penalties for this product. The policy is copied to each loan when it is created.</p>
+                                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                            <div>
+                                                <label className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-900">Charge type <HelpTip text="Choose a fixed currency amount or a percentage of the unpaid scheduled installment." /></label>
+                                                <select value={form.penalty_type} onChange={e => setField('penalty_type', e.target.value)} className="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm">
+                                                    <option value="flat">Flat amount (₱)</option>
+                                                    <option value="percent">Percentage (%)</option>
+                                                </select>
+                                            </div>
+                                            <NumberInput label={form.penalty_type === 'percent' ? 'Rate (%)' : 'Amount (₱)'} value={form.penalty_amount} onChange={v => setField('penalty_amount', v)} step="0.01" min={0} helpText={form.penalty_type === 'percent' ? 'Applied to the unpaid installment. The percentage does not compound.' : 'The fixed charge applied at the selected frequency.'} error={errors.penalty_amount} />
+                                            <div>
+                                                <label className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-900">Apply <HelpTip text="Daily charges accrue each overdue day, weekly charges after each full week, and per installment applies once to each overdue installment." /></label>
+                                                <select value={form.penalty_frequency} onChange={e => setField('penalty_frequency', e.target.value)} className="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm">
+                                                    <option value="per_due">Once per overdue installment</option>
+                                                    <option value="daily">Daily after due date</option>
+                                                    <option value="weekly">Weekly after due date</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </fieldset>
+
+                                    <fieldset className="space-y-4 rounded-xl border border-gray-200 p-4">
+                                        <legend className="px-2 text-sm font-semibold text-gray-900">Requirements</legend>
+                                        <p className="-mt-2 text-xs text-gray-500">Set member eligibility rules and any extra steps needed to apply.</p>
                                     <div className="grid grid-cols-3 gap-3">
-                                        <NumberInput label="Min Share Capital (₱)" value={form.minimum_share_capital} onChange={v => setField('minimum_share_capital', v)} step="0.01" min={0} error={errors.minimum_share_capital} />
-                                        <NumberInput label="Min Membership Yrs" value={form.minimum_membership_years} onChange={v => setField('minimum_membership_years', v)} min={0} error={errors.minimum_membership_years} />
-                                        <NumberInput label="Required Co-Makers" value={form.required_co_makers} onChange={v => setField('required_co_makers', v)} min={0} error={errors.required_co_makers} />
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <TextInput
-                                            label="Icon"
-                                            value={form.icon}
-                                            onChange={v => setField('icon', v)}
-                                            helper="(Font Awesome name)"
-                                            placeholder="wallet, briefcase, users, seedling"
-                                        />
-                                        <NumberInput label="Sort Order" value={form.sort_order} onChange={v => setField('sort_order', v)} min={0} error={errors.sort_order} />
-                                    </div>
-
-                                    <div>
-                                        <label className="mb-2 block text-sm font-medium text-gray-900">Description</label>
-                                        <textarea
-                                            value={form.description || ''}
-                                            onChange={e => { markDirty(); setForm(f => ({ ...f, description: e.target.value })); }}
-                                            rows={3}
-                                            placeholder="Brief description of this loan product..."
-                                            className="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-emerald-500 focus:ring-emerald-500"
-                                        />
+                                        <NumberInput label="Min Share Capital (₱)" value={form.minimum_share_capital} onChange={v => setField('minimum_share_capital', v)} step="0.01" min={0} helpText="Applicants must have at least this much share capital. Set to zero for no minimum." error={errors.minimum_share_capital} />
+                                        <NumberInput label="Min Membership Yrs" value={form.minimum_membership_years} onChange={v => setField('minimum_membership_years', v)} min={0} helpText="Applicants must have been members for at least this many years." error={errors.minimum_membership_years} />
+                                        <NumberInput label="Required Co-Makers" value={form.required_co_makers} onChange={v => setField('required_co_makers', v)} min={0} helpText="The number of co-makers an applicant must provide. Set to zero if none are required." error={errors.required_co_makers} />
                                     </div>
 
                                     <fieldset className="rounded-lg border border-gray-200 p-4">
                                         <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                            Flags & Requirements
+                                            Eligibility Checks
                                         </legend>
                                         <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                            <Checkbox label="Active product" checked={form.is_active} onChange={v => setField('is_active', v)} />
-                                            <Checkbox label="No existing active loan" checked={form.requires_no_existing_loan} onChange={v => setField('requires_no_existing_loan', v)} />
-                                            <Checkbox label="Require interview schedule" checked={form.requires_interview} onChange={v => setField('requires_interview', v)} />
-                                            <Checkbox label="Require special-eligibility flag" checked={form.requires_special_eligibility} onChange={v => setField('requires_special_eligibility', v)} />
+                                            <Checkbox label="Active product" checked={form.is_active} onChange={v => setField('is_active', v)} helpText="Inactive products are hidden from new applications but remain attached to existing loans." />
+                                            <Checkbox label="No existing active loan" checked={form.requires_no_existing_loan} onChange={v => setField('requires_no_existing_loan', v)} helpText="Blocks an application if the member already has an active loan." />
+                                            <Checkbox label="Require interview schedule" checked={form.requires_interview} onChange={v => setField('requires_interview', v)} helpText="Applicants must choose an interview appointment before submitting." />
+                                            <Checkbox label="Require special-eligibility flag" checked={form.requires_special_eligibility} onChange={v => setField('requires_special_eligibility', v)} helpText="Restricts this product to applicants who meet the cooperative’s special eligibility checks." />
                                         </div>
+                                    </fieldset>
                                     </fieldset>
                                 </form>
                             </div>
@@ -466,11 +531,11 @@ export default function LoanProductsPage() {
     );
 }
 
-function TextInput({ label, value, onChange, required, maxLength, placeholder, helper, error }: { label: string; value: any; onChange: (v: any) => void; required?: boolean; maxLength?: number; placeholder?: string; helper?: string; error?: string }) {
+function TextInput({ label, value, onChange, required, maxLength, placeholder, helper, helpText, error }: { label: string; value: any; onChange: (v: any) => void; required?: boolean; maxLength?: number; placeholder?: string; helper?: string; helpText?: string; error?: string }) {
     return (
         <div>
-            <label className="mb-2 block text-sm font-medium text-gray-900">
-                {label} {required && <span className="text-red-500">*</span>}
+            <label className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-900">
+                {label} {required && <span className="text-red-500">*</span>} {helpText && <HelpTip text={helpText} />}
             </label>
             <input
                 type="text"
@@ -487,10 +552,10 @@ function TextInput({ label, value, onChange, required, maxLength, placeholder, h
     );
 }
 
-function NumberInput({ label, value, onChange, step, min, error }: { label: string; value: any; onChange: (v: any) => void; step?: string | number; min?: number; error?: string }) {
+function NumberInput({ label, value, onChange, step, min, helpText, error }: { label: string; value: any; onChange: (v: any) => void; step?: string | number; min?: number; helpText?: string; error?: string }) {
     return (
         <div>
-            <label className="mb-2 block text-sm font-medium text-gray-900">{label}</label>
+            <label className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-900">{label} {helpText && <HelpTip text={helpText} />}</label>
             <input
                 type="number"
                 value={value ?? ''}
@@ -504,16 +569,19 @@ function NumberInput({ label, value, onChange, step, min, error }: { label: stri
     );
 }
 
-function Checkbox({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+function Checkbox({ label, checked, onChange, helpText }: { label: string; checked: boolean; onChange: (v: boolean) => void; helpText?: string }) {
     return (
-        <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input
-                type="checkbox"
-                checked={checked}
-                onChange={e => onChange(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-            />
-            {label}
-        </label>
+        <div className="flex items-center gap-2 text-sm text-gray-700">
+            <label className="flex items-center gap-2">
+                <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={e => onChange(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                {label}
+            </label>
+            {helpText && <HelpTip text={helpText} />}
+        </div>
     );
 }

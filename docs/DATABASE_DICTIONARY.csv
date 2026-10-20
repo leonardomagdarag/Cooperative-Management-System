@@ -63,6 +63,7 @@ archived_transactions,amount,decimal,15,2,Transaction amount.
 archived_transactions,transaction_date,datetime,N/A,Effective date of the transaction (indexed).
 archived_transactions,note,text,N/A,Free-text note carried over from the original row.
 archived_transactions,recorded_by,bigint,N/A,Primary key of the user who originally recorded it.
+archived_transactions,reversal_of_id,bigint,N/A,Primary key of the reversed transaction copied from the live ledger.
 archived_transactions,created_at,timestamp,N/A,Timestamp copied from the original row.
 archived_transactions,updated_at,timestamp,N/A,Timestamp copied from the original row.
 archived_transactions,archived_at,timestamp,N/A,Timestamp when the row was moved out of the live transactions table. Defaults to current.
@@ -147,6 +148,54 @@ cities,city_class,varchar,20,PSA classification such as HUC / ICC / component ci
 cities,created_at,timestamp,N/A,Record creation timestamp.
 cities,updated_at,timestamp,N/A,Record last-update timestamp.
 cities,,,,Main purpose: Part of the bundled PSGC reference set; resolves the city/municipality layer of an address and drives province-dependent form behaviour. Created by the schoolees/laravel-psgc package and populated by PSGCSeeder.
+collection_run_approvals,id,bigint,N/A,Auto-incrementing primary key.
+collection_run_approvals,collection_run_id,bigint,N/A,Foreign key to collection_runs.id; cascades on delete.
+collection_run_approvals,stage_index,int,N/A,"Approval stage number (1 for Accountant Stage 1, 2 for Manager Stage 2)."
+collection_run_approvals,stage_key,varchar,255,"Internal key identifier of the stage (e.g. accountant_review, manager_approval)."
+collection_run_approvals,stage_label,varchar,255,Human-readable label of the approval stage.
+collection_run_approvals,decided_by,bigint,N/A,Foreign key to users.id - the officer who reviewed and decided this stage.
+collection_run_approvals,decided_at,timestamp,N/A,Timestamp when the decision was recorded.
+collection_run_approvals,action,enum,N/A,Decision outcome: approved or rejected.
+collection_run_approvals,note,text,N/A,Auditor or manager notes regarding remittance verification.
+collection_run_approvals,created_at,timestamp,N/A,Record creation timestamp.
+collection_run_approvals,updated_at,timestamp,N/A,Record last-update timestamp.
+collection_run_approvals,,,,Main purpose: Audit trail recording individual stage decisions for two-stage collection run approvals.
+collection_run_items,id,bigint,N/A,Auto-incrementing primary key.
+collection_run_items,collection_run_id,bigint,N/A,Foreign key to collection_runs.id; cascades on delete.
+collection_run_items,member_id,bigint,N/A,Foreign key to users.id - borrower visited on the route.
+collection_run_items,recorded_by,bigint,N/A,Foreign key to users.id - loan officer who recorded the item.
+collection_run_items,loan_id,bigint,N/A,Foreign key to loans.id - loan contract being paid.
+collection_run_items,account_id,bigint,N/A,Foreign key to accounts.id - optional member account linked to the payment.
+collection_run_items,amount,decimal,"15,2",Payment amount collected from the borrower.
+collection_run_items,note,text,N/A,Field notes regarding the collection visit or borrower status.
+collection_run_items,visited,tinyint,1,Whether the borrower was physically visited during the route.
+collection_run_items,outcome,enum,N/A,Application outcome: pending / applied / failed. Defaults to pending.
+collection_run_items,failure_reason,text,N/A,Explanation if payment could not be collected or ledger posting failed.
+collection_run_items,transaction_id,bigint,N/A,Foreign key to transactions.id - ledger entry generated once the run is approved.
+collection_run_items,created_at,timestamp,N/A,Record creation timestamp.
+collection_run_items,updated_at,timestamp,N/A,Record last-update timestamp.
+collection_run_items,,,,Main purpose: Itemized borrower installment records collected during a field collection run.
+collection_runs,id,bigint,N/A,Auto-incrementing primary key.
+collection_runs,run_number,varchar,255,Unique human-readable collection run tracking number (e.g. CR-202610-0001).
+collection_runs,loan_officer_id,bigint,N/A,Foreign key to users.id - the loan officer assigned to the field collection route.
+collection_runs,collection_date,date,N/A,Scheduled date of the field collection run.
+collection_runs,branch_id,bigint,N/A,Foreign key to branches.id - cooperative branch managing this run.
+collection_runs,status,enum,N/A,Lifecycle status: draft / submitted / in_progress / approved / rejected / partially_applied / voided. Defaults to draft.
+collection_runs,current_stage,int,N/A,"Index of the current approval stage (0 = Draft, 1 = Stage 1 Accountant, 2 = Stage 2 Manager)."
+collection_runs,stages_snapshot,json,N/A,Snapshot of required approval stages configured when the run was submitted.
+collection_runs,total_amount,decimal,"15,2",Total cash amount collected across all line items in this run.
+collection_runs,item_count,int,N/A,Total number of borrower collection line items in the envelope.
+collection_runs,is_late,tinyint,1,Flag indicating whether the run was submitted after cutoff time.
+collection_runs,submitted_at,timestamp,N/A,Timestamp when the loan officer formally submitted the run.
+collection_runs,resubmission_of_id,bigint,N/A,Foreign key linking a resubmitted run to its previously rejected run.
+collection_runs,decided_at,timestamp,N/A,Timestamp of the final approval or rejection decision.
+collection_runs,rejection_reason,text,N/A,Mandatory explanation provided if the run was rejected.
+collection_runs,orphaned_at,timestamp,N/A,Timestamp if the run became orphaned due to staff assignment changes.
+collection_runs,voided_reason,text,N/A,Explanation provided if the run was voided.
+collection_runs,created_at,timestamp,N/A,Record creation timestamp.
+collection_runs,updated_at,timestamp,N/A,Record last-update timestamp.
+collection_runs,deleted_at,timestamp,N/A,Soft-delete marker.
+collection_runs,,,,Main purpose: Manages field collection batch envelopes from Loan Officer encoding through Accountant Stage 1 review to Manager Stage 2 final approval.
 contacts,id,bigint,N/A,Auto-incrementing primary key.
 contacts,phone_no,varchar,11,Philippine mobile number in 11-digit format (indexed).
 contacts,phone_verified_at,timestamp,N/A,Set once the phone number has been confirmed by OTP.
@@ -198,6 +247,20 @@ images,is_archived,varchar,255,Archive state flag for the image.
 images,created_at,timestamp,N/A,Record creation timestamp.
 images,updated_at,timestamp,N/A,Record last-update timestamp.
 images,,,,Main purpose: Legacy registry mapping member numbers to images kept on external cloud storage.
+interest_disbursement_items,id,bigint,N/A,Auto-incrementing primary key.
+interest_disbursement_items,interest_disbursement_id,bigint,N/A,Foreign key to interest_disbursements.id - the batch this line belongs to (cascade delete).
+interest_disbursement_items,user_id,bigint,N/A,Foreign key to users.id - the member credited or skipped (nullable).
+interest_disbursement_items,account_id,bigint,N/A,Foreign key to accounts.id - the account credited or skipped (nullable).
+interest_disbursement_items,transaction_id,bigint,N/A,Foreign key to transactions.id - the posted interest transaction for a credit (nullable).
+interest_disbursement_items,amount,decimal,15,2,Interest amount for the member; the would-be amount when skipped.
+interest_disbursement_items,balance_before,decimal,15,2,Account balance before the credit.
+interest_disbursement_items,balance_after,decimal,15,2,Account balance after the credit (equal to before when skipped).
+interest_disbursement_items,rate,decimal,8,4,Annual interest rate snapshot for the line.
+interest_disbursement_items,skipped,boolean,N/A,Whether the member was skipped rather than credited (indexed with the batch id).
+interest_disbursement_items,skip_reason,varchar,100,Reason recorded when the line was skipped.
+interest_disbursement_items,created_at,timestamp,N/A,Record creation timestamp.
+interest_disbursement_items,updated_at,timestamp,N/A,Record last-update timestamp.
+interest_disbursement_items,,,,Main purpose: Per-member lines for each interest batch, giving the credited or skipped amount and the resulting account balance.
 interest_disbursements,id,bigint,N/A,Auto-incrementing primary key.
 interest_disbursements,account_type,varchar,20,Interest-bearing account type: savings / share-capital (indexed with created_at).
 interest_disbursements,rate,decimal,8,4,Annual interest rate snapshot for the batch.
@@ -217,20 +280,17 @@ interest_disbursements,note,text,N/A,Free-text note or narration.
 interest_disbursements,created_at,timestamp,N/A,Record creation timestamp.
 interest_disbursements,updated_at,timestamp,N/A,Record last-update timestamp.
 interest_disbursements,,,,Main purpose: One auditable header per interest crediting batch, recording the rate/interval snapshot, totals, and idempotency key.
-interest_disbursement_items,id,bigint,N/A,Auto-incrementing primary key.
-interest_disbursement_items,interest_disbursement_id,bigint,N/A,Foreign key to interest_disbursements.id - the batch this line belongs to (cascade delete).
-interest_disbursement_items,user_id,bigint,N/A,Foreign key to users.id - the member credited or skipped (nullable).
-interest_disbursement_items,account_id,bigint,N/A,Foreign key to accounts.id - the account credited or skipped (nullable).
-interest_disbursement_items,transaction_id,bigint,N/A,Foreign key to transactions.id - the posted interest transaction for a credit (nullable).
-interest_disbursement_items,amount,decimal,15,2,Interest amount for the member; the would-be amount when skipped.
-interest_disbursement_items,balance_before,decimal,15,2,Account balance before the credit.
-interest_disbursement_items,balance_after,decimal,15,2,Account balance after the credit (equal to before when skipped).
-interest_disbursement_items,rate,decimal,8,4,Annual interest rate snapshot for the line.
-interest_disbursement_items,skipped,boolean,N/A,Whether the member was skipped rather than credited (indexed with the batch id).
-interest_disbursement_items,skip_reason,varchar,100,Reason recorded when the line was skipped.
-interest_disbursement_items,created_at,timestamp,N/A,Record creation timestamp.
-interest_disbursement_items,updated_at,timestamp,N/A,Record last-update timestamp.
-interest_disbursement_items,,,,Main purpose: Per-member lines for each interest batch, giving the credited or skipped amount and the resulting account balance.
+job_batches,id,varchar,255,Primary key; unique UUID string identifying the queued job batch.
+job_batches,name,varchar,255,Human-readable batch identifier name.
+job_batches,total_jobs,int,N/A,Total number of queued jobs contained within this batch.
+job_batches,pending_jobs,int,N/A,Number of jobs in the batch still awaiting execution.
+job_batches,failed_jobs,int,N/A,Number of jobs in the batch that encountered failures.
+job_batches,failed_job_ids,longtext,N/A,JSON-encoded array of IDs of the individual jobs that failed.
+job_batches,options,mediumtext,N/A,"Serialized batch configuration options, callbacks, and metadata."
+job_batches,cancelled_at,int,N/A,"Unix timestamp when the batch was cancelled, if applicable."
+job_batches,created_at,int,N/A,Unix timestamp when the batch record was created.
+job_batches,finished_at,int,N/A,Unix timestamp when the entire batch completed execution.
+job_batches,,,,Main purpose: Standard Laravel queue infrastructure table tracking batched background jobs.
 jobs,id,bigint,N/A,Auto-incrementing primary key.
 jobs,queue,varchar,255,Queue name the job was pushed onto (indexed). Used for the default and emails queues.
 jobs,payload,longtext,N/A,Serialized job payload.
@@ -280,7 +340,7 @@ loans,loan_amount,decimal,15,2,Principal amount requested or approved.
 loans,interest_rate,decimal,5,2,Annual interest rate percentage applied to the loan.
 loans,term_months,int,N/A,Repayment term expressed in months.
 loans,payment_frequency,enum,N/A,Amortisation schedule: weekly / bi-weekly / monthly / quarterly / annually. Defaults to monthly.
-loans,loan_status,enum,N/A,Lifecycle state: pending / approved / active / paid_off / rejected. Defaults to pending. Set to rejected when the application is rejected during credit review.
+loans,loan_status,enum,N/A,Current loan status: pending / approved / active / paid_off / rejected. Defaults to pending.
 loans,review_status,enum,N/A,Credit-review outcome: under_review / endorsed_for_approval / review_rejected.
 loans,reviewed_by,bigint,N/A,Foreign key to users.id - the officer who endorsed or rejected. Set to NULL on user delete.
 loans,reviewed_at,timestamp,N/A,Timestamp when the credit review was completed.
@@ -294,6 +354,7 @@ loans,interview_schedule,datetime,N/A,Scheduled date and time of the borrower in
 loans,interview_status,enum,N/A,Interview progress: pending / scheduled / completed / cancelled. Defaults to pending.
 loans,interview_officer_id,bigint,N/A,Foreign key to users.id - the officer who conducted the interview. Set to NULL on user delete.
 loans,interview_notes,text,N/A,Findings recorded during the interview.
+loans,encoded_by,bigint,N/A,Foreign key to users.id - the loan officer or staff member who encoded the application.
 loans,created_at,timestamp,N/A,Record creation timestamp.
 loans,updated_at,timestamp,N/A,Record last-update timestamp.
 loans,deleted_at,timestamp,N/A,Soft-delete marker.
@@ -421,6 +482,24 @@ personal_data,created_at,timestamp,N/A,Record creation timestamp.
 personal_data,updated_at,timestamp,N/A,Record last-update timestamp.
 personal_data,deleted_at,timestamp,N/A,Soft-delete marker.
 personal_data,,,,Main purpose: The personal identity record of every member and officer, linking to the normalised address, contact, employment and ID sub-tables.
+privileged_action_requests,id,bigint,N/A,Auto-incrementing primary key.
+privileged_action_requests,action_type,varchar,255,"Privileged action identifier (e.g. system.role_permissions.update, backup.restore, financial.interest.run)."
+privileged_action_requests,status,enum,N/A,Workflow state: pending / approved / executing / executed / rejected / expired / failed. Defaults to pending.
+privileged_action_requests,payload,json,N/A,Structured JSON payload capturing proposed mutation parameters and diffs.
+privileged_action_requests,requested_by,bigint,N/A,Foreign key to users.id - administrative initiator requesting the mutation.
+privileged_action_requests,requested_at,timestamp,N/A,Timestamp when the request was initiated.
+privileged_action_requests,expires_at,timestamp,N/A,Timestamp after which the pending request becomes invalid.
+privileged_action_requests,decided_by,bigint,N/A,Foreign key to users.id - Chairman or designated countersigner.
+privileged_action_requests,decided_at,timestamp,N/A,Timestamp when the countersign decision was made.
+privileged_action_requests,decision_note,text,N/A,Chairman's written remarks or rejection reason.
+privileged_action_requests,otp_verified_at,timestamp,N/A,Timestamp when the out-of-band 6-digit OTP code was successfully verified.
+privileged_action_requests,started_at,timestamp,N/A,Timestamp when automated mutation execution began (atomic lock).
+privileged_action_requests,executed_at,timestamp,N/A,Timestamp when mutation execution finished successfully.
+privileged_action_requests,execution_result,json,N/A,"JSON record of the execution output, changed IDs, or error traces."
+privileged_action_requests,idempotency_key,char,36,Unique UUID preventing duplicate execution of the same action request.
+privileged_action_requests,created_at,timestamp,N/A,Record creation timestamp.
+privileged_action_requests,updated_at,timestamp,N/A,Record last-update timestamp.
+privileged_action_requests,,,,Main purpose: Core four-eyes security architecture enforcing mandatory Chairman OTP countersignature before high-risk administrative mutations execute.
 provinces,code,varchar,20,Primary key. PSGC code of the province.
 provinces,name,varchar,255,Official name of the province (indexed).
 provinces,region_code,varchar,20,PSGC code of the parent region (indexed).
@@ -527,10 +606,20 @@ tickets,created_at,timestamp,N/A,Record creation timestamp.
 tickets,updated_at,timestamp,N/A,Record last-update timestamp.
 tickets,deleted_at,timestamp,N/A,Soft-delete marker.
 tickets,,,,Main purpose: Provides the member support-ticket system with assignment, priority and status tracking.
+transaction_receipts,id,bigint,N/A,Auto-incrementing primary key.
+transaction_receipts,transaction_id,bigint,N/A,Foreign key to transactions.id; cascades on delete.
+transaction_receipts,reason,enum,N/A,Issuance reason: original / reprint / reissue. Defaults to original.
+transaction_receipts,issued_by,bigint,N/A,Foreign key to users.id - staff member or officer issuing the receipt.
+transaction_receipts,issued_to_member_id,bigint,N/A,Foreign key to users.id - member receiving the receipt (optional for anonymous/guest payments).
+transaction_receipts,certified,tinyint,1,Flag indicating whether this is an executive certified official receipt.
+transaction_receipts,note,text,N/A,Auditor or officer remarks regarding receipt reissuance or certification.
+transaction_receipts,created_at,timestamp,N/A,Record creation timestamp.
+transaction_receipts,updated_at,timestamp,N/A,Record last-update timestamp.
+transaction_receipts,,,,"Main purpose: Tracks all official receipts issued, re-issued, or reprinted for cooperative transactions, including executive certification."
 transactions,id,bigint,N/A,Auto-incrementing primary key.
 transactions,transaction_number,varchar,20,Unique human-readable transaction reference.
 transactions,client_request_id,varchar,100,Client-supplied idempotency key; unique and prevents duplicate submissions.
-transactions,transaction_type,enum,N/A,Kind of movement: deposit / withdrawal / loan_payment / loan_disbursement / interest / fee. Defaults to deposit.
+transactions,transaction_type,enum,N/A,Type of entry: deposit / withdrawal / loan_payment / loan_disbursement / interest / fee.
 transactions,transaction_mode,varchar,255,Channel used to perform the transaction such as over-the-counter.
 transactions,payment_gateway,varchar,50,Online payment provider such as PayMongo (indexed).
 transactions,payment_method_used,varchar,50,Specific gateway method such as GCash or Maya.
@@ -551,6 +640,7 @@ transactions,approved_at,datetime,N/A,Timestamp when the transaction was approve
 transactions,rejection_reason,text,N/A,Explanation given when the transaction was rejected.
 transactions,proof_of_payment_path,varchar,255,Storage path of the uploaded proof-of-payment image.
 transactions,proof_of_payment_uploaded_at,timestamp,N/A,Timestamp when the proof of payment was uploaded.
+transactions,reversal_of_id,bigint,N/A,Foreign key to transactions.id pointing to the original transaction this entry reverses.
 transactions,created_at,timestamp,N/A,Record creation timestamp.
 transactions,updated_at,timestamp,N/A,Record last-update timestamp.
 transactions,,,,Main purpose: The cooperative's financial ledger; one immutable row per deposit, withdrawal, loan payment, disbursement or fee, with an approval workflow.
@@ -563,6 +653,7 @@ trusted_devices,user_agent,text,N/A,Browser user-agent captured when the device 
 trusted_devices,trusted_until,timestamp,N/A,Timestamp at which the trust window ends.
 trusted_devices,last_used_at,timestamp,N/A,Timestamp of the last successful login from this device.
 trusted_devices,is_active,tinyint,1,Whether the trust record is still honoured (indexed with user_id). Defaults to true.
+trusted_devices,session_id,varchar,255,Active session identifier bound to this trusted device.
 trusted_devices,created_at,timestamp,N/A,Record creation timestamp.
 trusted_devices,updated_at,timestamp,N/A,Record last-update timestamp.
 trusted_devices,,,,Main purpose: Remembers devices a user has OTP-verified so repeat logins can skip the code while still enforcing step-up auth elsewhere.
@@ -580,6 +671,7 @@ users,is_officer,tinyint,1,True when the user is staff and therefore subject to 
 users,special_loan_eligible,tinyint,1,Grants the member access to special loan products. Defaults to false.
 users,profile_completion_required,tinyint,1,Whether the member must complete their profile before using services.
 users,profile_completed_at,timestamp,N/A,Set once profile completion has been satisfied.
+users,current_session_id,varchar,255,Session ID of the active user session used to prevent concurrent logins.
 users,created_at,timestamp,N/A,Record creation timestamp.
 users,updated_at,timestamp,N/A,Record last-update timestamp.
 users,deleted_at,timestamp,N/A,Soft-delete marker.

@@ -166,6 +166,7 @@ class PermissionCatalog
         return [
             'admin' => [
                 'dashboard.view',
+                'branches.bypass',
                 'announcements.view',
                 'announcements.create',
                 'announcements.update',
@@ -345,6 +346,7 @@ class PermissionCatalog
                 'reports.export',
                 'reports.financial',
                 'settings.view',
+                'branches.bypass',
                 'tickets.view',
                 'tickets.reply',
                 'tickets.manage',
@@ -361,6 +363,7 @@ class PermissionCatalog
                 'loans.view',
                 'loans.create',
                 'settings.view',
+                'branches.bypass',
                 'tickets.view',
                 'tickets.reply',
                 'notifications.view',

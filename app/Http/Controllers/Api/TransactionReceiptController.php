@@ -18,7 +18,7 @@ class TransactionReceiptController extends Controller
         $user = Auth::user();
         $isOwner = (int) $this->recipientMemberId($transaction) === (int) $user->id;
         abort_unless($user->can('transactions.view-all') || $user->can('transactions.view') || $isOwner, 403);
-        abort_unless(BranchScope::isUnrestricted($user) || (int) $transaction->branch_id === (int) $user->branch_id, 403);
+        abort_unless(BranchScope::canAccessBranch($user, $transaction->branch_id), 403);
         abort_unless($transaction->status === 'completed', 422, 'Cannot reprint uncompleted transaction');
 
         $receipt = TransactionReceipt::create([
@@ -40,7 +40,7 @@ class TransactionReceiptController extends Controller
     {
         $user = Auth::user();
         abort_unless($user->can('receipts.reissue'), 403, 'You do not have permission to issue certified replacements.');
-        abort_unless(BranchScope::isUnrestricted($user) || (int) $transaction->branch_id === (int) $user->branch_id, 403);
+        abort_unless(BranchScope::canAccessBranch($user, $transaction->branch_id), 403);
         abort_unless($transaction->status === 'completed', 422, 'Cannot reissue uncompleted transaction');
 
         $validated = $request->validate([

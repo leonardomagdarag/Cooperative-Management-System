@@ -84,13 +84,6 @@ class SpatieRolePermissionSeeder extends Seeder
             }
         }
 
-        // Branch-level staff are scoped by their assigned branch. Main-branch
-        // officers receive their cross-branch access from BranchScope, while
-        // manager roles retain the explicit bypass permission.
-        foreach (['accountant', 'loan'] as $branchScopedRole) {
-            Role::findByName($branchScopedRole, 'web')->revokePermissionTo('branches.bypass');
-        }
-
         // === ASSIGN ROLES & PERMISSIONS TO EXISTING USERS ===
 
         // 1. Keep active members on the member role and outside officer flows.

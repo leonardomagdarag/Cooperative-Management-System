@@ -17,6 +17,7 @@ class Transaction extends Model
         'account_id',
         'loan_id',
         'amount',
+        'penalty_amount',
         'transaction_date',
         'status',
         'approved_by',
@@ -38,6 +39,7 @@ class Transaction extends Model
 
     protected $casts = [
         'amount' => 'decimal:2',
+        'penalty_amount' => 'decimal:2',
         'paymongo_fee' => 'decimal:2',
         'transaction_date' => 'datetime',
         'approved_at' => 'datetime',

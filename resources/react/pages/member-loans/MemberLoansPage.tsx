@@ -137,6 +137,9 @@ export default function MemberLoansPage() {
                                                 <div className="flex justify-between"><dt className="flex items-center gap-1 text-gray-500">Interest Rate <HelpTip text="The percentage charged on the loan, applied over the term." /></dt><dd className="font-medium">{Number(selected.interest_rate).toFixed(1)}%</dd></div>
                                                 <div className="flex justify-between"><dt className="flex items-center gap-1 text-gray-500">Term <HelpTip text="How long you have to repay the loan, in months." /></dt><dd className="font-medium">{selected.term_months} months</dd></div>
                                                 <div className="flex justify-between"><dt className="flex items-center gap-1 text-gray-500">Payment Frequency <HelpTip text="How often an installment is due (for example, monthly)." /></dt><dd className="font-medium capitalize">{selected.payment_frequency}</dd></div>
+                                                <div className="flex justify-between"><dt className="text-gray-500">Overdue Penalty</dt><dd className="font-medium">{Number(selected.penalty_amount) > 0 ? `${selected.penalty_type === 'percent' ? `${selected.penalty_amount}%` : formatPeso(selected.penalty_amount)} · ${selected.penalty_frequency === 'per_due' ? 'per overdue installment' : selected.penalty_frequency}` : 'None'}</dd></div>
+                                                <div className="flex justify-between"><dt className="text-gray-500">Accrued Penalties</dt><dd className="font-medium text-amber-700">{formatPeso(selected.accrued_penalty || 0)}</dd></div>
+                                                <div className="flex justify-between"><dt className="text-gray-500">Amount Due Now</dt><dd className="font-medium">{formatPeso(selected.amount_due || 0)}</dd></div>
                                                 {selected.estimated_interest > 0 && <><div className="flex justify-between"><dt className="flex items-center gap-1 text-gray-500">Est. Interest <HelpTip text="Estimated total interest over the whole term." /></dt><dd className="font-medium">{formatPeso(selected.estimated_interest)}</dd></div><div className="flex justify-between"><dt className="flex items-center gap-1 text-gray-500">Est. Total Repayment <HelpTip text="Principal plus estimated interest." /></dt><dd className="font-medium">{formatPeso(selected.estimated_total_repayment)}</dd></div></>}
                                                 <div className="flex justify-between"><dt className="text-gray-500">Status</dt><dd><span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${loanStatusMeta(selected.loan_status).className}`}>{loanStatusMeta(selected.loan_status).label}</span></dd></div>
                                             </dl>
@@ -174,7 +177,7 @@ export default function MemberLoansPage() {
                                         = <span className="inline-flex items-center gap-1">Principal <HelpTip text="The part of this payment that reduces the amount you borrowed." /></span>
                                         + <span className="inline-flex items-center gap-1">Interest <HelpTip text="The part of this payment that covers the cost of borrowing." /></span>.
                                     </p>
-                                    <AmortizationTable schedule={selected.payment_schedule} totalPaid={Number(selected.total_paid) || 0} />
+                                    <AmortizationTable schedule={selected.payment_schedule} totalPaid={Number(selected.schedule_paid ?? selected.total_paid) || 0} />
                                 </div>
                             )}
 

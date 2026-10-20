@@ -90,7 +90,7 @@ class RolePermissionController extends Controller
 
         $lockedPermissions = self::LOCKED_PERMISSIONS;
         $baseRoleRequiredPermissions = [
-            'manager' => ['members.view', 'loans.view', 'services.view', 'branches.bypass'],
+            'manager' => ['members.view', 'loans.view', 'services.view'],
             'accountant' => ['transactions.view', 'services.view', 'reports.view'],
             'loan' => ['loans.view', 'services.view'],
         ];

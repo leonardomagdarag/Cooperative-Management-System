@@ -28,7 +28,7 @@ export default function AmortizationTable({ schedule, totalPaid, compact = false
         <div className="space-y-3">
             {showLegend && <Legend />}
             <div className="overflow-x-auto">
-                <table className="min-w-[640px] w-full text-sm">
+                <table className="min-w-[760px] w-full text-sm">
                     <thead className="bg-gray-50">
                         <tr className="text-left text-xs font-semibold uppercase tracking-wider text-gray-400">
                             <th className={head}>#</th>
@@ -36,6 +36,7 @@ export default function AmortizationTable({ schedule, totalPaid, compact = false
                             <th className={`${head} text-right`}>Payment</th>
                             <th className={`${head} text-right`}>Principal</th>
                             <th className={`${head} text-right`}>Interest</th>
+                            <th className={`${head} text-right`}>Penalty</th>
                             <th className={`${head} text-right`}>Balance</th>
                             <th className={head}>Status</th>
                         </tr>
@@ -58,6 +59,7 @@ export default function AmortizationTable({ schedule, totalPaid, compact = false
                                     <td className={`${pad} text-right font-medium text-gray-900`}>{formatPeso(row.payment)}</td>
                                     <td className={`${pad} text-right text-gray-600`}>{formatPeso(row.principal)}</td>
                                     <td className={`${pad} text-right text-gray-500`}>{formatPeso(row.interest)}</td>
+                                    <td className={`${pad} text-right ${Number(row.penalty) > 0 ? 'font-medium text-amber-700' : 'text-gray-400'}`}>{Number(row.penalty) > 0 ? formatPeso(row.penalty) : '—'}</td>
                                     <td className={`${pad} text-right text-gray-500`}>{Number(row.balance) > 0 ? formatPeso(row.balance) : '—'}</td>
                                     <td className={pad}><Badge variant={style.badgeVariant}>{style.label}</Badge></td>
                                 </tr>

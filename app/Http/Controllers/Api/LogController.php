@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\SearchFilter;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,64 +19,7 @@ class LogController extends Controller
         $user = Auth::user();
         abort_unless($user && ($user->can('logs.view') || $user->hasRole('admin')), 403);
 
-        $query = Activity::query()
-            ->with(['causer.personalData'])
-            ->with(['subject' => function (MorphTo $morphTo) {
-                $morphTo->morphWith([
-                    User::class => ['personalData'],
-                ]);
-            }]);
-
-        // Search
-        if ($search = SearchFilter::escapeLike($request->string('search')->toString())) {
-            $query->where(function ($q) use ($search) {
-                $q->where('description', 'like', "%{$search}%")
-                    ->orWhere('event', 'like', "%{$search}%")
-                    ->orWhere('log_name', 'like', "%{$search}%")
-                    ->orWhere('subject_type', 'like', "%{$search}%")
-                    ->orWhereHas('causer', function ($causerQ) use ($search) {
-                        $causerQ->where('email', 'like', "%{$search}%")
-                            ->orWhereHas('personalData', function ($personalQ) use ($search) {
-                                $personalQ->where('first_name', 'like', "%{$search}%")
-                                    ->orWhere('last_name', 'like', "%{$search}%");
-                            });
-                    });
-            });
-        }
-
-        // Filter by tag (log_name)
-        if ($tag = $request->string('tag')->toString()) {
-            $query->where('log_name', $tag);
-        }
-
-        // Filter by event
-        if ($event = $request->string('event')->toString()) {
-            $query->where('event', $event);
-        }
-
-        // Filter by user (causer)
-        if ($userId = $request->integer('user_id')) {
-            $query->where('causer_id', $userId)
-                ->where('causer_type', User::class);
-        }
-
-        // Date range filter
-        $dateRange = $request->string('date_range')->toString();
-        if ($dateRange === 'today') {
-            $query->whereDate('created_at', today());
-        } elseif ($dateRange === 'week') {
-            $query->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()]);
-        } elseif ($dateRange === 'month') {
-            $query->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()]);
-        }
-
-        // Sort
-        $sortField = $request->string('sort', 'created_at')->toString();
-        $sortDirection = $request->string('direction', 'desc')->toString();
-        $allowedSorts = ['created_at', 'event', 'log_name', 'description'];
-        if (in_array($sortField, $allowedSorts, true)) {
-            $query->orderBy($sortField, $sortDirection === 'asc' ? 'asc' : 'desc');
-        }
+        $query = $this->filteredQuery($request);
 
         $perPage = max(5, min((int) $request->integer('per_page', 15), 50));
         $paginator = $query->paginate($perPage);
@@ -127,5 +71,119 @@ class LogController extends Controller
                     })->filter()->unique('id')->values(),
             ],
         ]);
+    }
+
+    public function export(Request $request)
+    {
+        $user = Auth::user();
+        abort_unless($user && ($user->can('logs.export') || $user->hasRole('admin')), 403);
+
+        $filename = 'audit-logs-'.now()->format('Y-m-d').'.csv';
+        $logs = $this->filteredQuery($request)->lazy(500);
+
+        return response()->streamDownload(function () use ($logs) {
+            $out = fopen('php://output', 'w');
+            // UTF-8 BOM helps spreadsheet applications recognize the encoding.
+            fwrite($out, "\xEF\xBB\xBF");
+            fputcsv($out, ['Date and Time', 'Area', 'Action', 'Description', 'Related Record Type', 'Related Record ID', 'Related Record', 'Performed By', 'Actor Email', 'Details']);
+
+            foreach ($logs as $log) {
+                $subject = $log->subject;
+                $subjectName = $subject ? (
+                    $subject instanceof User
+                        ? trim(($subject->personalData->first_name ?? '').' '.($subject->personalData->last_name ?? '')) ?: $subject->email
+                        : (method_exists($subject, 'getName') ? $subject->getName() : ($subject->name ?? $subject->title ?? $subject->email ?? null))
+                ) : null;
+                $causer = $log->causer;
+                $causerName = $causer
+                    ? trim(($causer->personalData->first_name ?? '').' '.($causer->personalData->last_name ?? '')) ?: $causer->email
+                    : 'System';
+                $properties = $log->properties?->toArray() ?? [];
+
+                fputcsv($out, array_map($this->csvSafe(...), [
+                    $log->created_at?->toISOString(),
+                    $log->log_name,
+                    $log->event,
+                    $log->description,
+                    class_basename($log->subject_type),
+                    $log->subject_id,
+                    $subjectName,
+                    $causerName,
+                    $causer?->email,
+                    json_encode($properties, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                ]));
+            }
+
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    private function filteredQuery(Request $request): Builder
+    {
+        $query = Activity::query()
+            ->with(['causer.personalData'])
+            ->with(['subject' => function (MorphTo $morphTo) {
+                $morphTo->morphWith([
+                    User::class => ['personalData'],
+                ]);
+            }]);
+
+        if ($search = SearchFilter::escapeLike($request->string('search')->toString())) {
+            $query->where(function ($q) use ($search) {
+                $q->where('description', 'like', "%{$search}%")
+                    ->orWhere('event', 'like', "%{$search}%")
+                    ->orWhere('log_name', 'like', "%{$search}%")
+                    ->orWhere('subject_type', 'like', "%{$search}%")
+                    ->orWhereHas('causer', function ($causerQ) use ($search) {
+                        $causerQ->where('email', 'like', "%{$search}%")
+                            ->orWhereHas('personalData', function ($personalQ) use ($search) {
+                                $personalQ->where('first_name', 'like', "%{$search}%")
+                                    ->orWhere('last_name', 'like', "%{$search}%");
+                            });
+                    });
+            });
+        }
+
+        if ($tag = $request->string('tag')->toString()) {
+            $query->where('log_name', $tag);
+        }
+
+        if ($event = $request->string('event')->toString()) {
+            $query->where('event', $event);
+        }
+
+        if ($userId = $request->integer('user_id')) {
+            $query->where('causer_id', $userId)
+                ->where('causer_type', User::class);
+        }
+
+        $dateRange = $request->string('date_range')->toString();
+        if ($dateRange === 'today') {
+            $query->whereDate('created_at', today());
+        } elseif ($dateRange === 'week') {
+            $query->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()]);
+        } elseif ($dateRange === 'month') {
+            $query->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()]);
+        }
+
+        $sortField = $request->string('sort', 'created_at')->toString();
+        $sortDirection = $request->string('direction', 'desc')->toString();
+        $allowedSorts = ['created_at', 'event', 'log_name', 'description'];
+        if (in_array($sortField, $allowedSorts, true)) {
+            $query->orderBy($sortField, $sortDirection === 'asc' ? 'asc' : 'desc');
+        }
+
+        return $query;
+    }
+
+    private function csvSafe(mixed $value): string
+    {
+        if (is_array($value) || is_object($value)) {
+            $value = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+
+        $value = (string) ($value ?? '');
+
+        return preg_match('/^[\s\x00-\x1F]*[=+\-@]/u', $value) === 1 ? "'{$value}" : $value;
     }
 }

@@ -605,6 +605,10 @@ export const loanProductSchema = z.object({
     minimum_membership_years: z.coerce.number().int('Must be a whole number').min(0).max(50, 'Cannot exceed 50 years'),
     required_co_makers: z.coerce.number().int('Must be a whole number').min(0).max(20, 'Cannot exceed 20 co-makers'),
     sort_order: z.coerce.number().int('Must be a whole number').min(0).max(9999, 'Cannot exceed 9999'),
+}).superRefine((product, ctx) => {
+    if (product.penalty_type === 'percent' && product.penalty_amount > 100) {
+        ctx.addIssue({ code: 'custom', path: ['penalty_amount'], message: 'Percentage penalty cannot exceed 100%' });
+    }
 });
 
 export const profileSchema = z.object({

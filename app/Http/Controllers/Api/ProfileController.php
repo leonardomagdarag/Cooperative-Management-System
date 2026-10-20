@@ -145,7 +145,8 @@ class ProfileController extends Controller
             'loans' => $loans->map(function ($l) {
                 $totalPaid = $l->totalPaid();
                 $totalPayable = $l->totalPayable();
-                $progress = $totalPayable > 0 ? round(($totalPaid / $totalPayable) * 100, 1) : 0;
+                $schedulePaid = $l->schedulePaid();
+                $progress = $totalPayable > 0 ? round(($schedulePaid / $totalPayable) * 100, 1) : 0;
 
                 return [
                     'id' => $l->id,
@@ -154,8 +155,10 @@ class ProfileController extends Controller
                     'principal_amount' => $l->principal_amount ?? $l->loan_amount,
                     'loan_amount' => $l->loan_amount,
                     'loan_status' => $l->loan_status,
-                    'remaining_balance' => max(0, round($totalPayable - $totalPaid, 2)),
+                    'remaining_balance' => $l->remainingBalance(),
                     'total_paid' => $totalPaid,
+                    'schedule_paid' => $schedulePaid,
+                    'accrued_penalty' => $l->accruedPenalty(),
                     'progress' => $progress,
                     'due_date' => $l->due_date?->format('M d, Y'),
                     'due_date_raw' => $l->due_date?->toISOString(),

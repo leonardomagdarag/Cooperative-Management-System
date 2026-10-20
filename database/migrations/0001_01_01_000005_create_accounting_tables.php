@@ -26,6 +26,9 @@ return new class extends Migration
             $table->enum('loan_type', ['group', 'business', 'special'])->default('business');
             $table->decimal('loan_amount', 15, 2);
             $table->decimal('interest_rate', 5, 2);
+            $table->enum('penalty_type', ['flat', 'percent'])->default('flat');
+            $table->decimal('penalty_amount', 12, 2)->default(0);
+            $table->enum('penalty_frequency', ['daily', 'weekly', 'per_due'])->default('per_due');
             $table->integer('term_months')->nullable();
             $table->enum('payment_frequency', ['weekly', 'bi-weekly', 'monthly', 'quarterly', 'annually'])->default('monthly');
             $table->enum('loan_status', ['pending', 'approved', 'active', 'paid_off'])->default('pending');
@@ -80,6 +83,7 @@ return new class extends Migration
             $table->foreignId('account_id')->nullable()->constrained('accounts');
             $table->foreignId('loan_id')->nullable()->constrained('loans');
             $table->decimal('amount', 15, 2);
+            $table->decimal('penalty_amount', 12, 2)->default(0);
             $table->dateTime('transaction_date')->nullable();
             $table->text('note')->nullable();
             $table->foreignId('recorded_by')->nullable()->constrained('users');

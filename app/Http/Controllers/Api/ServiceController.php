@@ -336,6 +336,9 @@ class ServiceController extends Controller
                 'loan_product' => $product->code,
                 'loan_amount' => $validated['amount'],
                 'interest_rate' => $product->interest_rate,
+                'penalty_type' => $product->penalty_type,
+                'penalty_amount' => $product->penalty_amount,
+                'penalty_frequency' => $product->penalty_frequency,
                 'term_months' => $validated['term_months'],
                 'payment_frequency' => $validated['payment_frequency'],
                 'loan_status' => 'pending',
@@ -396,6 +399,10 @@ class ServiceController extends Controller
         ]);
 
         $loan = Loan::findOrFail($validated['loan_id']);
+
+        if ((float) $validated['amount'] > (float) $loan->remainingBalance()) {
+            return response()->json(['message' => 'Payment exceeds the remaining loan balance.'], 422);
+        }
 
         abort_unless(
             in_array($loan->loan_status, ['approved', 'active'], true),
@@ -460,6 +467,7 @@ class ServiceController extends Controller
                 'client_request_id' => $validated['client_request_id'] ?? null,
                 'transaction_type' => 'loan_payment',
                 'amount' => $validated['amount'],
+                'penalty_amount' => min((float) $loan->accruedPenalty(), (float) $validated['amount']),
                 'status' => $status,
                 'transaction_mode' => $validated['transaction_mode'],
                 'note' => $validated['note'] ?? null,
@@ -802,10 +810,6 @@ class ServiceController extends Controller
 
     private function canAccessBranch($user, ?int $targetBranchId): bool
     {
-        if (BranchScope::isUnrestricted($user)) {
-            return true;
-        }
-
-        return (int) $user->branch_id === (int) $targetBranchId;
+        return BranchScope::canAccessBranch($user, $targetBranchId);
     }
 }

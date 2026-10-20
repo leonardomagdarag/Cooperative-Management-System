@@ -10,6 +10,9 @@ interface CoMaker { id: number; name: string; user_number: string }
 
 const peso = (n: number | string) => `₱${Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const penaltySummary = (product: any) => Number(product?.penalty_amount) > 0
+    ? `${product.penalty_type === 'percent' ? `${product.penalty_amount}%` : peso(product.penalty_amount)} ${product.penalty_frequency === 'per_due' ? 'per overdue installment' : product.penalty_frequency}`
+    : 'None';
 
 const iconClass = (p: any): string => {
     if (p?.icon) return p.icon.startsWith('fa-') ? p.icon : `fa-${p.icon}`;
@@ -216,6 +219,7 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
                                             <p className="text-sm text-gray-600 mb-2">{p.description}</p>
                                             <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
                                                 <span>Rate: {p.interest_rate}%</span>
+                                                <span>Overdue penalty: {penaltySummary(p)}</span>
                                                 <span>Max: {peso(p.max_amount)}</span>
                                                 <span>Up to {p.max_term} months</span>
                                             </div>
@@ -238,7 +242,7 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
 
                         <div className="bg-purple-50 border-l-4 border-purple-400 p-4">
                             <p className="text-sm text-purple-700">
-                                <strong>{selectedProduct?.name}</strong> - Interest Rate: {selectedProduct?.interest_rate}%
+                                <strong>{selectedProduct?.name}</strong> - Interest Rate: {selectedProduct?.interest_rate}% · Overdue penalty: {penaltySummary(selectedProduct)}
                             </p>
                         </div>
 

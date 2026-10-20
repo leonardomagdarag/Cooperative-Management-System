@@ -6,6 +6,7 @@ import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import EmptyState from '../../components/ui/EmptyState';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface BranchForm {
     name: string;
@@ -35,6 +36,10 @@ export default function BranchesPage() {
     }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
     const queryClient = useQueryClient();
     const { addToast } = useToast();
+    const { user } = useAuth();
+    const canCreate = !!user?.permissions?.includes('branches.create');
+    const canUpdate = !!user?.permissions?.includes('branches.update');
+    const canDelete = !!user?.permissions?.includes('branches.delete');
 
     const { data, isLoading } = useQuery({
         queryKey: ['branches', search],
@@ -113,7 +118,7 @@ export default function BranchesPage() {
                         placeholder="Search branches…"
                         className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 outline-none transition-colors"
                     />
-                    <Button onClick={openCreate} icon={<i className="fas fa-plus" />}>New Branch</Button>
+                    {canCreate && <Button onClick={openCreate} icon={<i className="fas fa-plus" />}>New Branch</Button>}
                 </div>
             </div>
 
@@ -149,8 +154,8 @@ export default function BranchesPage() {
                                             <span className="ml-5 mt-1 block text-xs font-mono text-gray-400">{b.code}</span>
                                         </button>
                                         <div className="flex shrink-0 gap-1">
-                                            <Button variant="ghost" size="sm" onClick={() => openEdit(b)} aria-label={`Edit ${b.name}`} className="hover:bg-emerald-50 hover:text-emerald-600"><i className="fas fa-edit"></i></Button>
-                                            <Button
+                                            {canUpdate && <Button variant="ghost" size="sm" onClick={() => openEdit(b)} aria-label={`Edit ${b.name}`} className="hover:bg-emerald-50 hover:text-emerald-600"><i className="fas fa-edit"></i></Button>}
+                                            {canDelete && <Button
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={() => setConfirmState({
@@ -165,7 +170,7 @@ export default function BranchesPage() {
                                                 className="hover:bg-red-50 hover:text-red-600"
                                             >
                                                 <i className="fas fa-trash"></i>
-                                            </Button>
+                                            </Button>}
                                         </div>
                                     </div>
                                     <div className="mt-4 grid grid-cols-3 gap-3 border-t border-gray-100 pt-4 text-center">

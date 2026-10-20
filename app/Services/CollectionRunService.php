@@ -426,7 +426,7 @@ class CollectionRunService
             abort_unless($run->loanOfficer()->whereNotNull('deleted_at')->exists(), 409, 'The run officer is active.');
             abort_unless($manager->can('collections.approve') || $manager->can('oversight.approve'), 403);
             abort_unless($newOfficer->trashed() === false && $newOfficer->can('collections.create'), 422, 'Choose an active loan officer.');
-            abort_unless((int) $newOfficer->branch_id === (int) $run->branch_id || BranchScope::isUnrestricted($newOfficer), 422, 'The replacement officer must cover this branch.');
+            abort_unless(BranchScope::canAccessBranch($newOfficer, $run->branch_id), 422, 'The replacement officer must cover this branch.');
             abort_if(trim($reason) === '', 422, 'A reason is required to reassign an orphaned run.');
 
             $formerOfficerId = $run->loan_officer_id;
@@ -455,7 +455,7 @@ class CollectionRunService
             abort_unless($rejectedRun->status === 'rejected', 409, 'Only rejected runs can have a replacement.');
             abort_unless($manager->can('collections.approve') || $manager->can('oversight.approve'), 403);
             abort_unless(! $officer->trashed() && $officer->can('collections.create'), 422, 'Choose an active loan officer.');
-            abort_unless((int) $officer->branch_id === (int) $rejectedRun->branch_id || BranchScope::isUnrestricted($officer), 422, 'The replacement officer must cover this branch.');
+            abort_unless(BranchScope::canAccessBranch($officer, $rejectedRun->branch_id), 422, 'The replacement officer must cover this branch.');
             abort_if($rejectedRun->resubmission()->exists(), 409, 'A replacement run already exists.');
 
             $replacement = CollectionRun::create([

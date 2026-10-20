@@ -144,7 +144,7 @@ test('F019-6: admin updates role permissions preserving locked core permissions'
         ->and($permissions)->toContain('profile.view')
         ->and($permissions)->toContain('profile.update')
         ->and($permissions)->toContain('settings.view')
-        ->and($permissions)->toContain('branches.bypass')
+        ->and($permissions)->not->toContain('branches.bypass')
         // Role-specific locked permissions for manager must also be preserved
         ->and($permissions)->toContain('members.view')
         ->and($permissions)->toContain('loans.view')

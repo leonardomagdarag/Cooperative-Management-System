@@ -213,6 +213,9 @@ class LedgerController extends Controller
         $transaction = Transaction::create([
             'transaction_type' => $validated['transaction_type'],
             'amount' => $validated['amount'],
+            'penalty_amount' => $type === 'loan_payment'
+                ? min((float) Loan::findOrFail($validated['loan_id'])->accruedPenalty(), (float) $validated['amount'])
+                : 0,
             'note' => $validated['note'] ?? null,
             'account_id' => $validated['account_id'] ?? null,
             'loan_id' => $validated['loan_id'] ?? null,
@@ -367,6 +370,7 @@ class LedgerController extends Controller
                 'account_id' => $transaction->account_id,
                 'loan_id' => $transaction->loan_id,
                 'amount' => $transaction->amount,
+                'penalty_amount' => $transaction->penalty_amount,
                 'transaction_date' => now(),
                 'status' => 'completed',
                 'approved_by' => $user->id,
@@ -395,7 +399,7 @@ class LedgerController extends Controller
     private function authorizeReversal(?User $user, Transaction $transaction): void
     {
         abort_unless($user?->can('transactions.reversal'), 403, 'Missing transactions.reversal permission.');
-        abort_unless(BranchScope::isUnrestricted($user) || (int) $transaction->branch_id === (int) $user->branch_id, 403);
+        abort_unless(BranchScope::canAccessBranch($user, $transaction->branch_id), 403);
         abort_unless($transaction->status === 'completed', 409, 'Only completed transactions can be reversed.');
         abort_if($transaction->reversal_of_id !== null || $transaction->reversal()->exists(), 409, 'This transaction has already been reversed.');
     }

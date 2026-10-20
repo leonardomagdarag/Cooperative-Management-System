@@ -13,6 +13,7 @@ export interface ScheduleRow {
     payment: number;
     principal: number;
     interest: number;
+    penalty?: number;
     balance: number;
     total_interest?: number;
     total_payment?: number;

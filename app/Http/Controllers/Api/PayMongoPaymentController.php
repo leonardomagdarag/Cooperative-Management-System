@@ -171,6 +171,7 @@ class PayMongoPaymentController extends Controller
                 'transaction_mode' => 'online',
                 'payment_gateway' => 'paymongo',
                 'amount' => $validated['amount'],
+                'penalty_amount' => $loan ? min((float) $loan->accruedPenalty(), (float) $validated['amount']) : 0,
                 'status' => 'pending',
                 'note' => $validated['note'] ?? null,
                 'transaction_date' => now(),

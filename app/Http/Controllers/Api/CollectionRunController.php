@@ -136,8 +136,7 @@ class CollectionRunController extends Controller
             ->get()
             ->filter(fn (User $officer) => $officer->can('collections.create'))
             ->filter(fn (User $officer) => BranchScope::isUnrestricted($user)
-                || BranchScope::isUnrestricted($officer)
-                || (int) $officer->branch_id === (int) $user->branch_id)
+                || BranchScope::canAccessBranch($officer, $user->branch_id))
             ->values()
             ->map(fn (User $officer) => [
                 'id' => $officer->id,
@@ -165,7 +164,7 @@ class CollectionRunController extends Controller
                 || $canReviewCurrentStage,
             403,
         );
-        abort_unless(BranchScope::isUnrestricted($user) || (int) $run->branch_id === (int) $user->branch_id, 403);
+        abort_unless(BranchScope::canAccessBranch($user, $run->branch_id), 403);
 
         $run->load(['items.member.personalData', 'items.loan', 'items.account', 'loanOfficer.personalData', 'approvals.decidedBy.personalData']);
 
@@ -175,7 +174,7 @@ class CollectionRunController extends Controller
     public function addItem(Request $request, CollectionRun $run): JsonResponse
     {
         $user = Auth::user();
-        abort_unless(BranchScope::isUnrestricted($user) || (int) $run->branch_id === (int) $user->branch_id, 403);
+        abort_unless(BranchScope::canAccessBranch($user, $run->branch_id), 403);
         abort_unless($user->can('collections.create') && $run->loan_officer_id === $user->id, 403);
 
         $validated = $request->validate([
@@ -201,7 +200,7 @@ class CollectionRunController extends Controller
     public function removeItem(CollectionRun $run, CollectionRunItem $item): JsonResponse
     {
         $user = Auth::user();
-        abort_unless(BranchScope::isUnrestricted($user) || (int) $run->branch_id === (int) $user->branch_id, 403);
+        abort_unless(BranchScope::canAccessBranch($user, $run->branch_id), 403);
         abort_unless($user->can('collections.create') && $run->loan_officer_id === $user->id, 403);
         abort_unless($item->collection_run_id === $run->id, 422);
 
@@ -219,7 +218,7 @@ class CollectionRunController extends Controller
     public function updateItem(Request $request, CollectionRun $run, CollectionRunItem $item): JsonResponse
     {
         $user = Auth::user();
-        abort_unless(BranchScope::isUnrestricted($user) || (int) $run->branch_id === (int) $user->branch_id, 403);
+        abort_unless(BranchScope::canAccessBranch($user, $run->branch_id), 403);
         abort_unless($user->can('collections.create') && (int) $run->loan_officer_id === (int) $user->id, 403);
         abort_unless((int) $item->collection_run_id === (int) $run->id, 404);
 
@@ -241,7 +240,7 @@ class CollectionRunController extends Controller
     public function submit(Request $request, CollectionRun $run): JsonResponse
     {
         $user = Auth::user();
-        abort_unless(BranchScope::isUnrestricted($user) || (int) $run->branch_id === (int) $user->branch_id, 403);
+        abort_unless(BranchScope::canAccessBranch($user, $run->branch_id), 403);
         abort_unless($user->can('collections.submit') || $user->can('collections.approve') || $user->can('oversight.approve'), 403);
 
         $validated = $request->validate([
@@ -300,7 +299,7 @@ class CollectionRunController extends Controller
                 }
 
                 return ! $activeUsers->contains(fn (User $candidate) => $candidate->can($stage['permission'])
-                    && (BranchScope::isUnrestricted($candidate) || (int) $candidate->branch_id === (int) $run->branch_id)
+                    && BranchScope::canAccessBranch($candidate, $run->branch_id)
                 );
             })->values();
         }
@@ -336,7 +335,7 @@ class CollectionRunController extends Controller
     public function approveStage(Request $request, CollectionRun $run): JsonResponse
     {
         $user = Auth::user();
-        abort_unless(BranchScope::isUnrestricted($user) || (int) $run->branch_id === (int) $user->branch_id, 403);
+        abort_unless(BranchScope::canAccessBranch($user, $run->branch_id), 403);
 
         $validated = $request->validate([
             'action' => 'required|in:approved,rejected',
@@ -358,7 +357,7 @@ class CollectionRunController extends Controller
     {
         $user = Auth::user();
         abort_unless($user->can('collections.approve'), 403, 'Only users with collection approval rights can retry failures.');
-        abort_unless(BranchScope::isUnrestricted($user) || (int) $run->branch_id === (int) $user->branch_id, 403);
+        abort_unless(BranchScope::canAccessBranch($user, $run->branch_id), 403);
 
         $validated = $request->validate(['reason' => 'required|string|min:5|max:1000']);
 
@@ -374,7 +373,7 @@ class CollectionRunController extends Controller
     {
         $user = Auth::user();
         abort_unless($user->can('collections.approve') || $user->can('oversight.approve'), 403);
-        abort_unless(BranchScope::isUnrestricted($user) || (int) $run->branch_id === (int) $user->branch_id, 403);
+        abort_unless(BranchScope::canAccessBranch($user, $run->branch_id), 403);
 
         $validated = $request->validate(['loan_officer_id' => 'nullable|integer|exists:users,id']);
         $officerId = $validated['loan_officer_id'] ?? $run->loan_officer_id;
@@ -390,7 +389,7 @@ class CollectionRunController extends Controller
     {
         $user = Auth::user();
         abort_unless($user->can('collections.view-all') && ($user->can('collections.approve') || $user->can('oversight.approve')), 403);
-        abort_unless(BranchScope::isUnrestricted($user) || (int) $run->branch_id === (int) $user->branch_id, 403);
+        abort_unless(BranchScope::canAccessBranch($user, $run->branch_id), 403);
 
         $validated = $request->validate([
             'loan_officer_id' => 'required|integer|exists:users,id',
@@ -406,7 +405,7 @@ class CollectionRunController extends Controller
     {
         $user = Auth::user();
         abort_unless($user->can('collections.view-all') && ($user->can('collections.approve') || $user->can('oversight.approve')), 403);
-        abort_unless(BranchScope::isUnrestricted($user) || (int) $run->branch_id === (int) $user->branch_id, 403);
+        abort_unless(BranchScope::canAccessBranch($user, $run->branch_id), 403);
 
         $validated = $request->validate(['reason' => 'required|string|min:5|max:1000']);
         $run = $this->service->voidOrphanedRun($run, $user, $validated['reason']);

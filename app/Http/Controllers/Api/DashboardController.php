@@ -64,9 +64,7 @@ class DashboardController extends Controller
         $activeLoans = $user->loans->whereIn('loan_status', ['approved', 'active'])->values();
 
         $totalLoanBalance = $activeLoans->sum(function ($l) {
-            $totalPaid = $l->totalPaid();
-
-            return max(0, round($l->totalPayable() - $totalPaid, 2));
+            return $l->remainingBalance();
         });
 
         $announcements = Announcement::query()
@@ -116,7 +114,8 @@ class DashboardController extends Controller
             'loans' => $activeLoans->map(function ($l) {
                 $totalPaid = $l->totalPaid();
                 $totalPayable = $l->totalPayable();
-                $progress = $totalPayable > 0 ? round(($totalPaid / $totalPayable) * 100, 1) : 0;
+                $schedulePaid = $l->schedulePaid();
+                $progress = $totalPayable > 0 ? round(($schedulePaid / $totalPayable) * 100, 1) : 0;
 
                 return [
                     'id' => $l->id,
@@ -124,8 +123,10 @@ class DashboardController extends Controller
                     'loan_type' => $l->loan_type,
                     'loan_amount' => $l->loan_amount,
                     'loan_status' => $l->loan_status,
-                    'remaining_balance' => max(0, round($totalPayable - $totalPaid, 2)),
+                    'remaining_balance' => $l->remainingBalance(),
                     'total_paid' => $totalPaid,
+                    'schedule_paid' => $schedulePaid,
+                    'accrued_penalty' => $l->accruedPenalty(),
                     'progress' => $progress,
                     'due_date' => $l->due_date?->format('M d, Y'),
                     'due_date_raw' => $l->due_date?->toISOString(),
@@ -993,7 +994,8 @@ class DashboardController extends Controller
                 $totalPaid = $l->totalPaid();
                 $remaining = $l->remainingBalance();
                 $totalPayable = $l->totalPayable();
-                $progress = $totalPayable > 0 ? round(($totalPaid / $totalPayable) * 100, 1) : 0;
+                $schedulePaid = $l->schedulePaid();
+                $progress = $totalPayable > 0 ? round(($schedulePaid / $totalPayable) * 100, 1) : 0;
 
                 $schedule = $l->paymentSchedule();
 
@@ -1009,7 +1011,13 @@ class DashboardController extends Controller
                     'payment_frequency' => $l->payment_frequency ?? 'monthly',
                     'loan_status' => $l->loan_status,
                     'remaining_balance' => $remaining,
+                    'accrued_penalty' => $l->accruedPenalty(),
+                    'amount_due' => $l->getCollectionMetrics()['amount_due'],
+                    'penalty_type' => $l->penalty_type,
+                    'penalty_amount' => $l->penalty_amount,
+                    'penalty_frequency' => $l->penalty_frequency,
                     'total_paid' => $totalPaid,
+                    'schedule_paid' => $schedulePaid,
                     'progress' => $progress,
                     'due_date' => $l->due_date?->format('M d, Y'),
                     'due_date_raw' => $l->due_date?->toISOString(),

@@ -3,8 +3,10 @@
 use App\Models\Account;
 use App\Models\Branch;
 use App\Models\Loan;
+use App\Models\PrivilegedActionRequest;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\CountersignService;
 use Database\Seeders\AccountSeeder;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\SystemSettingSeeder;
@@ -279,18 +281,103 @@ test('F024-12: officer updates loan terms with validation', function () {
         ->and((int) $loan->term_months)->toBe(18);
 });
 
-test('F024-13: officer deletes loan record with audit trail', function () {
+test('F024-13: loan deletion requires chairman countersign and only removes an untouched application', function () {
     $loan = Loan::factory()->create([
         'user_id' => $this->borrower->id,
         'account_id' => $this->savingsAccount->id,
         'branch_id' => $this->mainBranch->id,
         'loan_status' => 'pending',
+        'review_status' => null,
+        'approved_at' => null,
+        'approved_by' => null,
+        'due_date' => null,
     ]);
 
     $response = $this->actingAs($this->loanOfficer)->deleteJson("/api/loans/{$loan->id}");
-    $response->assertOk()
-        ->assertJson(['message' => 'Loan deleted.']);
+    $response->assertStatus(202)
+        ->assertJsonPath('status', 'pending');
+
+    $request = PrivilegedActionRequest::findOrFail($response->json('request_id'));
+    expect($request->action_type)->toBe('loan.delete')
+        ->and($request->status)->toBe('pending')
+        ->and($request->payload['loan_id'])->toBe($loan->id)
+        ->and(Loan::find($loan->id))->not->toBeNull();
+
+    app(CountersignService::class)->approve($request, $this->chairman);
 
     expect(Loan::find($loan->id))->toBeNull();
     expect(Loan::withTrashed()->find($loan->id))->not->toBeNull();
+});
+
+test('F024-14: chairman loan deletion also requires a different chairman to countersign', function () {
+    $loan = Loan::factory()->create([
+        'user_id' => $this->borrower->id,
+        'branch_id' => $this->mainBranch->id,
+        'loan_status' => 'pending',
+        'review_status' => null,
+        'approved_at' => null,
+        'approved_by' => null,
+        'due_date' => null,
+    ]);
+    $secondChairman = User::factory()->create([
+        'role' => 'chairman',
+        'is_officer' => true,
+        'account_status' => 'active',
+    ]);
+    $secondChairman->assignRole('chairman');
+
+    $response = $this->actingAs($this->chairman)->deleteJson("/api/loans/{$loan->id}");
+
+    $response->assertStatus(202);
+    $request = PrivilegedActionRequest::findOrFail($response->json('request_id'));
+    expect($request->requested_by)->toBe($this->chairman->id)
+        ->and(Loan::find($loan->id))->not->toBeNull();
+
+    app(CountersignService::class)->approve($request, $secondChairman);
+    expect(Loan::find($loan->id))->toBeNull();
+});
+
+test('F024-15: active loan with payment history cannot be deleted or disappear from member loans', function () {
+    $loan = Loan::factory()->active()->create([
+        'user_id' => $this->borrower->id,
+        'account_id' => $this->savingsAccount->id,
+        'branch_id' => $this->mainBranch->id,
+    ]);
+    Transaction::factory()->create([
+        'account_id' => $this->savingsAccount->id,
+        'loan_id' => $loan->id,
+        'branch_id' => $this->mainBranch->id,
+        'recorded_by' => $this->loanOfficer->id,
+        'transaction_type' => 'loan_payment',
+        'status' => 'completed',
+    ]);
+
+    $this->actingAs($this->loanOfficer)
+        ->deleteJson("/api/loans/{$loan->id}")
+        ->assertStatus(409);
+
+    expect(Loan::find($loan->id))->not->toBeNull();
+
+    $this->actingAs($this->borrower)
+        ->getJson('/api/member-loans')
+        ->assertOk()
+        ->assertJsonPath('data.0.id', $loan->id);
+});
+
+test('F024-16: loan list marks only untouched pending applications as deletable', function () {
+    $loan = Loan::factory()->create([
+        'user_id' => $this->borrower->id,
+        'branch_id' => $this->mainBranch->id,
+        'loan_status' => 'pending',
+        'review_status' => null,
+        'approved_at' => null,
+        'approved_by' => null,
+        'due_date' => null,
+    ]);
+
+    $this->actingAs($this->loanOfficer)
+        ->getJson('/api/loans?search='.$loan->loan_number)
+        ->assertOk()
+        ->assertJsonPath('data.0.id', $loan->id)
+        ->assertJsonPath('data.0.can_delete', true);
 });

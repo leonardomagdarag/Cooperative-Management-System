@@ -161,6 +161,7 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     Route::get('/history', [HistoryController::class, 'index']);
 
     // Logs (admin only)
+    Route::get('/logs/export', [LogController::class, 'export']);
     Route::get('/logs', [LogController::class, 'index']);
 
     // Global search (permission-scoped)

@@ -10,6 +10,7 @@ use App\Models\MemberApplication;
 use App\Models\OfficerPermissionOverride;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Support\BranchScope;
 use Database\Seeders\AccountSeeder;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\UserSeeder;
@@ -21,11 +22,14 @@ beforeEach(function () {
     $this->seed(AccountSeeder::class);
 
     $this->admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
+    $this->chairman = User::where('user_number', 'USR000002')->firstOrFail();
+    $this->accountant = User::where('user_number', 'USR000004')->firstOrFail();
     $this->manager = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
     $this->loanOfficer = User::where('email', 'leo.baluyot039+loan@gmail.com')->firstOrFail();
 
     $this->mainBranch = Branch::where('code', 'BR000001')->firstOrFail();
     $this->officeBranch = Branch::where('code', 'BR000002')->firstOrFail();
+    $this->accountant->update(['branch_id' => $this->officeBranch->id]);
     $this->loanOfficer->update(['branch_id' => $this->officeBranch->id]);
 
     $this->mainMember = User::where('user_number', 'USR000007')->firstOrFail();
@@ -154,8 +158,12 @@ test('F016-6: admin cannot delete branch with pending member applications (422)'
         ->assertJson(['message' => 'Cannot delete branch because it has pending member applications.']);
 });
 
-test('branch officers stay in branch while main office and manager users can see all branches', function () {
-    expect($this->loanOfficer->can('branches.bypass'))->toBeFalse();
+test('built-in officer roles with branch bypass can see all branches regardless of assignment', function () {
+    expect($this->admin->can('branches.bypass'))->toBeTrue()
+        ->and($this->chairman->can('branches.bypass'))->toBeTrue()
+        ->and($this->accountant->can('branches.bypass'))->toBeTrue()
+        ->and($this->manager->can('branches.bypass'))->toBeTrue()
+        ->and($this->loanOfficer->can('branches.bypass'))->toBeTrue();
 
     $product = LoanProduct::first() ?? LoanProduct::create([
         'name' => 'Standard Loan',
@@ -194,23 +202,14 @@ test('branch officers stay in branch while main office and manager users can see
     $response->assertOk();
 
     $branchIds = collect($response->json('data'))->pluck('branch_id')->filter()->unique()->values()->all();
-    expect($branchIds)->toBe([$this->officeBranch->id]);
+    expect($branchIds)->toEqualCanonicalizing([$this->mainBranch->id, $this->officeBranch->id]);
 
-    $this->loanOfficer->update(['branch_id' => $this->mainBranch->id]);
-    $this->actingAs($this->loanOfficer->fresh());
-    $mainOfficerResponse = $this->getJson('/api/loans?loan_status=pending')->assertOk();
-    $mainOfficerBranches = collect($mainOfficerResponse->json('data'))->pluck('branch_id')->filter()->unique()->values()->all();
-    expect($mainOfficerBranches)->toEqualCanonicalizing([$this->mainBranch->id, $this->officeBranch->id]);
-
-    $this->manager->update(['branch_id' => $this->officeBranch->id]);
-    $this->actingAs($this->manager->fresh());
-    $managerResponse = $this->getJson('/api/loans?loan_status=pending')->assertOk();
-    $managerBranches = collect($managerResponse->json('data'))->pluck('branch_id')->filter()->unique()->values()->all();
-    expect($this->manager->can('branches.bypass'))->toBeTrue()
-        ->and($managerBranches)->toEqualCanonicalizing([$this->mainBranch->id, $this->officeBranch->id]);
+    $memberBranchIds = BranchScope::applyToUsers(User::query()->memberUsers(), $this->loanOfficer)
+        ->pluck('branch_id')->unique()->values()->all();
+    expect($memberBranchIds)->toEqualCanonicalizing([$this->mainBranch->id, $this->officeBranch->id]);
 });
 
-test('a branch officer cannot expand branch scope with a bypass permission override', function () {
+test('an accountant assigned to a secondary branch can view loans across branches', function () {
     $product = LoanProduct::first() ?? LoanProduct::create([
         'name' => 'Standard Loan',
         'code' => 'STD01',
@@ -222,6 +221,42 @@ test('a branch officer cannot expand branch scope with a bypass permission overr
     ]);
 
     Loan::create([
+        'user_id' => $this->mainMember->id,
+        'loan_product_id' => $product->id,
+        'branch_id' => $this->mainBranch->id,
+        'loan_amount' => 10000,
+        'loan_status' => 'pending',
+        'interest_rate' => 5,
+        'term_months' => 12,
+    ]);
+    Loan::create([
+        'user_id' => $this->officeMember->id,
+        'loan_product_id' => $product->id,
+        'branch_id' => $this->officeBranch->id,
+        'loan_amount' => 8000,
+        'loan_status' => 'pending',
+        'interest_rate' => 5,
+        'term_months' => 12,
+    ]);
+
+    $this->actingAs($this->accountant);
+    $accountantResponse = $this->getJson('/api/loans?loan_status=pending')->assertOk();
+    $accountantBranches = collect($accountantResponse->json('data'))->pluck('branch_id')->filter()->unique()->values()->all();
+    expect($accountantBranches)->toEqualCanonicalizing([$this->mainBranch->id, $this->officeBranch->id]);
+});
+
+test('a per-officer deny override keeps the officer scoped despite the role bypass permission', function () {
+    $product = LoanProduct::first() ?? LoanProduct::create([
+        'name' => 'Standard Loan',
+        'code' => 'STD01',
+        'interest_rate' => 5,
+        'min_amount' => 1000,
+        'max_amount' => 50000,
+        'min_term_months' => 6,
+        'max_term_months' => 24,
+    ]);
+
+    $mainLoan = Loan::create([
         'user_id' => $this->mainMember->id,
         'loan_product_id' => $product->id,
         'branch_id' => $this->mainBranch->id,
@@ -244,7 +279,7 @@ test('a branch officer cannot expand branch scope with a bypass permission overr
     OfficerPermissionOverride::create([
         'user_id' => $this->loanOfficer->id,
         'permission' => 'branches.bypass',
-        'effect' => OfficerPermissionOverride::EFFECT_ALLOW,
+        'effect' => OfficerPermissionOverride::EFFECT_DISALLOW,
     ]);
 
     $this->actingAs($this->loanOfficer);
@@ -253,9 +288,57 @@ test('a branch officer cannot expand branch scope with a bypass permission overr
 
     $branchIds = collect($response->json('data'))->pluck('branch_id')->filter()->unique()->values()->all();
     expect($branchIds)->toBe([$this->officeBranch->id]);
+    expect($this->loanOfficer->can('view', $mainLoan))->toBeFalse();
+
+    $memberBranchIds = BranchScope::applyToUsers(User::query()->memberUsers(), $this->loanOfficer)
+        ->pluck('branch_id')->unique()->values()->all();
+    expect($memberBranchIds)->toBe([$this->officeBranch->id]);
 });
 
-test('branch officer cannot add, edit, or remove items from a draft in another branch', function () {
+test('an accountant without branch bypass sees only ledger transactions for their branch', function () {
+    OfficerPermissionOverride::create([
+        'user_id' => $this->accountant->id,
+        'permission' => 'branches.bypass',
+        'effect' => OfficerPermissionOverride::EFFECT_DISALLOW,
+    ]);
+
+    $mainAccount = Account::factory()->create(['user_id' => $this->mainMember->id, 'account_type' => 'savings']);
+    $officeAccount = Account::factory()->create(['user_id' => $this->officeMember->id, 'account_type' => 'savings']);
+    Transaction::factory()->deposit()->create([
+        'account_id' => $mainAccount->id,
+        'branch_id' => $this->mainBranch->id,
+        'status' => 'completed',
+        'transaction_mode' => 'counter',
+        'recorded_by' => $this->accountant->id,
+    ]);
+    Transaction::factory()->deposit()->create([
+        'account_id' => $officeAccount->id,
+        'branch_id' => $this->officeBranch->id,
+        'status' => 'completed',
+        'transaction_mode' => 'counter',
+        'recorded_by' => $this->accountant->id,
+    ]);
+
+    $this->actingAs($this->accountant);
+    $response = $this->getJson('/api/ledger')->assertOk();
+    $branchNames = collect($response->json('data'))->pluck('branch_name')->unique()->values()->all();
+    expect($branchNames)->toBe(['Branch Office']);
+});
+
+test('an officer without bypass and without a branch receives no branch scoped data', function () {
+    $this->accountant->update(['branch_id' => null]);
+    OfficerPermissionOverride::create([
+        'user_id' => $this->accountant->id,
+        'permission' => 'branches.bypass',
+        'effect' => OfficerPermissionOverride::EFFECT_DISALLOW,
+    ]);
+
+    $this->actingAs($this->accountant);
+    $members = BranchScope::applyToUsers(User::query()->memberUsers(), $this->accountant)->get();
+    expect($members)->toBeEmpty();
+});
+
+test('branch bypass lets a loan officer add a collection item to a draft in another branch', function () {
     $product = LoanProduct::first() ?? LoanProduct::create([
         'name' => 'Standard Loan',
         'code' => 'STD01',
@@ -296,12 +379,7 @@ test('branch officer cannot add, edit, or remove items from a draft in another b
         'member_id' => $this->mainMember->id,
         'loan_id' => $loan->id,
         'amount' => 100,
-    ])->assertForbidden();
-    $this->putJson("/api/collections/{$run->id}/items/{$item->id}", [
-        'amount' => 200,
-        'visited' => true,
-    ])->assertForbidden();
-    $this->deleteJson("/api/collections/{$run->id}/items/{$item->id}")->assertForbidden();
+    ])->assertCreated();
 
-    expect($item->fresh()->amount)->toBe('100.00');
+    expect(CollectionRunItem::where('collection_run_id', $run->id)->count())->toBe(2);
 });

@@ -95,8 +95,13 @@ export default function LoansPage() {
 
     const deleteMutation = useMutation({
         mutationFn: (id: number) => api.delete(`/api/loans/${id}`),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['loans'] }); addToast('Loan deleted', 'success'); },
-        onError: (err: any) => addToast(err.response?.data?.message || 'Failed to delete loan', 'error'),
+        onSuccess: (res) => {
+            queryClient.invalidateQueries({ queryKey: ['loans'] });
+            queryClient.invalidateQueries({ queryKey: ['oversight-requests'] });
+            setConfirmState(s => ({ ...s, isOpen: false }));
+            addToast(res.data.message || 'Loan deletion request submitted for chairman approval', 'success');
+        },
+        onError: (err: any) => addToast(err.response?.data?.message || 'Failed to request loan deletion', 'error'),
     });
 
     const editMutation = useMutation({
@@ -153,6 +158,7 @@ export default function LoansPage() {
     const canDisburse = !!user?.permissions?.includes('loans.disburse');
     const canClose = role === 'chairman' || role === 'manager';
     const canManage = !!canEncode;
+    const canRequestDelete = !!user?.permissions?.includes('loans.update');
 
     const getStatusColor = (s: string) => {
         const c: Record<string, string> = { pending: 'bg-yellow-100 text-yellow-800', approved: 'bg-green-100 text-green-800', active: 'bg-blue-100 text-blue-800', paid_off: 'bg-gray-100 text-gray-800', rejected: 'bg-red-100 text-red-800' };
@@ -285,12 +291,12 @@ export default function LoansPage() {
                                                         <i className="fas fa-edit"></i>
                                                     </button>
                                                 )}
-                                                {canManage && (
+                                                {canRequestDelete && l.can_delete && (
                                                     <button onClick={() => setConfirmState({
                                                         isOpen: true,
-                                                        title: 'Delete Loan',
-                                                        message: `Are you sure you want to delete loan ${l.loan_number}? This cannot be undone.`,
-                                                        confirmText: 'Delete',
+                                                        title: 'Request Loan Deletion',
+                                                        message: `Request deletion of ${l.loan_number}? Another active chairman must approve. Only pending, unreviewed loans with no transactions, uploaded documents, co-maker records, or collection records can be removed. After approval, the borrower will no longer see this pending loan in My Loans.`,
+                                                        confirmText: 'Request Deletion',
                                                         variant: 'danger',
                                                         onConfirm: () => deleteMutation.mutate(l.id),
                                                     })} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer" title="Delete">
@@ -348,7 +354,7 @@ export default function LoansPage() {
                                 <div className="space-y-4">
                                     <div className="rounded-xl bg-gray-50 p-5">
                                         <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-gray-900">How this loan breaks down <HelpTip text="Principal is the amount borrowed. Interest is the cost of borrowing. Added together they make up the total to be repaid." /></h3>
-                                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                                             <div className="rounded-lg border border-gray-100 bg-white p-4">
                                                 <p className="flex items-center gap-1 text-xs font-medium text-gray-500">Principal <HelpTip text="The amount borrowed, before any interest is added." /></p>
                                                 <p className="mt-1 text-lg font-semibold text-gray-900">{formatPeso(detail.principal_amount || detail.loan_amount)}</p>
@@ -360,6 +366,10 @@ export default function LoansPage() {
                                             <div className="rounded-lg border border-gray-100 bg-white p-4">
                                                 <p className="flex items-center gap-1 text-xs font-medium text-gray-500">= Total Repayment <HelpTip text="Principal plus interest: the total to be paid over the life of the loan." /></p>
                                                 <p className="mt-1 text-lg font-semibold text-emerald-700">{formatPeso(detail.estimated_total_repayment)}</p>
+                                            </div>
+                                            <div className="rounded-lg border border-amber-100 bg-amber-50 p-4">
+                                                <p className="flex items-center gap-1 text-xs font-medium text-amber-700">Accrued Penalties <HelpTip text="Current overdue charges based on this loan’s penalty policy and unpaid installments." /></p>
+                                                <p className="mt-1 text-lg font-semibold text-amber-800">{formatPeso(detail.accrued_penalty || 0)}</p>
                                             </div>
                                         </div>
                                         <div className="mt-5">
@@ -381,6 +391,8 @@ export default function LoansPage() {
                                         <InfoRow label="Interest Rate" value={`${detail.interest_rate}%`} hint="The percentage charged on the loan, applied over the term." />
                                         <InfoRow label="Term" value={`${detail.term_months} months`} hint="How long the borrower has to repay the loan, in months." />
                                         <InfoRow label="Payment Frequency" value={detail.payment_frequency} hint="How often an installment is due (for example, monthly)." />
+                                        <InfoRow label="Overdue Penalty" value={detail.penalty_amount > 0 ? `${detail.penalty_type === 'percent' ? `${detail.penalty_amount}%` : formatPeso(detail.penalty_amount)} · ${detail.penalty_frequency === 'per_due' ? 'per overdue installment' : detail.penalty_frequency}` : 'None'} hint="Penalty rules are copied from the loan product when the loan is created." />
+                                        <InfoRow label="Amount Due Now" value={formatPeso(detail.amount_due || 0)} hint="Unpaid scheduled installments plus accrued overdue penalties." />
                                         <InfoRow label="Status" value={<span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${getStatusColor(detail.loan_status)}`}>{getStatusLabel(detail.loan_status)}</span>} />
                                         <InfoRow label="Applied" value={detail.applied_at || '—'} />
                                         <InfoRow label="Approved" value={detail.approved_at || '—'} />
@@ -406,7 +418,7 @@ export default function LoansPage() {
                                         = <span className="inline-flex items-center gap-1">Principal <HelpTip text="The part of this payment that reduces the amount borrowed." /></span>
                                         + <span className="inline-flex items-center gap-1">Interest <HelpTip text="The part of this payment that covers the cost of borrowing." /></span>.
                                     </p>
-                                    <AmortizationTable schedule={detail?.payment_schedule} totalPaid={Number(detail?.total_paid) || 0} compact />
+                                    <AmortizationTable schedule={detail?.payment_schedule} totalPaid={Number(detail?.schedule_paid ?? detail?.total_paid) || 0} compact />
                                 </div>
                             )}
 

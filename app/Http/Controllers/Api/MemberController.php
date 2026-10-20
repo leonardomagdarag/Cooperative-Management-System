@@ -167,9 +167,7 @@ class MemberController extends Controller
             403
         );
 
-        if ($viewer && ! BranchScope::isUnrestricted($viewer)) {
-            abort_unless((int) $target->branch_id === (int) $viewer->branch_id, 403);
-        }
+        abort_unless(BranchScope::canAccessBranch($viewer, $target->branch_id), 403);
 
         $user = $target->load([
             'branch',

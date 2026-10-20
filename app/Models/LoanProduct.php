@@ -16,6 +16,9 @@ class LoanProduct extends Model
         'base_type',
         'icon',
         'interest_rate',
+        'penalty_type',
+        'penalty_amount',
+        'penalty_frequency',
         'max_amount',
         'max_term',
         'is_active',
@@ -30,6 +33,7 @@ class LoanProduct extends Model
 
     protected $casts = [
         'interest_rate' => 'decimal:2',
+        'penalty_amount' => 'decimal:2',
         'max_amount' => 'decimal:2',
         'is_active' => 'boolean',
         'requires_no_existing_loan' => 'boolean',
