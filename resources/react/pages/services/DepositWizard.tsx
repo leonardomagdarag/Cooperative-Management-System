@@ -6,11 +6,11 @@ import { validate, depositSchema, type FieldErrors } from '../../lib/validation'
 import ServiceModal from './ServiceModal';
 import StepCircles from './StepCircles';
 import {
-    getPayMongoMethods,
-    createPayMongoCheckout,
-    verifyPayMongoPayment,
+    getXenditStatus,
+    createXenditCheckout,
+    verifyXenditPayment,
     type CheckoutResponse,
-} from '../../api/paymongo';
+} from '../../api/xendit';
 
 interface AvailabilityFlags {
     global?: boolean;
@@ -39,13 +39,13 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
     const { addToast } = useToast();
     const requestIdRef = useRef<string | null>(null);
 
-    // Fetch PayMongo enabled status and active methods
-    const { data: paymongoData } = useQuery({
-        queryKey: ['paymongo-methods'],
-        queryFn: getPayMongoMethods,
+    // Fetch Xendit enabled status and active methods
+    const { data: xenditData } = useQuery({
+        queryKey: ['xendit-methods'],
+        queryFn: getXenditStatus,
     });
 
-    const isPayMongoAvailable = Boolean(paymongoData?.enabled && paymongoData.methods.length > 0);
+    const isXenditAvailable = Boolean(xenditData?.enabled);
 
     const setField = (key: string, value: string) => setForm(f => ({ ...f, [key]: value }));
 
@@ -53,9 +53,9 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
         onDirtyChange?.(!receipt && (form.amount !== '' || form.note !== '' || form.transaction_mode !== '' || !!proof));
     }, [form, proof, receipt, onDirtyChange]);
 
-    const isModeAvailable = (mode: 'counter' | 'online' | 'bank_transfer' | 'paymongo'): boolean => {
-        if (mode === 'paymongo') {
-            if (!isPayMongoAvailable) return false;
+    const isModeAvailable = (mode: 'counter' | 'online' | 'bank_transfer' | 'xendit'): boolean => {
+        if (mode === 'xendit') {
+            if (!isXenditAvailable) return false;
             if (availability && (!availability.global || availability.online === false)) return false;
             return true;
         }
@@ -80,10 +80,10 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
         setStep(3);
     };
 
-    const paymongoCheckoutMutation = useMutation({
+    const xenditCheckoutMutation = useMutation({
         mutationFn: () => {
             requestIdRef.current = requestIdRef.current ?? crypto.randomUUID();
-            return createPayMongoCheckout({
+            return createXenditCheckout({
                 service_type: 'deposit',
                 amount: form.amount,
                 account_type: form.account_type as 'savings' | 'share-capital',
@@ -101,12 +101,12 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
             }
         },
         onError: (err: any) => {
-            addToast(err.response?.data?.message || 'Failed to initialize PayMongo checkout.', 'error');
+            addToast(err.response?.data?.message || 'Failed to initialize Xendit checkout.', 'error');
         },
     });
 
     const verifyMutation = useMutation({
-        mutationFn: (txnNumber: string) => verifyPayMongoPayment(txnNumber),
+        mutationFn: (txnNumber: string) => verifyXenditPayment(txnNumber),
         onSuccess: (res) => {
             if (res.is_paid || res.status === 'completed') {
                 addToast('Payment verified successfully!', 'success');
@@ -150,7 +150,7 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
         },
         onSuccess: (res) => {
             requestIdRef.current = null;
-            addToast('Deposit submitted successfully', 'success');
+            addToast(res.data.data?.status === 'completed' ? 'Counter deposit recorded and credited' : 'Deposit submitted for manager or chairman approval', 'success');
             setReceipt(res.data.data || { message: res.data.message });
             setStep(99);
         },
@@ -160,7 +160,7 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
         },
     });
 
-    const totalSteps = form.transaction_mode === 'paymongo' ? 4 : 3;
+    const totalSteps = form.transaction_mode === 'xendit' ? 4 : 3;
 
     return (
         <ServiceModal
@@ -231,25 +231,25 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
                     <h4 className="text-lg font-semibold text-gray-900 mb-4">Choose Payment Method</h4>
 
                     <div className="space-y-3">
-                        {/* Option 1: PayMongo Secure Gateway (only when online payment is enabled) */}
-                        {isModeAvailable('paymongo') && (
+                        {/* Option 1: Xendit Secure Gateway (only when online payment is enabled) */}
+                        {isModeAvailable('xendit') && (
                             <button
                                 type="button"
-                                onClick={() => { setField('transaction_mode', 'paymongo'); setErrors(prev => ({ ...prev, transaction_mode: '' })); }}
-                                className={`w-full p-4 border-2 rounded-lg text-left transition-all ${form.transaction_mode === 'paymongo' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-300 hover:border-emerald-300'}`}
+                                onClick={() => { setField('transaction_mode', 'xendit'); setErrors(prev => ({ ...prev, transaction_mode: '' })); }}
+                                className={`w-full p-4 border-2 rounded-lg text-left transition-all ${form.transaction_mode === 'xendit' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-300 hover:border-emerald-300'}`}
                             >
                                 <div className="flex items-center gap-3">
-                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${form.transaction_mode === 'paymongo' ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${form.transaction_mode === 'xendit' ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
                                         <i className="fas fa-shield-alt text-xl"></i>
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
-                                            <p className="font-semibold text-gray-900">PayMongo Online Payment</p>
+                                            <p className="font-semibold text-gray-900">Xendit Online Payment</p>
                                             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">Automated</span>
                                         </div>
                                         <p className="text-sm text-gray-600 truncate">GCash, Maya, GrabPay, Cards, QR Ph & Direct Online Banking</p>
                                     </div>
-                                    {form.transaction_mode === 'paymongo' && <i className="fas fa-check-circle text-emerald-600 text-xl"></i>}
+                                    {form.transaction_mode === 'xendit' && <i className="fas fa-check-circle text-emerald-600 text-xl"></i>}
                                 </div>
                             </button>
                         )}
@@ -324,7 +324,7 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
                         <div className="flex justify-between">
                             <span className="text-gray-600">Payment Channel:</span>
                             <span className="font-semibold text-gray-900">
-                                {form.transaction_mode === 'paymongo' ? 'PayMongo Secure Online Checkout' :
+                                {form.transaction_mode === 'xendit' ? 'Xendit Secure Online Checkout' :
                                  form.transaction_mode === 'counter' ? 'Over the Counter' : 'Bank Transfer (Proof Upload)'}
                             </span>
                         </div>
@@ -336,18 +336,18 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
                         )}
                     </div>
 
-                    {form.transaction_mode === 'paymongo' ? (
+                    {form.transaction_mode === 'xendit' ? (
                         <div className="bg-emerald-50 border-l-4 border-emerald-500 p-4">
                             <p className="text-sm text-emerald-800">
                                 <i className="fas fa-shield-alt mr-2"></i>
-                                You will be redirected to PayMongo's secure hosted payment portal to complete your deposit using GCash, Maya, Card, QR Ph, or Online Banking.
+                                You will be redirected to Xendit's secure hosted payment portal. After Xendit verifies payment, a manager or chairman must approve the deposit before your balance changes.
                             </p>
                         </div>
                     ) : form.transaction_mode === 'counter' ? (
                         <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
                             <p className="text-sm text-blue-700">
                                 <i className="fas fa-info-circle mr-2"></i>
-                                Please visit our office with your payment to complete this transaction.
+                                Bring your payment to the office. A staff member will record the cash; member-submitted counter requests stay pending for manager or chairman approval.
                             </p>
                         </div>
                     ) : (
@@ -360,6 +360,7 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
                                 className={`block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/30 ${errors.proof ? 'border-red-400' : ''}`}
                             />
                             <p className="text-xs text-gray-500">Upload a screenshot, receipt, or PDF proof before submitting.</p>
+                            <p className="text-xs text-amber-700">Online and bank-transfer deposits stay pending until a manager or chairman approves them. Xendit payments also wait for approval after provider verification.</p>
                             {proof && <p className="text-xs font-medium text-gray-700">Selected: {proof.name}</p>}
                             {errors.proof && <span className="text-red-500 text-xs">{errors.proof}</span>}
                         </div>
@@ -369,14 +370,14 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
                         <button type="button" onClick={() => setStep(2)} className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50">
                             <i className="fas fa-arrow-left mr-2"></i> Back
                         </button>
-                        {form.transaction_mode === 'paymongo' ? (
+                        {form.transaction_mode === 'xendit' ? (
                             <button
                                 type="button"
-                                onClick={() => paymongoCheckoutMutation.mutate()}
-                                disabled={paymongoCheckoutMutation.isPending}
+                                onClick={() => xenditCheckoutMutation.mutate()}
+                                disabled={xenditCheckoutMutation.isPending}
                                 className="flex-1 px-4 py-3 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2"
                             >
-                                {paymongoCheckoutMutation.isPending ? 'Connecting...' : (<><i className="fas fa-lock mr-1"></i> Proceed to PayMongo</>)}
+                                {xenditCheckoutMutation.isPending ? 'Connecting...' : (<><i className="fas fa-lock mr-1"></i> Proceed to Xendit</>)}
                             </button>
                         ) : (
                             <button
@@ -392,7 +393,7 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
                 </div>
             )}
 
-            {/* Step 4: PayMongo Portal & Verification */}
+            {/* Step 4: Xendit Portal & Verification */}
             {step === 4 && checkoutSession && (
                 <div className="p-6 space-y-5 text-center">
                     <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto text-emerald-600 text-2xl">
@@ -400,8 +401,8 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
                     </div>
 
                     <div>
-                        <h4 className="text-xl font-bold text-gray-900">PayMongo Checkout Session</h4>
-                        <p className="text-sm text-gray-600 mt-1">Complete your payment in PayMongo's secure payment portal</p>
+                        <h4 className="text-xl font-bold text-gray-900">Xendit Checkout Session</h4>
+                        <p className="text-sm text-gray-600 mt-1">Complete your payment in Xendit's secure payment portal</p>
                     </div>
 
                     <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 text-left space-y-2 text-sm">
@@ -433,13 +434,13 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
                             className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-medium rounded-lg shadow-sm disabled:opacity-50"
                         >
                             <i className={`fas fa-sync-alt ${verifyMutation.isPending ? 'animate-spin' : ''}`}></i>
-                            <span>{verifyMutation.isPending ? 'Verifying with PayMongo...' : "I've Paid / Check Status"}</span>
+                            <span>{verifyMutation.isPending ? 'Verifying with Xendit...' : "I've Paid / Check Status"}</span>
                         </button>
                     </div>
 
                     <p className="text-xs text-gray-500 pt-2">
                         <i className="fas fa-info-circle mr-1"></i>
-                        After finishing the transaction on PayMongo, click <strong>"I've Paid / Check Status"</strong> above to verify your payment.
+                        After finishing the transaction on Xendit, click <strong>"I've Paid / Check Status"</strong> above to verify your payment.
                     </p>
                 </div>
             )}
@@ -449,13 +450,13 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
                     <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <i className="fas fa-check text-green-600 text-4xl"></i>
                     </div>
-                    <h4 className="text-xl font-bold text-gray-900 mb-2">Deposit Successful!</h4>
+                    <h4 className="text-xl font-bold text-gray-900 mb-2">{receipt?.status === 'completed' ? 'Deposit Completed' : 'Deposit Request Submitted'}</h4>
                     <p className="text-gray-600 mb-6">
                         {receipt?.status === 'completed'
-                            ? 'Your deposit has been verified and your account balance has been updated.'
+                                ? 'Your deposit was approved and your account balance has been updated.'
                             : form.transaction_mode === 'bank_transfer' || form.transaction_mode === 'online'
-                                ? 'Your bank transfer proof has been uploaded and is pending officer verification.'
-                                : 'Please visit our office to complete your counter deposit.'}
+                                ? 'Your online or bank transfer is pending manager or chairman approval.'
+                                : 'Your counter request is pending manager or chairman approval. Staff-recorded counter deposits post immediately.'}
                     </p>
 
                     {receipt?.transaction_number && (

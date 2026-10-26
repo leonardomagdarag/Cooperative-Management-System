@@ -38,6 +38,10 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(PersonalData::class, MemberPolicy::class);
 
         Gate::before(function (User $user, string $ability) {
+            if ($ability === 'oversight.approve') {
+                return $user->hasRole('chairman') ? null : false;
+            }
+
             return $user->hasRole('developer') && $ability !== 'finalApprove' ? true : null;
         });
 

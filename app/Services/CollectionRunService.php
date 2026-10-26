@@ -19,6 +19,25 @@ use Illuminate\Support\Str;
 
 class CollectionRunService
 {
+    public function notifyOpenRunOfficersOfExternalPayment(Loan $loan, float $amount): void
+    {
+        $officers = User::query()
+            ->whereIn('id', CollectionRun::query()
+                ->whereDate('collection_date', today())
+                ->whereIn('status', ['draft', 'submitted', 'in_progress', 'partially_applied'])
+                ->where('branch_id', $loan->branch_id)
+                ->select('loan_officer_id'))
+            ->get();
+
+        foreach ($officers as $officer) {
+            app(NotificationService::class)->notifyAccountActivity(
+                $officer,
+                'Loan payment received during collection run',
+                'An external payment of ₱'.number_format($amount, 2)." was recorded for {$loan->loan_number}. Refresh the route list. If this loan is already in your run, review its recorded amount before submitting or approving it."
+            );
+        }
+    }
+
     public function createRun(User $officer, string $date, ?int $branchId = null): CollectionRun
     {
         return DB::transaction(function () use ($officer, $date, $branchId) {
@@ -62,7 +81,8 @@ class CollectionRunService
         return DB::transaction(function () use ($run, $data) {
             $run = CollectionRun::whereKey($run->id)->lockForUpdate()->firstOrFail();
             abort_unless($run->status === 'draft', 409, 'Cannot add items to a non-draft run.');
-            $accountId = $data['account_id'] ?? null;
+            // Loan collections are external cash receipts; never link them to savings.
+            $accountId = null;
             $this->validateItemReferences($run, $data['member_id'], $data['loan_id'], $accountId, (float) $data['amount']);
 
             $item = $run->items()->create([
@@ -100,8 +120,9 @@ class CollectionRunService
             $run = CollectionRun::whereKey($runId)->lockForUpdate()->firstOrFail();
             $lockedItem = CollectionRunItem::whereKey($item->id)->lockForUpdate()->firstOrFail();
             abort_unless($run->status === 'draft', 409, 'Only draft run items can be changed.');
-            $this->validateItemReferences($run, $lockedItem->member_id, $lockedItem->loan_id, $lockedItem->account_id, (float) $data['amount']);
+            $this->validateItemReferences($run, $lockedItem->member_id, $lockedItem->loan_id, null, (float) $data['amount']);
             $lockedItem->update([
+                'account_id' => null,
                 'amount' => $data['amount'],
                 'note' => $data['note'] ?? null,
                 'visited' => $data['visited'] ?? false,
@@ -260,9 +281,15 @@ class CollectionRunService
                     }
                     $loan = Loan::whereKey($lockedItem->loan_id)->lockForUpdate()->firstOrFail();
                     abort_if($loan->loan_status === 'paid_off', 422, 'Loan is already paid off.');
+                    $currentDue = (float) $loan->getCollectionMetrics()['amount_due'];
+                    abort_if(
+                        (float) $lockedItem->amount > $currentDue + 0.01,
+                        409,
+                        'The overdue amount changed after this run was prepared. Current amount due: '.number_format($currentDue, 2).'. Refresh the route and update this item.'
+                    );
                     abort_if((float) $lockedItem->amount > (float) $loan->remainingBalance() + 0.01, 422, 'Payment exceeds the remaining loan balance.');
                     $transaction = Transaction::create([
-                        'account_id' => $lockedItem->account_id,
+                        'account_id' => null,
                         'amount' => $lockedItem->amount,
                         'transaction_type' => 'loan_payment',
                         'status' => 'completed',
@@ -300,6 +327,17 @@ class CollectionRunService
                         $lockedItem->update(['outcome' => 'failed', 'failure_reason' => $e->getMessage()]);
                     }
                 });
+
+                if (str_contains($e->getMessage(), 'overdue amount changed')) {
+                    $officer = $run->loanOfficer;
+                    if ($officer && ! $officer->trashed()) {
+                        app(NotificationService::class)->notifyAccountActivity(
+                            $officer,
+                            'Collection amount changed',
+                            "A loan payment changed the overdue amount for a loan in run {$run->run_number}. The item was not collected; refresh the route and update the run."
+                        );
+                    }
+                }
             }
         }
 
@@ -360,8 +398,9 @@ class CollectionRunService
             $account = Account::findOrFail($accountId);
             abort_unless((int) $account->user_id === $memberId && $account->account_type === 'savings', 422, 'The account must be a savings account belonging to the selected member.');
         }
-        abort_unless(in_array($loan->loan_status, ['approved', 'active'], true), 422, 'Loan is not open for payment.');
-        abort_unless($amount > 0 && $amount <= (float) $loan->remainingBalance() + 0.01, 422, 'Payment amount exceeds the loan balance.');
+        abort_unless($loan->loan_status === 'active' && $loan->disbursed_at !== null, 422, 'Loan must be disbursed before it can be collected.');
+        $amountDue = (float) $loan->getCollectionMetrics()['amount_due'];
+        abort_unless($amount > 0 && $amount <= $amountDue + 0.01, 422, 'Payment amount exceeds the current overdue amount. Refresh the route and review the amount.');
 
         // A loan already recorded in another run for the same date is off the
         // route list; block it here too so a stale client cannot double-collect.

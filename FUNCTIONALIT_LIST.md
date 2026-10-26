@@ -91,10 +91,10 @@ Member requires completed profile + per-service availability (`service.availabil
 
 | Service | API | Notes / Wizards |
 |---|---|---|
-| Deposit Money | `POST /api/services/deposit` or PayMongo checkout | `DepositWizard` — savings or share-capital, Counter (OTC), Online, or enabled PayMongo hosted checkout; availability still governs Counter/Online service use. |
+| Deposit Money | `POST /api/services/deposit` or Xendit checkout | `DepositWizard` — savings or share-capital, Counter (OTC), Online, or enabled Xendit hosted checkout; availability still governs Counter/Online service use. |
 | Withdraw Money | `POST /api/services/withdrawal` | `WithdrawalWizard` — savings only, Counter/Online/Bank-transfer, may require OTP approval on large amounts |
 | Apply for Loan | `POST /api/services/loan-application` | `LoanApplicationWizard` — personal/housing/business/emergency, availability `loan_application.{global,member,officer}` |
-| Make Loan Payment | `POST /api/services/loan-payment` or PayMongo checkout | `LoanPaymentWizard` — pay own active loan installments by Counter, Online, or enabled PayMongo hosted checkout; availability `loan_payment.{global,member,officer,counter,online}`. |
+| Make Loan Payment | `POST /api/services/loan-payment` or Xendit checkout | `LoanPaymentWizard` — pay own active loan installments by Counter, Online, or enabled Xendit hosted checkout; availability `loan_payment.{global,member,officer,counter,online}`. |
 | View own pending requests | `GET /api/history?status=pending&per_page=5` | Shown as “Pending Requests” card; “Awaiting Approval” badge, amount/type/date/note |
 
 If a service is disabled, `ServiceMaintenanceModal` is shown.
@@ -198,6 +198,8 @@ The admin preset is limited to system configuration, backups, security logs, tro
 ### 5.1.1 Chairman (`chairman`)
 Preset: operational member, service, loan, transaction, deposit, withdrawal, branch, announcement, and report permissions; `oversight.approve`; collections review/approval; and receipt reissue. The chairman is the countersign approver for privileged actions and is subject to the same server-side branch, OTP, separation-of-duty, and workflow checks as every other user.
 
+`oversight.approve` is chairman-only. Role and officer permission editors omit it, server authorization rejects it for non-chairman accounts (including developers), and pending permission changes cannot grant it. Ledger transaction changes remain in the chairman countersign workflow.
+
 ### 5.2 Manager (`manager`)
 Preset: members (view/create/update/approve plus detail facets), services (view/create/update), loans (view/create/encode/update/approve/reject/disburse), transactions (view/view-all/create/update/approve/reversal/export), deposits & withdrawals (view/create/approve/reject), reports (view/export/financial), announcements (view), `branches.bypass`, logs (view), settings (view), tickets, notifications, profile, and collections review/approval. The default manager preset does not grant member deletion, announcement writes, officer management, or `settings.update`. Managers have cross-branch access through `branches.bypass`.
 - Approve member applications (`POST /api/members/{user}/approve`, `POST /api/members/{user}/decline`).
@@ -215,6 +217,7 @@ Preset: members (view/create/update/approve plus detail facets), services (view/
 - Tickets support view (`isSupportStaff` includes accountant).
 
 ### 5.4 Loan Officer (`loan`)
+The default loan role also grants `deposits.create`, allowing loan officers to record member deposits through Services without granting ledger or expense access.
 Preset: dashboard.view, members.view, services.view, loans (view/create), `branches.bypass`, settings.view, tickets (view/reply), notifications.view, profile (view/update), collections (view-own/create/submit). The preset does not grant `loans.encode` or `loans.update`; loan encoding, review, edits, deletes, and officer document uploads are therefore unavailable unless those permissions are explicitly granted. The admin role can encode loans through its explicit admin policy exception. Loan officers can access records across branches, while loan lifecycle permissions remain separately enforced. **No `transactions.*`** — ledger/expenses return 403.
 - **Loan Applications** (`Services → Loan Applications`, `LoanReviewModal`): loan officers can view the loan queue and product/member lookup; review and endorsement require `loans.update`, which is not in the default loan role preset.
 - **Loans module** (`/dashboard/loans`, `loans.view`): `GET /api/loans/search-members`, `GET /api/loans/loan-products`, and `GET /api/loans/{loan}`. Encoding requires `loans.encode`; edits and officer uploads require `loans.update`. Loan deletion requests require `loans.update`, are limited to pending unreviewed loans with no linked records, and execute only after another active chairman countersigns. Borrowers can upload documents for their own loans.
@@ -270,6 +273,8 @@ do not treat old secretary-specific behavior as a separate role contract.
 ### 6.3 Services & Transactions (`ServicesPage`, `services.*`, `transactions.*`, `deposits.*`, `withdrawals.*`)
 - Availability-gated wizards (Deposit/Withdrawal/Loan Application/Loan Payment) for self (member) or selected member (officer).
 - Pending queue: `GET /api/services/pending` + `TransactionApproval` modal; approve: `POST /api/services/approve/{transaction}` (`transactions.approve`/`deposits.approve`/`withdrawals.approve`).
+- An officer cannot approve or reject a transaction they recorded unless they also have the explicit `transactions.approve-own` permission. This permission only lifts the self-approval restriction; the existing permission for the transaction type is still required. It is available through per-officer permission overrides and is not included in built-in role presets.
+- **Posting and approval workflow:** An officer who records a member's cash deposit, counter payout, or counter loan payment at the branch posts it immediately. A member's self-service counter request stays pending and requires a manager or chairman approval. Online and bank-transfer transactions stay pending; Xendit provider verification confirms payment but does not credit/debit an account or complete a loan payment by itself. A manager can approve only transactions in their assigned branch when `branches.bypass` is off. When the approver has branch bypass, only a chairman can approve. The transaction type permission and branch access checks still apply; high-value withdrawals also require OTP.
 - Account types: `savings`, `share-capital`; transaction types: `deposit`, `withdrawal`, `loan_payment`, `loan_disbursement`, `interest`, `fee`.
 - Channels/modes: Counter (OTC), Online, Bank Transfer (withdrawal).
 
@@ -329,10 +334,10 @@ do not treat old secretary-specific behavior as a separate role contract.
 ### 6.18 Backup & Restore (`BackupPage`, `backups.*`, admin)
 - Tiers: hourly and daily local archives plus an off-site Backblaze B2 replica; fixed schedules, retention, and optional archive encryption (`BACKUP_ARCHIVE_PASSWORD`). The UI can view runs, manage settings, test off-site connectivity, run/clean/download/delete archives, and request restore through the countersigned workflow. `backup:ping` + `/backup/ping` remain the scheduler fallback. See `docs/BACKUPS.md`.
 
-### 6.19 PayMongo Payment Gateway (`PayMongoPage`, Deposit/Loan Payment wizards)
-- **Settings:** the current UI and API restrict gateway configuration, encrypted credentials, enabled payment methods, and connection tests to `admin`. The endpoints are `GET/PUT /api/settings/paymongo`, `PUT/DELETE /api/settings/paymongo/credentials`, and `POST /api/settings/paymongo/test`.
-- **Member/officer payments:** Deposit and Loan Payment wizards fetch `GET /api/services/paymongo/methods`, create a hosted checkout with `POST /api/services/paymongo/checkout`, and allow a user-initiated status check through `GET /api/services/paymongo/verify/{transactionNumber}`.
-- **Webhook:** `POST /api/webhooks/paymongo` is a public signature-verified callback; it is integration-only, not a browser UI operation. External checkout and webhook verification require sandbox credentials and must be recorded as blocked/partially verified when unavailable rather than simulated against production.
+### 6.19 Xendit Payment Gateway (`XenditPage`, Deposit/Loan Payment wizards)
+- **Settings:** administrators manage test/live mode, encrypted secret API keys, callback tokens, and connection tests through `GET/PUT /api/settings/xendit`, `PUT/DELETE /api/settings/xendit/credentials`, and `POST /api/settings/xendit/test`.
+- **Member/officer payments:** Deposit and Loan Payment wizards fetch `GET /api/services/xendit/status`, create hosted Payment Sessions through the deposit or loan-payment checkout route (each carries profile-completion and matching service-availability gates), and allow a user-initiated authoritative status check through `GET /api/services/xendit/verify/{transactionNumber}`.
+- **Webhook:** `POST /api/webhooks/xendit` is a public callback-token-verified endpoint. Completion requires the Xendit session and underlying payment to match the stored transaction reference, PHP amount, and successful payment status. External checkout verification requires test credentials; never use live transactions for manual QA.
 
 ### 6.20 Supporting Security, Address, and Infrastructure Behaviors
 - **PSGC address lookup:** `GET /psgc/regions|provinces|cities|barangays` (and individual-code endpoints) supplies address selectors used by registration/profile/member workflows.
@@ -357,7 +362,7 @@ do not treat old secretary-specific behavior as a separate role contract.
 | Financial Accounts | `financial-accounts` | Non-members with `financial_settings.update` (admin) | Interest rates/intervals/min balance, withdrawal limits and account toggles, manual interest run; all countersigned (see §8.1) |
 | SMS Service | `sms` | Admin | Configure and test SMS settings |
 | Email Service | `email` | Non-members with `settings.update` | Configure and test email settings |
-| Payment Gateway | `paymongo` | Admin | Configure PayMongo, credentials, methods, connection test, and webhook guidance |
+| Payment Gateway | `xendit` | Admin | Configure Xendit test/live credentials, connection test, and webhook guidance |
 | Backup & Restore | `backups` | Non-members, admin or `backups.view`/`backups.manage` | Schedules, scopes, retention, cloud creds, run/restore/download |
 
 The Settings tab accepts admins and users with `officers.manage-permissions` for Roles & Permissions, but direct navigation to `/dashboard/role-permissions` is currently admin-gated by `App.tsx` and the API controller is also admin-only. Audit this discrepancy as observed behavior.
@@ -426,7 +431,7 @@ Other system settings (seeded, `SystemSettingSeeder`): site name/tagline, mainte
 
 ## 10. Permission Catalog (Summary)
 
-`PermissionCatalog::groups()` is the canonical list. It includes dashboard; member detail facets (`members.view-loans`, `members.view-ids`, `members.view-activity`, `members.view-financial`); services; loan lifecycle; transaction reversal; deposits; withdrawals; announcements; reports; officers; branches; logs; settings; financial accounts (`financial_settings.view`, `financial_settings.update`, `interest.view`, `interest.run`); backups; tickets; notifications; profile; oversight; collections; and receipt reissue permissions. `logs.export` remains a declared permission without a current log-export route or UI.
+`PermissionCatalog::groups()` is the canonical list. It includes dashboard; member detail facets (`members.view-loans`, `members.view-ids`, `members.view-activity`, `members.view-financial`); services; loan lifecycle; transaction approval, including the separate self-approval grant (`transactions.approve-own`); transaction reversal; deposits; withdrawals; announcements; reports; officers; branches; logs; settings; financial accounts (`financial_settings.view`, `financial_settings.update`, `interest.view`, `interest.run`); backups; tickets; notifications; profile; oversight; collections; and receipt reissue permissions. `logs.export` remains a declared permission without a current log-export route or UI.
 
 Current officer presets are `admin`, `chairman`, `manager`, `accountant`, and `loan`; the effective permission returned to the SPA also includes permitted officer overrides. Member, inactive, and terminated behavior is established by the user/role seeders and authorization code. Use `PermissionCatalog::rolePresets()` and `$user->can(...)` as the authority instead of this summary when testing access.
 

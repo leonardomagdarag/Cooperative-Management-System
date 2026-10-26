@@ -86,9 +86,7 @@ class CollectionRunController extends Controller
             ? collect()
             : CollectionRunItem::query()->whereIn('collection_run_id', $claimedRunIds)->pluck('loan_id');
 
-        $loansQuery = Loan::with(['branch', 'user.personalData.address', 'user.personalData.contact', 'user.accounts' => function ($q) {
-            $q->where('account_type', 'savings');
-        }]);
+        $loansQuery = Loan::with(['branch', 'user.personalData.address', 'user.personalData.contact']);
         BranchScope::applyToLoans($loansQuery, $user);
         $loans = $loansQuery
             ->whereIn('loan_status', ['approved', 'active'])
@@ -116,7 +114,6 @@ class CollectionRunController extends Controller
                     ])->filter()->implode(', ')) : null,
                     'amount_due' => $metrics['amount_due'],
                     'days_overdue' => $metrics['days_overdue'],
-                    'savings_account_id' => $loan->user->accounts->first()->id ?? null,
                 ];
             })
             ->filter(fn (array $loan) => $loan['amount_due'] > 0)
@@ -167,6 +164,10 @@ class CollectionRunController extends Controller
         abort_unless(BranchScope::canAccessBranch($user, $run->branch_id), 403);
 
         $run->load(['items.member.personalData', 'items.loan', 'items.account', 'loanOfficer.personalData', 'approvals.decidedBy.personalData']);
+        $run->items->each(fn (CollectionRunItem $item) => $item->setAttribute(
+            'current_amount_due',
+            (float) ($item->loan?->getCollectionMetrics()['amount_due'] ?? 0),
+        ));
 
         return response()->json(['data' => $run]);
     }

@@ -3,7 +3,7 @@ accounts,id,bigint,N/A,Auto-incrementing primary key.
 accounts,account_number,varchar,20,Unique cooperative account number printed on passbooks.
 accounts,user_id,bigint,N/A,Foreign key to users.id - the member who owns the account.
 accounts,account_type,enum,N/A,Account classification: savings or share-capital. Defaults to savings.
-accounts,balance,decimal,15,2,Current ledger balance of the account. Defaults to 0.
+accounts,balance,decimal,"15,2",Current ledger balance of the account. Defaults to 0.
 accounts,created_at,timestamp,N/A,Record creation timestamp.
 accounts,updated_at,timestamp,N/A,Record last-update timestamp.
 accounts,deleted_at,timestamp,N/A,Soft-delete marker; NULL while the account is active.
@@ -20,7 +20,7 @@ activity_log,properties,json,N/A,JSON blob holding the changed attributes and ev
 activity_log,batch_uuid,char,36,UUID that groups several related log entries into one batch.
 activity_log,created_at,timestamp,N/A,Timestamp when the entry was written.
 activity_log,updated_at,timestamp,N/A,Timestamp when the entry was last updated.
-activity_log,,,,Main purpose: Immutable audit trail of state-changing actions performed in the system, written by AuditLogService with 365-day retention.
+activity_log,,,,Main purpose: Immutable audit trail of state-changing actions performed in the system
 addresses,id,bigint,N/A,Auto-incrementing primary key.
 addresses,country,varchar,100,Country of residence.
 addresses,region,varchar,100,Region or region code.
@@ -44,7 +44,7 @@ announcements,event_location,varchar,255,Venue of the event.
 announcements,created_at,timestamp,N/A,Record creation timestamp.
 announcements,updated_at,timestamp,N/A,Record last-update timestamp.
 announcements,deleted_at,timestamp,N/A,Soft-delete marker.
-announcements,,,,Main purpose: Publishes news, general announcements and event notices to the membership with role-based visibility.
+announcements,,,,Main purpose: Publishes news
 app_credentials,id,bigint,N/A,Auto-incrementing primary key.
 app_credentials,key,varchar,255,Unique credential name used to look the secret up.
 app_credentials,value,text,N/A,Stored secret or environment value.
@@ -59,14 +59,14 @@ archived_transactions,transaction_number,varchar,20,Transaction reference copied
 archived_transactions,transaction_type,enum,N/A,Type of the archived entry: deposit / withdrawal / loan_payment / loan_disbursement / interest / fee.
 archived_transactions,account_id,bigint,N/A,Primary key of the affected account (indexed).
 archived_transactions,loan_id,bigint,N/A,Primary key of the affected loan.
-archived_transactions,amount,decimal,15,2,Transaction amount.
+archived_transactions,amount,decimal,"15,2",Transaction amount.
 archived_transactions,transaction_date,datetime,N/A,Effective date of the transaction (indexed).
 archived_transactions,note,text,N/A,Free-text note carried over from the original row.
 archived_transactions,recorded_by,bigint,N/A,Primary key of the user who originally recorded it.
-archived_transactions,reversal_of_id,bigint,N/A,Primary key of the reversed transaction copied from the live ledger.
 archived_transactions,created_at,timestamp,N/A,Timestamp copied from the original row.
 archived_transactions,updated_at,timestamp,N/A,Timestamp copied from the original row.
 archived_transactions,archived_at,timestamp,N/A,Timestamp when the row was moved out of the live transactions table. Defaults to current.
+archived_transactions,reversal_of_id,bigint,N/A,Primary key of the reversed transaction copied from the live ledger.
 archived_transactions,,,,Main purpose: Cold storage for transactions pulled out of the live ledger to keep the hot table small while preserving history.
 backup_runs,id,bigint,N/A,Auto-incrementing primary key.
 backup_runs,tier,varchar,20,Backup tier or fixed job name such as daily and offsite. Widened from an enum on 2026-09-22.
@@ -80,7 +80,7 @@ backup_runs,finished_at,timestamp,N/A,Timestamp when the job completed.
 backup_runs,triggered_by,bigint,N/A,Foreign key to users.id; set to NULL if the triggering user is removed.
 backup_runs,created_at,timestamp,N/A,Record creation timestamp.
 backup_runs,updated_at,timestamp,N/A,Record last-update timestamp.
-backup_runs,,,,Main purpose: Execution log for the three backup tiers so operators can see which backups ran, how long they took and whether they succeeded.
+backup_runs,,,,Main purpose: Execution log for the three backup tiers so operators can see which backups ran
 barangays,code,varchar,20,Primary key. PSGC 10-digit barangay code assigned by PSA.
 barangays,name,varchar,255,Official name of the barangay (indexed).
 barangays,city_code,varchar,20,PSGC code of the parent city or municipality (indexed).
@@ -102,7 +102,7 @@ beneficiaries,province,varchar,100,Beneficiary province.
 beneficiaries,postal_code,varchar,10,Beneficiary postal code.
 beneficiaries,created_at,timestamp,N/A,Record creation timestamp.
 beneficiaries,updated_at,timestamp,N/A,Record last-update timestamp.
-beneficiaries,,,,Main purpose: Records the people a member designates to receive benefits, used for death-claim and payout processing.
+beneficiaries,,,,Main purpose: Records the people a member designates to receive benefits
 board_members,id,bigint,N/A,Auto-incrementing primary key.
 board_members,name,varchar,255,Full name of the board member.
 board_members,position,varchar,255,Board office held such as Chairman or Treasurer (indexed).
@@ -186,8 +186,6 @@ collection_runs,stages_snapshot,json,N/A,Snapshot of required approval stages co
 collection_runs,total_amount,decimal,"15,2",Total cash amount collected across all line items in this run.
 collection_runs,item_count,int,N/A,Total number of borrower collection line items in the envelope.
 collection_runs,is_late,tinyint,1,Flag indicating whether the run was submitted after cutoff time.
-collection_runs,submitted_at,timestamp,N/A,Timestamp when the loan officer formally submitted the run.
-collection_runs,resubmission_of_id,bigint,N/A,Foreign key linking a resubmitted run to its previously rejected run.
 collection_runs,decided_at,timestamp,N/A,Timestamp of the final approval or rejection decision.
 collection_runs,rejection_reason,text,N/A,Mandatory explanation provided if the run was rejected.
 collection_runs,orphaned_at,timestamp,N/A,Timestamp if the run became orphaned due to staff assignment changes.
@@ -195,6 +193,8 @@ collection_runs,voided_reason,text,N/A,Explanation provided if the run was voide
 collection_runs,created_at,timestamp,N/A,Record creation timestamp.
 collection_runs,updated_at,timestamp,N/A,Record last-update timestamp.
 collection_runs,deleted_at,timestamp,N/A,Soft-delete marker.
+collection_runs,submitted_at,timestamp,N/A,Timestamp when the loan officer formally submitted the run.
+collection_runs,resubmission_of_id,bigint,N/A,Foreign key linking a resubmitted run to its previously rejected run.
 collection_runs,,,,Main purpose: Manages field collection batch envelopes from Loan Officer encoding through Accountant Stage 1 review to Manager Stage 2 final approval.
 contacts,id,bigint,N/A,Auto-incrementing primary key.
 contacts,phone_no,varchar,11,Philippine mobile number in 11-digit format (indexed).
@@ -202,21 +202,21 @@ contacts,phone_verified_at,timestamp,N/A,Set once the phone number has been conf
 contacts,email,varchar,255,Email address; unique across all member contact records.
 contacts,email_verified_at,timestamp,N/A,Set once the email address has been confirmed.
 contacts,facebook,varchar,255,Facebook profile link (indexed).
-contacts,,,,Main purpose: Reusable contact-method block holding each member's phone, email and Facebook details plus their verification timestamps.
+contacts,,,,Main purpose: Reusable contact-method block holding each member's phone
 employments,id,bigint,N/A,Auto-incrementing primary key.
 employments,employment_type,enum,N/A,Work arrangement: full-time / part-time / self-employed / freelancer / government / private / ofw / retired / unemployed / student / homemaker.
 employments,company,varchar,255,Employer or business name.
 employments,position,varchar,100,Job title or occupation.
-employments,monthly_income,decimal,15,2,Declared monthly income used for loan affordability assessment.
+employments,monthly_income,decimal,"15,2",Declared monthly income used for loan affordability assessment.
 employments,other_income_source,varchar,255,Source of additional income.
-employments,other_income_amount,decimal,15,2,Monthly amount from the additional income source.
+employments,other_income_amount,decimal,"15,2",Monthly amount from the additional income source.
 employments,created_at,timestamp,N/A,Record creation timestamp.
 employments,updated_at,timestamp,N/A,Record last-update timestamp.
 employments,,,,Main purpose: Captures a member's employment and income profile that drives credit assessment and eligibility rules.
 expenses,id,bigint,N/A,Auto-incrementing primary key.
 expenses,category,varchar,100,Expense classification such as utilities or supplies (indexed).
 expenses,description,text,N/A,Explanation of what the expense was for.
-expenses,amount,decimal,15,2,Expense amount.
+expenses,amount,decimal,"15,2",Expense amount.
 expenses,expense_date,datetime,N/A,Date the expense was incurred (indexed).
 expenses,recorded_by,bigint,N/A,Foreign key to users.id - the staff member who logged the expense.
 expenses,branch_id,bigint,N/A,Foreign key to branches.id - the branch that owns the expense.
@@ -252,25 +252,25 @@ interest_disbursement_items,interest_disbursement_id,bigint,N/A,Foreign key to i
 interest_disbursement_items,user_id,bigint,N/A,Foreign key to users.id - the member credited or skipped (nullable).
 interest_disbursement_items,account_id,bigint,N/A,Foreign key to accounts.id - the account credited or skipped (nullable).
 interest_disbursement_items,transaction_id,bigint,N/A,Foreign key to transactions.id - the posted interest transaction for a credit (nullable).
-interest_disbursement_items,amount,decimal,15,2,Interest amount for the member; the would-be amount when skipped.
-interest_disbursement_items,balance_before,decimal,15,2,Account balance before the credit.
-interest_disbursement_items,balance_after,decimal,15,2,Account balance after the credit (equal to before when skipped).
-interest_disbursement_items,rate,decimal,8,4,Annual interest rate snapshot for the line.
+interest_disbursement_items,amount,decimal,"15,2",Interest amount for the member; the would-be amount when skipped.
+interest_disbursement_items,balance_before,decimal,"15,2",Account balance before the credit.
+interest_disbursement_items,balance_after,decimal,"15,2",Account balance after the credit (equal to before when skipped).
+interest_disbursement_items,rate,decimal,"8,4",Annual interest rate snapshot for the line.
 interest_disbursement_items,skipped,boolean,N/A,Whether the member was skipped rather than credited (indexed with the batch id).
 interest_disbursement_items,skip_reason,varchar,100,Reason recorded when the line was skipped.
 interest_disbursement_items,created_at,timestamp,N/A,Record creation timestamp.
 interest_disbursement_items,updated_at,timestamp,N/A,Record last-update timestamp.
-interest_disbursement_items,,,,Main purpose: Per-member lines for each interest batch, giving the credited or skipped amount and the resulting account balance.
+interest_disbursement_items,,,,Main purpose: Per-member lines for each interest batch
 interest_disbursements,id,bigint,N/A,Auto-incrementing primary key.
 interest_disbursements,account_type,varchar,20,Interest-bearing account type: savings / share-capital (indexed with created_at).
-interest_disbursements,rate,decimal,8,4,Annual interest rate snapshot for the batch.
+interest_disbursements,rate,decimal,"8,4",Annual interest rate snapshot for the batch.
 interest_disbursements,interval,varchar,20,Crediting interval at the time of the run: daily / monthly / yearly.
 interest_disbursements,period_label,varchar,30,Batch period label such as 2026-10-16 / 2026-10 / 2026.
 interest_disbursements,period_start,date,N/A,First day covered by the batch.
 interest_disbursements,period_end,date,N/A,Last day covered by the batch.
 interest_disbursements,member_count,int,N/A,Unsigned count of members credited in the batch.
 interest_disbursements,skipped_count,int,N/A,Unsigned count of members skipped by the minimum-payout threshold.
-interest_disbursements,total_amount,decimal,15,2,Total interest credited across all members in the batch.
+interest_disbursements,total_amount,decimal,"15,2",Total interest credited across all members in the batch.
 interest_disbursements,status,varchar,20,Batch state: completed / failed / reversed (indexed).
 interest_disbursements,trigger,varchar,20,What started the run: scheduled / manual.
 interest_disbursements,batch_key,varchar,100,Unique idempotency key such as savings:2026-10.
@@ -279,7 +279,7 @@ interest_disbursements,approved_by,bigint,N/A,Foreign key to users.id - the appr
 interest_disbursements,note,text,N/A,Free-text note or narration.
 interest_disbursements,created_at,timestamp,N/A,Record creation timestamp.
 interest_disbursements,updated_at,timestamp,N/A,Record last-update timestamp.
-interest_disbursements,,,,Main purpose: One auditable header per interest crediting batch, recording the rate/interval snapshot, totals, and idempotency key.
+interest_disbursements,,,,Main purpose: One auditable header per interest crediting batch
 job_batches,id,varchar,255,Primary key; unique UUID string identifying the queued job batch.
 job_batches,name,varchar,255,Human-readable batch identifier name.
 job_batches,total_jobs,int,N/A,Total number of queued jobs contained within this batch.
@@ -309,18 +309,28 @@ loan_documents,uploaded_by,bigint,N/A,Foreign key to users.id; set to NULL if th
 loan_documents,created_at,timestamp,N/A,Record creation timestamp.
 loan_documents,updated_at,timestamp,N/A,Record last-update timestamp.
 loan_documents,,,,Main purpose: Stores the supporting documents members attach to a loan application.
+loan_payment_installment_allocations,id,bigint,N/A,Auto-incrementing primary key.
+loan_payment_installment_allocations,transaction_id,bigint,N/A,Foreign key to transactions.id - the loan payment transaction. Cascades on transaction deletion.
+loan_payment_installment_allocations,period,smallint,N/A,Installment number selected for this payment.
+loan_payment_installment_allocations,amount,decimal,"15,2",Amount of the payment excluding any separately recorded penalty portion.
+loan_payment_installment_allocations,created_at,timestamp,N/A,Record creation timestamp.
+loan_payment_installment_allocations,updated_at,timestamp,N/A,Record last-update timestamp.
+loan_payment_installment_allocations,,,,Main purpose: Records the distribution of loan payment amounts across specific repayment installments and periods.
 loan_products,id,bigint,N/A,Auto-incrementing primary key.
 loan_products,code,varchar,50,Unique short code identifying the product.
 loan_products,name,varchar,120,Display name of the loan product.
 loan_products,description,text,N/A,Marketing and eligibility description shown to members.
 loan_products,base_type,enum,N/A,Underlying loan category: group / business / special. Defaults to business.
 loan_products,icon,varchar,50,Front-end icon key. Defaults to wallet.
-loan_products,interest_rate,decimal,5,2,Default annual interest rate percentage.
-loan_products,max_amount,decimal,15,2,Maximum principal the product may grant. Defaults to 0.
+loan_products,interest_rate,decimal,"5,2",Default annual interest rate percentage.
+loan_products,penalty_type,enum,N/A,Overdue penalty calculation type: flat fee or percentage of due amount. Defaults to flat.
+loan_products,penalty_amount,decimal,"12,2",Fixed penalty fee or percentage rate charged on overdue loan installments. Defaults to 0.
+loan_products,penalty_frequency,enum,N/A,"Penalty recurring frequency: daily, weekly, or per_due. Defaults to per_due."
+loan_products,max_amount,decimal,"15,2",Maximum principal the product may grant. Defaults to 0.
 loan_products,max_term,int,N/A,Unsigned maximum term in months. Defaults to 1.
 loan_products,is_active,tinyint,1,Whether the product is offered to members. Defaults to true.
 loan_products,requires_no_existing_loan,tinyint,1,Restricts the product to members with no outstanding loan. Defaults to false.
-loan_products,minimum_share_capital,decimal,15,2,Minimum share-capital balance required to qualify.
+loan_products,minimum_share_capital,decimal,"15,2",Minimum share-capital balance required to qualify.
 loan_products,minimum_membership_years,int,N/A,Unsigned minimum years of membership required to qualify. Defaults to 0.
 loan_products,required_co_makers,tinyint,N/A,Unsigned number of co-makers the product requires. Defaults to 0.
 loan_products,requires_interview,tinyint,1,Whether a face-to-face interview is mandatory. Defaults to false.
@@ -328,16 +338,19 @@ loan_products,requires_special_eligibility,tinyint,1,Whether the member must be 
 loan_products,sort_order,int,N/A,Unsigned ordering used when listing products. Defaults to 0.
 loan_products,created_at,timestamp,N/A,Record creation timestamp.
 loan_products,updated_at,timestamp,N/A,Record last-update timestamp.
-loan_products,,,,Main purpose: Configurable catalogue of loan offerings with their interest rates, limits and eligibility rules, administered from the dashboard.
+loan_products,,,,Main purpose: Configurable catalogue of loan offerings with their interest rates
 loans,id,bigint,N/A,Auto-incrementing primary key.
 loans,loan_number,varchar,20,Unique human-readable loan reference number.
 loans,user_id,bigint,N/A,Foreign key to users.id - the borrower.
 loans,branch_id,bigint,N/A,Foreign key to branches.id - the branch that owns and services the loan.
-loans,account_id,bigint,N/A,Foreign key to accounts.id - the account used for disbursement and repayment. Set to NULL if the account is deleted.
+loans,account_id,bigint,N/A,Optional savings account credited when loan proceeds are disbursed to savings. Loan repayments are external and never debit this account. Set to NULL if the account is deleted.
 loans,loan_type,enum,N/A,Loan category: group / business / special. Defaults to business.
 loans,loan_product,varchar,50,Loan product code matched against loan_products.code (indexed).
-loans,loan_amount,decimal,15,2,Principal amount requested or approved.
-loans,interest_rate,decimal,5,2,Annual interest rate percentage applied to the loan.
+loans,loan_amount,decimal,"15,2",Principal amount requested or approved.
+loans,interest_rate,decimal,"5,2",Annual interest rate percentage applied to the loan.
+loans,penalty_type,enum,N/A,Snapshot of penalty calculation mode: flat fee or percentage applied to late payments. Defaults to flat.
+loans,penalty_amount,decimal,"12,2",Snapshot of penalty fee or percentage rate levied on overdue installments. Defaults to 0.
+loans,penalty_frequency,enum,N/A,"Frequency at which late penalties accumulate: daily, weekly, or per_due. Defaults to per_due."
 loans,term_months,int,N/A,Repayment term expressed in months.
 loans,payment_frequency,enum,N/A,Amortisation schedule: weekly / bi-weekly / monthly / quarterly / annually. Defaults to monthly.
 loans,loan_status,enum,N/A,Current loan status: pending / approved / active / paid_off / rejected. Defaults to pending.
@@ -347,6 +360,7 @@ loans,reviewed_at,timestamp,N/A,Timestamp when the credit review was completed.
 loans,review_notes,text,N/A,Justification or notes written during the credit review.
 loans,applied_at,datetime,N/A,Timestamp when the member submitted the application.
 loans,approved_at,datetime,N/A,Timestamp when the loan was formally approved.
+loans,disbursed_at,datetime,N/A,Timestamp when the borrower received the loan funds; repayment schedule and due countdown start from this time.
 loans,approved_by,bigint,N/A,Foreign key to users.id - the officer who approved the loan.
 loans,due_date,date,N/A,Maturity date of the loan.
 loans,employment_id,bigint,N/A,Foreign key to employments.id used for the assessment. Set to NULL on delete.
@@ -354,11 +368,11 @@ loans,interview_schedule,datetime,N/A,Scheduled date and time of the borrower in
 loans,interview_status,enum,N/A,Interview progress: pending / scheduled / completed / cancelled. Defaults to pending.
 loans,interview_officer_id,bigint,N/A,Foreign key to users.id - the officer who conducted the interview. Set to NULL on user delete.
 loans,interview_notes,text,N/A,Findings recorded during the interview.
-loans,encoded_by,bigint,N/A,Foreign key to users.id - the loan officer or staff member who encoded the application.
 loans,created_at,timestamp,N/A,Record creation timestamp.
 loans,updated_at,timestamp,N/A,Record last-update timestamp.
 loans,deleted_at,timestamp,N/A,Soft-delete marker.
-loans,,,,Main purpose: Central loan record covering the full lifecycle from application through credit review, interview, approval and repayment.
+loans,encoded_by,bigint,N/A,Foreign key to users.id - the loan officer or staff member who encoded the application.
+loans,,,,Main purpose: Central loan record covering the full lifecycle from application through credit review
 logs,id,bigint,N/A,Auto-incrementing primary key.
 logs,user_id,bigint,N/A,Foreign key to users.id; NULL when the actor is not authenticated.
 logs,activity,varchar,255,Short name of the activity performed.
@@ -421,7 +435,7 @@ notifications,priority,enum,N/A,Display priority: low / normal / high / urgent. 
 notifications,expires_at,timestamp,N/A,Timestamp after which the notification is no longer shown.
 notifications,created_at,timestamp,N/A,Record creation timestamp.
 notifications,updated_at,timestamp,N/A,Record last-update timestamp.
-notifications,,,,Main purpose: In-app notification inbox delivering loan, membership, security and support-ticket updates to individual users.
+notifications,,,,Main purpose: In-app notification inbox delivering loan
 officer_permission_overrides,id,bigint,N/A,Auto-incrementing primary key.
 officer_permission_overrides,user_id,bigint,N/A,Foreign key to users.id; cascades on delete. Unique together with permission.
 officer_permission_overrides,permission,varchar,255,Name of the permission being overridden.
@@ -441,7 +455,7 @@ otp_challenges,expires_at,timestamp,N/A,Timestamp when the code stops being vali
 otp_challenges,consumed_at,timestamp,N/A,Set once the code has been successfully redeemed.
 otp_challenges,created_at,timestamp,N/A,Record creation timestamp.
 otp_challenges,updated_at,timestamp,N/A,Record last-update timestamp.
-otp_challenges,,,,Main purpose: Issues and verifies hashed one-time passcodes for step-up authentication on sensitive operations, with attempt limits and expiry.
+otp_challenges,,,,Main purpose: Issues and verifies hashed one-time passcodes for step-up authentication on sensitive operations
 password_reset_tokens,email,varchar,255,Email address of the user requesting a reset. Primary key.
 password_reset_tokens,token,varchar,255,Hashed password reset token.
 password_reset_tokens,created_at,timestamp,N/A,Timestamp when the reset token was generated.
@@ -481,7 +495,7 @@ personal_data,member_id,bigint,N/A,Foreign key to member_ids.id; unique so one I
 personal_data,created_at,timestamp,N/A,Record creation timestamp.
 personal_data,updated_at,timestamp,N/A,Record last-update timestamp.
 personal_data,deleted_at,timestamp,N/A,Soft-delete marker.
-personal_data,,,,Main purpose: The personal identity record of every member and officer, linking to the normalised address, contact, employment and ID sub-tables.
+personal_data,,,,Main purpose: The personal identity record of every member and officer
 privileged_action_requests,id,bigint,N/A,Auto-incrementing primary key.
 privileged_action_requests,action_type,varchar,255,"Privileged action identifier (e.g. system.role_permissions.update, backup.restore, financial.interest.run)."
 privileged_action_requests,status,enum,N/A,Workflow state: pending / approved / executing / executed / rejected / expired / failed. Defaults to pending.
@@ -499,6 +513,7 @@ privileged_action_requests,execution_result,json,N/A,"JSON record of the executi
 privileged_action_requests,idempotency_key,char,36,Unique UUID preventing duplicate execution of the same action request.
 privileged_action_requests,created_at,timestamp,N/A,Record creation timestamp.
 privileged_action_requests,updated_at,timestamp,N/A,Record last-update timestamp.
+privileged_action_requests,active_key,varchar,255,Concurrency control key ensuring only one pending approval request exists for a given action or target entity at a time.
 privileged_action_requests,,,,Main purpose: Core four-eyes security architecture enforcing mandatory Chairman OTP countersignature before high-risk administrative mutations execute.
 provinces,code,varchar,20,Primary key. PSGC code of the province.
 provinces,name,varchar,255,Official name of the province (indexed).
@@ -524,7 +539,7 @@ restore_runs,finished_at,timestamp,N/A,Timestamp when the restore completed.
 restore_runs,triggered_by,bigint,N/A,Foreign key to users.id; set to NULL if the triggering user is removed.
 restore_runs,created_at,timestamp,N/A,Record creation timestamp.
 restore_runs,updated_at,timestamp,N/A,Record last-update timestamp.
-restore_runs,,,,Main purpose: Execution log for restore operations, recording the safety snapshot taken before the restore was applied.
+restore_runs,,,,Main purpose: Execution log for restore operations
 role_has_permissions,permission_id,bigint,N/A,Foreign key to permissions.id; cascades on delete. Part of the composite primary key.
 role_has_permissions,role_id,bigint,N/A,Foreign key to roles.id; cascades on delete. Part of the composite primary key.
 role_has_permissions,,,,Main purpose: Spatie pivot defining which permissions each role grants.
@@ -535,7 +550,7 @@ role_permissions,permissions,json,N/A,JSON array of the permission names granted
 role_permissions,is_active,tinyint,1,Whether the bundle is currently applied. Defaults to true.
 role_permissions,created_at,timestamp,N/A,Record creation timestamp.
 role_permissions,updated_at,timestamp,N/A,Record last-update timestamp.
-role_permissions,,,,Main purpose: Section-by-section view of each role's permission set, used by the admin matrix UI to edit role capabilities.
+role_permissions,,,,Main purpose: Section-by-section view of each role's permission set
 roles,id,bigint,N/A,Auto-incrementing primary key.
 roles,name,varchar,255,Role name. Unique together with guard_name.
 roles,guard_name,varchar,255,Auth guard the role applies to; always web in this system.
@@ -559,7 +574,7 @@ site_contents,order,int,N/A,Display sort order (reserved SQL word; always quoted
 site_contents,is_active,tinyint,1,Whether the content entry is rendered. Defaults to true.
 site_contents,created_at,timestamp,N/A,Record creation timestamp.
 site_contents,updated_at,timestamp,N/A,Record last-update timestamp.
-site_contents,,,,Main purpose: Makes the public-facing website copy (homepage text, about page, contact details) editable without a code deployment.
+site_contents,,,,Main purpose: Makes the public-facing website copy (homepage text
 system_settings,id,bigint,N/A,Auto-incrementing primary key.
 system_settings,key,varchar,255,Unique setting key (reserved SQL word; always quoted).
 system_settings,value,text,N/A,Stored setting value.
@@ -572,7 +587,7 @@ system_settings,is_editable,tinyint,1,Whether administrators may change the valu
 system_settings,requires_restart,tinyint,1,Flags settings that need a worker or application restart to take effect. Defaults to false.
 system_settings,created_at,timestamp,N/A,Record creation timestamp.
 system_settings,updated_at,timestamp,N/A,Record last-update timestamp.
-system_settings,,,,Main purpose: Stores runtime configuration such as service-availability switches and per-tier backup cron expressions, editable from the admin panel.
+system_settings,,,,Main purpose: Stores runtime configuration such as service-availability switches and per-tier backup cron expressions
 ticket_attachments,id,bigint,N/A,Auto-incrementing primary key.
 ticket_attachments,ticket_id,bigint,N/A,Foreign key to tickets.id; cascades on delete (indexed).
 ticket_attachments,ticket_message_id,bigint,N/A,Foreign key to ticket_messages.id; cascades on delete (indexed).
@@ -605,7 +620,12 @@ tickets,closed_at,timestamp,N/A,Timestamp when the ticket was closed.
 tickets,created_at,timestamp,N/A,Record creation timestamp.
 tickets,updated_at,timestamp,N/A,Record last-update timestamp.
 tickets,deleted_at,timestamp,N/A,Soft-delete marker.
-tickets,,,,Main purpose: Provides the member support-ticket system with assignment, priority and status tracking.
+tickets,,,,Main purpose: Provides the member support-ticket system with assignment
+transaction_number_sequences,business_date,date,N/A,Transaction accounting business date acting as primary key.
+transaction_number_sequences,last_sequence,bigint,N/A,Monotonically increasing sequential counter issued for transaction numbers on this date. Defaults to 0.
+transaction_number_sequences,created_at,timestamp,N/A,Record creation timestamp.
+transaction_number_sequences,updated_at,timestamp,N/A,Record last-update timestamp.
+transaction_number_sequences,,,,"Main purpose: Tracks daily sequential counters to generate unique, gapless, and collision-free transaction numbers (TXNYYYYMMDD#####) during concurrent processing."
 transaction_receipts,id,bigint,N/A,Auto-incrementing primary key.
 transaction_receipts,transaction_id,bigint,N/A,Foreign key to transactions.id; cascades on delete.
 transaction_receipts,reason,enum,N/A,Issuance reason: original / reprint / reissue. Defaults to original.
@@ -621,16 +641,17 @@ transactions,transaction_number,varchar,20,Unique human-readable transaction ref
 transactions,client_request_id,varchar,100,Client-supplied idempotency key; unique and prevents duplicate submissions.
 transactions,transaction_type,enum,N/A,Type of entry: deposit / withdrawal / loan_payment / loan_disbursement / interest / fee.
 transactions,transaction_mode,varchar,255,Channel used to perform the transaction such as over-the-counter.
-transactions,payment_gateway,varchar,50,Online payment provider such as PayMongo (indexed).
+transactions,payment_gateway,varchar,50,Online payment provider such as Xendit (indexed); legacy PayMongo transactions retain their original provider value.
 transactions,payment_method_used,varchar,50,Specific gateway method such as GCash or Maya.
 transactions,paymongo_checkout_session_id,varchar,100,PayMongo checkout session identifier (indexed).
 transactions,paymongo_payment_intent_id,varchar,100,PayMongo payment-intent identifier (indexed).
 transactions,paymongo_payment_id,varchar,100,PayMongo payment identifier (indexed).
-transactions,paymongo_fee,decimal,15,2,Fee charged by the gateway on the payment.
+transactions,paymongo_fee,decimal,"15,2",Fee charged by the gateway on the payment.
 transactions,status,enum,N/A,Approval state: pending / approved / rejected / completed. Defaults to pending.
 transactions,account_id,bigint,N/A,Foreign key to accounts.id - the account the money moved through.
 transactions,loan_id,bigint,N/A,Foreign key to loans.id - the loan affected by a payment or disbursement.
-transactions,amount,decimal,15,2,Transaction amount; positive for all recorded movements.
+transactions,amount,decimal,"15,2",Transaction amount; positive for all recorded movements.
+transactions,penalty_amount,decimal,"12,2",Late payment penalty portion included in the transaction amount. Defaults to 0.
 transactions,transaction_date,datetime,N/A,Effective date of the transaction (indexed).
 transactions,note,text,N/A,Free-text note or narration.
 transactions,recorded_by,bigint,N/A,Foreign key to users.id - the member or officer who created the entry.
@@ -640,10 +661,13 @@ transactions,approved_at,datetime,N/A,Timestamp when the transaction was approve
 transactions,rejection_reason,text,N/A,Explanation given when the transaction was rejected.
 transactions,proof_of_payment_path,varchar,255,Storage path of the uploaded proof-of-payment image.
 transactions,proof_of_payment_uploaded_at,timestamp,N/A,Timestamp when the proof of payment was uploaded.
-transactions,reversal_of_id,bigint,N/A,Foreign key to transactions.id pointing to the original transaction this entry reverses.
 transactions,created_at,timestamp,N/A,Record creation timestamp.
 transactions,updated_at,timestamp,N/A,Record last-update timestamp.
-transactions,,,,Main purpose: The cooperative's financial ledger; one immutable row per deposit, withdrawal, loan payment, disbursement or fee, with an approval workflow.
+transactions,reversal_of_id,bigint,N/A,Foreign key to transactions.id pointing to the original transaction this entry reverses.
+transactions,xendit_session_id,varchar,100,Xendit Payment Session identifier (indexed).
+transactions,xendit_mode,varchar,10,Test or live Xendit environment used to create the session.
+transactions,xendit_payment_id,varchar,100,Xendit Payment API identifier (indexed).
+transactions,,,,Main purpose: The cooperative's financial ledger; one immutable row per deposit
 trusted_devices,id,bigint,N/A,Auto-incrementing primary key.
 trusted_devices,user_id,bigint,N/A,Foreign key to users.id; cascades on delete.
 trusted_devices,fingerprint,varchar,64,SHA-256 hash of the device and browser fingerprint. Unique together with user_id.
@@ -653,9 +677,9 @@ trusted_devices,user_agent,text,N/A,Browser user-agent captured when the device 
 trusted_devices,trusted_until,timestamp,N/A,Timestamp at which the trust window ends.
 trusted_devices,last_used_at,timestamp,N/A,Timestamp of the last successful login from this device.
 trusted_devices,is_active,tinyint,1,Whether the trust record is still honoured (indexed with user_id). Defaults to true.
-trusted_devices,session_id,varchar,255,Active session identifier bound to this trusted device.
 trusted_devices,created_at,timestamp,N/A,Record creation timestamp.
 trusted_devices,updated_at,timestamp,N/A,Record last-update timestamp.
+trusted_devices,session_id,varchar,255,Active session identifier bound to this trusted device.
 trusted_devices,,,,Main purpose: Remembers devices a user has OTP-verified so repeat logins can skip the code while still enforcing step-up auth elsewhere.
 users,id,bigint,N/A,Auto-incrementing primary key.
 users,user_number,varchar,20,Unique human-readable member or officer number.
@@ -671,8 +695,16 @@ users,is_officer,tinyint,1,True when the user is staff and therefore subject to 
 users,special_loan_eligible,tinyint,1,Grants the member access to special loan products. Defaults to false.
 users,profile_completion_required,tinyint,1,Whether the member must complete their profile before using services.
 users,profile_completed_at,timestamp,N/A,Set once profile completion has been satisfied.
-users,current_session_id,varchar,255,Session ID of the active user session used to prevent concurrent logins.
 users,created_at,timestamp,N/A,Record creation timestamp.
 users,updated_at,timestamp,N/A,Record last-update timestamp.
 users,deleted_at,timestamp,N/A,Soft-delete marker.
-users,,,,Main purpose: The authentication and access-control record for every member and officer, linking to personal data, branch assignment and Spatie roles.
+users,current_session_id,varchar,255,Session ID of the active user session used to prevent concurrent logins.
+users,,,,Main purpose: The authentication and access-control record for every member and officer
+xendit_webhook_events,id,bigint,N/A,Auto-incrementing primary key.
+xendit_webhook_events,event_id,varchar,100,Hashed Xendit event and session identifier; unique to make delivery handling idempotent.
+xendit_webhook_events,event_type,varchar,100,Xendit payment-session webhook event name.
+xendit_webhook_events,payload,json,N/A,Decoded webhook body retained for troubleshooting.
+xendit_webhook_events,processed_at,timestamp,N/A,Set after the event is handled; NULL while processing is pending.
+xendit_webhook_events,created_at,timestamp,N/A,Record creation timestamp.
+xendit_webhook_events,updated_at,timestamp,N/A,Record last-update timestamp.
+xendit_webhook_events,,,,Main purpose: De-duplicates Xendit payment-session webhooks so payments are confirmed exactly once.

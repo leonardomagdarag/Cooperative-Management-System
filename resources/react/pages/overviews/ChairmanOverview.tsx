@@ -193,7 +193,7 @@ export default function ChairmanOverview() {
                         </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {(['hourly', 'daily', 'offsite'] as const).map(tier => {
+                        {(['daily', 'offsite'] as const).map(tier => {
                             const b = backupStatus.tiers?.[tier] || {};
                             return (
                                 <div key={tier} className={`rounded-xl border p-4 ${b.last_status === 'failed' ? 'border-red-200 bg-red-50/60' : b.last_status === 'running' ? 'border-blue-200 bg-blue-50/60' : 'border-gray-100 bg-gray-50/40'}`}>
@@ -408,8 +408,8 @@ export default function ChairmanOverview() {
     );
 }
 
-const TIER_TITLES: Record<string, string> = { hourly: 'Hourly', daily: 'Daily', offsite: 'Off-Site' };
-const TIER_ICONS: Record<string, string> = { hourly: 'fas fa-clock', daily: 'fas fa-server', offsite: 'fas fa-cloud' };
+const TIER_TITLES: Record<string, string> = { daily: 'Daily', offsite: 'Off-Site' };
+const TIER_ICONS: Record<string, string> = { daily: 'fas fa-server', offsite: 'fas fa-cloud' };
 const STATUS_BADGE: Record<string, string> = {
     success: 'bg-emerald-100 text-emerald-700',
     failed: 'bg-red-100 text-red-700',

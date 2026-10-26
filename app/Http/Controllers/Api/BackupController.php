@@ -10,6 +10,7 @@ use App\Services\CountersignService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Crypt;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class BackupController extends Controller
@@ -89,16 +90,25 @@ class BackupController extends Controller
         abort_unless(Auth::user()?->can('backups.manage'), 403);
 
         $validated = $request->validate([
-            'hourly_enabled' => 'required|boolean',
+            'daily_time' => ['required_without:archive_password', 'nullable', 'date_format:H:i'],
+            'archive_password' => ['required_without:daily_time', 'nullable', 'string', 'min:8', 'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).+$/', 'confirmed'],
         ]);
 
-        $pending = app(CountersignService::class)->request('backup.hourly.update', [
-            'enabled' => (bool) $validated['hourly_enabled'],
-        ], Auth::user());
+        $requests = [];
+        if ($request->filled('daily_time')) {
+            $requests[] = app(CountersignService::class)->request('backup.daily.schedule.update', [
+                'time' => $validated['daily_time'],
+            ], Auth::user());
+        }
+        if ($request->filled('archive_password')) {
+            $requests[] = app(CountersignService::class)->request('backup.password.update', [
+                'password' => Crypt::encryptString($validated['archive_password']),
+            ], Auth::user());
+        }
 
         return response()->json([
-            'message' => 'Hourly backup setting change is awaiting chairman countersign approval.',
-            'request_id' => $pending->id,
+            'message' => 'Backup settings changes are awaiting chairman countersign approval.',
+            'request_id' => $requests[0]->id,
             'status' => 'pending',
         ], 202);
     }
@@ -236,13 +246,12 @@ class BackupController extends Controller
         abort_unless(Auth::user()?->can('backups.restore'), 403);
 
         $validated = $request->validate([
-            'tier' => 'required_without:archive|nullable|in:hourly,daily,offsite',
+            'tier' => 'required_without:archive|nullable|in:daily,offsite',
             'path' => 'required_without:archive|nullable|string|max:500',
             'archive' => 'required_without:tier|nullable|file|mimes:zip|max:512000',
             'scope' => 'required|in:db,files,both',
             'current_password' => ['required', 'current_password'],
             'confirmation' => 'required|string|in:RESTORE',
-            'archive_password' => 'required|string',
         ]);
 
         abort_if(
@@ -251,7 +260,7 @@ class BackupController extends Controller
             'Choose either a stored backup or an uploaded archive.'
         );
 
-        $tier = $validated['tier'] ?? BackupService::TIER_HOURLY;
+        $tier = $validated['tier'] ?? BackupService::TIER_DAILY;
         $path = $request->file('archive')
             ? $this->backupService->importRestoreArchive($request->file('archive'), Auth::user())
             : $validated['path'];
@@ -261,7 +270,6 @@ class BackupController extends Controller
             'tier' => $tier,
             'path' => $path,
             'scope' => $validated['scope'],
-            'archive_password' => $validated['archive_password'],
         ], Auth::user());
 
         return response()->json([

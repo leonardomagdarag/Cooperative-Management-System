@@ -39,6 +39,12 @@ api.interceptors.response.use(
             const redirect = error.response.data?.redirect;
             window.location.href = redirect || '/security/verify-otp';
         }
+        // Laravel blocks the whole app before controllers while it is in
+        // maintenance mode. Leave the stale SPA for the standalone page, which
+        // does not depend on the API, session, database, or Vite bundle.
+        if (error.response?.status === 503 && window.location.pathname !== '/maintenance') {
+            window.location.href = '/maintenance';
+        }
         // The backend flags its own maintenance responses with `maintenance: true`
         // rather than a status code we can switch on: sign-in being switched off
         // answers 403 from the login endpoint and 503 from the public guard.

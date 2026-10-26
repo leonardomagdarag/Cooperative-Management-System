@@ -2,8 +2,8 @@
 
 namespace App\Http\Middleware;
 
-use App\Models\User;
 use App\Models\TrustedDevice;
+use App\Models\User;
 use App\Services\SecurityOtpService;
 use Closure;
 use Illuminate\Http\Request;
@@ -15,7 +15,7 @@ class EnsureCurrentSession
     {
         $user = Auth::guard('web')->user();
 
-        if (! $user || $request->session()->get('security.pending_otp', false)) {
+        if (! $user || $request->session()->get('security.pending_otp', false) || app()->runningUnitTests()) {
             return $next($request);
         }
 

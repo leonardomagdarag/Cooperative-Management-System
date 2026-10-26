@@ -24,7 +24,7 @@ function txBadgeClass(type: string): string {
 }
 
 function txBadgeText(type: string): string {
-    const c: Record<string, string> = { deposit: 'Deposit', withdrawal: 'Withdrawal', loan_payment: 'Loan Payment', loan_disbursement: 'Loan Disbursement', interest: 'Interest', fee: 'Fee' };
+    const c: Record<string, string> = { deposit: 'Deposit', withdrawal: 'Withdrawal', loan_payment: 'Loan Payment', loan_disbursement: 'Loan Disbursement', interest: 'Interest Credit', fee: 'Fee' };
     return c[type] || type?.replace(/_/g, ' ') || 'Unknown';
 }
 
@@ -242,7 +242,7 @@ export default function ReportsPage() {
     const loanStatusSeries = dashboardData?.data?.loan_status_series || [];
     const pendingTransactions = dashboardData?.data?.pending_transactions_list || [];
 
-    const inflows = Number(financial.total_deposits || 0) + Number(financial.total_loan_repayments || 0) + Number(financial.total_fees || 0);
+    const inflows = Number(financial.total_deposits || 0) + Number(financial.total_loan_repayments || 0) + Number(financial.total_interest_credits || 0) + Number(financial.total_fees || 0);
     const outflows = Number(financial.total_withdrawals || 0) + Number(financial.total_loan_releases || 0) + Number(financial.total_expenses || 0);
 
     const totalsByType = [
@@ -250,6 +250,7 @@ export default function ReportsPage() {
         { label: 'Withdrawals', value: Number(financial.total_withdrawals || 0), color: '#ef4444' },
         { label: 'Loan Releases', value: Number(financial.total_loan_releases || 0), color: '#9333ea' },
         { label: 'Loan Repayments', value: Number(financial.total_loan_repayments || 0), color: '#2563eb' },
+        { label: 'Interest Credits', value: Number(financial.total_interest_credits || 0), color: '#0d9488' },
         { label: 'Fees', value: Number(financial.total_fees || 0), color: '#f59e0b' },
         { label: 'Expenses', value: Number(financial.total_expenses || 0), color: '#f97316' },
     ];
@@ -314,6 +315,7 @@ export default function ReportsPage() {
         { label: 'Total Withdrawals', value: financial.total_withdrawals, key: 'withdrawals' },
         { label: 'Total Loan Releases', value: financial.total_loan_releases, key: 'releases' },
         { label: 'Total Loan Repayments', value: financial.total_loan_repayments, key: 'repayments' },
+        { label: 'Interest Credits', value: financial.total_interest_credits, key: 'interest-credits' },
         { label: 'Total Interest Earned (Collected)', value: financial.total_interest_earned, key: 'interest' },
         { label: 'Total Fees', value: financial.total_fees, key: 'fees' },
         { label: 'Total Expenses', value: financial.total_expenses, key: 'expenses' },
@@ -411,7 +413,7 @@ export default function ReportsPage() {
                                 <option value="withdrawal">Withdrawal</option>
                                 <option value="loan_disbursement">Loan</option>
                                 <option value="loan_payment">Payment</option>
-                                <option value="interest">Interest</option>
+                                <option value="interest">Interest Credit</option>
                                 <option value="fee">Fee</option>
                             </select>
                         </div>
@@ -486,7 +488,11 @@ export default function ReportsPage() {
                                         <tr>
                                             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Month</th>
                                             <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Deposits</th>
+                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Interest Credits</th>
+                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Loan Repayments</th>
+                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Loan Releases</th>
                                             <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Withdrawals</th>
+                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Fees</th>
                                             <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Expenses</th>
                                             <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Net</th>
                                         </tr>
@@ -496,7 +502,11 @@ export default function ReportsPage() {
                                             <tr key={i} className="hover:bg-gray-50">
                                                 <td className="px-4 py-2 text-sm font-medium text-gray-900">{m.label}</td>
                                                 <td className="px-4 py-2 text-sm text-right text-emerald-600">{formatCurrency(m.deposits)}</td>
+                                                <td className="px-4 py-2 text-sm text-right text-teal-600">{formatCurrency(m.interest_credits)}</td>
+                                                <td className="px-4 py-2 text-sm text-right text-blue-600">{formatCurrency(m.loan_repayments)}</td>
+                                                <td className="px-4 py-2 text-sm text-right text-purple-600">{formatCurrency(m.loan_releases)}</td>
                                                 <td className="px-4 py-2 text-sm text-right text-red-500">{formatCurrency(m.withdrawals)}</td>
+                                                <td className="px-4 py-2 text-sm text-right text-amber-700">{formatCurrency(m.fees)}</td>
                                                 <td className="px-4 py-2 text-sm text-right text-amber-600">{formatCurrency(m.expenses)}</td>
                                                 <td className={`px-4 py-2 text-sm text-right font-medium ${Number(m.net) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{formatCurrency(m.net)}</td>
                                             </tr>
@@ -593,6 +603,7 @@ export default function ReportsPage() {
                                         <tr>
                                             <th scope="col" className={thCls}>Member</th>
                                             <th scope="col" className={thCls}>Total Deposits</th>
+                                            <th scope="col" className={thCls}>Interest Credits</th>
                                             <th scope="col" className={thCls}>Total Withdrawals</th>
                                             <th scope="col" className={thCls}>Current Savings Balance</th>
                                         </tr>
@@ -600,12 +611,13 @@ export default function ReportsPage() {
                                     <tbody className="bg-white divide-y divide-gray-200">
                                         {memberSavingsRows.length === 0 ? (
                                             <tr>
-                                                <td colSpan={4} className="p-6 text-sm text-gray-500">No savings records found for the selected filters.</td>
+                                                <td colSpan={5} className="p-6 text-sm text-gray-500">No savings records found for the selected filters.</td>
                                             </tr>
                                         ) : memberSavingsRows.map((row: any, i: number) => (
                                             <tr key={i} className="hover:bg-gray-50">
                                                 <td className="p-4 text-sm font-medium text-gray-900 whitespace-nowrap truncate" title={row.member_name}>{row.member_name}</td>
                                                 <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{formatCurrency(row.total_deposits)}</td>
+                                                <td className="p-4 text-sm text-teal-700 whitespace-nowrap">{formatCurrency(row.total_interest_credits)}</td>
                                                 <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{formatCurrency(row.total_withdrawals)}</td>
                                                 <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{formatCurrency(row.current_balance)}</td>
                                             </tr>

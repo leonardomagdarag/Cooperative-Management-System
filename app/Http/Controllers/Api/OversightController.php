@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\PrivilegedActionRequest;
+use App\Services\BackupService;
 use App\Services\CountersignService;
 use App\Services\SecurityOtpService;
 use Illuminate\Http\JsonResponse;
@@ -90,6 +91,15 @@ class OversightController extends Controller
             );
         }
 
-        return response()->json(['message' => 'Decision recorded.']);
+        $response = ['message' => 'Decision recorded.'];
+        if ($validated['decision'] === 'approve' && $privilegedActionRequest->action_type === 'backup.restore') {
+            $delay = BackupService::RESTORE_START_DELAY_SECONDS;
+            $response = [
+                'message' => "Restore approved. The system will enter maintenance mode in about {$delay} seconds.",
+                'restore_start_delay_seconds' => $delay,
+            ];
+        }
+
+        return response()->json($response);
     }
 }

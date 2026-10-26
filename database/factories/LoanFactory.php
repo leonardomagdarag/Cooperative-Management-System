@@ -12,12 +12,22 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  *
  * The factory never invents a term or a rate: both are read from the seeded
  * loan product, so a factory-made loan is as valid as a real application. Only
- * an approved, active or paid-off loan has an approval date, a due date and an
- * approving officer.
+ * approved loans have approval dates; active and paid-off loans also have a
+ * disbursement date, which anchors their repayment schedule.
  */
 class LoanFactory extends Factory
 {
     protected $model = Loan::class;
+
+    public function configure(): static
+    {
+        return $this->afterMaking(function (Loan $loan) {
+            if (in_array($loan->loan_status, ['active', 'paid_off'], true) && ! $loan->disbursed_at) {
+                $loan->disbursed_at = $loan->approved_at ?? now();
+                $loan->due_date ??= $loan->disbursed_at->copy()->addMonths((int) ($loan->term_months ?? 12));
+            }
+        });
+    }
 
     public function definition(): array
     {
@@ -29,6 +39,9 @@ class LoanFactory extends Factory
         $appliedAt = fake()->dateTimeBetween('-2 years', '-1 month');
         $approvedAt = in_array($status, ['approved', 'active', 'paid_off'], true)
             ? fake()->dateTimeBetween($appliedAt, 'now')
+            : null;
+        $disbursedAt = in_array($status, ['active', 'paid_off'], true)
+            ? fake()->dateTimeBetween($approvedAt, 'now')
             : null;
 
         $termMonths = $product?->max_term ?? 12;
@@ -50,9 +63,8 @@ class LoanFactory extends Factory
             'review_status' => $status === 'pending' ? 'under_review' : 'endorsed_for_approval',
             'applied_at' => $appliedAt,
             'approved_at' => $approvedAt,
-            'due_date' => $status === 'paid_off'
-                ? fake()->dateTimeBetween($approvedAt, 'now')
-                : ($approvedAt ? (clone $approvedAt)->modify("+{$termMonths} months") : null),
+            'disbursed_at' => $disbursedAt,
+            'due_date' => $disbursedAt ? (clone $disbursedAt)->modify("+{$termMonths} months") : null,
         ];
     }
 
@@ -74,14 +86,19 @@ class LoanFactory extends Factory
             'loan_status' => 'approved',
             'review_status' => 'endorsed_for_approval',
             'approved_at' => $attributes['approved_at'] ?? now(),
-            'due_date' => (clone ($attributes['approved_at'] ?? now()))->modify('+'.$attributes['term_months'].' months'),
+            'disbursed_at' => null,
+            'due_date' => null,
         ]);
     }
 
     /** A loan that has been released and is being repaid. */
     public function active(): static
     {
-        return $this->approved()->state(fn () => ['loan_status' => 'active']);
+        return $this->approved()->state(fn (array $attributes) => [
+            'loan_status' => 'active',
+            'disbursed_at' => $attributes['disbursed_at'] ?? now(),
+            'due_date' => ($attributes['disbursed_at'] ?? now())->modify('+'.($attributes['term_months'] ?? 12).' months'),
+        ]);
     }
 
     /** A loan that has been settled in full. */
@@ -89,7 +106,8 @@ class LoanFactory extends Factory
     {
         return $this->approved()->state(fn (array $attributes) => [
             'loan_status' => 'paid_off',
-            'due_date' => fake()->dateTimeBetween($attributes['approved_at'] ?? now(), 'now'),
+            'disbursed_at' => $attributes['disbursed_at'] ?? now()->subMonths(12),
+            'due_date' => fake()->dateTimeBetween($attributes['disbursed_at'] ?? now()->subMonths(12), 'now'),
         ]);
     }
 }

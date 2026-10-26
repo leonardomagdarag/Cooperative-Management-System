@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../api/client';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
@@ -19,7 +19,6 @@ interface RouteLoan {
     address: string | null;
     amount_due: number;
     days_overdue: number;
-    savings_account_id: number | null;
 }
 
 export default function MyRouteTab() {
@@ -37,6 +36,7 @@ export default function MyRouteTab() {
     const [note, setNote] = useState('');
     const [visited, setVisited] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const dataFetchInFlight = useRef(false);
     
     const { markDirty, reset, requestClose, renderDialog } = useDiscardGuard(amount !== '' || note !== '');
 
@@ -51,11 +51,17 @@ export default function MyRouteTab() {
     };
 
     useEffect(() => {
-        fetchData();
+        void fetchData();
+        const refreshId = window.setInterval(() => {
+            if (document.visibilityState === 'visible') void fetchData(true);
+        }, 30_000);
+        return () => window.clearInterval(refreshId);
     }, [user?.id]);
 
-    const fetchData = async () => {
-        setLoading(true);
+    const fetchData = async (background = false) => {
+        if (dataFetchInFlight.current) return;
+        dataFetchInFlight.current = true;
+        if (!background) setLoading(true);
         try {
             // Fetch route list
             const resLoans = await api.get('/api/collections/route-list');
@@ -72,9 +78,10 @@ export default function MyRouteTab() {
             setDraftRuns(details);
             setSelectedBranchId(current => current ?? user?.branch_id ?? details[0]?.branch_id ?? routeLoans[0]?.branch_id ?? null);
         } catch (err: any) {
-            addToast('error', 'Failed to load route data');
+            if (!background) addToast('error', 'Failed to load route data');
         } finally {
-            setLoading(false);
+            dataFetchInFlight.current = false;
+            if (!background) setLoading(false);
         }
     };
 
@@ -108,7 +115,6 @@ export default function MyRouteTab() {
                 await api.post(`/api/collections/${activeRun.id}/items`, {
                     member_id: selectedLoan!.member_id,
                     loan_id: selectedLoan!.id,
-                    account_id: selectedLoan!.savings_account_id,
                     amount: parseFloat(amount), note, visited
                 });
             }
@@ -292,6 +298,10 @@ export default function MyRouteTab() {
                                             <div>
                                                 <div className="text-sm font-semibold">{item.member?.personal_data?.first_name} {item.member?.personal_data?.last_name}</div>
                                                 <div className="text-xs text-slate-500">{item.loan?.loan_number}</div>
+                                                <div className="text-xs text-slate-500">Current amount due: ₱{Number(item.current_amount_due ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                                                {Number(item.amount) > Number(item.current_amount_due ?? 0) + 0.01 && (
+                                                    <div className="mt-1 text-xs font-medium text-amber-700">Recorded amount exceeds the current due. Edit or remove this item before submitting.</div>
+                                                )}
                                             </div>
                                             <div className="font-semibold text-emerald-600 text-right">
                                                 ₱{parseFloat(item.amount).toLocaleString(undefined, {minimumFractionDigits: 2})}

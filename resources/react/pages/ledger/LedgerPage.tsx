@@ -125,12 +125,12 @@ export default function LedgerPage() {
     const summary = summaryData?.data;
 
     const getTypeColor = (t: string) => {
-        const c: Record<string, string> = { deposit: 'bg-blue-100 text-blue-800', withdrawal: 'bg-orange-100 text-orange-800', loan_payment: 'bg-green-100 text-green-800', loan_disbursement: 'bg-purple-100 text-purple-800', fee: 'bg-red-100 text-red-800' };
+        const c: Record<string, string> = { deposit: 'bg-blue-100 text-blue-800', withdrawal: 'bg-orange-100 text-orange-800', loan_payment: 'bg-green-100 text-green-800', loan_disbursement: 'bg-purple-100 text-purple-800', interest: 'bg-teal-100 text-teal-800', fee: 'bg-red-100 text-red-800' };
         return c[t] || 'bg-gray-100 text-gray-800';
     };
 
     const getTypeLabel = (t: string) => {
-        const c: Record<string, string> = { deposit: 'Deposit', withdrawal: 'Withdrawal', loan_payment: 'Loan Payment', loan_disbursement: 'Loan Disbursement', fee: 'Fee' };
+        const c: Record<string, string> = { deposit: 'Deposit', withdrawal: 'Withdrawal', loan_payment: 'Loan Payment', loan_disbursement: 'Loan Disbursement', interest: 'Interest Credit', fee: 'Fee' };
         return c[t] || t.replace(/_/g, ' ');
     };
 
@@ -215,9 +215,9 @@ export default function LedgerPage() {
 
                 {/* Tab filters */}
                 <div className="flex gap-2 mb-3 border-b border-gray-200">
-                    {['all', 'deposit', 'withdrawal', 'loan_payment', 'loan_disbursement', 'fee', 'corrections'].map(c => (
+                    {['all', 'deposit', 'withdrawal', 'loan_payment', 'loan_disbursement', 'interest', 'fee', 'corrections'].map(c => (
                         <button key={c} onClick={() => { setCategory(c); setPage(1); }} className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${category === c ? 'border-b-2 border-emerald-600 text-emerald-600 font-semibold' : 'text-gray-500 hover:text-gray-700 border-transparent'}`}>
-                            {c === 'all' ? 'All' : c === 'corrections' ? 'Corrections' : c.replace(/_/g, ' ')}
+                            {c === 'all' ? 'All' : c === 'corrections' ? 'Corrections' : getTypeLabel(c)}
                         </button>
                     ))}
                 </div>
@@ -439,6 +439,8 @@ export default function LedgerPage() {
                         ['Member number', viewingTransaction.user_number || '—'], ['Account ID', viewingTransaction.account_id ?? '—'],
                         ['Loan number', viewingTransaction.loan_number || '—'], ['Branch', viewingTransaction.branch_name || '—'],
                         ['Transaction date', viewingTransaction.transaction_date || '—'], ['Recorded by', viewingTransaction.recorded_by || '—'],
+                        ['Approved by', viewingTransaction.approved_by || '—'],
+                        ['Approved at', viewingTransaction.approved_at ? new Date(viewingTransaction.approved_at).toLocaleString() : '—'],
                         ['Created at', viewingTransaction.created_at ? new Date(viewingTransaction.created_at).toLocaleString() : '—'],
                         ['Reverses', viewingTransaction.reversal_of_transaction_number || '—'],
                     ].map(([label, value]) => <div key={label} className="min-w-0">

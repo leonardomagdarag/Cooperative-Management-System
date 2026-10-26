@@ -35,6 +35,7 @@ export default function HistoryPage() {
     const getTypeStyle = (type: string) => {
         const c: Record<string, { bg: string; icon: string; text: string }> = {
             deposit: { bg: 'bg-green-100', icon: 'fas fa-plus-circle', text: 'text-green-600' },
+            interest: { bg: 'bg-teal-100', icon: 'fas fa-coins', text: 'text-teal-600' },
             withdrawal: { bg: 'bg-orange-100', icon: 'fas fa-minus-circle', text: 'text-orange-600' },
             loan_disbursement: { bg: 'bg-purple-100', icon: 'fas fa-file-invoice-dollar', text: 'text-purple-600' },
             loan_payment: { bg: 'bg-blue-100', icon: 'fas fa-hand-holding-usd', text: 'text-blue-600' },
@@ -45,6 +46,7 @@ export default function HistoryPage() {
     const getTypeColor = (type: string) => {
         switch (type) {
             case 'deposit': return 'bg-green-100 text-green-800';
+            case 'interest': return 'bg-teal-100 text-teal-800';
             case 'withdrawal': return 'bg-orange-100 text-orange-800';
             case 'loan_payment': return 'bg-blue-100 text-blue-800';
             case 'loan_disbursement': return 'bg-purple-100 text-purple-800';
@@ -95,6 +97,7 @@ export default function HistoryPage() {
                         <option value="withdrawal">Withdrawals</option>
                         <option value="loan_payment">Loan Payments</option>
                         <option value="loan_disbursement">Loan Disbursements</option>
+                        <option value="interest">Interest</option>
                     </select>
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -130,7 +133,8 @@ export default function HistoryPage() {
                 <div className="space-y-3">
                     {transactions.map(t => {
                         const ts = getTypeStyle(t.transaction_type);
-                        const amountColor = t.transaction_type === 'deposit' ? 'text-green-600' : t.transaction_type === 'withdrawal' ? 'text-orange-600' : 'text-blue-600';
+                        const isCredit = ['deposit', 'loan_disbursement', 'interest'].includes(t.transaction_type) !== !!t.reversal_of_id;
+                        const amountColor = isCredit ? 'text-green-600' : 'text-orange-600';
                         return (
                         <div key={t.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow">
                             <div className="flex items-center justify-between">
@@ -142,14 +146,14 @@ export default function HistoryPage() {
                                         <div className="flex items-center gap-2">
                                             <span className="font-medium text-gray-900">{t.transaction_number}</span>
                                             <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${getTypeColor(t.transaction_type)}`}>
-                                                {t.transaction_type.replace('_', ' ')}
+                                                {t.transaction_type === 'interest' ? 'Interest Credit' : t.transaction_type.replace(/_/g, ' ')}
                                             </span>
                                         </div>
                                         <p className="text-xs text-gray-500">{t.transaction_date}</p>
                                     </div>
                                 </div>
                                 <div className="text-right">
-                                    <p className={`text-xl font-bold ${amountColor}`}>{(t.transaction_type === 'deposit' ? '+' : '-')}&#8369;{Number(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                    <p className={`text-xl font-bold ${amountColor}`}>{isCredit ? '+' : '-'}&#8369;{Number(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                     <div className="mt-1 flex items-center gap-2 justify-end">
                                         <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusColor(t.status)}`}>
                                             {t.status}

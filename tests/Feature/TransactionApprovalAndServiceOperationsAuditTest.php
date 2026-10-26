@@ -4,6 +4,7 @@ use App\Models\Account;
 use App\Models\Branch;
 use App\Models\Loan;
 use App\Models\LoanProduct;
+use App\Models\OfficerPermissionOverride;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\SecurityOtpService;
@@ -16,12 +17,12 @@ use Illuminate\Support\Facades\Mail;
 beforeEach(function () {
     $this->seed(SpatieRolePermissionSeeder::class);
     $this->seed(UserSeeder::class);
+    $this->seed(SpatieRolePermissionSeeder::class);
     $this->seed(AccountSeeder::class);
     $this->seed(SystemSettingSeeder::class);
 
     $this->admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
     $this->manager = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
-    $this->accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
     $this->accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
     $this->member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
 
@@ -357,6 +358,7 @@ test('F023-13: loan payment approval decrements balance and updates loan to paid
         'interest_rate' => 0,
         'term_months' => 6,
         'loan_status' => 'active',
+        'disbursed_at' => now()->subMonths(1),
         'applied_at' => now(),
     ]);
 
@@ -384,4 +386,133 @@ test('F023-13: loan payment approval decrements balance and updates loan to paid
 
     $loan->refresh();
     expect($loan->loan_status)->toBe('paid_off');
+});
+
+test('F023-14: officer who recorded transaction cannot self-approve without transactions.approve-own override', function () {
+    $this->memberAccount->update(['balance' => 5000.00]);
+
+    $transaction = Transaction::create([
+        'account_id' => $this->memberAccount->id,
+        'branch_id' => $this->mainBranch->id,
+        'transaction_type' => 'deposit',
+        'amount' => 500.00,
+        'status' => 'pending',
+        'transaction_mode' => 'counter',
+        'transaction_date' => now(),
+        'recorded_by' => $this->manager->id,
+    ]);
+
+    // Manager cannot self-approve by default
+    $this->actingAs($this->manager)
+        ->postJson("/api/services/approve/{$transaction->id}", ['action' => 'approve'])
+        ->assertForbidden();
+
+    // Now grant per-officer override
+    OfficerPermissionOverride::create([
+        'user_id' => $this->manager->id,
+        'permission' => 'transactions.approve-own',
+        'effect' => OfficerPermissionOverride::EFFECT_ALLOW,
+    ]);
+
+    // Now manager can self-approve
+    $this->actingAs($this->manager)
+        ->postJson("/api/services/approve/{$transaction->id}", ['action' => 'approve'])
+        ->assertOk()
+        ->assertJson(['message' => 'Transaction approved.']);
+
+    expect($transaction->fresh()->status)->toBe('completed');
+});
+
+test('F023-15: officer can approve fee transaction with null account_id without crashing', function () {
+    $transaction = Transaction::create([
+        'account_id' => null,
+        'branch_id' => $this->mainBranch->id,
+        'transaction_type' => 'fee',
+        'amount' => 150.00,
+        'status' => 'pending',
+        'transaction_mode' => 'counter',
+        'transaction_date' => now(),
+        'recorded_by' => $this->member->id,
+    ]);
+
+    $response = $this->actingAs($this->manager)->postJson("/api/services/approve/{$transaction->id}", [
+        'action' => 'approve',
+    ]);
+
+    $response->assertOk()
+        ->assertJson(['message' => 'Transaction approved.']);
+
+    expect($transaction->fresh()->status)->toBe('completed');
+});
+
+test('F023-16: officer can approve counter loan payment with null account_id and loan marks paid_off', function () {
+    $product = LoanProduct::create([
+        'code' => 'audit-test-prod-counter',
+        'name' => 'Audit Test Product Counter',
+        'base_type' => 'business',
+        'interest_rate' => 0,
+        'max_amount' => 50000,
+        'max_term' => 12,
+        'minimum_membership_years' => 0,
+        'required_co_makers' => 0,
+        'sort_order' => 1,
+    ]);
+
+    $loan = Loan::create([
+        'user_id' => $this->member->id,
+        'account_id' => $this->memberAccount->id,
+        'branch_id' => $this->mainBranch->id,
+        'loan_number' => 'LN-AUDIT-COUNTER-001',
+        'loan_amount' => 1000.00,
+        'interest_rate' => 0,
+        'term_months' => 6,
+        'loan_status' => 'active',
+        'disbursed_at' => now()->subMonths(1),
+        'applied_at' => now(),
+    ]);
+
+    // Counter cash loan payment without account deduction
+    $transaction = Transaction::create([
+        'account_id' => null,
+        'loan_id' => $loan->id,
+        'branch_id' => $this->mainBranch->id,
+        'transaction_type' => 'loan_payment',
+        'amount' => 1000.00,
+        'status' => 'pending',
+        'transaction_mode' => 'counter',
+        'transaction_date' => now(),
+        'recorded_by' => $this->member->id,
+    ]);
+
+    $response = $this->actingAs($this->manager)->postJson("/api/services/approve/{$transaction->id}", [
+        'action' => 'approve',
+    ]);
+
+    $response->assertOk()
+        ->assertJson(['message' => 'Transaction approved.']);
+
+    expect($transaction->fresh()->status)->toBe('completed');
+    expect($loan->fresh()->loan_status)->toBe('paid_off');
+});
+
+test('F023-17: approving transaction on closed account is rejected with 422', function () {
+    $transaction = Transaction::create([
+        'account_id' => $this->memberAccount->id,
+        'branch_id' => $this->mainBranch->id,
+        'transaction_type' => 'deposit',
+        'amount' => 500.00,
+        'status' => 'pending',
+        'transaction_mode' => 'counter',
+        'transaction_date' => now(),
+        'recorded_by' => $this->member->id,
+    ]);
+
+    $this->memberAccount->delete(); // Soft-delete / close account
+
+    $response = $this->actingAs($this->manager)->postJson("/api/services/approve/{$transaction->id}", [
+        'action' => 'approve',
+    ]);
+
+    $response->assertStatus(422)
+        ->assertJson(['message' => 'Cannot process transaction on a closed account.']);
 });

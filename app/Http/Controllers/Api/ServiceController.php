@@ -10,6 +10,8 @@ use App\Models\SystemSetting;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Services\CollectionRunService;
+use App\Services\LoanPaymentAllocationService;
 use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
 use App\Support\BranchScope;
@@ -90,6 +92,7 @@ class ServiceController extends Controller
             $pendingApprovalsQuery->whereIn('transaction_type', $allowedApprovalTypes);
         }
         BranchScope::applyToTransactions($pendingApprovalsQuery, $user);
+        $this->requireVerifiedXenditPayment($pendingApprovalsQuery);
 
         $pendingLoansQuery = Loan::awaitingReview();
         BranchScope::applyToLoans($pendingLoansQuery, $user);
@@ -151,12 +154,15 @@ class ServiceController extends Controller
             $proofPath = $request->file('proof')->store('transaction-proofs', 'public');
         }
 
-        $status = $validated['transaction_mode'] === 'counter' ? 'completed' : 'pending';
+        $isOfficerProcessingCash = $validated['transaction_mode'] === 'counter'
+            && $this->canManageServicesForMembers($user)
+            && (int) $targetUserId !== (int) $user->id;
+        $status = $isOfficerProcessingCash ? 'completed' : 'pending';
 
         $transaction = DB::transaction(function () use ($account, $validated, $status, $proofPath, $user, $targetBranchId) {
             $transaction = Transaction::create([
                 'account_id' => $account->id,
-                'branch_id' => $validated['branch_id'] ?? $targetBranchId,
+                'branch_id' => $targetBranchId,
                 'client_request_id' => $validated['client_request_id'] ?? null,
                 'transaction_type' => 'deposit',
                 'amount' => $validated['amount'],
@@ -178,7 +184,14 @@ class ServiceController extends Controller
             return $transaction;
         });
 
-        return response()->json(['message' => 'Deposit submitted.', 'data' => $transaction], 201);
+        if ($transaction->status === 'completed') {
+            app(CollectionRunService::class)->notifyOpenRunOfficersOfExternalPayment($loan->fresh(), (float) $transaction->amount);
+        }
+
+        return response()->json([
+            'message' => $status === 'completed' ? 'Counter deposit recorded and credited.' : 'Deposit submitted and is awaiting manager or chairman approval.',
+            'data' => $transaction,
+        ], 201);
     }
 
     public function withdrawal(Request $request): JsonResponse
@@ -232,7 +245,12 @@ class ServiceController extends Controller
             return response()->json(['message' => 'Member has no savings account.'], 422);
         }
 
-        $transaction = DB::transaction(function () use ($account, $validated, $user, $targetBranchId, $maxWithdrawal) {
+        $isOfficerProcessingCash = $validated['transaction_mode'] === 'counter'
+            && $this->canManageServicesForMembers($user)
+            && (int) $targetUserId !== (int) $user->id;
+        $status = $isOfficerProcessingCash ? 'completed' : 'pending';
+
+        $transaction = DB::transaction(function () use ($account, $validated, $user, $targetBranchId, $maxWithdrawal, $status) {
             // Lock the account row so concurrent withdrawals cannot overdraw.
             $lockedAccount = Account::whereKey($account->id)->lockForUpdate()->firstOrFail();
 
@@ -254,23 +272,36 @@ class ServiceController extends Controller
 
             $transaction = Transaction::create([
                 'account_id' => $lockedAccount->id,
-                'branch_id' => $validated['branch_id'] ?? $targetBranchId,
+                'branch_id' => $targetBranchId,
                 'client_request_id' => $validated['client_request_id'] ?? null,
                 'transaction_type' => 'withdrawal',
                 'amount' => $validated['amount'],
-                'status' => 'pending',
+                'status' => $status,
                 'transaction_mode' => $validated['transaction_mode'],
                 'note' => $validated['note'] ?? $validated['reason'] ?? null,
                 'transaction_date' => now(),
                 'recorded_by' => Auth::id(),
             ]);
 
-            app(AuditLogService::class)->log('service.withdrawal', 'Withdrawal requested.', 'transaction', $transaction, $user);
+            if ($status === 'completed') {
+                $lockedAccount->decrement('balance', $validated['amount']);
+            }
+
+            app(AuditLogService::class)->log(
+                'service.withdrawal',
+                $status === 'completed' ? 'Counter withdrawal processed.' : 'Withdrawal requested.',
+                'transaction',
+                $transaction,
+                $user
+            );
 
             return $transaction;
         });
 
-        return response()->json(['message' => 'Withdrawal submitted for approval.', 'data' => $transaction], 201);
+        return response()->json([
+            'message' => $status === 'completed' ? 'Counter withdrawal processed.' : 'Withdrawal submitted for approval.',
+            'data' => $transaction,
+        ], 201);
     }
 
     public function loanApplication(Request $request): JsonResponse
@@ -331,7 +362,7 @@ class ServiceController extends Controller
         $loan = DB::transaction(function () use ($validated, $product, $targetUser, $coMakers, $targetBranchId) {
             $loanData = [
                 'user_id' => $targetUser->id,
-                'branch_id' => $validated['branch_id'] ?? $targetBranchId,
+                'branch_id' => $targetBranchId,
                 'loan_type' => $product->base_type,
                 'loan_product' => $product->code,
                 'loan_amount' => $validated['amount'],
@@ -382,6 +413,10 @@ class ServiceController extends Controller
         $validated = $request->validate([
             'loan_id' => 'required|exists:loans,id',
             'amount' => 'required|numeric|min:1',
+            'installment_allocations' => 'nullable|array|min:1',
+            'installment_allocations.*.period' => 'required|integer|min:1',
+            'installment_allocations.*.amount' => 'required|numeric|min:0.01',
+            'penalty_amount' => 'nullable|numeric|min:0',
             'account_id' => 'nullable|exists:accounts,id',
             'transaction_mode' => 'required|in:counter,online,bank_transfer',
             'note' => 'nullable|string|max:500',
@@ -405,9 +440,9 @@ class ServiceController extends Controller
         }
 
         abort_unless(
-            in_array($loan->loan_status, ['approved', 'active'], true),
+            $loan->loan_status === 'active' && $loan->disbursed_at !== null,
             422,
-            'Payments can only be made on active or approved loans.'
+            'Payments can only be made on disbursed loans.'
         );
 
         $targetUserId = $validated['member_id'] ?? $validated['user_id'] ?? $user->id;
@@ -423,6 +458,12 @@ class ServiceController extends Controller
             return response()->json(['message' => 'The selected loan does not belong to this member.'], 422);
         }
 
+        abort_unless(
+            ! empty($validated['installment_allocations']) && array_key_exists('penalty_amount', $validated),
+            422,
+            'Select one or more due installments and provide the penalty amount.'
+        );
+
         $targetBranchId = $loan->branch_id ?? $loan->user?->branch_id;
         if (! $this->canAccessBranch($user, $targetBranchId)) {
             return response()->json(['message' => 'You can only manage members in your branch.'], 403);
@@ -432,21 +473,18 @@ class ServiceController extends Controller
             return response()->json(['message' => 'This request was already submitted.', 'data' => $existing], 200);
         }
 
-        $account = ! empty($validated['account_id']) ? Account::find($validated['account_id']) : null;
+        $isCounterCash = $validated['transaction_mode'] === 'counter';
+        $isOfficerProcessingCash = $isCounterCash
+            && $this->canManageServicesForMembers($user)
+            && (int) $targetUserId !== (int) $user->id;
 
-        if (! $account || ((int) $account->user_id !== (int) $targetUserId && ! $this->canManageServicesForMembers($user))) {
-            $account = Account::where('user_id', $targetUserId)->where('account_type', 'savings')->first();
-        }
+        // Cash payments are not savings withdrawals. A member's counter
+        // request waits for an officer to confirm receipt; an officer
+        // processing a selected member at the counter records it as complete.
+        // A loan repayment is an external payment. It never uses a savings account.
+        $account = null;
 
-        if (! $account) {
-            return response()->json(['message' => 'Member has no savings account.'], 422);
-        }
-
-        if ($account->balance < $validated['amount']) {
-            return response()->json(['message' => 'Insufficient balance.'], 422);
-        }
-
-        $status = $validated['transaction_mode'] === 'counter' ? 'completed' : 'pending';
+        $status = $isOfficerProcessingCash ? 'completed' : 'pending';
 
         $proofPath = null;
         if ($request->hasFile('proof')) {
@@ -454,20 +492,26 @@ class ServiceController extends Controller
         }
 
         $transaction = DB::transaction(function () use ($account, $loan, $validated, $status, $proofPath, $user, $targetBranchId) {
-            $lockedAccount = Account::whereKey($account->id)->lockForUpdate()->firstOrFail();
+            $lockedLoan = Loan::whereKey($loan->id)->lockForUpdate()->firstOrFail();
+            abort_unless($lockedLoan->loan_status === 'active' && $lockedLoan->disbursed_at !== null, 409, 'Loan is no longer open for payment.');
+            abort_if((float) $validated['amount'] > (float) $lockedLoan->remainingBalance() + 0.01, 422, 'Payment exceeds the remaining loan balance.');
+            $lockedAccount = $account
+                ? Account::whereKey($account->id)->lockForUpdate()->firstOrFail()
+                : null;
 
-            if ((float) $lockedAccount->balance < (float) $validated['amount']) {
-                abort(422, 'Insufficient balance.');
-            }
+            $penaltyAmount = array_key_exists('penalty_amount', $validated)
+                ? (float) $validated['penalty_amount']
+                : min((float) $lockedLoan->accruedPenalty(), (float) $validated['amount']);
+            $allocations = $validated['installment_allocations'] ?? [];
 
             $transaction = Transaction::create([
-                'account_id' => $lockedAccount->id,
+                'account_id' => null,
                 'loan_id' => $loan->id,
-                'branch_id' => $validated['branch_id'] ?? $targetBranchId,
+                'branch_id' => $targetBranchId,
                 'client_request_id' => $validated['client_request_id'] ?? null,
                 'transaction_type' => 'loan_payment',
                 'amount' => $validated['amount'],
-                'penalty_amount' => min((float) $loan->accruedPenalty(), (float) $validated['amount']),
+                'penalty_amount' => $penaltyAmount,
                 'status' => $status,
                 'transaction_mode' => $validated['transaction_mode'],
                 'note' => $validated['note'] ?? null,
@@ -477,21 +521,32 @@ class ServiceController extends Controller
                 'recorded_by' => Auth::id(),
             ]);
 
-            if ($status === 'completed') {
-                $lockedAccount->decrement('balance', $validated['amount']);
+            if ($allocations !== []) {
+                app(LoanPaymentAllocationService::class)->record($transaction, $allocations, $penaltyAmount);
+            }
 
-                $loan->refresh();
-                if ($loan->remainingBalance() <= 0 && $loan->loan_status !== 'paid_off') {
-                    $loan->update(['loan_status' => 'paid_off']);
+            if ($status === 'completed') {
+                $lockedLoan->refresh();
+                if ($lockedLoan->remainingBalance() <= 0 && $lockedLoan->loan_status !== 'paid_off') {
+                    $lockedLoan->update(['loan_status' => 'paid_off']);
                 }
             }
 
-            app(AuditLogService::class)->log('service.loan_payment', 'Loan payment submitted.', 'transaction', $transaction, $user);
+            app(AuditLogService::class)->log(
+                'service.loan_payment',
+                $status === 'completed' ? 'Counter loan payment recorded.' : 'Loan payment submitted for approval.',
+                'transaction',
+                $transaction,
+                $user
+            );
 
             return $transaction;
         });
 
-        return response()->json(['message' => 'Payment submitted.', 'data' => $transaction], 201);
+        return response()->json([
+            'message' => $status === 'completed' ? 'Counter loan payment recorded.' : 'Payment submitted for manager or chairman approval.',
+            'data' => $transaction,
+        ], 201);
     }
 
     public function approveTransaction(Request $request, Transaction $transaction): JsonResponse
@@ -537,9 +592,39 @@ class ServiceController extends Controller
             }
 
             if ($validated['action'] === 'approve') {
-                $lockedAccount = Account::whereKey($lockedTransaction->account_id)->lockForUpdate()->firstOrFail();
+                abort_if(
+                    $lockedTransaction->payment_gateway === 'xendit' && ! filled($lockedTransaction->xendit_payment_id),
+                    422,
+                    'Xendit must verify this payment before it can be approved.'
+                );
 
-                if (in_array($lockedTransaction->transaction_type, ['withdrawal', 'loan_payment'], true)) {
+                $lockedAccount = $lockedTransaction->account_id
+                    ? Account::withTrashed()->whereKey($lockedTransaction->account_id)->lockForUpdate()->first()
+                    : null;
+
+                if ($lockedAccount) {
+                    abort_if($lockedAccount->trashed(), 422, 'Cannot process transaction on a closed account.');
+                }
+
+                if (in_array($lockedTransaction->transaction_type, ['deposit', 'withdrawal'], true)) {
+                    abort_if(! $lockedAccount, 422, 'Deposit or withdrawal must have an associated account.');
+                }
+
+                if ($lockedTransaction->transaction_type === 'loan_payment') {
+                    $loan = Loan::whereKey($lockedTransaction->loan_id)->lockForUpdate()->firstOrFail();
+                    abort_unless($loan->loan_status === 'active' && $loan->disbursed_at !== null, 409, 'Loan is no longer open for payment.');
+                    abort_if((float) $lockedTransaction->amount > (float) $loan->remainingBalance() + 0.01, 422, 'Payment exceeds the remaining loan balance.');
+                    $allocations = DB::table('loan_payment_installment_allocations')
+                        ->where('transaction_id', $lockedTransaction->id)
+                        ->get(['period', 'amount'])
+                        ->map(fn ($allocation) => ['period' => (int) $allocation->period, 'amount' => (float) $allocation->amount])
+                        ->all();
+                    if ($allocations !== []) {
+                        app(LoanPaymentAllocationService::class)->validate($loan, $lockedTransaction, $allocations, (float) $lockedTransaction->penalty_amount);
+                    }
+                }
+
+                if ($lockedTransaction->transaction_type === 'withdrawal' && $lockedAccount) {
                     if ((float) $lockedAccount->balance < (float) $lockedTransaction->amount) {
                         abort(422, 'Insufficient available balance to approve this transaction.');
                     }
@@ -547,13 +632,15 @@ class ServiceController extends Controller
 
                 $lockedTransaction->update(['status' => 'completed', 'approved_by' => $user->id, 'approved_at' => now()]);
 
-                if ($lockedTransaction->transaction_type === 'deposit') {
-                    $lockedAccount->increment('balance', $lockedTransaction->amount);
-                } elseif ($lockedTransaction->transaction_type === 'withdrawal') {
-                    $lockedAccount->decrement('balance', $lockedTransaction->amount);
-                } elseif ($lockedTransaction->transaction_type === 'loan_payment') {
-                    $lockedAccount->decrement('balance', $lockedTransaction->amount);
+                if ($lockedAccount) {
+                    if ($lockedTransaction->transaction_type === 'deposit') {
+                        $lockedAccount->increment('balance', $lockedTransaction->amount);
+                    } elseif ($lockedTransaction->transaction_type === 'withdrawal') {
+                        $lockedAccount->decrement('balance', $lockedTransaction->amount);
+                    }
+                }
 
+                if ($lockedTransaction->transaction_type === 'loan_payment') {
                     $lockedTransaction->loan?->refresh();
                     if ($lockedTransaction->loan && $lockedTransaction->loan->remainingBalance() <= 0 && $lockedTransaction->loan->loan_status !== 'paid_off') {
                         $lockedTransaction->loan->update(['loan_status' => 'paid_off']);
@@ -571,6 +658,10 @@ class ServiceController extends Controller
 
             return $lockedTransaction;
         });
+
+        if ($validated['action'] === 'approve' && $transaction->transaction_type === 'loan_payment' && $transaction->loan) {
+            app(CollectionRunService::class)->notifyOpenRunOfficersOfExternalPayment($transaction->loan, (float) $transaction->amount);
+        }
 
         $this->notifyTransactionDecision($transaction->fresh(), $validated['action'], $validated['reason'] ?? null);
 
@@ -664,6 +755,7 @@ class ServiceController extends Controller
             ->whereIn('transaction_type', $allowedTypes);
 
         BranchScope::applyToTransactions($transactions, $user);
+        $this->requireVerifiedXenditPayment($transactions);
 
         if ($request->filled('type')) {
             $types = explode(',', $request->query('type'));
@@ -710,12 +802,16 @@ class ServiceController extends Controller
                 'status' => $t->status, 'account_holder' => $t->account?->user ? trim(($t->account->user->personalData->first_name ?? '').' '.($t->account->user->personalData->last_name ?? '')) : null,
                 'created_at' => $t->created_at->toISOString(),
                 'transaction_mode' => $t->transaction_mode,
+                'provider_payment_verified' => filled($t->xendit_payment_id),
                 'note' => $t->note,
                 'account_type' => $t->account?->account_type,
                 'proof_of_payment_api_url' => $t->proof_of_payment_path ? url('storage/'.$t->proof_of_payment_path) : null,
                 'loan_number' => $t->loan?->loan_number,
                 'recorded_by_id' => $t->recorded_by,
                 'recorded_by' => $t->recordedBy ? trim(($t->recordedBy->personalData->first_name ?? '').' '.($t->recordedBy->personalData->last_name ?? '')) : null,
+                'approved_by' => $t->approvedBy?->personalData ? trim(($t->approvedBy->personalData->first_name ?? '').' '.($t->approvedBy->personalData->last_name ?? '')) : null,
+                'approved_at' => $t->approved_at?->toISOString(),
+                'next_approver' => $this->nextTransactionApprover($user, $t),
                 'branch_id' => $t->branch_id,
                 'branch_name' => $t->branch?->name,
             ]);
@@ -728,26 +824,47 @@ class ServiceController extends Controller
         return (bool) ($user && ($user->can('transactions.approve') || $user->can('deposits.approve') || $user->can('withdrawals.approve') || $user->can('loans.approve')));
     }
 
+    private function nextTransactionApprover(User $viewer, Transaction $transaction): string
+    {
+        if ($viewer->hasRole('chairman')) {
+            return 'Chairman';
+        }
+
+        if ($viewer->hasRole('manager') && $viewer->can('branches.bypass')) {
+            return 'Chairman';
+        }
+
+        return $transaction->branch_id ? 'Branch manager or chairman' : 'Chairman';
+    }
+
     private function canApproveTransaction($user, Transaction $transaction): bool
     {
         if (! $user) {
             return false;
         }
 
-        if ((int) $transaction->recorded_by === (int) $user->id) {
-            return false;
-        }
-
-        if ($user->can('transactions.approve')) {
-            return true;
-        }
-
-        return match ($transaction->transaction_type) {
+        $hasTransactionApprovalPermission = $user->can('transactions.approve') || match ($transaction->transaction_type) {
             'deposit' => $user->can('deposits.approve'),
             'withdrawal' => $user->can('withdrawals.approve'),
             'loan_payment' => $user->can('loans.approve'),
             default => false,
         };
+
+        if (! $hasTransactionApprovalPermission) {
+            return false;
+        }
+
+        return (int) $transaction->recorded_by !== (int) $user->id
+            || $user->can('transactions.approve-own');
+    }
+
+    private function requireVerifiedXenditPayment($query): void
+    {
+        $query->where(function ($payments) {
+            $payments->whereNull('payment_gateway')
+                ->orWhere('payment_gateway', '!=', 'xendit')
+                ->orWhereNotNull('xendit_payment_id');
+        });
     }
 
     private function existingDuplicate(array $validated): ?Transaction

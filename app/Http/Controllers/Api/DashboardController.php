@@ -115,6 +115,7 @@ class DashboardController extends Controller
                 $totalPaid = $l->totalPaid();
                 $totalPayable = $l->totalPayable();
                 $schedulePaid = $l->schedulePaid();
+                $collectionMetrics = $l->getCollectionMetrics();
                 $progress = $totalPayable > 0 ? round(($schedulePaid / $totalPayable) * 100, 1) : 0;
 
                 return [
@@ -126,7 +127,10 @@ class DashboardController extends Controller
                     'remaining_balance' => $l->remainingBalance(),
                     'total_paid' => $totalPaid,
                     'schedule_paid' => $schedulePaid,
-                    'accrued_penalty' => $l->accruedPenalty(),
+                    'accrued_penalty' => $collectionMetrics['accrued_penalty'],
+                    'amount_due' => $collectionMetrics['amount_due'],
+                    'days_overdue' => $collectionMetrics['days_overdue'],
+                    'is_overdue' => $collectionMetrics['days_overdue'] > 0,
                     'progress' => $progress,
                     'due_date' => $l->due_date?->format('M d, Y'),
                     'due_date_raw' => $l->due_date?->toISOString(),
@@ -298,6 +302,7 @@ class DashboardController extends Controller
             'loans_overdue' => $overdueLoansCount,
             'loans_due_soon' => $dueSoonLoansCount,
             'month_deposits' => $financialThisMonth['total_deposits'],
+            'month_interest_credits' => $financialThisMonth['total_interest_credits'],
             'month_withdrawals' => $financialThisMonth['total_withdrawals'],
             'month_expenses' => $financialThisMonth['total_expenses'],
             'month_net' => $financialThisMonth['net'],
@@ -341,12 +346,12 @@ class DashboardController extends Controller
             'configured' => ! empty($smsApiKey),
         ];
 
-        $paymongoSecret = (string) (SystemSetting::get('paymongo_secret_key') ?: config('paymongo.secret_key'));
-        $paymongo = [
-            'name' => 'PayMongo Payments',
-            'enabled' => (bool) SystemSetting::get('paymongo_enabled', false),
-            'mode' => (string) SystemSetting::get('paymongo_mode', 'sandbox'),
-            'configured' => ! empty($paymongoSecret),
+        $xenditSummary = app(\App\Services\XenditService::class)->summary();
+        $xendit = [
+            'name' => 'Xendit Payments',
+            'enabled' => $xenditSummary['enabled'],
+            'mode' => $xenditSummary['mode'],
+            'configured' => $xenditSummary['configured'],
         ];
 
         $email = [
@@ -435,7 +440,7 @@ class DashboardController extends Controller
                 'services' => $services,
                 'integrations' => [
                     'sms' => $sms,
-                    'paymongo' => $paymongo,
+                    'xendit' => $xendit,
                     'mail' => $email,
                 ],
             ],
@@ -456,7 +461,7 @@ class DashboardController extends Controller
 
     private function buildBackupStatus(): array
     {
-        $tiers = ['hourly', 'daily', 'offsite'];
+        $tiers = ['daily', 'offsite'];
 
         $lastRuns = BackupRun::query()
             ->whereIn('tier', $tiers)
@@ -615,6 +620,7 @@ class DashboardController extends Controller
             'loans_overdue' => $overdueLoansCount,
             'pending_transactions' => $pendingTxnCount,
             'month_deposits' => $financialThisMonth['total_deposits'],
+            'month_interest_credits' => $financialThisMonth['total_interest_credits'],
             'month_withdrawals' => $financialThisMonth['total_withdrawals'],
             'month_expenses' => $financialThisMonth['total_expenses'],
             'month_net' => $financialThisMonth['net'],
@@ -696,6 +702,7 @@ class DashboardController extends Controller
             'share_capital_total' => $totalShareCapital,
             'total_assets' => $totalSavings + $totalShareCapital,
             'month_deposits' => $financialThisMonth['total_deposits'],
+            'month_interest_credits' => $financialThisMonth['total_interest_credits'],
             'month_withdrawals' => $financialThisMonth['total_withdrawals'],
             'month_expenses' => $financialThisMonth['total_expenses'],
             'month_net' => $financialThisMonth['net'],
@@ -1021,7 +1028,7 @@ class DashboardController extends Controller
                     'progress' => $progress,
                     'due_date' => $l->due_date?->format('M d, Y'),
                     'due_date_raw' => $l->due_date?->toISOString(),
-                    'applied_at' => $l->created_at->format('M d, Y'),
+                    'applied_at' => ($l->applied_at ?? $l->created_at)->format('M d, Y'),
                     'approved_at' => $l->approved_at?->format('M d, Y'),
                     'approved_by' => $l->approvedBy?->personalData
                         ? trim(($l->approvedBy->personalData->first_name ?? '').' '.($l->approvedBy->personalData->last_name ?? ''))
@@ -1101,7 +1108,7 @@ class DashboardController extends Controller
             $query->where('loans.branch_id', $branchId);
         }
 
-        return (float) $query->sum('transactions.amount');
+        return (float) $query->selectRaw('SUM('.Transaction::netAmountExpression().') as aggregate_total')->value('aggregate_total');
     }
 
     private function financialSummary(Carbon $start, Carbon $end, ?int $branchId = null): array
@@ -1120,14 +1127,14 @@ class DashboardController extends Controller
                             ->whereBetween('created_at', [$start, $end]);
                     });
             })
-            ->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'fee']);
+            ->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'interest', 'fee']);
 
         if ($branchId !== null) {
             $totals->where('transactions.branch_id', $branchId);
         }
 
         $totals = $totals
-            ->selectRaw('transaction_type, SUM(amount) as total')
+            ->selectRaw('transaction_type, SUM('.Transaction::netAmountExpression().') as total')
             ->groupBy('transaction_type')
             ->pluck('total', 'transaction_type');
 
@@ -1135,6 +1142,7 @@ class DashboardController extends Controller
         $totalWithdrawals = (float) ($totals['withdrawal'] ?? 0);
         $totalLoanReleases = (float) ($totals['loan_disbursement'] ?? 0);
         $totalLoanRepayments = (float) ($totals['loan_payment'] ?? 0);
+        $totalInterestCredits = (float) ($totals['interest'] ?? 0);
         $totalFees = (float) ($totals['fee'] ?? 0);
 
         $totalExpenses = (float) Expense::query()
@@ -1142,11 +1150,12 @@ class DashboardController extends Controller
             ->when($branchId !== null, fn ($q) => $q->where('expenses.branch_id', $branchId))
             ->sum('amount');
 
-        $inflows = $totalDeposits + $totalLoanRepayments + $totalFees;
+        $inflows = $totalDeposits + $totalLoanRepayments + $totalInterestCredits + $totalFees;
         $outflows = $totalWithdrawals + $totalLoanReleases + $totalExpenses;
 
         return $this->financialSummaryCache[$cacheKey] = [
             'total_deposits' => $totalDeposits,
+            'total_interest_credits' => $totalInterestCredits,
             'total_withdrawals' => $totalWithdrawals,
             'total_expenses' => $totalExpenses,
             'net' => $inflows - $outflows,
@@ -1165,12 +1174,14 @@ class DashboardController extends Controller
             $monthEnd = $monthStart->copy()->endOfMonth();
             $summary = $this->financialSummary($monthStart, $monthEnd, $branchId);
             $dep = (float) ($summary['total_deposits'] ?? 0);
+            $interestCredits = (float) ($summary['total_interest_credits'] ?? 0);
             $out = (float) ($summary['total_withdrawals'] ?? 0) + (float) ($summary['total_expenses'] ?? 0);
-            $this->monthlyMax = max($this->monthlyMax, $dep, $out);
+            $this->monthlyMax = max($this->monthlyMax, $dep + $interestCredits, $out);
 
             $series[] = [
                 'label' => $monthStart->format('M Y'),
                 'deposits' => $dep,
+                'interest_credits' => $interestCredits,
                 'withdrawals' => (float) ($summary['total_withdrawals'] ?? 0),
                 'expenses' => (float) ($summary['total_expenses'] ?? 0),
                 'net' => (float) ($summary['net'] ?? 0),

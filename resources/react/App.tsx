@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { Routes, Route, Navigate, useParams, useNavigate, useLocation } from 'react-router';
+import { Routes, Route, Navigate, useParams, useNavigate, useLocation, useSearchParams } from 'react-router';
 import { useAuth } from './contexts/AuthContext';
 import DashboardLayout from './layouts/DashboardLayout';
 import PublicLayout from './layouts/PublicLayout';
@@ -19,6 +19,13 @@ const LogsPage = lazy(() => import('./pages/logs/LogsPage'));
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'));
 const ProfileCompletionPage = lazy(() => import('./pages/profile/ProfileCompletionPage'));
 const SettingsPage = lazy(() => import('./pages/settings/SettingsPage'));
+const PublicContentPage = lazy(() => import('./pages/public-content/PublicContentPage'));
+const LoanProductsPage = lazy(() => import('./pages/loan-products/LoanProductsPage'));
+const RolePermissionsPage = lazy(() => import('./pages/role-permissions/RolePermissionsPage'));
+const ServiceAvailabilityPage = lazy(() => import('./pages/settings/ServiceAvailabilityPage'));
+const FinancialAccountsPage = lazy(() => import('./pages/settings/FinancialAccountsPage'));
+const IntegrationsSettingsPage = lazy(() => import('./pages/settings/IntegrationsSettingsPage'));
+const BackupPage = lazy(() => import('./pages/settings/BackupPage'));
 const AnnouncementsPage = lazy(() => import('./pages/announcements/AnnouncementsPage'));
 const LedgerPage = lazy(() => import('./pages/ledger/LedgerPage'));
 const ExpensesPage = lazy(() => import('./pages/expenses/ExpensesPage'));
@@ -79,10 +86,42 @@ function PermissionGate({ permission, role, multiPermission, children }: { permi
 function RedirectToSettingsTab({ tab, subTab }: { tab: string; subTab?: string }) {
     const navigate = useNavigate();
     useEffect(() => {
-        const query = subTab ? `?tab=${tab}&subTab=${subTab}` : `?tab=${tab}`;
-        navigate(`/dashboard/settings${query}`, { replace: true, state: { tab, subTab } });
+        const destination = settingsTabDestination(tab, subTab);
+        navigate(destination, { replace: true, state: { tab, subTab } });
     }, [navigate, tab, subTab]);
     return null;
+}
+
+function settingsTabDestination(tab: string, subTab?: string): string {
+    const destinations: Record<string, string> = {
+        'public-content': '/dashboard/public-content',
+        'loan-products': '/dashboard/loan-products',
+        'role-permissions': '/dashboard/role-permissions',
+        'service-availability': '/dashboard/service-availability',
+        'financial-accounts': '/dashboard/financial-accounts',
+        integrations: '/dashboard/integrations',
+        sms: '/dashboard/integrations',
+        email: '/dashboard/integrations',
+        paymongo: '/dashboard/integrations',
+        xendit: '/dashboard/integrations',
+        backups: '/dashboard/backups',
+    };
+    const destination = destinations[tab];
+    if (!destination) {
+        const query = subTab ? `?tab=${tab}&subTab=${subTab}` : `?tab=${tab}`;
+        return `/dashboard/settings${query}`;
+    }
+    const integrationTab = tab === 'integrations' ? subTab : tab;
+    return integrationTab ? `${destination}?subTab=${integrationTab}` : destination;
+}
+
+function SettingsPageRoute() {
+    const [searchParams] = useSearchParams();
+    const tab = searchParams.get('tab');
+    if (tab && ['public-content', 'loan-products', 'role-permissions', 'service-availability', 'financial-accounts', 'integrations', 'sms', 'email', 'paymongo', 'xendit', 'backups'].includes(tab)) {
+        return <Navigate to={settingsTabDestination(tab, searchParams.get('subTab') || undefined)} replace />;
+    }
+    return <SettingsPage />;
 }
 
 function UnauthorizedPlaceholder({ permission }: { permission?: string }) {
@@ -104,20 +143,24 @@ function DashboardRouter() {
         'notifications': <NotificationsPage />,
         'history': <HistoryPage />,
         'profile': <ProfilePage />,
-        'settings': <SettingsPage />,
+        'settings': <SettingsPageRoute />,
         'member-loans': <MemberLoansPage />,
         'collections': <CollectionsPage />,
         'approvals': <PermissionGate role="chairman"><OversightApprovalsPage /></PermissionGate>,
+        'public-content': <PermissionGate role="admin"><PublicContentPage /></PermissionGate>,
+        'loan-products': <PermissionGate permission="settings.update"><LoanProductsPage /></PermissionGate>,
+        'role-permissions': <PermissionGate role="admin"><RolePermissionsPage /></PermissionGate>,
+        'service-availability': <PermissionGate role="admin"><ServiceAvailabilityPage /></PermissionGate>,
+        'financial-accounts': <PermissionGate permission="financial_settings.update"><FinancialAccountsPage /></PermissionGate>,
+        'integrations': <PermissionGate permission="settings.update" role="admin"><IntegrationsSettingsPage /></PermissionGate>,
+        'backups': <PermissionGate multiPermission={['backups.view', 'backups.manage']} role="admin"><BackupPage /></PermissionGate>,
     };
 
     const permissionMap: Record<string, { permission?: string; role?: string; multiPermission?: string[] }> = {
         'logs': { permission: 'logs.view' },
         'announcements': { permission: 'announcements.view' },
-        'loan-products': { permission: 'settings.update' },
         'ledger': { permission: 'transactions.view' },
         'expenses': { permission: 'transactions.view' },
-        'public-content': { permission: 'settings.update' },
-        'role-permissions': { role: 'admin' },
         'officers': { permission: 'officers.view' },
         'branches': { permission: 'branches.view' },
         'loans': { permission: 'loans.view' },
@@ -125,12 +168,6 @@ function DashboardRouter() {
         'services': { permission: 'services.view' },
         'members': { permission: 'members.view' },
         'collections': { multiPermission: ['collections.view-all', 'collections.view-own', 'collections.review', 'collections.approve'] },
-    };
-
-    const tabRedirects: Record<string, string> = {
-        'public-content': 'public-content',
-        'loan-products': 'loan-products',
-        'role-permissions': 'role-permissions',
     };
 
     if (sectionMap[section]) return sectionMap[section];
@@ -157,7 +194,6 @@ function DashboardRouter() {
             <PermissionGate permission={gate.permission} role={gate.role} multiPermission={gate.multiPermission}>
                 {section === 'logs' ? <LogsPage /> :
                  section === 'announcements' ? <AnnouncementsPage /> :
-                 tabRedirects[section] ? <RedirectToSettingsTab tab={tabRedirects[section]} /> :
                  section === 'ledger' ? <LedgerPage /> :
                  section === 'expenses' ? <ExpensesPage /> :
                  section === 'officers' ? <OfficersPage /> :

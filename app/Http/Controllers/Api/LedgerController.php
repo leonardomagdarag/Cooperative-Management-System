@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Account;
 use App\Models\Loan;
+use App\Models\PrivilegedActionRequest;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\AuditLogService;
@@ -23,7 +24,7 @@ class LedgerController extends Controller
     {
         abort_unless(Auth::user()?->can('transactions.view'), 403);
 
-        $query = Transaction::with(['branch', 'account.user.personalData', 'loan.user.personalData', 'recordedBy', 'reversalOf']);
+        $query = Transaction::with(['branch', 'account.user.personalData', 'loan.user.personalData', 'recordedBy.personalData', 'approvedBy.personalData', 'reversalOf']);
 
         BranchScope::applyToTransactions($query, Auth::user(), $request->input('branch_id'));
 
@@ -82,6 +83,8 @@ class LedgerController extends Controller
                 'branch_id' => $t->branch_id,
                 'branch_name' => $t->branch?->name,
                 'recorded_by' => $t->recordedBy ? trim(($t->recordedBy->personalData->first_name ?? '').' '.($t->recordedBy->personalData->last_name ?? '')) : null,
+                'approved_by' => $t->approvedBy?->personalData ? trim(($t->approvedBy->personalData->first_name ?? '').' '.($t->approvedBy->personalData->last_name ?? '')) : null,
+                'approved_at' => $t->approved_at?->toISOString(),
                 'created_at' => $t->created_at->toISOString(),
             ]),
             'pagination' => [
@@ -217,13 +220,28 @@ class LedgerController extends Controller
                 ? min((float) Loan::findOrFail($validated['loan_id'])->accruedPenalty(), (float) $validated['amount'])
                 : 0,
             'note' => $validated['note'] ?? null,
-            'account_id' => $validated['account_id'] ?? null,
+            'account_id' => $type === 'loan_payment' ? null : ($validated['account_id'] ?? null),
             'loan_id' => $validated['loan_id'] ?? null,
             'branch_id' => $validated['branch_id'] ?? $this->resolveTransactionBranch($validated),
             'transaction_date' => now(),
             'status' => 'pending',
             'recorded_by' => Auth::id(),
         ]);
+
+        app(AuditLogService::class)->log(
+            'ledger.transaction_created',
+            'Manual ledger transaction created.',
+            'transaction',
+            $transaction,
+            $user,
+            [
+                'transaction_type' => $transaction->transaction_type,
+                'amount' => (float) $transaction->amount,
+                'status' => $transaction->status,
+                'account_id' => $transaction->account_id,
+                'loan_id' => $transaction->loan_id,
+            ]
+        );
 
         return response()->json(['message' => 'Transaction created.', 'data' => $transaction], 201);
     }
@@ -260,23 +278,28 @@ class LedgerController extends Controller
         // Edits are privileged: they never mutate directly. A countersign
         // request is recorded and the change is applied only after an active
         // chairman with oversight.approve countersigns it (see CountersignService).
-        $pending = app(CountersignService::class)->request(
-            'transaction.update',
-            [
-                'transaction_id' => $transaction->id,
-                'transaction_number' => $transaction->transaction_number,
-                'requested_by' => $user->id,
-                'changes' => [
-                    'transaction_type' => $validated['transaction_type'],
-                    'amount' => $validated['amount'],
-                    'note' => $validated['note'] ?? null,
-                    'account_id' => $validated['account_id'] ?? null,
-                    'loan_id' => $validated['loan_id'] ?? null,
-                    'branch_id' => $validated['branch_id'] ?? $this->resolveTransactionBranch($validated),
+        $pending = DB::transaction(function () use ($transaction, $validated, $user) {
+            $lockedTransaction = Transaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+            abort_if($lockedTransaction->status !== 'pending', 409, 'Only pending transactions can be edited.');
+
+            return app(CountersignService::class)->request(
+                'transaction.update',
+                [
+                    'transaction_id' => $lockedTransaction->id,
+                    'transaction_number' => $lockedTransaction->transaction_number,
+                    'requested_by' => $user->id,
+                    'changes' => [
+                        'transaction_type' => $validated['transaction_type'],
+                        'amount' => $validated['amount'],
+                        'note' => $validated['note'] ?? null,
+                        'account_id' => $validated['transaction_type'] === 'loan_payment' ? null : ($validated['account_id'] ?? null),
+                        'loan_id' => $validated['loan_id'] ?? null,
+                        'branch_id' => $validated['branch_id'] ?? $this->resolveTransactionBranch($validated),
+                    ],
                 ],
-            ],
-            $user
-        );
+                $user
+            );
+        });
 
         app(AuditLogService::class)->log(
             'transaction.update_requested',
@@ -310,13 +333,56 @@ class LedgerController extends Controller
             abort_unless($user?->can('loans.create') || $user?->can('loans.encode') || $user?->can('loans.update') || $user?->can('loans.approve'), 403, 'Missing loan management permission.');
         }
 
-        if ($transaction->status !== 'pending') {
-            abort(409, 'Only pending transactions can be deleted.');
-        }
+        DB::transaction(function () use ($transaction, $user) {
+            $lockedTransaction = Transaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+            abort_if($lockedTransaction->status !== 'pending', 409, 'Only pending transactions can be deleted.');
+            abort_if(
+                $this->hasActiveUpdateRequest($lockedTransaction->id),
+                409,
+                'Cannot delete a transaction with a pending update request.'
+            );
 
-        $transaction->delete();
+            app(AuditLogService::class)->log(
+                'ledger.transaction_deleted',
+                'Pending manual ledger transaction deleted.',
+                'transaction',
+                $lockedTransaction,
+                $user,
+                [
+                    'transaction_type' => $lockedTransaction->transaction_type,
+                    'amount' => (float) $lockedTransaction->amount,
+                    'status' => $lockedTransaction->status,
+                    'account_id' => $lockedTransaction->account_id,
+                    'loan_id' => $lockedTransaction->loan_id,
+                ]
+            );
+
+            $lockedTransaction->delete();
+        });
 
         return response()->json(['message' => 'Transaction deleted.']);
+    }
+
+    private function hasActiveUpdateRequest(int $transactionId): bool
+    {
+        $activeKey = 'transaction.update:'.$transactionId;
+
+        return PrivilegedActionRequest::query()
+            ->where(function ($query) use ($activeKey, $transactionId) {
+                $query->where('active_key', $activeKey)
+                    ->orWhere(function ($legacy) use ($transactionId) {
+                        $legacy->whereNull('active_key')
+                            ->where('action_type', 'transaction.update')
+                            ->whereJsonContains('payload->transaction_id', $transactionId);
+                    });
+            })
+            ->where(function ($query) {
+                $query->whereIn('status', ['approved', 'executing'])
+                    ->orWhere(fn ($pending) => $pending
+                        ->where('status', 'pending')
+                        ->where('expires_at', '>', now()));
+            })
+            ->exists();
     }
 
     public function sendReversalOtp(Request $request, Transaction $transaction, SecurityOtpService $otp): JsonResponse
@@ -353,10 +419,21 @@ class LedgerController extends Controller
             abort_if($transaction->reversal_of_id !== null, 409, 'A reversal cannot itself be reversed.');
             abort_if($transaction->reversal()->exists(), 409, 'This transaction has already been reversed.');
 
+            $loan = null;
+            if ($transaction->loan_id) {
+                $loan = Loan::whereKey($transaction->loan_id)->lockForUpdate()->firstOrFail();
+                if ($transaction->transaction_type === 'loan_disbursement') {
+                    abort_if($loan->completedPayments()->exists(), 422, 'Cannot reverse disbursement of a loan with recorded payments.');
+                }
+            }
+
             // Roll back account balance
             if ($transaction->account_id) {
-                $account = Account::whereKey($transaction->account_id)->lockForUpdate()->firstOrFail();
-                if (in_array($transaction->transaction_type, ['deposit', 'loan_disbursement'], true)) {
+                $account = Account::withTrashed()->whereKey($transaction->account_id)->lockForUpdate()->first();
+                abort_if(! $account, 404, 'Associated account not found.');
+                abort_if($account->trashed(), 422, 'Cannot reverse transaction on a closed account.');
+
+                if (in_array($transaction->transaction_type, ['deposit', 'loan_disbursement', 'interest'], true)) {
                     abort_if((float) $account->balance < (float) $transaction->amount, 422, 'Cannot reverse credit: insufficient current balance.');
                     $account->decrement('balance', $transaction->amount);
                 } elseif (in_array($transaction->transaction_type, ['withdrawal', 'loan_payment'], true)) {
@@ -381,11 +458,12 @@ class LedgerController extends Controller
                 'reversal_of_id' => $transaction->id,
             ]);
 
-            if ($transaction->loan_id && $transaction->transaction_type === 'loan_payment') {
-                $loan = Loan::whereKey($transaction->loan_id)->lockForUpdate()->firstOrFail();
+            if ($loan && $transaction->transaction_type === 'loan_payment') {
                 if ($loan->loan_status === 'paid_off' && $loan->remainingBalance() > 0) {
                     $loan->update(['loan_status' => 'active']);
                 }
+            } elseif ($loan && $transaction->transaction_type === 'loan_disbursement') {
+                $loan->update(['loan_status' => 'approved', 'disbursed_at' => null, 'due_date' => null]);
             }
 
             app(AuditLogService::class)->log('transaction.reversed', 'Reversal entry posted.', 'transaction', $reversal, $user, ['reversal_of_id' => $transaction->id]);
@@ -426,43 +504,5 @@ class LedgerController extends Controller
         }
 
         return Auth::user()?->branch_id;
-    }
-
-    /**
-     * Keep account balances in sync with manual ledger entries.
-     * Deposits and loan disbursements credit the account; withdrawals and
-     * loan payments debit it.
-     */
-    private function applyBalanceEffect(Transaction $transaction, bool $reverse = false): void
-    {
-        if (! $transaction->account_id) {
-            return;
-        }
-
-        $effect = match ($transaction->transaction_type) {
-            'deposit', 'loan_disbursement' => (float) $transaction->amount,
-            'withdrawal', 'loan_payment' => -(float) $transaction->amount,
-            default => 0.0,
-        };
-
-        if ($effect == 0.0) {
-            return;
-        }
-
-        if ($reverse) {
-            $effect = -$effect;
-        }
-
-        $account = Account::whereKey($transaction->account_id)->lockForUpdate()->first();
-
-        if (! $account) {
-            return;
-        }
-
-        if ($effect < 0 && (float) $account->balance < abs($effect)) {
-            abort(422, 'Insufficient balance to record this transaction.');
-        }
-
-        $account->increment('balance', $effect);
     }
 }

@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 export default function MemberOverview() {
     const { user } = useAuth();
     const { data, isLoading } = useQuery({
-        queryKey: ['overview-member'],
+        queryKey: ['overview-member', user?.id],
         queryFn: () => api.get('/api/dashboard'),
     });
 
@@ -147,6 +147,11 @@ export default function MemberOverview() {
                                             <span className={`px-3 py-1 text-xs font-semibold rounded-full ${['approved', 'active'].includes(l.loan_status) ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
                                                 {l.loan_status.charAt(0).toUpperCase() + l.loan_status.slice(1)}
                                             </span>
+                                            {l.is_overdue && (
+                                                <span className="px-3 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                                                    Overdue{l.days_overdue > 0 ? ` · ${l.days_overdue} days` : ''}
+                                                </span>
+                                            )}
                                         </div>
                                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                             <div>
@@ -158,7 +163,7 @@ export default function MemberOverview() {
                                                 <p className="text-lg font-bold text-red-600">₱{Number(l.remaining_balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
                                             </div>
                                             <div>
-                                                <p className="text-xs text-gray-600 mb-1">Next Due Date</p>
+                                                <p className="text-xs text-gray-600 mb-1">Maturity Date</p>
                                                 <p className="text-sm font-semibold text-gray-900">{l.due_date || 'N/A'}</p>
                                             </div>
                                         </div>

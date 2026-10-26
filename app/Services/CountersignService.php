@@ -16,7 +16,9 @@ use App\Models\User;
 use App\Support\FinancialSettings;
 use App\Support\MaintenanceState;
 use App\Support\PermissionCatalog;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -34,14 +36,38 @@ class CountersignService
      */
     public function request(string $actionType, array $payload, User $requester): PrivilegedActionRequest
     {
-        $request = PrivilegedActionRequest::create([
-            'action_type' => $actionType,
-            'status' => 'pending',
-            'payload' => $payload,
-            'requested_by' => $requester->id,
-            'idempotency_key' => Str::uuid()->toString(),
-            'expires_at' => now()->addHours(24),
-        ]);
+        $activeKey = $this->activeRequestKey($actionType, $payload);
+
+        try {
+            $request = DB::transaction(function () use ($actionType, $payload, $requester, $activeKey) {
+                if ($activeKey !== null) {
+                    $this->expireStaleActiveRequest($activeKey);
+                    abort_if(
+                        $this->hasActiveRequest($actionType, $activeKey),
+                        409,
+                        $this->duplicateRequestMessage($activeKey),
+                    );
+                }
+
+                return PrivilegedActionRequest::create([
+                    'action_type' => $actionType,
+                    'status' => 'pending',
+                    'payload' => $payload,
+                    'requested_by' => $requester->id,
+                    'idempotency_key' => Str::uuid()->toString(),
+                    'active_key' => $activeKey,
+                    'expires_at' => now()->addHours(24),
+                ]);
+            });
+        } catch (QueryException $exception) {
+            // The unique index is the concurrency boundary when two requests
+            // pass the preflight check at the same time.
+            if ($activeKey !== null && PrivilegedActionRequest::where('active_key', $activeKey)->exists()) {
+                abort(409, $this->duplicateRequestMessage($activeKey));
+            }
+
+            throw $exception;
+        }
 
         $approvers = User::role('chairman')
             ->whereHas('roles.permissions', fn ($query) => $query->where('name', 'oversight.approve'))
@@ -135,6 +161,7 @@ class CountersignService
             ->where('status', 'pending')->where('expires_at', '>', now())
             ->update([
                 'status' => 'rejected',
+                'active_key' => null,
                 'decided_by' => $decider->id,
                 'decided_at' => now(),
                 'decision_note' => $note,
@@ -188,10 +215,11 @@ class CountersignService
         try {
             DB::beginTransaction();
 
-            $result = $this->performAction($request->action_type, $request->payload);
+            $result = $this->performAction($request->action_type, $request->payload, $request);
 
             $request->update([
                 'status' => 'executed',
+                'active_key' => null,
                 'executed_at' => now(),
                 'execution_result' => $result,
             ]);
@@ -202,6 +230,7 @@ class CountersignService
 
             $request->update([
                 'status' => 'failed',
+                'active_key' => null,
                 'execution_result' => ['error' => $e->getMessage()],
             ]);
 
@@ -232,6 +261,7 @@ class CountersignService
             ->where('started_at', '<=', now()->subMinutes(self::EXECUTION_TIMEOUT_MINUTES))
             ->update([
                 'status' => $outcome,
+                'active_key' => null,
                 'decided_by' => $decider->id,
                 'decided_at' => now(),
                 'decision_note' => $note,
@@ -254,10 +284,76 @@ class CountersignService
         return $user->hasRole('chairman') && $user->can('oversight.approve');
     }
 
+    private function activeRequestKey(string $actionType, array $payload): ?string
+    {
+        return match ($actionType) {
+            'transaction.update' => isset($payload['transaction_id'])
+                ? 'transaction.update:'.$payload['transaction_id']
+                : null,
+            'expense.update', 'expense.delete' => isset($payload['expense_id'])
+                ? 'expense:'.$payload['expense_id']
+                : null,
+            'financial.interest.run' => isset($payload['account_type'])
+                ? 'financial.interest.run:'.$payload['account_type']
+                : null,
+            default => null,
+        };
+    }
+
+    private function expireStaleActiveRequest(string $activeKey): void
+    {
+        PrivilegedActionRequest::query()
+            ->where('active_key', $activeKey)
+            ->where('status', 'pending')
+            ->where('expires_at', '<=', now())
+            ->update(['active_key' => null]);
+
+    }
+
+    private function hasActiveRequest(string $actionType, string $activeKey): bool
+    {
+        $keyedActive = PrivilegedActionRequest::query()
+            ->where('active_key', $activeKey)
+            ->where(function ($query) {
+                $query->whereIn('status', ['approved', 'executing'])
+                    ->orWhere(fn ($pending) => $pending->where('status', 'pending')->where('expires_at', '>', now()));
+            })
+            ->exists();
+
+        if ($keyedActive) {
+            return true;
+        }
+
+        $legacyActions = match ($actionType) {
+            'expense.update', 'expense.delete' => ['expense.update', 'expense.delete'],
+            default => [$actionType],
+        };
+
+        return PrivilegedActionRequest::query()
+            ->whereNull('active_key')
+            ->whereIn('action_type', $legacyActions)
+            ->where(function ($query) {
+                $query->whereIn('status', ['approved', 'executing'])
+                    ->orWhere(fn ($pending) => $pending->where('status', 'pending')->where('expires_at', '>', now()));
+            })
+            ->get()
+            ->contains(fn ($request) => $this->activeRequestKey($request->action_type, $request->payload ?? []) === $activeKey);
+    }
+
+    private function duplicateRequestMessage(string $activeKey): string
+    {
+        return match (true) {
+            str_starts_with($activeKey, 'transaction.update:') => 'This transaction already has a pending update request.',
+            str_starts_with($activeKey, 'expense:') => 'This expense already has a pending approval request.',
+            str_starts_with($activeKey, 'financial.interest.run:') => 'An interest run for this account type is already awaiting approval.',
+            default => 'A matching privileged action is already awaiting approval.',
+        };
+    }
+
     /**
      * Route the action to the appropriate handler.
      */
-    private function performAction(string $actionType, array $payload): array
+    private function performAction(string $actionType, array $payload, PrivilegedActionRequest $request): array
     {
         switch ($actionType) {
             case 'admin.create':
@@ -313,10 +409,11 @@ class CountersignService
 
             case 'permissions.update':
                 $role = Role::query()->where('name', $payload['role'])->where('guard_name', 'web')->firstOrFail();
-                $role->syncPermissions($payload['permissions']);
+                $permissions = array_values(array_diff($payload['permissions'], ['oversight.approve']));
+                $role->syncPermissions($permissions);
                 app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-                return ['status' => 'success', 'permissions' => $payload['permissions']];
+                return ['status' => 'success', 'permissions' => $permissions];
 
             case 'officer.permissions.update':
                 $user = User::findOrFail($payload['user_id']);
@@ -326,6 +423,7 @@ class CountersignService
                 foreach ($overrides as $permission => $effect) {
                     abort_unless(
                         in_array($permission, PermissionCatalog::allPermissions(), true)
+                            && $permission !== 'oversight.approve'
                             && in_array($effect, [OfficerPermissionOverride::EFFECT_ALLOW, OfficerPermissionOverride::EFFECT_DISALLOW], true),
                         422,
                         'An override contains an invalid permission or effect.'
@@ -350,7 +448,7 @@ class CountersignService
                 abort_unless(is_array($payload['permissions'] ?? null), 422, 'Role permissions are invalid.');
                 abort_if(Role::query()->where('name', $payload['role'])->where('guard_name', 'web')->exists(), 409, 'Role already exists.');
                 $role = Role::create(['name' => $payload['role'], 'guard_name' => 'web']);
-                $role->syncPermissions($payload['permissions']);
+                $role->syncPermissions(array_values(array_diff($payload['permissions'], ['oversight.approve'])));
                 app(PermissionRegistrar::class)->forgetCachedPermissions();
 
                 return ['status' => 'success', 'role' => $role->name];
@@ -377,21 +475,38 @@ class CountersignService
                 return ['status' => 'success', 'role' => $payload['role']];
 
             case 'backup.restore':
+                $requester = $request->requestedBy;
+                abort_unless($requester instanceof User, 409, 'The restore requester is no longer available.');
                 $run = app(BackupService::class)->queueRestore(
                     $payload['tier'],
                     $payload['path'],
                     $payload['scope'],
-                    $payload['archive_password'] ?? '',
-                    User::find($payload['requested_by'] ?? 1) ?? User::first()
+                    $requester
                 );
 
                 return ['status' => 'queued', 'run_id' => $run->id];
 
-            case 'backup.hourly.update':
-                abort_unless(is_bool($payload['enabled'] ?? null), 422, 'Hourly backup state is invalid.');
-                app(BackupService::class)->updateHourlyEnabled($payload['enabled']);
+            case 'backup.daily.schedule.update':
+                abort_unless(is_string($payload['time'] ?? null) && preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $payload['time']), 422, 'Daily backup time is invalid.');
+                app(BackupService::class)->updateDailyTime($payload['time']);
 
-                return ['status' => 'success', 'enabled' => $payload['enabled']];
+                return ['status' => 'success', 'time' => $payload['time']];
+
+            case 'backup.password.update':
+                $password = Crypt::decryptString($payload['password']);
+                abort_unless(
+                    is_string($password)
+                        && strlen($password) >= 8
+                        && preg_match('/[a-z]/', $password)
+                        && preg_match('/[A-Z]/', $password)
+                        && preg_match('/\d/', $password)
+                        && preg_match('/[^A-Za-z\d]/', $password),
+                    422,
+                    'Backup password is invalid.',
+                );
+                app(BackupService::class)->updateArchivePassword($password);
+
+                return ['status' => 'success'];
 
             case 'backup.delete':
                 app(BackupService::class)->delete(
@@ -440,7 +555,10 @@ class CountersignService
                     throw new \RuntimeException("Unknown interest account type: {$accountType}");
                 }
 
-                DisburseInterestJob::dispatch($accountType, $payload['requested_by'] ?? null, 'manual');
+                $requesterId = $payload['requested_by'] ?? $request->requested_by;
+                $approverId = $request->decided_by;
+
+                DisburseInterestJob::dispatch($accountType, $requesterId, 'manual', $approverId);
 
                 return [
                     'status' => 'queued',
@@ -536,7 +654,9 @@ class CountersignService
                     'amount' => $changes['amount'],
                     'penalty_amount' => $penaltyAmount,
                     'note' => $changes['note'] ?? null,
-                    'account_id' => $changes['account_id'] ?? null,
+                    'account_id' => ($changes['transaction_type'] ?? null) === 'loan_payment'
+                        ? null
+                        : ($changes['account_id'] ?? null),
                     'loan_id' => $changes['loan_id'] ?? null,
                     'branch_id' => $changes['branch_id'] ?? null,
                 ]);

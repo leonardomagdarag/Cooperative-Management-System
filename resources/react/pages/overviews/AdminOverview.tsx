@@ -39,7 +39,7 @@ interface SystemHealthData {
                 enabled: boolean;
                 configured: boolean;
             };
-            paymongo?: {
+            xendit?: {
                 name: string;
                 enabled: boolean;
                 mode: string;
@@ -387,18 +387,18 @@ export default function AdminOverview() {
                                         <i className="fas fa-credit-card text-sm"></i>
                                     </div>
                                     <div>
-                                        <p className="text-sm font-semibold text-slate-900">Online Payments (PayMongo)</p>
+                                        <p className="text-sm font-semibold text-slate-900">Online Payments (Xendit)</p>
                                         <p className="text-xs text-slate-500 mt-0.5">
                                             Accepts digital deposits and loan payments through GCash, Maya, and bank cards.
                                         </p>
                                     </div>
                                 </div>
                                 <span className={`px-2.5 py-1 text-[11px] font-semibold rounded-full shrink-0 ${
-                                    health?.integrations?.paymongo?.enabled
+                                    health?.integrations?.xendit?.enabled
                                         ? 'bg-emerald-100 text-emerald-800'
                                         : 'bg-slate-200 text-slate-700'
                                 }`}>
-                                    {health?.integrations?.paymongo?.enabled ? 'Active' : 'Turned Off'}
+                                    {health?.integrations?.xendit?.enabled ? 'Active' : 'Turned Off'}
                                 </span>
                             </div>
 
@@ -435,7 +435,7 @@ export default function AdminOverview() {
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            {(['hourly', 'daily', 'offsite'] as const).map(tier => {
+                            {(['daily', 'offsite'] as const).map(tier => {
                                 const b = backupStatus?.tiers?.[tier] || {};
                                 const isOk = b.last_status === 'success';
                                 const isFail = b.last_status === 'failed';
@@ -451,7 +451,7 @@ export default function AdminOverview() {
                                     >
                                         <div className="flex items-center justify-between mb-1.5">
                                             <span className="text-xs font-bold text-slate-900 capitalize">
-                                                {tier === 'hourly' ? 'Recent Backup' : tier === 'daily' ? 'Daily Archive' : 'Off-Site Cloud'}
+                                                {tier === 'daily' ? 'Daily Archive' : 'Off-Site Cloud'}
                                             </span>
                                             <span className={`px-2 py-0.5 text-[10px] font-semibold rounded-full ${
                                                 isOk ? 'bg-emerald-100 text-emerald-800' :

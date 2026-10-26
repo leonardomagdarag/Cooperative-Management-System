@@ -11,7 +11,7 @@ class BackupPingCommand extends Command
      * The name and signature of the console command.
      */
     protected $signature = 'backup:ping
-                            {--tier= : Only handle this tier (hourly|daily|offsite). Omitting handles every enabled tier.}';
+                            {--tier= : Only handle this tier (daily|offsite). Omitting handles every enabled tier.}';
 
     /**
      * The console command description.
@@ -30,7 +30,7 @@ class BackupPingCommand extends Command
 
         foreach ($tiers as $tier) {
             if (! BackupService::isValidTier($tier)) {
-                $this->error("Unknown backup tier [{$tier}]. Expected: hourly, daily or offsite.");
+                $this->error("Unknown backup tier [{$tier}]. Expected: daily or offsite.");
 
                 return self::INVALID;
             }

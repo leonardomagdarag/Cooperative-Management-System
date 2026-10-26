@@ -71,7 +71,7 @@ test('loan officer with loans.disburse can disburse approved loan', function () 
 
     $this->loanOfficer->givePermissionTo('loans.disburse');
     actingAs($this->loanOfficer);
-    $this->postJson("/api/loans/{$loan->id}/disburse")
+    $this->postJson("/api/loans/{$loan->id}/disburse", ['destination' => 'savings'])
         ->assertOk();
 
     expect($loan->fresh()->loan_status)->toBe('active')

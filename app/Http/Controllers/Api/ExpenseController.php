@@ -126,15 +126,6 @@ class ExpenseController extends Controller
     {
         abort_unless(Auth::user()?->can('transactions.update'), 403);
 
-        $hasPending = PrivilegedActionRequest::query()
-            ->whereIn('action_type', ['expense.update', 'expense.delete'])
-            ->where('status', 'pending')
-            ->where('expires_at', '>', now())
-            ->get()
-            ->contains(fn ($req) => ($req->payload['expense_id'] ?? null) == $expense->id);
-
-        abort_if($hasPending, 409, 'This expense already has a pending approval request.');
-
         $validated = $request->validate([
             'category' => 'required|string|max:100',
             'description' => 'nullable|string|max:500',
@@ -182,15 +173,6 @@ class ExpenseController extends Controller
     public function destroy(Expense $expense): JsonResponse
     {
         abort_unless(Auth::user()?->can('transactions.update'), 403);
-
-        $hasPending = PrivilegedActionRequest::query()
-            ->whereIn('action_type', ['expense.update', 'expense.delete'])
-            ->where('status', 'pending')
-            ->where('expires_at', '>', now())
-            ->get()
-            ->contains(fn ($req) => ($req->payload['expense_id'] ?? null) == $expense->id);
-
-        abort_if($hasPending, 409, 'This expense already has a pending approval request.');
 
         // Expense deletions are privileged, mirroring expense updates.
         // They never mutate directly: a countersign request is recorded

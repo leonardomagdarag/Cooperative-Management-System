@@ -5,6 +5,8 @@ use App\Models\User;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\SystemSettingSeeder;
 use Database\Seeders\UserSeeder;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 beforeEach(function () {
     $this->seed(SpatieRolePermissionSeeder::class);
@@ -24,6 +26,21 @@ beforeEach(function () {
         'role' => 'loan',
     ]);
     $this->loanOfficer->syncRoles(['loan']);
+});
+
+test('seeding removes transactions.approve-own from existing built-in role grants', function () {
+    $permission = Permission::findByName('transactions.approve-own', 'web');
+    $roles = Role::query()->whereIn('name', ['admin', 'chairman', 'manager', 'accountant', 'loan', 'developer', 'member'])->get();
+
+    foreach ($roles as $role) {
+        $role->givePermissionTo($permission);
+    }
+
+    $this->seed(SpatieRolePermissionSeeder::class);
+
+    foreach ($roles as $role) {
+        expect($role->fresh()->hasPermissionTo($permission))->toBeFalse();
+    }
 });
 
 test('guest access behavior', function () {

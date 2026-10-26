@@ -11,17 +11,8 @@ import DatePicker from '../../components/DatePicker';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import ModalHeader from '../../components/ui/ModalHeader';
 import EmailChangeVerification from '../../components/EmailChangeVerification';
-import PublicContentPage from '../public-content/PublicContentPage';
-import LoanProductsPage from '../loan-products/LoanProductsPage';
-import RolePermissionsPage from '../role-permissions/RolePermissionsPage';
-import ServiceAvailabilityPage from './ServiceAvailabilityPage';
-import FinancialAccountsPage from './FinancialAccountsPage';
-import BackupPage from './BackupPage';
-import PayMongoPage from './PayMongoPage';
 import HelpSupportTab from './HelpSupportTab';
 import SettingsTabHeader from './SettingsTabHeader';
-import SmsSettingsPage from './SmsSettingsPage';
-import EmailSettingsPage from './EmailSettingsPage';
 import OtpVerifyField from '../../components/OtpVerifyField';
 
 interface SettingsTab {
@@ -32,30 +23,11 @@ interface SettingsTab {
 }
 
 export default function SettingsPage() {
-    const { user } = useAuth();
     const location = useLocation();
     const [searchParams, setSearchParams] = useSearchParams();
-    const isMember = user?.primary_role === 'member';
-    const isAdmin = user?.primary_role === 'admin';
-    const canManageSettings = user?.permissions?.includes('settings.update') || isAdmin;
-    const canViewSettings = canManageSettings || user?.permissions?.includes('settings.view');
-    const canManagePermissions = isAdmin || user?.permissions?.includes('officers.manage-permissions');
-    const canManageBackups = isAdmin || user?.permissions?.includes('backups.manage') || user?.permissions?.includes('backups.view');
-    const canViewLoans = canViewSettings || user?.permissions?.includes('loans.view');
-    const canManageFinancial = user?.permissions?.includes('financial_settings.update');
-
     const tabs: SettingsTab[] = [
         { key: 'account', label: 'My Account', icon: 'fas fa-user-cog', visible: true },
         { key: 'help-support', label: 'Help & Support', icon: 'fas fa-life-ring', visible: true },
-        { key: 'public-content', label: 'Public Page', icon: 'fas fa-globe', visible: isAdmin },
-        { key: 'loan-products', label: 'Loan Products', icon: 'fa-solid fa-hand-holding-dollar', visible: !isMember && canViewLoans },
-        { key: 'role-permissions', label: 'Roles & Permissions', icon: 'fas fa-user-shield', visible: !isMember && canManagePermissions },
-        { key: 'service-availability', label: 'Service Availability', icon: 'fas fa-toggle-on', visible: isAdmin },
-        { key: 'financial-accounts', label: 'Financial Accounts', icon: 'fas fa-piggy-bank', visible: canManageFinancial },
-        { key: 'sms', label: 'SMS Service', icon: 'fas fa-comment-sms', visible: isAdmin },
-        { key: 'email', label: 'Email Service', icon: 'fas fa-envelope', visible: !isMember && canManageSettings },
-        { key: 'paymongo', label: 'Payment Gateway', icon: 'fas fa-credit-card', visible: isAdmin },
-        { key: 'backups', label: 'Backup & Restore', icon: 'fas fa-hard-drive', visible: !isMember && canManageBackups },
     ];
 
     const visibleTabs = tabs.filter(t => t.visible);
@@ -143,7 +115,7 @@ export default function SettingsPage() {
         <div className="space-y-6">
             <div className="bg-gradient-to-r from-emerald-600 to-cyan-600 rounded-2xl p-6 text-white shadow-lg">
                 <h1 className="text-2xl font-bold">Settings</h1>
-                <p className="mt-1 text-sm text-white/80">Manage your account and configure the cooperative system</p>
+                <p className="mt-1 text-sm text-white/80">Manage your account and support requests</p>
             </div>
 
             <div className="flex min-w-0 gap-2 overflow-x-auto overflow-y-hidden border-b border-gray-200">
@@ -164,16 +136,7 @@ export default function SettingsPage() {
                 ))}
             </div>
 
-            {activeTab === 'public-content' ? <PublicContentPage /> :
-              activeTab === 'loan-products' ? <LoanProductsPage /> :
-              activeTab === 'role-permissions' ? <RolePermissionsPage /> :
-              activeTab === 'service-availability' ? <ServiceAvailabilityPage /> :
-              activeTab === 'financial-accounts' ? <FinancialAccountsPage /> :
-              activeTab === 'sms' ? <SmsSettingsPage /> :
-              activeTab === 'email' ? <EmailSettingsPage /> :
-              activeTab === 'paymongo' ? <PayMongoPage /> :
-              activeTab === 'backups' ? <BackupPage /> :
-              activeTab === 'help-support' ? <HelpSupportTab /> :
+            {activeTab === 'help-support' ? <HelpSupportTab /> :
               <MemberSettings />}
         </div>
     );

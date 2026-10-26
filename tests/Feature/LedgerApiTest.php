@@ -9,6 +9,9 @@ use App\Services\CountersignService;
 use App\Services\SecurityOtpService;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\UserSeeder;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Str;
+use Spatie\Activitylog\Models\Activity;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 beforeEach(function () {
@@ -64,6 +67,56 @@ test('ledger store creates pending transaction without affecting balance', funct
     expect($transaction->status)->toBe('pending')
         ->and($transaction->recorded_by)->toBe($this->manager->id)
         ->and($transaction->account_id)->toBe($this->account->id);
+});
+
+test('manual ledger creation and deletion are audited with their actor and subject', function () {
+    $created = $this->actingAs($this->manager)->postJson('/api/ledger', [
+        'transaction_type' => 'deposit',
+        'amount' => 125.50,
+        'account_id' => $this->account->id,
+    ])->assertCreated();
+    $transactionId = $created->json('data.id');
+
+    expect(Activity::where('event', 'ledger.transaction_created')
+        ->where('subject_type', Transaction::class)
+        ->where('subject_id', $transactionId)
+        ->where('causer_id', $this->manager->id)
+        ->exists())->toBeTrue();
+
+    $this->deleteJson("/api/ledger/{$transactionId}")->assertOk();
+
+    expect(Activity::where('event', 'ledger.transaction_deleted')
+        ->where('subject_type', Transaction::class)
+        ->where('subject_id', $transactionId)
+        ->where('causer_id', $this->manager->id)
+        ->exists())->toBeTrue();
+});
+
+test('loan payment ledger edits cannot attach a savings account', function () {
+    $loan = Loan::factory()->active()->create(['user_id' => $this->member->id]);
+    $transaction = Transaction::create([
+        'transaction_type' => 'loan_payment',
+        'amount' => 100,
+        'account_id' => null,
+        'loan_id' => $loan->id,
+        'status' => 'pending',
+        'recorded_by' => $this->manager->id,
+        'branch_id' => $this->manager->branch_id,
+        'transaction_date' => now(),
+    ]);
+
+    $response = $this->actingAs($this->manager)->putJson("/api/ledger/{$transaction->id}", [
+        'transaction_type' => 'loan_payment',
+        'amount' => 100,
+        'account_id' => $this->account->id,
+        'loan_id' => $loan->id,
+    ])->assertAccepted();
+
+    $request = PrivilegedActionRequest::findOrFail($response->json('request_id'));
+    expect($request->payload['changes']['account_id'])->toBeNull();
+
+    app(CountersignService::class)->approve($request, $this->chairman);
+    expect($transaction->fresh()->account_id)->toBeNull();
 });
 
 test('ledger update is applied only after chairman countersign', function () {
@@ -249,6 +302,52 @@ test('ledger destroy deletes pending transaction without affecting balance', fun
     $this->assertDatabaseMissing('transactions', ['id' => $transactionId]);
 });
 
+test('generated transaction numbers are not reused after a transaction is deleted', function () {
+    $first = Transaction::create([
+        'transaction_type' => 'fee',
+        'amount' => 1.00,
+        'status' => 'pending',
+        'recorded_by' => $this->manager->id,
+        'transaction_date' => now(),
+    ]);
+    $firstNumber = $first->transaction_number;
+    $first->delete();
+
+    $next = Transaction::create([
+        'transaction_type' => 'fee',
+        'amount' => 1.00,
+        'status' => 'pending',
+        'recorded_by' => $this->manager->id,
+        'transaction_date' => now(),
+    ]);
+
+    expect($next->transaction_number)->not->toBe($firstNumber)
+        ->and($next->transaction_number)->toStartWith('TXN'.now()->format('Ymd'));
+});
+
+test('explicit transaction numbers advance the daily sequence', function () {
+    $prefix = 'TXN'.now()->format('Ymd');
+
+    Transaction::create([
+        'transaction_number' => $prefix.'000321',
+        'transaction_type' => 'fee',
+        'amount' => 1.00,
+        'status' => 'pending',
+        'recorded_by' => $this->manager->id,
+        'transaction_date' => now(),
+    ]);
+
+    $next = Transaction::create([
+        'transaction_type' => 'fee',
+        'amount' => 1.00,
+        'status' => 'pending',
+        'recorded_by' => $this->manager->id,
+        'transaction_date' => now(),
+    ]);
+
+    expect($next->transaction_number)->toBe($prefix.'000322');
+});
+
 test('ledger destroy rejects deleting non-pending transaction', function () {
     $this->actingAs($this->manager);
 
@@ -264,4 +363,208 @@ test('ledger destroy rejects deleting non-pending transaction', function () {
 
     $this->deleteJson("/api/ledger/{$transactionId}")->assertStatus(409)
         ->assertJson(['message' => 'Only pending transactions can be deleted.']);
+});
+
+test('ledger update rejects duplicate pending countersign request', function () {
+    $this->actingAs($this->manager);
+
+    $txn = Transaction::create([
+        'transaction_type' => 'deposit',
+        'amount' => 300.00,
+        'account_id' => $this->account->id,
+        'status' => 'pending',
+        'recorded_by' => $this->manager->id,
+        'branch_id' => $this->manager->branch_id,
+        'transaction_date' => now(),
+    ]);
+
+    $this->putJson("/api/ledger/{$txn->id}", [
+        'transaction_type' => 'deposit',
+        'amount' => 400.00,
+        'account_id' => $this->account->id,
+    ])->assertStatus(202);
+
+    $this->putJson("/api/ledger/{$txn->id}", [
+        'transaction_type' => 'deposit',
+        'amount' => 500.00,
+        'account_id' => $this->account->id,
+    ])->assertStatus(409)
+        ->assertJson(['message' => 'This transaction already has a pending update request.']);
+});
+
+test('privileged action active keys reject a duplicate reservation at the database boundary', function () {
+    $attributes = [
+        'action_type' => 'transaction.update',
+        'status' => 'pending',
+        'payload' => ['transaction_id' => 912345],
+        'requested_by' => $this->manager->id,
+        'idempotency_key' => (string) Str::uuid(),
+        'active_key' => 'transaction.update:912345',
+        'expires_at' => now()->addHour(),
+    ];
+
+    PrivilegedActionRequest::create($attributes);
+
+    expect(fn () => PrivilegedActionRequest::create([
+        ...$attributes,
+        'idempotency_key' => (string) Str::uuid(),
+    ]))->toThrow(QueryException::class);
+});
+
+test('ledger destroy rejects deleting transaction with pending update request', function () {
+    $this->actingAs($this->manager);
+
+    $txn = Transaction::create([
+        'transaction_type' => 'deposit',
+        'amount' => 300.00,
+        'account_id' => $this->account->id,
+        'status' => 'pending',
+        'recorded_by' => $this->manager->id,
+        'branch_id' => $this->manager->branch_id,
+        'transaction_date' => now(),
+    ]);
+
+    $this->putJson("/api/ledger/{$txn->id}", [
+        'transaction_type' => 'deposit',
+        'amount' => 400.00,
+        'account_id' => $this->account->id,
+    ])->assertStatus(202);
+
+    $this->deleteJson("/api/ledger/{$txn->id}")
+        ->assertStatus(409)
+        ->assertJson(['message' => 'Cannot delete a transaction with a pending update request.']);
+});
+
+test('reversing a loan disbursement with recorded payments is blocked', function () {
+    $this->actingAs($this->manager);
+
+    $loan = Loan::factory()->active()->create([
+        'user_id' => $this->member->id,
+        'branch_id' => $this->manager->branch_id,
+        'loan_amount' => 5000.00,
+    ]);
+
+    $disbursement = Transaction::create([
+        'transaction_type' => 'loan_disbursement',
+        'amount' => 5000.00,
+        'account_id' => $this->account->id,
+        'loan_id' => $loan->id,
+        'status' => 'completed',
+        'recorded_by' => $this->manager->id,
+        'branch_id' => $this->manager->branch_id,
+        'transaction_date' => now(),
+    ]);
+
+    // Record a payment against the loan
+    Transaction::create([
+        'transaction_type' => 'loan_payment',
+        'amount' => 500.00,
+        'account_id' => $this->account->id,
+        'loan_id' => $loan->id,
+        'status' => 'completed',
+        'recorded_by' => $this->manager->id,
+        'branch_id' => $this->manager->branch_id,
+        'transaction_date' => now(),
+    ]);
+
+    $securityOtp = app(SecurityOtpService::class);
+    $challenge = $securityOtp->issueChallenge($this->manager, $securityOtp->ledgerReversalPurpose(), ['transaction_id' => $disbursement->id]);
+
+    $this->postJson("/api/ledger/{$disbursement->id}/reverse", ['otp_code' => $challenge['otp_code']])
+        ->assertStatus(422)
+        ->assertJson(['message' => 'Cannot reverse disbursement of a loan with recorded payments.']);
+});
+
+test('reversing a loan disbursement without payments reverts loan status to approved', function () {
+    $this->actingAs($this->manager);
+
+    $loan = Loan::factory()->active()->create([
+        'user_id' => $this->member->id,
+        'branch_id' => $this->manager->branch_id,
+        'loan_amount' => 5000.00,
+        'due_date' => now()->addMonths(6)->toDateString(),
+    ]);
+
+    $disbursement = Transaction::create([
+        'transaction_type' => 'loan_disbursement',
+        'amount' => 500.00,
+        'account_id' => $this->account->id,
+        'loan_id' => $loan->id,
+        'status' => 'completed',
+        'recorded_by' => $this->manager->id,
+        'branch_id' => $this->manager->branch_id,
+        'transaction_date' => now(),
+    ]);
+
+    $securityOtp = app(SecurityOtpService::class);
+    $challenge = $securityOtp->issueChallenge($this->manager, $securityOtp->ledgerReversalPurpose(), ['transaction_id' => $disbursement->id]);
+
+    $this->postJson("/api/ledger/{$disbursement->id}/reverse", ['otp_code' => $challenge['otp_code']])
+        ->assertOk();
+
+    expect($loan->fresh()->loan_status)->toBe('approved')
+        ->and($loan->fresh()->due_date)->toBeNull()
+        ->and((float) $this->account->fresh()->balance)->toBe(500.00);
+});
+
+test('reversing interest transaction decrements balance and checks funds', function () {
+    $this->actingAs($this->manager);
+
+    $interest = Transaction::create([
+        'transaction_type' => 'interest',
+        'amount' => 200.00,
+        'account_id' => $this->account->id,
+        'status' => 'completed',
+        'recorded_by' => null,
+        'branch_id' => $this->manager->branch_id,
+        'transaction_date' => now(),
+    ]);
+
+    $securityOtp = app(SecurityOtpService::class);
+    $challenge = $securityOtp->issueChallenge($this->manager, $securityOtp->ledgerReversalPurpose(), ['transaction_id' => $interest->id]);
+
+    $this->postJson("/api/ledger/{$interest->id}/reverse", ['otp_code' => $challenge['otp_code']])
+        ->assertOk();
+
+    expect((float) $this->account->fresh()->balance)->toBe(800.00);
+
+    // If balance is now below amount, reversal of a credit is rejected
+    $this->account->update(['balance' => 50.00]);
+    $interest2 = Transaction::create([
+        'transaction_type' => 'interest',
+        'amount' => 200.00,
+        'account_id' => $this->account->id,
+        'status' => 'completed',
+        'recorded_by' => null,
+        'branch_id' => $this->manager->branch_id,
+        'transaction_date' => now(),
+    ]);
+
+    $challenge2 = $securityOtp->issueChallenge($this->manager, $securityOtp->ledgerReversalPurpose(), ['transaction_id' => $interest2->id]);
+    $this->postJson("/api/ledger/{$interest2->id}/reverse", ['otp_code' => $challenge2['otp_code']])
+        ->assertStatus(422)
+        ->assertJson(['message' => 'Cannot reverse credit: insufficient current balance.']);
+});
+
+test('reversal on a closed account is rejected', function () {
+    $this->actingAs($this->manager);
+
+    $txn = Transaction::create([
+        'transaction_type' => 'deposit',
+        'amount' => 100.00,
+        'account_id' => $this->account->id,
+        'status' => 'completed',
+        'recorded_by' => $this->manager->id,
+        'branch_id' => $this->manager->branch_id,
+        'transaction_date' => now(),
+    ]);
+
+    $this->account->delete(); // Soft delete / close account
+
+    $securityOtp = app(SecurityOtpService::class);
+    $challenge = $securityOtp->issueChallenge($this->manager, $securityOtp->ledgerReversalPurpose(), ['transaction_id' => $txn->id]);
+
+    $this->postJson("/api/ledger/{$txn->id}/reverse", ['otp_code' => $challenge['otp_code']])
+        ->assertStatus(422)
+        ->assertJson(['message' => 'Cannot reverse transaction on a closed account.']);
 });

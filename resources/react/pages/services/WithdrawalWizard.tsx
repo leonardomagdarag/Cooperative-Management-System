@@ -65,7 +65,10 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
 
     const savingsAccount = memberDetail?.accounts?.find((a: any) => a.account_type === 'savings') ?? dashboard?.data?.savings_account;
     const balance = Number(savingsAccount?.balance ?? 0);
-    const availableBalance = Math.max(0, balance - (selectedMember ? 0 : pendingWithdrawalSum));
+    const pendingWithdrawalAmount = selectedMember
+        ? Number(savingsAccount?.pending_withdrawals ?? 0)
+        : pendingWithdrawalSum;
+    const availableBalance = Math.max(0, balance - pendingWithdrawalAmount);
 
     const isModeAvailable = (mode: 'counter' | 'online' | 'bank_transfer'): boolean => {
         if (!availability) return true;
@@ -128,7 +131,7 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
         },
         onSuccess: (res) => {
             requestIdRef.current = null;
-            addToast('Withdrawal submitted for approval', 'success');
+            addToast(res.data.data?.status === 'completed' ? 'Counter withdrawal recorded' : 'Withdrawal submitted for manager or chairman approval', 'success');
             setReceipt(res.data.data || { message: res.data.message });
             setStep(form.transaction_mode === 'counter' ? 99 : 4);
         },
@@ -140,7 +143,7 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
 
     const modeLabels: Record<string, { title: string; sub: string; icon: string }> = {
         counter: { title: 'Over the Counter', sub: 'Visit our office to collect cash', icon: 'fa-cash-register' },
-        online: { title: 'Mobile Wallet/Online', sub: 'GCash, PayMaya, or online banking', icon: 'fa-mobile-alt' },
+        online: { title: 'External online transfer', sub: 'GCash, Maya, or online banking', icon: 'fa-mobile-alt' },
         bank_transfer: { title: 'Bank Transfer', sub: 'Receive funds via online bank transfer', icon: 'fa-university' },
     };
 
@@ -326,13 +329,13 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
                         <h4 className="text-lg font-semibold text-gray-900 mb-2">
                             {form.transaction_mode === 'bank_transfer' ? 'Processing Bank Transfer' : 'Processing Online Transfer'}
                         </h4>
-                        <p className="text-gray-600 mb-6">We'll process your transfer request</p>
+                        <p className="text-gray-600 mb-6">Online and bank-transfer withdrawals remain pending until a manager or chairman approves them. A manager is limited to their branch when branch bypass is off; with bypass enabled, only the chairman can approve.</p>
 
                         <div className="bg-gray-50 rounded-lg p-6 mb-6">
                             <p className="text-sm text-gray-600 mb-4">
                                 {form.transaction_mode === 'bank_transfer'
                                     ? 'Funds will be transferred to your registered bank account'
-                                    : 'Funds will be transferred to your registered mobile wallet'}
+                                    : 'Funds will be sent through your registered external payment method'}
                             </p>
                             <p className="text-2xl font-bold text-gray-900">{peso(form.amount)}</p>
                         </div>
@@ -350,8 +353,8 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
                         <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                             <i className="fas fa-receipt text-green-600 text-3xl"></i>
                         </div>
-                        <h4 className="text-xl font-bold text-gray-900 mb-2">Transaction Successful!</h4>
-                        <p className="text-gray-600">Your transaction has been completed</p>
+                        <h4 className="text-xl font-bold text-gray-900 mb-2">{receipt.status === 'completed' ? 'Withdrawal Processed' : 'Withdrawal Request Submitted'}</h4>
+                        <p className="text-gray-600">{receipt.status === 'completed' ? 'The counter payout was recorded and your balance was debited.' : 'Your withdrawal is pending manager or chairman approval.'}</p>
                     </div>
 
                     <div className="bg-gray-50 rounded-lg p-6 mb-4 space-y-3 border-2 border-dashed border-gray-300">
@@ -389,7 +392,7 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
                         <div className="flex justify-between text-sm pt-3 border-t border-gray-300">
                             <span className="text-gray-600">Payment Method:</span>
                             <span className="font-semibold text-gray-900">
-                                {form.transaction_mode === 'counter' ? 'Over the Counter' : form.transaction_mode === 'bank_transfer' ? 'Bank Transfer' : 'Online/Digital Wallet'}
+                                {form.transaction_mode === 'counter' ? 'Over the Counter' : form.transaction_mode === 'bank_transfer' ? 'Bank Transfer' : 'External online transfer'}
                             </span>
                         </div>
                         <div className="flex justify-between text-sm">

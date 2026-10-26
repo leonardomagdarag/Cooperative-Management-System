@@ -38,7 +38,7 @@ const typeLabels: Record<string, string> = {
     loan_payment: 'Loan Payment',
     loan_disbursement: 'Loan Disbursement',
     fee: 'Fee',
-    interest: 'Interest',
+    interest: 'Interest Credit',
 };
 
 const peso = (amount: string | number) =>

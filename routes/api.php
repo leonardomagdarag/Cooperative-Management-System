@@ -17,9 +17,9 @@ use App\Http\Controllers\Api\MemberController;
 use App\Http\Controllers\Api\OfficerPermissionController;
 use App\Http\Controllers\Api\OfficerVerificationController;
 use App\Http\Controllers\Api\OversightController;
-use App\Http\Controllers\Api\PayMongoPaymentController;
-use App\Http\Controllers\Api\PayMongoSettingsController;
-use App\Http\Controllers\Api\PayMongoWebhookController;
+use App\Http\Controllers\Api\XenditPaymentController;
+use App\Http\Controllers\Api\XenditSettingsController;
+use App\Http\Controllers\Api\XenditWebhookController;
 use App\Http\Controllers\Api\PhoneVerificationController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\PublicContentController;
@@ -97,8 +97,8 @@ Route::get('/announcements/public', function (Request $request) {
     ]);
 })->middleware('throttle:30,1');
 
-// PayMongo Webhook (Public, signature-verified, rate-limited)
-Route::post('/webhooks/paymongo', [PayMongoWebhookController::class, 'handle'])->middleware('throttle:60,1');
+// Xendit webhook (public endpoint, callback-token verified)
+Route::post('/webhooks/xendit', [XenditWebhookController::class, 'handle'])->middleware('throttle:60,1');
 
 // Current user (auth + OTP only — must remain reachable so the SPA can
 // surface the "verify your email" gate instead of a blank session failure)
@@ -282,7 +282,7 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     Route::post('/services/withdrawal', [ServiceController::class, 'withdrawal'])->middleware(['profile.completed', 'service.availability:withdrawal']);
     Route::post('/services/loan-application', [ServiceController::class, 'loanApplication'])->middleware(['profile.completed', 'service.availability:loan_application']);
     Route::post('/services/loan-payment', [ServiceController::class, 'loanPayment'])->middleware(['profile.completed', 'service.availability:loan_payment']);
-    Route::post('/services/approve/{transaction}', [ServiceController::class, 'approveTransaction']);
+    Route::post('/services/approve/{transaction}', [ServiceController::class, 'approveTransaction'])->middleware(['profile.completed', 'service.availability:transaction']);
     Route::post('/services/transactions/{transaction}/send-otp', [ServiceController::class, 'sendWithdrawalApprovalOtp']);
     Route::get('/services/pending', [ServiceController::class, 'pendingTransactions']);
 
@@ -328,15 +328,16 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     Route::delete('/backups/{tier}/backup', [BackupController::class, 'destroy']);
     Route::post('/backups/restore', [BackupController::class, 'restore']);
 
-    // PayMongo Settings (admin or settings permissions)
-    Route::get('/settings/paymongo', [PayMongoSettingsController::class, 'index']);
-    Route::put('/settings/paymongo', [PayMongoSettingsController::class, 'updateSettings']);
-    Route::put('/settings/paymongo/credentials', [PayMongoSettingsController::class, 'updateCredentials']);
-    Route::delete('/settings/paymongo/credentials', [PayMongoSettingsController::class, 'clearCredentials']);
-    Route::post('/settings/paymongo/test', [PayMongoSettingsController::class, 'testConnection']);
+    // Xendit Settings (admin only)
+    Route::get('/settings/xendit', [XenditSettingsController::class, 'index']);
+    Route::put('/settings/xendit', [XenditSettingsController::class, 'updateSettings']);
+    Route::put('/settings/xendit/credentials', [XenditSettingsController::class, 'updateCredentials']);
+    Route::delete('/settings/xendit/credentials', [XenditSettingsController::class, 'clearCredentials']);
+    Route::post('/settings/xendit/test', [XenditSettingsController::class, 'testConnection']);
 
-    // PayMongo Payment Flow (member or authorized officer)
-    Route::get('/services/paymongo/methods', [PayMongoPaymentController::class, 'methods']);
-    Route::post('/services/paymongo/checkout', [PayMongoPaymentController::class, 'createCheckout'])->middleware('profile.completed');
-    Route::get('/services/paymongo/verify/{transactionNumber}', [PayMongoPaymentController::class, 'verify']);
+    // Xendit payment flow (existing protected group and profile completion gate)
+    Route::get('/services/xendit/status', [XenditPaymentController::class, 'status']);
+    Route::post('/services/xendit/deposit/checkout', [XenditPaymentController::class, 'createDepositCheckout'])->middleware(['profile.completed', 'service.availability:deposit']);
+    Route::post('/services/xendit/loan-payment/checkout', [XenditPaymentController::class, 'createLoanPaymentCheckout'])->middleware(['profile.completed', 'service.availability:loan_payment']);
+    Route::get('/services/xendit/verify/{transactionNumber}', [XenditPaymentController::class, 'verify']);
 });

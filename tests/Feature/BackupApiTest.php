@@ -66,13 +66,13 @@ test('admin with backups.view can read backup index and recent runs', function (
     $this->actingAs($admin)
         ->getJson('/api/backups')
         ->assertOk()
-        ->assertJsonPath('data.settings.tiers.hourly.enabled', false)
+        ->assertJsonPath('data.settings.daily_time', '03:00')
         ->assertJsonPath('data.settings.tiers.daily.retention.days', 30)
         ->assertJsonPath('data.settings.offsite.configured', false)
         ->assertJsonStructure([
             'data' => [
-                'settings' => ['tiers' => ['hourly', 'daily', 'offsite']],
-                'tiers' => ['hourly', 'daily', 'offsite'],
+                    'settings' => ['tiers' => ['daily', 'offsite']],
+                    'tiers' => ['daily', 'offsite'],
             ],
         ])
         ->assertJsonCount(1, 'data.recent_runs')
@@ -83,26 +83,39 @@ test('backup index reports the on-disk size of each archive', function () {
     Storage::fake('local_backups');
 
     $base = (string) config('backup.backup.name');
-    Storage::disk('local_backups')->put("{$base}/backup-hourly-2026-10-16-01-00-00.zip", 'abcdef');
+    Storage::disk('local_backups')->put("{$base}/backup-daily-2026-10-16-01-00-00.zip", 'abcdef');
 
     $admin = backupAdminWith('backups.view');
 
     $this->actingAs($admin)
         ->getJson('/api/backups')
         ->assertOk()
-        ->assertJsonPath('data.tiers.hourly.items.0.name', 'backup-hourly-2026-10-16-01-00-00.zip')
-        ->assertJsonPath('data.tiers.hourly.items.0.size', 6);
+        ->assertJsonPath('data.tiers.daily.items.0.name', 'backup-daily-2026-10-16-01-00-00.zip')
+        ->assertJsonPath('data.tiers.daily.items.0.size', 6);
 });
 
-test('admin can enable automatic hourly backups from settings', function () {
+test('admin can change the daily backup time from settings', function () {
     $admin = backupAdminWith('backups.manage');
 
     $this->actingAs($admin)
-        ->putJson('/api/backups/settings', ['hourly_enabled' => true])
-        ->assertOk()
-        ->assertJsonPath('message', 'Backup settings updated.');
+        ->putJson('/api/backups/settings', ['daily_time' => '05:30'])
+        ->assertStatus(202)
+        ->assertJsonPath('message', 'Backup settings changes are awaiting chairman countersign approval.');
+});
 
-    expect(SystemSetting::get('backup_hourly_enabled'))->toBeTrue();
+test('backup password changes are validated and encrypted in the database', function () {
+    $admin = backupAdminWith('backups.manage');
+
+    $this->actingAs($admin)
+        ->putJson('/api/backups/settings', [
+            'archive_password' => 'StrongPass1!',
+            'archive_password_confirmation' => 'StrongPass1!',
+        ])
+        ->assertStatus(202);
+
+    $setting = SystemSetting::where('key', 'backup_archive_password')->firstOrFail();
+    expect($setting->type)->toBe('encrypted')
+        ->and($setting->value)->not->toBe('StrongPass1!');
 });
 
 test('backup settings rejects an empty payload', function () {
@@ -132,8 +145,8 @@ test('restore rejects when unauthenticated actor lacks backups.restore permissio
 
     $this->actingAs($member)
         ->postJson('/api/backups/restore', [
-            'tier' => 'hourly',
-            'path' => 'Laravel/backup-hourly-test.zip',
+            'tier' => 'daily',
+            'path' => 'Laravel/backup-daily-test.zip',
             'scope' => 'both',
             'current_password' => 'password',
             'confirmation' => 'RESTORE',
@@ -151,23 +164,23 @@ test('run rejects invalid tier or invalid scope', function () {
         ->assertJson(['message' => 'Invalid tier.']);
 
     $this->actingAs($admin)
-        ->postJson('/api/backups/hourly/run', ['scope' => 'invalid_scope'])
+        ->postJson('/api/backups/daily/run', ['scope' => 'invalid_scope'])
         ->assertStatus(422)
         ->assertJson(['message' => 'Invalid scope.']);
 });
 
-test('backups.manage queues an hourly files backup', function () {
+test('backups.manage queues a daily files backup', function () {
     config(['backup.backup.password' => 'test-encryption-key']);
     config(['backup.backup.encryption' => 'none']);
 
     $admin = backupAdminWith('backups.manage');
 
     $this->actingAs($admin)
-        ->postJson('/api/backups/hourly/run', ['scope' => 'files'])
+        ->postJson('/api/backups/daily/run', ['scope' => 'files'])
         ->assertStatus(202)
         ->assertJsonPath('run.status', 'queued');
 
-    expect(BackupRun::where('tier', 'hourly')->latest()->first()->status)->toBe('success');
+    expect(BackupRun::where('tier', 'daily')->latest()->first()->status)->toBe('success');
 });
 
 test('off-site status and test endpoint require backups.manage and report unconfigured', function () {

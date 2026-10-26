@@ -4,6 +4,16 @@ Cooperative management system for **Settlers Credit Cooperative**. Laravel 12 mo
 
 ## Architecture
 
+- **This system is not, and must not become, a digital wallet.** Cooperative account
+  balances are member ledger records, not stored-value funds members can use to pay
+  loans or make third-party purchases. Loan payments must be funded externally and
+  recorded as payments to the cooperative; never debit a member's savings account
+  to settle their own loan. Loan proceeds are normally paid to the member as
+  physical cash. A disbursement may instead be explicitly posted to the member's
+  savings ledger when the officer selects that option and confirms it. Keep the
+  selected delivery method, operator, and transaction linked in the audit trail.
+  Do not add wallet transfers, wallet top-ups, or wallet-style payment flows.
+
 - **One Blade shell, everything else is React.** `resources/views/react.blade.php` renders `<div id="app">` and mounts `resources/react/main.tsx`. All routing is client-side in `resources/react/App.tsx` (react-router). `app/Http/Controllers/PageController.php` just returns that view.
 - **`routes/web.php` ends with a catch-all** — `Route::get('/{path?}', ...)->name('react.spa')` with `->where('path', '.*')`. It **must stay the last route**; any GET route appended after it is silently shadowed and will 404 into the SPA.
 - **`routes/api.php` is inside the `web` middleware group, not `api`.** Auth is cookie/session based, so protected routes are declared `Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])`; a second group omits `verified` for pre-verification OTP flows. There are no API tokens.

@@ -30,11 +30,11 @@ class ReportController extends Controller
         $branchId = BranchScope::resolveBranchId(Auth::user(), $request->integer('branch_id'));
 
         $totals = $this->applyWindowToTransactions(
-            $this->completedTransactions($branchId)->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'fee']),
+            $this->completedTransactions($branchId)->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'interest', 'fee']),
             $start,
             $end
         )
-            ->selectRaw('transaction_type, SUM(amount) as total')
+            ->selectRaw('transaction_type, SUM('.Transaction::netAmountExpression().') as total')
             ->groupBy('transaction_type')
             ->pluck('total', 'transaction_type');
 
@@ -47,7 +47,7 @@ class ReportController extends Controller
             ->where('transaction_type', 'loan_payment')
             ->whereBetween('transaction_date', [$start, $end])
             ->with(['loan' => fn ($q) => $q->select('id', 'loan_amount', 'interest_rate', 'term_months')])
-            ->get(['id', 'amount', 'loan_id']);
+            ->get(['id', 'amount', 'loan_id', 'reversal_of_id']);
 
         $totalInterestEarned = 0.0;
         foreach ($payments as $payment) {
@@ -55,7 +55,8 @@ class ReportController extends Controller
                 $totalPayable = $payment->loan->totalPayable();
                 $totalInterest = $payment->loan->totalInterest();
                 if ($totalPayable > 0) {
-                    $totalInterestEarned += (float) $payment->amount * ($totalInterest / $totalPayable);
+                    $direction = $payment->reversal_of_id === null ? 1 : -1;
+                    $totalInterestEarned += $direction * (float) $payment->amount * ($totalInterest / $totalPayable);
                 }
             }
         }
@@ -76,7 +77,8 @@ class ReportController extends Controller
             ->get(['loan_amount', 'interest_rate', 'term_months'])
             ->sum(fn (Loan $loan) => $loan->totalInterest());
 
-        $inflows = (float) ($totals['deposit'] ?? 0) + (float) ($totals['loan_payment'] ?? 0) + (float) ($totals['fee'] ?? 0);
+        $totalInterestCredits = (float) ($totals['interest'] ?? 0);
+        $inflows = (float) ($totals['deposit'] ?? 0) + (float) ($totals['loan_payment'] ?? 0) + $totalInterestCredits + (float) ($totals['fee'] ?? 0);
         $outflows = (float) ($totals['withdrawal'] ?? 0) + (float) ($totals['loan_disbursement'] ?? 0) + $totalExpenses;
 
         return response()->json([
@@ -86,6 +88,7 @@ class ReportController extends Controller
             'total_withdrawals' => (float) ($totals['withdrawal'] ?? 0),
             'total_loan_releases' => (float) ($totals['loan_disbursement'] ?? 0),
             'total_loan_repayments' => (float) ($totals['loan_payment'] ?? 0),
+            'total_interest_credits' => $totalInterestCredits,
             'total_interest_earned' => $totalInterestEarned,
             'projected_interest' => round($projectedInterest, 2),
             'total_fees' => (float) ($totals['fee'] ?? 0),
@@ -182,7 +185,7 @@ class ReportController extends Controller
 
         return response()->json([
             ...$this->withPagination($items, $paginator),
-            'total' => (float) $query->sum('amount'),
+            'total' => (float) $query->selectRaw('SUM('.Transaction::netAmountExpression().') as aggregate_total')->value('aggregate_total'),
         ]);
     }
 
@@ -212,8 +215,8 @@ class ReportController extends Controller
                 $start,
                 $end
             )
-                ->whereIn('transaction_type', ['deposit', 'withdrawal'])
-                ->selectRaw('account_id, transaction_type, SUM(amount) as total')
+                ->whereIn('transaction_type', ['deposit', 'withdrawal', 'interest'])
+                ->selectRaw('account_id, transaction_type, SUM('.Transaction::netAmountExpression().') as total')
                 ->groupBy('account_id', 'transaction_type')
                 ->get();
         }
@@ -233,6 +236,7 @@ class ReportController extends Controller
                 'member_name' => $name,
                 'total_deposits' => (float) ($byAccount[$account->id]['deposit'] ?? 0),
                 'total_withdrawals' => (float) ($byAccount[$account->id]['withdrawal'] ?? 0),
+                'total_interest_credits' => (float) ($byAccount[$account->id]['interest'] ?? 0),
                 'current_balance' => (float) $account->balance,
             ];
         });
@@ -660,6 +664,7 @@ class ReportController extends Controller
             ['Total Withdrawals', $this->money($financial['total_withdrawals'])],
             ['Total Loan Releases', $this->money($financial['total_loan_releases'])],
             ['Total Loan Repayments', $this->money($financial['total_loan_repayments'])],
+            ['Interest Credits', $this->money($financial['total_interest_credits'])],
             ['Total Interest Earned (Collected)', $this->money($financial['total_interest_earned'])],
             ['Projected Interest', $this->money($financial['projected_interest'])],
             ['Total Fees', $this->money($financial['total_fees'])],
@@ -670,14 +675,22 @@ class ReportController extends Controller
         $monthlyColumns = [
             ['key' => 'month', 'label' => 'Month'],
             ['key' => 'deposits', 'label' => 'Deposits', 'align' => 'right'],
+            ['key' => 'interest_credits', 'label' => 'Interest Credits', 'align' => 'right'],
+            ['key' => 'loan_repayments', 'label' => 'Loan Repayments', 'align' => 'right'],
+            ['key' => 'loan_releases', 'label' => 'Loan Releases', 'align' => 'right'],
             ['key' => 'withdrawals', 'label' => 'Withdrawals', 'align' => 'right'],
+            ['key' => 'fees', 'label' => 'Fees', 'align' => 'right'],
             ['key' => 'expenses', 'label' => 'Expenses', 'align' => 'right'],
             ['key' => 'net', 'label' => 'Net', 'align' => 'right'],
         ];
         $monthlyRows = collect($financial['monthly_series'] ?? [])->map(fn (array $m) => [
             $m['label'],
             $this->money($m['deposits']),
+            $this->money($m['interest_credits']),
+            $this->money($m['loan_repayments']),
+            $this->money($m['loan_releases']),
             $this->money($m['withdrawals']),
+            $this->money($m['fees']),
             $this->money($m['expenses']),
             $this->money($m['net']),
         ])->all();
@@ -745,8 +758,8 @@ class ReportController extends Controller
                 $start,
                 $end
             )
-                ->whereIn('transaction_type', ['deposit', 'withdrawal'])
-                ->selectRaw('account_id, transaction_type, SUM(amount) as total')
+                ->whereIn('transaction_type', ['deposit', 'withdrawal', 'interest'])
+                ->selectRaw('account_id, transaction_type, SUM('.Transaction::netAmountExpression().') as total')
                 ->groupBy('account_id', 'transaction_type')
                 ->get();
         }
@@ -760,6 +773,7 @@ class ReportController extends Controller
             return [
                 $this->personName($account->user?->personalData),
                 $this->money($byAccount[$account->id]['deposit'] ?? 0),
+                $this->money($byAccount[$account->id]['interest'] ?? 0),
                 $this->money($byAccount[$account->id]['withdrawal'] ?? 0),
                 $this->money($account->balance),
             ];
@@ -774,6 +788,7 @@ class ReportController extends Controller
             [
                 ['key' => 'member', 'label' => 'Member'],
                 ['key' => 'deposits', 'label' => 'Total Deposits', 'align' => 'right'],
+                ['key' => 'interest_credits', 'label' => 'Interest Credits', 'align' => 'right'],
                 ['key' => 'withdrawals', 'label' => 'Total Withdrawals', 'align' => 'right'],
                 ['key' => 'balance', 'label' => 'Current Savings Balance', 'align' => 'right'],
             ],
@@ -1195,12 +1210,12 @@ class ReportController extends Controller
                             ->whereDate('created_at', '<=', $end->toDateString());
                     });
             })
-            ->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'fee'])
-            ->selectRaw('transaction_type, SUM(amount) as total')
+            ->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'interest', 'fee'])
+            ->selectRaw('transaction_type, SUM('.Transaction::netAmountExpression().') as total')
             ->groupBy('transaction_type')
             ->pluck('total', 'transaction_type');
 
-        $cashInflows = (float) ($totalsByType['deposit'] ?? 0) + (float) ($totalsByType['loan_payment'] ?? 0) + (float) ($totalsByType['fee'] ?? 0);
+        $cashInflows = (float) ($totalsByType['deposit'] ?? 0) + (float) ($totalsByType['loan_payment'] ?? 0) + (float) ($totalsByType['interest'] ?? 0) + (float) ($totalsByType['fee'] ?? 0);
         $cashOutflows = (float) ($totalsByType['withdrawal'] ?? 0) + (float) ($totalsByType['loan_disbursement'] ?? 0);
 
         $totalExpenses = (float) Expense::query()
@@ -1221,7 +1236,7 @@ class ReportController extends Controller
             ->where('status', 'completed')
             ->when($branchId !== null, fn ($q) => $q->where('transactions.branch_id', $branchId))
             ->whereHas('loan', fn ($q) => $q->when($branchId !== null, fn ($l) => $l->where('loans.branch_id', $branchId))->whereIn('loan_status', $activeLoanStatuses))
-            ->sum('amount');
+            ->selectRaw('SUM('.Transaction::netAmountExpression().') as aggregate_total')->value('aggregate_total');
         $netLoansReceivable = max(0, $loanPrincipalActive - $loanPaymentsOnActive);
 
         $accountTotals = $this->accountTotals($branchId);
@@ -1241,12 +1256,12 @@ class ReportController extends Controller
                             ->whereDate('created_at', '<', $start->toDateString());
                     });
             })
-            ->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'fee'])
-            ->selectRaw('transaction_type, SUM(amount) as total')
+            ->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'interest', 'fee'])
+            ->selectRaw('transaction_type, SUM('.Transaction::netAmountExpression().') as total')
             ->groupBy('transaction_type')
             ->pluck('total', 'transaction_type');
 
-        $priorInflows = (float) ($priorTotalsByType['deposit'] ?? 0) + (float) ($priorTotalsByType['loan_payment'] ?? 0) + (float) ($priorTotalsByType['fee'] ?? 0);
+        $priorInflows = (float) ($priorTotalsByType['deposit'] ?? 0) + (float) ($priorTotalsByType['loan_payment'] ?? 0) + (float) ($priorTotalsByType['interest'] ?? 0) + (float) ($priorTotalsByType['fee'] ?? 0);
         $priorOutflows = (float) ($priorTotalsByType['withdrawal'] ?? 0) + (float) ($priorTotalsByType['loan_disbursement'] ?? 0);
         $priorExpenses = (float) Expense::query()
             ->when($branchId !== null, fn ($q) => $q->where('expenses.branch_id', $branchId))
@@ -1298,11 +1313,11 @@ class ReportController extends Controller
             $to = $month->copy()->endOfMonth();
 
             $totals = $this->applyWindowToTransactions(
-                $this->completedTransactions($branchId)->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'fee']),
+                $this->completedTransactions($branchId)->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'interest', 'fee']),
                 $from,
                 $to
             )
-                ->selectRaw('transaction_type, SUM(amount) as total')
+                ->selectRaw('transaction_type, SUM('.Transaction::netAmountExpression().') as total')
                 ->groupBy('transaction_type')
                 ->pluck('total', 'transaction_type');
 
@@ -1312,14 +1327,19 @@ class ReportController extends Controller
                 ->sum('amount');
 
             $deposits = (float) ($totals['deposit'] ?? 0);
+            $interestCredits = (float) ($totals['interest'] ?? 0);
             $withdrawals = (float) ($totals['withdrawal'] ?? 0);
 
             $series[] = [
                 'label' => $month->format('M Y'),
                 'deposits' => $deposits,
+                'interest_credits' => $interestCredits,
+                'loan_repayments' => (float) ($totals['loan_payment'] ?? 0),
+                'loan_releases' => (float) ($totals['loan_disbursement'] ?? 0),
                 'withdrawals' => $withdrawals,
+                'fees' => (float) ($totals['fee'] ?? 0),
                 'expenses' => $expenses,
-                'net' => $deposits - $withdrawals - $expenses,
+                'net' => $deposits + $interestCredits + (float) ($totals['loan_payment'] ?? 0) + (float) ($totals['fee'] ?? 0) - $withdrawals - (float) ($totals['loan_disbursement'] ?? 0) - $expenses,
             ];
         }
 

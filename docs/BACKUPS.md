@@ -1,29 +1,29 @@
 # Backups & Restore
 
-The cooperative uses [spatie/laravel-backup](https://spatie.be/docs/laravel-backup) with three
-independent backup jobs. Cadences and retention are fixed system defaults; hourly automatic runs
-can be enabled or disabled in the UI.
+The cooperative uses [spatie/laravel-backup](https://spatie.be/docs/laravel-backup) with daily
+on-server and off-site backup jobs. The daily schedule can be changed in the UI.
 
 | Tier | Disk | Schedule | Retention |
 |------|------|----------|-----------|
-| `hourly` | `local_backups` (`storage/app/backups`) | every hour, on the hour | keep the newest **3** copies |
-| `daily` | `local_backups` (`storage/app/backups`) | every day at 03:00 | keep **30 days** |
-| `offsite` | `b2` (Backblaze B2, S3-compatible) | every day at 03:00 | keep **7 days** |
+| `daily` | `local_backups` (`storage/app/backups`) | every day at the configured time (03:00 by default) | keep **30 days** |
+| `offsite` | `b2` (Backblaze B2, S3-compatible) | every day at the configured time | keep **7 days** |
 
-The `hourly` and `daily` jobs share the on-server disk. At 03:00 the daily archive is created once
-locally, verified, and then copied to B2; the off-site job never creates a duplicate database dump.
+At the configured time the daily archive is created once locally, verified, and then copied to B2;
+the off-site job never creates a duplicate database dump.
 New B2 files use `backup-offsite-*`. Existing `backup-offsight-*` archives remain visible,
 downloadable, restorable, and subject to retention until they age out.
 
-All archives are password-encrypted (ZipCrypto) using `BACKUP_ARCHIVE_PASSWORD`. Encryption is always enabled.
-Hourly backups are disabled by default and can be enabled in the Backup & Restore settings. Daily
-and off-site backups continue on their fixed schedules. Keep backup copies on a local machine as
-well, and store the password safely because it is required for restores.
+All archives are password-encrypted (ZipCrypto) using the encrypted backup password stored in the
+`system_settings` table. The initial installation imports `BACKUP_ARCHIVE_PASSWORD` once (or
+generates a temporary strong password), after which the password can be changed from Backup &
+Restore settings. The password is never returned by the API or shown after entry.
+Daily and off-site backups run every day at the configured time. Keep backup copies on a local
+machine as well, and store the password safely because it is required for restores.
 
 ## Environment variables
 
 ```dotenv
-# Required for encrypted backups and restores
+# Used only to initialize the encrypted database setting on first setup
 BACKUP_ARCHIVE_PASSWORD=change-me-to-a-long-secret
 
 # Optional: email notifications would have used this (emails are disabled)
@@ -61,7 +61,7 @@ on the server:
 * * * * * cd /path/to/app && php artisan schedule:run >> /dev/null 2>&1
 ```
 
-Every minute, `backup:ping` checks each tier's fixed cron expression and queues any job that is due.
+Every minute, `backup:ping` checks each tier's cron expression and queues any job that is due.
 `backup:ping` is also exposed as the web endpoint `GET /backup/ping?token=<BACKUP_PING_TOKEN>`
 (constant-time token check) so external uptime services (e.g. cron-job.org) can trigger it over
 HTTPS without shell access.
@@ -70,10 +70,8 @@ HTTPS without shell access.
 
 | Command | Purpose |
 |---------|---------|
-| `php artisan backup:run-tier hourly --scope=files` | Run one job now |
 | `php artisan backup:run-tier daily --scope=both` | Run daily job now |
 | `php artisan backup:run-tier offsite --scope=both` | Run off-site job now |
-| `php artisan backup:clean-tier hourly` | Enforce hourly retention (keep 3) now |
 | `php artisan backup:ping` | Run any due tiers (scheduler hook) |
 | `php artisan backup:restore-files --disk=local_backups --backup=Laravel/backup-daily-....zip --password=...` | Restore only the public files of an archive |
 
@@ -114,7 +112,7 @@ data with the archive's contents.
 - DB-scope backups require `mysqldump`. Set `DB_DUMP_BINARY_PATH` in `.env` to the directory
   containing the binary when it is not on `PATH` (e.g. Laragon:
   `C:\laragon\bin\mysql\mysql-8.4.3-winx64\bin`). Files-scope backups work with a plain PHP build.
-- The spam/audit trail lives in the `backup_runs` table (tiers `hourly` / `daily` / `offsite`) and
+- The audit trail lives in the `backup_runs` table (tiers `daily` / `offsite`) and
   the audit log (events `backup.created`, `backup.failed`, `backup.cleaned`, `backup.deleted`,
   `backup.restored`, `backup.restore_failed`, `backup.offsite_connection_tested`).
 - Emails from spatie are disabled (`--disable-notifications`) because an unavailable SMTP channel

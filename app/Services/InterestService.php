@@ -64,7 +64,7 @@ class InterestService
      * Idempotent per (account type, period bucket): re-invoking for the same
      * period returns the existing batch instead of double-crediting.
      */
-    public function disburse(string $accountType, ?User $actor = null, string $trigger = 'scheduled'): InterestDisbursement
+    public function disburse(string $accountType, ?User $actor = null, string $trigger = 'scheduled', ?User $approver = null): InterestDisbursement
     {
         if (! in_array($accountType, FinancialSettings::ACCOUNT_TYPES, true)) {
             throw new InvalidArgumentException("Unknown account type: {$accountType}");
@@ -100,14 +100,14 @@ class InterestService
             "Interest run started for {$accountType}.",
             'financial',
             null,
-            $actor,
-            ['account_type' => $accountType, 'batch_key' => $batchKey, 'trigger' => $trigger],
+            $approver ?? $actor,
+            ['account_type' => $accountType, 'batch_key' => $batchKey, 'trigger' => $trigger, 'requested_by' => $actor?->id, 'approved_by' => $approver?->id],
         );
 
         try {
             return DB::transaction(function () use (
                 $accountType, $rate, $interval, $periodLabel, $periodStart, $now,
-                $batchKey, $divisor, $minBalance, $minPayout, $notify, $trigger, $actor
+                $batchKey, $divisor, $minBalance, $minPayout, $notify, $trigger, $actor, $approver
             ) {
                 $batch = InterestDisbursement::create([
                     'account_type' => $accountType,
@@ -120,7 +120,7 @@ class InterestService
                     'trigger' => $trigger,
                     'batch_key' => $batchKey,
                     'requested_by' => $actor?->id,
-                    'approved_by' => $trigger === 'manual' ? $actor?->id : null,
+                    'approved_by' => $trigger === 'manual' ? ($approver?->id ?? $actor?->id) : null,
                 ]);
 
                 $accounts = Account::query()
@@ -175,7 +175,7 @@ class InterestService
                         'transaction_date' => $now,
                         'note' => $this->note($accountType, $interval, $rate, $periodLabel),
                         'recorded_by' => null,
-                        'approved_by' => $trigger === 'manual' ? $actor?->id : null,
+                        'approved_by' => $trigger === 'manual' ? ($approver?->id ?? $actor?->id) : null,
                         'approved_at' => $now,
                     ]);
 
@@ -218,13 +218,15 @@ class InterestService
                     "Interest run completed for {$accountType}: {$count} member(s), ₱".number_format($total, 2).'.',
                     'financial',
                     $batch,
-                    $actor,
+                    $approver ?? $actor,
                     [
                         'account_type' => $accountType,
                         'member_count' => $count,
                         'skipped_count' => $skipped,
                         'total_amount' => round($total, 2),
                         'batch_key' => $batchKey,
+                        'requested_by' => $actor?->id,
+                        'approved_by' => $approver?->id,
                     ],
                 );
 
@@ -236,7 +238,7 @@ class InterestService
                 "Interest run failed for {$accountType}: {$e->getMessage()}",
                 'financial',
                 null,
-                $actor,
+                $approver ?? $actor,
                 ['account_type' => $accountType, 'batch_key' => $batchKey],
             );
 

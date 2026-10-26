@@ -107,7 +107,7 @@ function requestSummary(item: RequestItem): string {
             }
             return 'Update system settings';
         }
-        case 'backup.hourly.update': return `${payload.enabled ? 'Enable' : 'Disable'} hourly backups`;
+        case 'backup.daily.schedule.update': return `Change daily backup time to ${payload.time}`;
         case 'backup.delete': return `Delete ${humanize(String(payload.tier ?? 'backup'))} backup`;
         case 'backup.restore': return `Restore ${humanize(String(payload.tier ?? 'backup'))} backup`;
         default: return `Review privileged action: ${humanize(item.action_type)}`;
@@ -153,7 +153,7 @@ function requestChanges(item: RequestItem): string[] {
         if (item.payload.tier) details.push(`Backup tier: ${humanize(String(item.payload.tier))}`);
         if (item.payload.path) details.push(`File: ${String(item.payload.path)}`);
         if (item.payload.scope) details.push(`Restore scope: ${humanize(String(item.payload.scope))}`);
-        if (item.action_type === 'backup.hourly.update') details.push(`Hourly backups: ${item.payload.enabled ? 'Enabled' : 'Disabled'}`);
+        if (item.action_type === 'backup.daily.schedule.update') details.push(`Daily backup time: ${item.payload.time}`);
         return details;
     }
     if (item.action_type === 'transaction.update' || item.action_type === 'expense.update') {
@@ -184,6 +184,7 @@ export default function OversightApprovalsPage() {
     const [note, setNote] = useState('');
     const [otpSent, setOtpSent] = useState(false);
     const [resendCountdown, setResendCountdown] = useState(0);
+    const [restoreGraceCountdown, setRestoreGraceCountdown] = useState(0);
     const { addToast } = useToast();
     const client = useQueryClient();
     useEffect(() => {
@@ -191,6 +192,11 @@ export default function OversightApprovalsPage() {
         const timer = window.setTimeout(() => setResendCountdown(seconds => seconds - 1), 1000);
         return () => window.clearTimeout(timer);
     }, [resendCountdown]);
+    useEffect(() => {
+        if (restoreGraceCountdown <= 0) return;
+        const timer = window.setTimeout(() => setRestoreGraceCountdown(seconds => seconds - 1), 1000);
+        return () => window.clearTimeout(timer);
+    }, [restoreGraceCountdown]);
     const requests = useQuery({
         queryKey: ['oversight-requests'],
         queryFn: async () => (await api.get('/api/oversight/requests')).data.data as RequestItem[],
@@ -205,6 +211,9 @@ export default function OversightApprovalsPage() {
         onSuccess: (res: any) => {
             const defaultMsg = decision === 'approve' ? 'Request approved.' : decision === 'reject' ? 'Request rejected.' : 'Execution outcome recorded for reconciliation.';
             addToast(res?.data?.message || defaultMsg, 'success', 6000);
+            if (selected?.action_type === 'backup.restore' && decision === 'approve') {
+                setRestoreGraceCountdown(Number(res?.data?.restore_start_delay_seconds) || 15);
+            }
             setSelected(null); setOtp(''); setNote(''); setOtpSent(false); setResendCountdown(0);
             client.invalidateQueries({ queryKey: ['oversight-requests'] });
             client.invalidateQueries({ queryKey: ['members'] });
@@ -241,6 +250,11 @@ export default function OversightApprovalsPage() {
             </div>
         </header>
 
+        {restoreGraceCountdown > 0 && <div role="status" className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            <p className="font-semibold">System restore begins in {restoreGraceCountdown} seconds.</p>
+            <p className="mt-1">The site will show a maintenance page while it restores. Wait for it to return, then sign in again if prompted.</p>
+        </div>}
+
         {selected ? <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-100 bg-slate-50/80 px-5 py-4 sm:px-6">
                 <button type="button" className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-emerald-700 hover:text-emerald-800" onClick={clearSelection}><i className="fa-solid fa-arrow-left" aria-hidden="true" />Back to requests</button>
@@ -250,6 +264,7 @@ export default function OversightApprovalsPage() {
             </div>
             <div className="space-y-5 p-5 sm:p-6">
                 <p className="text-sm text-slate-700">You are about to <strong>{decision === 'approve' ? 'approve' : decision === 'reject' ? 'reject' : decision === 'reconcile_executed' ? 'confirm the action completed' : 'confirm the action did not complete'}</strong> this request.</p>
+                {selected.action_type === 'backup.restore' && decision === 'approve' && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">After approval, the system will wait 15 seconds before entering maintenance mode. The site will be unavailable for the duration of the restore.</p>}
                 {requestChanges(selected).length > 0 && <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{itemActionIsPermissions(selected) ? (selected.action_type === 'permissions.update' ? 'Permissions requested' : 'Requested permission changes') : 'Requested changes'}</p><ul className="mt-3 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">{requestChanges(selected).map(change => <li key={change} className="rounded-lg border border-slate-200 bg-white px-3 py-2">{change}</li>)}</ul></div>}
                 {decision !== 'approve' && <label className="block text-sm font-medium text-slate-700">{decision.startsWith('reconcile_') ? 'Reconciliation evidence (required)' : 'Reason (optional)'}<textarea value={note} onChange={e => setNote(e.target.value)} maxLength={1000} rows={3} className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" /></label>}
                 <div className="max-w-sm">

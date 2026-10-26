@@ -129,7 +129,7 @@ export default function ServicesPage() {
     const myPendingCount = myPendingData?.data?.pagination?.total ?? myPendingRequests.length;
 
     const { data: dashboardData } = useQuery({
-        queryKey: ['dashboard'],
+        queryKey: ['dashboard', user?.id],
         queryFn: () => api.get('/api/dashboard'),
         enabled: !isOfficer,
     });
@@ -348,17 +348,17 @@ export default function ServicesPage() {
                     <>
                         <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-5 border-l-4 border-green-500">
                             <p className="text-sm font-medium text-green-700 mb-1">Savings Balance</p>
-                            <p className="text-2xl font-bold text-green-900">₱{Number(savingsBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                            <p className="text-2xl font-bold text-green-900">{hasSelectedMember ? (selectedMemberDetail ? `₱${Number(savingsBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—') : !isOfficer && !dashboardData ? '—' : `₱${Number(savingsBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}</p>
                         </div>
                         <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-5 border-l-4 border-blue-500">
                             <p className="text-sm font-medium text-blue-700 mb-1">Share Capital</p>
-                            <p className="text-2xl font-bold text-blue-900">₱{Number(shareCapitalBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                            <p className="text-2xl font-bold text-blue-900">{hasSelectedMember ? (selectedMemberDetail ? `₱${Number(shareCapitalBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—') : !isOfficer && !dashboardData ? '—' : `₱${Number(shareCapitalBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}</p>
                         </div>
                     </>
                 )}
                 <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-5 border-l-4 border-purple-500">
                     <p className="text-sm font-medium text-purple-700 mb-1">Active Loans</p>
-                    <p className="text-2xl font-bold text-purple-900">{activeLoanCount}</p>
+                    <p className="text-2xl font-bold text-purple-900">{hasSelectedMember ? (selectedMemberDetail ? activeLoanCount : '—') : !isOfficer && !dashboardData ? '—' : activeLoanCount}</p>
                 </div>
                 <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-5 border-l-4 border-orange-500">
                     <p className="text-sm font-medium text-orange-700 mb-1">Pending Requests</p>

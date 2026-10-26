@@ -9,6 +9,7 @@ use App\Models\SystemSetting;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Services\LoanPaymentAllocationService;
 use App\Services\PayMongoService;
 use App\Support\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
@@ -71,6 +72,10 @@ class PayMongoPaymentController extends Controller
         $validated = $request->validate([
             'service_type' => 'required|in:deposit,loan_payment',
             'amount' => 'required|numeric|min:1',
+            'installment_allocations' => 'required_if:service_type,loan_payment|array|min:1',
+            'installment_allocations.*.period' => 'required|integer|min:1',
+            'installment_allocations.*.amount' => 'required|numeric|min:0.01',
+            'penalty_amount' => 'required_if:service_type,loan_payment|numeric|min:0',
             'account_type' => 'required_if:service_type,deposit|in:savings,share-capital',
             'loan_id' => 'required_if:service_type,loan_payment|exists:loans,id',
             'member_id' => 'nullable|exists:users,id',
@@ -124,7 +129,7 @@ class PayMongoPaymentController extends Controller
                 return response()->json(['message' => 'The selected loan does not belong to this member.'], 422);
             }
 
-            if (! in_array($loan->loan_status, ['approved', 'active'], true)) {
+            if ($loan->loan_status !== 'active' || $loan->disbursed_at === null) {
                 return response()->json(['message' => 'This loan is not currently active for payment.'], 422);
             }
 
@@ -135,10 +140,8 @@ class PayMongoPaymentController extends Controller
                 ], 422);
             }
 
-            // Find linked savings account
-            $account = Account::where('user_id', $targetUserId)
-                ->where('account_type', 'savings')
-                ->first();
+            // Repayments are external payments and are not tied to savings.
+            $account = null;
         }
 
         // Idempotency check with client_request_id
@@ -162,7 +165,10 @@ class PayMongoPaymentController extends Controller
 
         // Create transaction in pending state
         $transaction = DB::transaction(function () use ($account, $loan, $validated, $serviceType, $user, $targetBranchId) {
-            return Transaction::create([
+            $penaltyAmount = $loan
+                ? (float) ($validated['penalty_amount'] ?? min((float) $loan->accruedPenalty(), (float) $validated['amount']))
+                : 0.0;
+            $transaction = Transaction::create([
                 'account_id' => $account?->id,
                 'loan_id' => $loan?->id,
                 'branch_id' => $targetBranchId,
@@ -171,12 +177,17 @@ class PayMongoPaymentController extends Controller
                 'transaction_mode' => 'online',
                 'payment_gateway' => 'paymongo',
                 'amount' => $validated['amount'],
-                'penalty_amount' => $loan ? min((float) $loan->accruedPenalty(), (float) $validated['amount']) : 0,
+                'penalty_amount' => $penaltyAmount,
                 'status' => 'pending',
                 'note' => $validated['note'] ?? null,
                 'transaction_date' => now(),
                 'recorded_by' => $user->id,
             ]);
+            if ($loan && ! empty($validated['installment_allocations'])) {
+                app(LoanPaymentAllocationService::class)->record($transaction, $validated['installment_allocations'], $penaltyAmount);
+            }
+
+            return $transaction;
         });
 
         // Determine return URL

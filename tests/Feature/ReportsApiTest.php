@@ -12,6 +12,7 @@ test('report endpoints return paginated report data for admins', function () {
     $this->seed(UserSeeder::class);
 
     $admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
+    $admin->givePermissionTo('reports.view');
 
     $this->actingAs($admin)->getJson('/api/reports/options')
         ->assertOk()
@@ -58,6 +59,8 @@ test('financial report aggregates interest cash receipts and excludes rejected o
     $this->seed(UserSeeder::class);
 
     $admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
+    $admin->givePermissionTo('reports.view');
+    $admin->givePermissionTo('reports.financial');
     $member = User::factory()->create();
     $member->assignRole('member');
 
@@ -114,4 +117,90 @@ test('financial report aggregates interest cash receipts and excludes rejected o
     // total_interest_earned should be exactly 200.00 (from the 1200 repayment), NOT inflated by rejected/pending loans
     expect((float) $response->json('total_interest_earned'))->toBe(200.0)
         ->and((float) $response->json('projected_interest'))->toBe(2000.0);
+});
+
+test('financial report nets completed transaction reversals from aggregate totals', function () {
+    $this->seed(SpatieRolePermissionSeeder::class);
+    $this->seed(UserSeeder::class);
+
+    $admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
+    $admin->givePermissionTo('reports.view');
+    $member = User::factory()->create();
+    $account = Account::factory()->create(['user_id' => $member->id, 'account_type' => 'savings']);
+    $date = now()->toDateString();
+
+    $reversed = Transaction::factory()->create([
+        'account_id' => $account->id,
+        'transaction_type' => 'loan_payment',
+        'amount' => 6800,
+        'status' => 'completed',
+        'transaction_date' => $date,
+    ]);
+
+    Transaction::factory()->create([
+        'account_id' => $account->id,
+        'transaction_type' => 'loan_payment',
+        'amount' => 6800,
+        'status' => 'completed',
+        'transaction_date' => $date,
+        'reversal_of_id' => $reversed->id,
+    ]);
+
+    Transaction::factory()->create([
+        'account_id' => $account->id,
+        'transaction_type' => 'loan_payment',
+        'amount' => 1200,
+        'status' => 'completed',
+        'transaction_date' => $date,
+    ]);
+
+    $response = $this->actingAs($admin)
+        ->getJson('/api/reports/financial?from='.$date.'&to='.$date)
+        ->assertOk();
+
+    expect((float) $response->json('total_loan_repayments'))->toBe(1200.0)
+        ->and((float) $response->json('net'))->toBe(1200.0);
+});
+
+test('financial report counts credited interest as cash separately from collected loan interest', function () {
+    $this->seed(SpatieRolePermissionSeeder::class);
+    $this->seed(UserSeeder::class);
+
+    $admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
+    $admin->givePermissionTo('reports.view');
+    $admin->givePermissionTo('reports.financial');
+    $member = User::factory()->create();
+    $account = Account::factory()->create(['user_id' => $member->id, 'account_type' => 'savings']);
+    $date = now()->toDateString();
+
+    Transaction::factory()->create([
+        'account_id' => $account->id,
+        'transaction_type' => 'interest',
+        'amount' => 55,
+        'status' => 'completed',
+        'transaction_date' => $date,
+    ]);
+
+    $response = $this->actingAs($admin)
+        ->getJson('/api/reports/financial?from='.$date.'&to='.$date)
+        ->assertOk();
+
+    expect((float) $response->json('total_interest_credits'))->toBe(55.0)
+        ->and((float) $response->json('total_interest_earned'))->toBe(0.0)
+        ->and((float) $response->json('net'))->toBe(55.0)
+        ->and((float) $response->json('monthly_series.5.interest_credits'))->toBe(55.0);
+
+    $this->actingAs($admin)
+        ->getJson('/api/reports/member-savings?from='.$date.'&to='.$date.'&member_id='.$member->id)
+        ->assertOk()
+        ->assertJsonPath('data.0.total_interest_credits', 55);
+
+    $this->actingAs($admin)
+        ->getJson('/api/reports/balance-sheet?from='.$date.'&to='.$date)
+        ->assertOk()
+        ->assertJsonPath('period_movement.inflows', 55);
+
+    $dashboard = $this->actingAs($admin)->getJson('/api/dashboard')->assertOk();
+    expect((float) $dashboard->json('month_interest_credits'))->toBe(55.0)
+        ->and((float) $dashboard->json('month_net'))->toBe(55.0);
 });

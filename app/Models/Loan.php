@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 
 class Loan extends Model
 {
@@ -35,6 +36,7 @@ class Loan extends Model
         'review_notes',
         'applied_at',
         'approved_at',
+        'disbursed_at',
         'approved_by',
         'due_date',
         'employment_id',
@@ -50,6 +52,7 @@ class Loan extends Model
         'penalty_amount' => 'decimal:2',
         'applied_at' => 'datetime',
         'approved_at' => 'datetime',
+        'disbursed_at' => 'datetime',
         'reviewed_at' => 'datetime',
         'due_date' => 'date',
         'interview_schedule' => 'datetime',
@@ -220,7 +223,11 @@ class Loan extends Model
         $principalCents = (int) round((float) $this->loan_amount * 100);
         $payableCents = (int) round($this->totalPayable() * 100);
         $interestCents = max(0, $payableCents - $principalCents);
-        $startDate = ($this->approved_at ?? $this->applied_at ?? $this->created_at)?->copy();
+        // Repayment begins only when the borrower receives the funds.
+        $startDate = $this->disbursed_at?->copy();
+        if (! $startDate) {
+            return null;
+        }
 
         $principalPerPeriod = intdiv($principalCents, $term);
         $principalRemainder = $principalCents % $term;
@@ -231,6 +238,15 @@ class Loan extends Model
         $totalPaymentCents = 0;
         $schedule = [];
         $totalPaid = (float) $this->schedulePaid();
+        $explicitAllocations = DB::table('loan_payment_installment_allocations as allocations')
+            ->join('transactions', 'transactions.id', '=', 'allocations.transaction_id')
+            ->where('transactions.loan_id', $this->id)
+            ->where('transactions.status', 'completed')
+            ->selectRaw('allocations.period, SUM(CASE WHEN transactions.reversal_of_id IS NULL THEN allocations.amount ELSE -allocations.amount END) as amount')
+            ->groupBy('allocations.period')
+            ->pluck('amount', 'period')
+            ->map(fn ($amount) => max(0.0, (float) $amount));
+        $legacyPaid = max(0.0, $totalPaid - (float) $explicitAllocations->sum());
         $paidBefore = 0.0;
         $now = now()->startOfDay();
 
@@ -244,7 +260,10 @@ class Loan extends Model
             $totalPaymentCents += $payment;
 
             $dueDate = $startDate?->copy()->addMonths($period)->startOfDay();
-            $paidForInstallment = min($payment / 100, max(0.0, $totalPaid - $paidBefore));
+            $explicitPaid = min($payment / 100, (float) ($explicitAllocations[$period] ?? 0));
+            $legacyApplied = min(max(0.0, $payment / 100 - $explicitPaid), $legacyPaid);
+            $legacyPaid -= $legacyApplied;
+            $paidForInstallment = min($payment / 100, $explicitPaid + $legacyApplied);
             $unpaidInstallment = max(0.0, $payment / 100 - $paidForInstallment);
             $paidBefore += $payment / 100;
             $penalty = 0.0;
@@ -269,6 +288,8 @@ class Loan extends Model
                 'period' => $period,
                 'due_date' => $dueDate?->format('M d, Y'),
                 'payment' => $payment / 100,
+                'paid' => $paidForInstallment,
+                'amount_due' => max(0.0, $payment / 100 - $paidForInstallment),
                 'principal' => $principal / 100,
                 'interest' => $interest / 100,
                 'penalty' => $penalty,
@@ -277,6 +298,18 @@ class Loan extends Model
                 'total_payment' => $totalPaymentCents / 100,
             ];
         }
+
+        // Penalty payments are stored on the loan transaction rather than an
+        // installment allocation. Apply them oldest-overdue-first so the
+        // schedule exposes the same remaining penalty total as collection
+        // metrics and payment validation.
+        $penaltyPaid = max(0.0, $this->penaltyPaid());
+        foreach ($schedule as &$installment) {
+            $applied = min((float) $installment['penalty'], $penaltyPaid);
+            $installment['penalty'] = round((float) $installment['penalty'] - $applied, 2);
+            $penaltyPaid -= $applied;
+        }
+        unset($installment);
 
         return $schedule;
     }
@@ -288,25 +321,19 @@ class Loan extends Model
             return ['amount_due' => 0.0, 'days_overdue' => 0, 'accrued_penalty' => 0.0];
         }
 
-        $totalPaid = (float) $this->schedulePaid();
         $amountDue = 0.0;
         $daysOverdue = 0;
         $now = now()->startOfDay();
 
-        $cumulativeDue = 0.0;
         $firstUnpaidDueDate = null;
-        $paidBefore = 0.0;
         $accruedPenalty = 0.0;
 
         foreach ($schedule as $installment) {
             $dueDate = Carbon::createFromFormat('M d, Y', $installment['due_date'])->startOfDay();
 
             if ($dueDate->lessThanOrEqualTo($now)) {
-                $cumulativeDue += (float) $installment['payment'];
-
-                $paidForInstallment = min((float) $installment['payment'], max(0.0, $totalPaid - $paidBefore));
-                $unpaidInstallment = max(0.0, (float) $installment['payment'] - $paidForInstallment);
-                $paidBefore += (float) $installment['payment'];
+                $unpaidInstallment = (float) $installment['amount_due'];
+                $amountDue += $unpaidInstallment;
 
                 if ($unpaidInstallment > 0.001) {
                     if ($firstUnpaidDueDate === null) {
@@ -319,8 +346,8 @@ class Loan extends Model
             }
         }
 
-        $penaltyDue = max(0.0, $accruedPenalty - $this->penaltyPaid());
-        $amountDue = max(0.0, $cumulativeDue - $totalPaid) + $penaltyDue;
+        $penaltyDue = $accruedPenalty;
+        $amountDue += $penaltyDue;
 
         if ($amountDue > 0 && $firstUnpaidDueDate !== null) {
             $daysOverdue = (int) $firstUnpaidDueDate->diffInDays($now);

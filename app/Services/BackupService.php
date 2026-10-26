@@ -25,8 +25,6 @@ use Throwable;
 
 class BackupService
 {
-    public const TIER_HOURLY = 'hourly';
-
     public const TIER_DAILY = 'daily';
 
     public const TIER_OFFSITE = 'offsite';
@@ -37,44 +35,35 @@ class BackupService
 
     public const SCOPE_BOTH = 'both';
 
+    /** Grace period after approval so the approver receives the response before downtime. */
+    public const RESTORE_START_DELAY_SECONDS = 15;
+
     /**
      * Where each backup job stores its archives.
      *
-     * Both hourly and daily live on the shared on-server disk; the off-site
-     * job writes to the Backblaze B2 S3-compatible disk. Because hourly and
-     * daily share a disk, each tier writes with its own filename prefix so
-     * listing and cleanup always know which job an archive belongs to.
+     * Daily archives live on the shared on-server disk; the off-site job
+     * writes to the Backblaze B2 S3-compatible disk.
      */
     public const DISKS = [
-        self::TIER_HOURLY => 'local_backups',
         self::TIER_DAILY => 'local_backups',
         self::TIER_OFFSITE => 'b2',
     ];
 
     /**
-     * Fixed schedules. Daily jobs are anchored at 03:00; hourly runs on the
-     * hour. These are deliberate system defaults — no longer user-editable.
+     * The daily schedule is read from the system settings table. The default
+     * keeps the existing 03:00 schedule for installations that have not yet
+     * saved a preference.
      */
-    public const SCHEDULES = [
-        self::TIER_HOURLY => '0 * * * *',
-        self::TIER_DAILY => '0 3 * * *',
-        self::TIER_OFFSITE => '0 3 * * *',
-    ];
+    public const DEFAULT_DAILY_TIME = '03:00';
 
     /**
      * Per-tier archive filename prefix. Keeps archives distinguishable on
      * shared disks and lets each tier's retention act only on its own files.
      */
     public const FILENAME_PREFIXES = [
-        self::TIER_HOURLY => 'backup-hourly-',
         self::TIER_DAILY => 'backup-daily-',
         self::TIER_OFFSITE => 'backup-offsite-',
     ];
-
-    /**
-     * How many of the newest hourly archives to retain at any time.
-     */
-    public const HOURLY_KEEP = 3;
 
     /**
      * How many days of archives to retain for the daily and off-site jobs.
@@ -85,7 +74,7 @@ class BackupService
 
     public const VALID_SCOPES = [self::SCOPE_DB, self::SCOPE_FILES, self::SCOPE_BOTH];
 
-    public const VALID_TIERS = [self::TIER_HOURLY, self::TIER_DAILY, self::TIER_OFFSITE];
+    public const VALID_TIERS = [self::TIER_DAILY, self::TIER_OFFSITE];
 
     public function __construct(
         private readonly AuditLogService $auditLogService,
@@ -123,7 +112,14 @@ class BackupService
 
     public static function scheduleFor(string $tier): string
     {
-        return self::SCHEDULES[$tier];
+        if (! in_array($tier, self::VALID_TIERS, true)) {
+            throw new InvalidArgumentException("Unknown backup tier [{$tier}].");
+        }
+
+        $time = SystemSetting::get('backup_daily_time', self::DEFAULT_DAILY_TIME);
+        [$hour, $minute] = array_map('intval', explode(':', $time));
+
+        return "{$minute} {$hour} * * *";
     }
 
     /**
@@ -183,14 +179,22 @@ class BackupService
         return $run;
     }
 
-    public function queueRestore(string $tier, string $path, string $scope, string $password, User $actor): RestoreRun
+    public function queueRestore(string $tier, string $path, string $scope, User $actor): RestoreRun
     {
+        $password = $this->archivePassword();
         $this->validateRestoreRequest($tier, $path, $scope, $password);
         if (BackupRun::query()->whereIn('status', ['queued', 'running'])->exists() || RestoreRun::query()->whereIn('status', ['queued', 'running'])->exists()) {
             throw new RuntimeException('A backup or restore operation is already queued or running.');
         }
         $run = RestoreRun::create(['tier' => $tier, 'path' => $path, 'scope' => $scope, 'status' => 'queued', 'triggered_by' => $actor->id]);
-        RestoreBackupJob::dispatch($run->id, $password);
+        // Restores must never run inline with the chairman's approval request.
+        // The database connection also honors the delay if QUEUE_CONNECTION is
+        // accidentally set to `sync`; afterCommit avoids racing the transaction
+        // that records the approval and queued run.
+        RestoreBackupJob::dispatch($run->id, $password)
+            ->onConnection('database')
+            ->delay(now()->addSeconds(self::RESTORE_START_DELAY_SECONDS))
+            ->afterCommit();
 
         return $run;
     }
@@ -330,7 +334,7 @@ class BackupService
 
     public function isEnabled(string $tier): bool
     {
-        return $tier !== self::TIER_HOURLY || (bool) SystemSetting::get('backup_hourly_enabled', false);
+        return in_array($tier, self::VALID_TIERS, true);
     }
 
     /**
@@ -460,8 +464,8 @@ class BackupService
         }
 
         $base = (string) config('backup.backup.name');
-        $filename = self::prefixFor(self::TIER_HOURLY).'uploaded-'.now()->format('YmdHis').'-'.Str::uuid().'.zip';
-        $path = Storage::disk(self::diskFor(self::TIER_HOURLY))->putFileAs($base, $archive, $filename);
+        $filename = self::prefixFor(self::TIER_DAILY).'uploaded-'.now()->format('YmdHis').'-'.Str::uuid().'.zip';
+        $path = Storage::disk(self::diskFor(self::TIER_DAILY))->putFileAs($base, $archive, $filename);
         if (! is_string($path) || $path === '') {
             throw new RuntimeException('The uploaded backup could not be stored.');
         }
@@ -472,7 +476,12 @@ class BackupService
             'backup',
             null,
             $actor,
-            ['tier' => self::TIER_HOURLY, 'file' => basename($path)],
+            [
+                'source' => 'uploaded_archive',
+                'original_filename' => $archive->getClientOriginalName(),
+                'storage_tier' => self::TIER_DAILY,
+                'file' => basename($path),
+            ],
         );
 
         return $path;
@@ -481,7 +490,6 @@ class BackupService
     /**
      * Delete old backups on the tier's disk according to its fixed policy.
      *
-     * - hourly:  keep the 3 newest archives, delete the rest.
      * - daily / off-site: keep archives newer than RETENTION_DAYS, delete older.
      *
      * We intentionally skip spatie's backup:clean abstraction here: it resolves
@@ -506,18 +514,13 @@ class BackupService
                 ->filter(fn (string $path) => Str::startsWith(basename($path), self::prefixesFor($tier)) && str_ends_with($path, '.zip'))
                 ->values();
 
-            if ($tier === self::TIER_HOURLY) {
-                // Keep the newest HOURLY_KEEP archives; oldest filenames sort first.
-                $toDelete = $archives->sort()->take(max(0, $archives->count() - self::HOURLY_KEEP));
-            } else {
-                $retentionDays = $tier === self::TIER_DAILY ? self::DAILY_RETENTION_DAYS : self::OFFSITE_RETENTION_DAYS;
-                $cutoff = now()->subDays($retentionDays);
-                $toDelete = $archives->filter(function (string $path) use ($disk, $cutoff) {
-                    $lastModified = $disk->lastModified($path);
+            $retentionDays = $tier === self::TIER_DAILY ? self::DAILY_RETENTION_DAYS : self::OFFSITE_RETENTION_DAYS;
+            $cutoff = now()->subDays($retentionDays);
+            $toDelete = $archives->filter(function (string $path) use ($disk, $cutoff) {
+                $lastModified = $disk->lastModified($path);
 
-                    return is_int($lastModified) && Carbon::createFromTimestamp($lastModified)->lt($cutoff);
-                });
-            }
+                return is_int($lastModified) && Carbon::createFromTimestamp($lastModified)->lt($cutoff);
+            });
 
             foreach ($toDelete as $path) {
                 $disk->delete($path);
@@ -555,6 +558,8 @@ class BackupService
     {
         $this->validateRestoreRequest($tier, $path, $scope, $password);
         $this->applyRuntimeConfiguration($tier);
+        $source = $this->restoreSource($tier, $path);
+        $sourceLabel = $source === 'uploaded_archive' ? 'an uploaded archive' : "the {$tier} tier";
 
         $restoreSecret = Str::random(32);
         $restoredFiles = false;
@@ -581,7 +586,7 @@ class BackupService
 
             $this->clearCaches();
         } catch (Throwable $e) {
-            $this->auditLogService->log('backup.restore_failed', "Restore failed from the {$tier} tier ({$path}).", 'backup', null, $actor, ['tier' => $tier, 'file' => $path, 'scope' => $scope, 'error' => Str::limit($e->getMessage(), 2000)]);
+            $this->auditLogService->log('backup.restore_failed', "Restore failed from {$sourceLabel} ({$path}).", 'backup', null, $actor, ['source' => $source, 'storage_tier' => $tier, 'file' => $path, 'scope' => $scope, 'error' => Str::limit($e->getMessage(), 2000)]);
             throw $e;
         } finally {
             // Nested finally: a failing `up` must not strand the notice, or the
@@ -596,7 +601,14 @@ class BackupService
             }
         }
 
-        $this->auditLogService->log('backup.restored', "Database restored from a {$tier} tier backup (scope: {$scope}).", 'backup', null, $actor, ['tier' => $tier, 'file' => $path, 'scope' => $scope, 'files_restored' => $restoredFiles]);
+        $this->auditLogService->log('backup.restored', "Database restored from {$sourceLabel} (scope: {$scope}).", 'backup', null, $actor, ['source' => $source, 'storage_tier' => $tier, 'file' => $path, 'scope' => $scope, 'files_restored' => $restoredFiles]);
+    }
+
+    private function restoreSource(string $tier, string $path): string
+    {
+        return Str::startsWith(basename($path), self::prefixFor(self::TIER_DAILY).'uploaded-')
+            ? 'uploaded_archive'
+            : $tier;
     }
 
     private function validateRestoreRequest(string $tier, string $path, string $scope, string $password): void
@@ -605,9 +617,9 @@ class BackupService
             throw new InvalidArgumentException("Unknown restore scope [{$scope}].");
         }
 
-        $configuredPassword = config('backup.backup.password');
+        $configuredPassword = $this->archivePassword();
         if (! is_string($configuredPassword) || $configuredPassword === '' || ! hash_equals($configuredPassword, $password)) {
-            throw new RuntimeException('The archive encryption password does not match BACKUP_ARCHIVE_PASSWORD.');
+            throw new RuntimeException('The archive encryption password does not match the configured backup password.');
         }
 
         if (! $this->fileExists($tier, $path)) {
@@ -713,26 +725,42 @@ class BackupService
                 'last_auto_run' => SystemSetting::get("backup_{$tier}_last_auto_run"),
             ];
 
-            if ($tier === self::TIER_HOURLY) {
-                $tiers[$tier]['retention'] = ['keep' => self::HOURLY_KEEP];
-                $tiers[$tier]['enabled'] = $this->isEnabled($tier);
-            } else {
-                $tiers[$tier]['retention'] = ['days' => $tier === self::TIER_DAILY ? self::DAILY_RETENTION_DAYS : self::OFFSITE_RETENTION_DAYS];
-            }
+            $tiers[$tier]['retention'] = ['days' => $tier === self::TIER_DAILY ? self::DAILY_RETENTION_DAYS : self::OFFSITE_RETENTION_DAYS];
         }
 
         return [
             'tiers' => $tiers,
+            'daily_time' => SystemSetting::get('backup_daily_time', self::DEFAULT_DAILY_TIME),
             'offsite' => $this->offsiteStatus(),
         ];
     }
 
     /**
-     * Persist the encryption toggle from the Settings UI.
+     * Persist the daily backup time after countersign approval.
      */
-    public function updateHourlyEnabled(bool $enabled): void
+    public function updateDailyTime(string $time): void
     {
-        SystemSetting::set('backup_hourly_enabled', $enabled);
+        SystemSetting::set('backup_daily_time', $time);
+    }
+
+    public function updateArchivePassword(string $password): void
+    {
+        SystemSetting::set('backup_archive_password', $password);
+    }
+
+    public function archivePassword(): string
+    {
+        $password = SystemSetting::get('backup_archive_password');
+        if (is_string($password) && $password !== '') {
+            return $password;
+        }
+
+        $password = config('backup.backup.password');
+        if (is_string($password) && $password !== '') {
+            return $password;
+        }
+
+        throw new RuntimeException('Backup encryption is required but no archive password is configured.');
     }
 
     /**
@@ -773,10 +801,8 @@ class BackupService
             'backup.cleanup.default_strategy.delete_oldest_backups_when_using_more_megabytes_than' => null,
         ]);
 
-        $archivePassword = config('backup.backup.password');
-        if (! is_string($archivePassword) || $archivePassword === '') {
-            throw new RuntimeException('Backup encryption is required but BACKUP_ARCHIVE_PASSWORD is empty. Set it in .env (and keep it safe).');
-        }
+        $archivePassword = $this->archivePassword();
+        config(['backup.backup.password' => $archivePassword]);
         config(['backup.backup.encryption' => 'default']);
     }
 

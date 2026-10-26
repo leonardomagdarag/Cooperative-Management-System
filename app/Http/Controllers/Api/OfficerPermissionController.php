@@ -19,6 +19,7 @@ class OfficerPermissionController extends Controller
 
         $overrides = $user->permissionOverrides
             ->pluck('effect', 'permission')
+            ->except('oversight.approve')
             ->all();
 
         return response()->json([
@@ -29,9 +30,11 @@ class OfficerPermissionController extends Controller
                 'role' => $user->getRoleNames()->first(),
                 'role_label' => PermissionCatalog::roleDisplayNames()[$user->getRoleNames()->first()] ?? ucfirst((string) $user->getRoleNames()->first()),
             ],
-            'role_permissions' => $user->getPermissionsViaRoles()->pluck('name')->sort()->values()->all(),
+            'role_permissions' => $user->getPermissionsViaRoles()->where('name', '!=', 'oversight.approve')->pluck('name')->sort()->values()->all(),
             'overrides' => $overrides,
-            'groups' => PermissionCatalog::groups(),
+            'groups' => collect(PermissionCatalog::groups())
+                ->map(fn (array $permissions) => array_values(array_diff($permissions, ['oversight.approve'])))
+                ->all(),
         ]);
     }
 
@@ -46,6 +49,7 @@ class OfficerPermissionController extends Controller
 
         $payload = collect($validated['overrides'])
             ->filter(fn ($effect, $permission) => in_array($permission, PermissionCatalog::allPermissions(), true)
+                && $permission !== 'oversight.approve'
                 && in_array($effect, [OfficerPermissionOverride::EFFECT_ALLOW, OfficerPermissionOverride::EFFECT_DISALLOW], true))
             ->map(fn (string $effect, string $permission) => [
                 'user_id' => $user->id,

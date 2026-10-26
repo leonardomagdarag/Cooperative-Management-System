@@ -42,7 +42,7 @@ class RolePermissionController extends Controller
         $rolePermissions = [];
         foreach ($editableRoles as $roleName) {
             $role = Role::findOrCreate($roleName, 'web');
-            $rolePermissions[$roleName] = $role->permissions()->pluck('name')->sort()->values()->all();
+            $rolePermissions[$roleName] = $role->permissions()->where('name', '!=', 'oversight.approve')->pluck('name')->sort()->values()->all();
         }
 
         $roleUserCounts = collect($editableRoles)
@@ -72,7 +72,7 @@ class RolePermissionController extends Controller
             'role_descriptions' => $roleDescriptions,
             'role_presets' => $rolePresets,
             'base_roles' => array_values(array_intersect($editableRoles, $baseRoles)),
-            'groups' => PermissionCatalog::groups(),
+            'groups' => $this->editablePermissionGroups(),
         ]);
     }
 
@@ -108,6 +108,7 @@ class RolePermissionController extends Controller
             $allAllowed,
             array_unique(array_merge($validated['permissions'], $allLocked))
         ));
+        $permissions = array_values(array_diff($permissions, ['oversight.approve']));
 
         // Enforce countersign
         $countersign = app(CountersignService::class);
@@ -155,6 +156,7 @@ class RolePermissionController extends Controller
 
         $lockedPermissions = self::LOCKED_PERMISSIONS;
         $assignedPermissions = array_values(array_unique(array_merge($assignedPermissions, $lockedPermissions)));
+        $assignedPermissions = array_values(array_diff($assignedPermissions, ['oversight.approve']));
 
         $pending = app(CountersignService::class)->request('role.create', [
             'role' => $roleName,
@@ -259,6 +261,13 @@ class RolePermissionController extends Controller
         foreach (array_keys(PermissionCatalog::rolePresets()) as $role) {
             Role::findOrCreate($role, 'web');
         }
+    }
+
+    private function editablePermissionGroups(): array
+    {
+        return collect(PermissionCatalog::groups())
+            ->map(fn (array $permissions) => array_values(array_diff($permissions, ['oversight.approve'])))
+            ->all();
     }
 
     private function normalizeRoleName(string $name): string

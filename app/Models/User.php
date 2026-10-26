@@ -309,6 +309,16 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function checkPermissionTo($permission, $guardName = null): bool
     {
+        $permissionName = is_object($permission) && isset($permission->name)
+            ? $permission->name
+            : (string) $permission;
+
+        if ($permissionName === 'oversight.approve') {
+            return $this->hasRole('chairman')
+                && OfficerPermissionOverride::getCachedEffect($this->id, 'oversight.approve') !== OfficerPermissionOverride::EFFECT_DISALLOW
+                && $this->spatieCheckPermissionTo($permission, $guardName);
+        }
+
         if ($this->is_officer) {
             $effect = OfficerPermissionOverride::getCachedEffect(
                 $this->id,

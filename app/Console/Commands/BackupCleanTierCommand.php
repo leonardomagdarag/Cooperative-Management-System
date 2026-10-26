@@ -12,7 +12,7 @@ class BackupCleanTierCommand extends Command
      * The name and signature of the console command.
      */
     protected $signature = 'backup:clean-tier
-                            {tier : The backup tier to clean (hourly|daily|offsite)}
+                            {tier : The backup tier to clean (daily|offsite)}
                             {--user= : User ID that triggered the cleanup (for audit attribution).}';
 
     /**
@@ -25,7 +25,7 @@ class BackupCleanTierCommand extends Command
         $tier = $this->argument('tier');
 
         if (! BackupService::isValidTier($tier)) {
-            $this->error("Unknown backup tier [{$tier}]. Expected: hourly, daily or offsite.");
+            $this->error("Unknown backup tier [{$tier}]. Expected: daily or offsite.");
 
             return self::INVALID;
         }

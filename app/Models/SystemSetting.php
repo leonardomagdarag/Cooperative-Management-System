@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 
 class SystemSetting extends Model
 {
@@ -47,6 +48,7 @@ class SystemSetting extends Model
                 'float', 'decimal' => (float) $setting->value,
                 'json' => json_decode($setting->value, true),
                 'array' => json_decode($setting->value, true),
+                'encrypted' => Crypt::decryptString($setting->value),
                 default => $setting->value,
             };
         });
@@ -64,6 +66,7 @@ class SystemSetting extends Model
             $stringValue = match ($type) {
                 'boolean' => $value ? '1' : '0',
                 'json', 'array' => json_encode($value),
+                'encrypted' => Crypt::encryptString((string) $value),
                 default => (string) $value,
             };
 
@@ -89,6 +92,7 @@ class SystemSetting extends Model
         $stringValue = match ($setting->type) {
             'boolean' => $value ? '1' : '0',
             'json', 'array' => json_encode($value),
+            'encrypted' => Crypt::encryptString((string) $value),
             default => (string) $value,
         };
 

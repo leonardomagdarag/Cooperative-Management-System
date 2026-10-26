@@ -43,10 +43,10 @@ test('guest cannot access backup endpoints', function () {
     $this->getJson('/api/backups/runs')->assertStatus(401);
     $this->putJson('/api/backups/settings', [])->assertStatus(401);
     $this->postJson('/api/backups/offsite/test', [])->assertStatus(401);
-    $this->postJson('/api/backups/hourly/run', [])->assertStatus(401);
-    $this->postJson('/api/backups/hourly/cleanup')->assertStatus(401);
-    $this->getJson('/api/backups/hourly/download')->assertStatus(401);
-    $this->deleteJson('/api/backups/hourly/backup')->assertStatus(401);
+    $this->postJson('/api/backups/daily/run', [])->assertStatus(401);
+    $this->postJson('/api/backups/daily/cleanup')->assertStatus(401);
+    $this->getJson('/api/backups/daily/download')->assertStatus(401);
+    $this->deleteJson('/api/backups/daily/backup')->assertStatus(401);
     $this->postJson('/api/backups/restore', [])->assertStatus(401);
 });
 
@@ -70,7 +70,7 @@ test('member and unauthorized officers are forbidden from backup endpoints', fun
         $this->actingAs($user)->getJson('/api/backups/runs')->assertStatus(403);
         $this->actingAs($user)->putJson('/api/backups/settings', [])->assertStatus(403);
         $this->actingAs($user)->postJson('/api/backups/offsite/test')->assertStatus(403);
-        $this->actingAs($user)->postJson('/api/backups/hourly/run', [])->assertStatus(403);
+        $this->actingAs($user)->postJson('/api/backups/daily/run', [])->assertStatus(403);
         $this->actingAs($user)->postJson('/api/backups/restore', [])->assertStatus(403);
     }
 });
@@ -86,11 +86,11 @@ test('backups settings validation rules', function () {
     // Invalid values
     $this->actingAs($admin)
         ->putJson('/api/backups/settings', [
-            'hourly_enabled' => 'not-a-boolean',
+            'daily_time' => 'not-a-time',
             'unexpected' => 'ignored field should still allow saving',
         ])
         ->assertStatus(422)
-        ->assertJsonValidationErrors(['hourly_enabled']);
+        ->assertJsonValidationErrors(['daily_time']);
 });
 
 test('run rejects invalid tier or invalid scope', function () {
@@ -102,7 +102,7 @@ test('run rejects invalid tier or invalid scope', function () {
         ->assertJson(['message' => 'Invalid tier.']);
 
     $this->actingAs($admin)
-        ->postJson('/api/backups/hourly/run', ['scope' => 'invalid_scope'])
+        ->postJson('/api/backups/daily/run', ['scope' => 'invalid_scope'])
         ->assertStatus(422)
         ->assertJson(['message' => 'Invalid scope.']);
 });
@@ -122,7 +122,7 @@ test('restore validation enforces current password and confirmation keyword', fu
     // Missing confirmation and invalid current_password
     $this->actingAs($admin)
         ->postJson('/api/backups/restore', [
-            'tier' => 'hourly',
+            'tier' => 'daily',
             'path' => 'Laravel/test.zip',
             'scope' => 'both',
             'current_password' => 'wrong_password',

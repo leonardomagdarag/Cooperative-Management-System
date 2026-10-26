@@ -143,11 +143,11 @@ test('F024-6: manager or chairman can approve endorsed loan', function () {
         ->and($loan->approved_at)->not->toBeNull();
 });
 
-test('F024-7: manager disburses approved loan, crediting savings balance and creating transaction', function () {
+test('F024-7: manager can disburse approved loan to savings when explicitly selected', function () {
     $loanAmount = 15000.00;
     $initialBalance = (float) $this->savingsAccount->balance;
 
-    $loan = Loan::factory()->create([
+    $loan = Loan::factory()->approved()->create([
         'user_id' => $this->borrower->id,
         'account_id' => $this->savingsAccount->id,
         'branch_id' => $this->mainBranch->id,
@@ -156,7 +156,7 @@ test('F024-7: manager disburses approved loan, crediting savings balance and cre
         'term_months' => 12,
     ]);
 
-    $response = $this->actingAs($this->manager)->postJson("/api/loans/{$loan->id}/disburse");
+    $response = $this->actingAs($this->manager)->postJson("/api/loans/{$loan->id}/disburse", ['destination' => 'savings']);
     $response->assertOk()
         ->assertJson(['message' => 'Loan disbursed.']);
 
@@ -176,7 +176,43 @@ test('F024-7: manager disburses approved loan, crediting savings balance and cre
     ]);
 });
 
-test('F024-8: disburse rejects loans not in approved status with 422', function () {
+test('cash disbursement starts the schedule without crediting savings and cannot be repeated', function () {
+    $loan = Loan::factory()->create([
+        'user_id' => $this->borrower->id,
+        'branch_id' => $this->mainBranch->id,
+        'loan_amount' => 15000.00,
+        'loan_status' => 'approved',
+        'term_months' => 12,
+        'disbursed_at' => null,
+        'due_date' => null,
+    ]);
+    $initialBalance = (float) $this->savingsAccount->balance;
+
+    $this->actingAs($this->manager)->postJson("/api/loans/{$loan->id}/disburse", ['destination' => 'cash'])
+        ->assertOk();
+
+    $loan->refresh();
+    expect($loan->loan_status)->toBe('active')
+        ->and($loan->disbursed_at)->not->toBeNull()
+        ->and($loan->paymentSchedule())->not->toBeNull()
+        ->and((float) $this->savingsAccount->fresh()->balance)->toBe($initialBalance);
+
+    $this->assertDatabaseHas('transactions', [
+        'loan_id' => $loan->id,
+        'transaction_type' => 'loan_disbursement',
+        'account_id' => null,
+        'status' => 'completed',
+        'note' => 'Loan disbursed as physical cash.',
+    ]);
+
+    $this->postJson("/api/loans/{$loan->id}/disburse", ['destination' => 'cash'])
+        ->assertStatus(409)
+        ->assertJson(['message' => 'Only approved loans that have not been disbursed can be released.']);
+
+    expect(Transaction::where('loan_id', $loan->id)->where('transaction_type', 'loan_disbursement')->count())->toBe(1);
+});
+
+test('F024-8: disburse rejects loans not in approved status', function () {
     $loan = Loan::factory()->create([
         'user_id' => $this->borrower->id,
         'account_id' => $this->savingsAccount->id,
@@ -184,21 +220,23 @@ test('F024-8: disburse rejects loans not in approved status with 422', function 
         'loan_status' => 'pending',
     ]);
 
-    $response = $this->actingAs($this->manager)->postJson("/api/loans/{$loan->id}/disburse");
-    $response->assertStatus(422)
-        ->assertJson(['message' => 'Only approved loans can be disbursed.']);
+    $response = $this->actingAs($this->manager)->postJson("/api/loans/{$loan->id}/disburse", ['destination' => 'cash']);
+    $response->assertStatus(409)
+        ->assertJson(['message' => 'Only approved loans that have not been disbursed can be released.']);
 });
 
-test('F024-9: disburse rejects borrowers without savings account with 422', function () {
+test('savings destination rejects borrowers without a savings account', function () {
     $newUser = User::factory()->create(['branch_id' => $this->mainBranch->id]);
 
     $loan = Loan::factory()->create([
         'user_id' => $newUser->id,
         'branch_id' => $this->mainBranch->id,
         'loan_status' => 'approved',
+        'disbursed_at' => null,
+        'due_date' => null,
     ]);
 
-    $response = $this->actingAs($this->manager)->postJson("/api/loans/{$loan->id}/disburse");
+    $response = $this->actingAs($this->manager)->postJson("/api/loans/{$loan->id}/disburse", ['destination' => 'savings']);
     $response->assertStatus(422)
         ->assertJson(['message' => 'Borrower has no savings account.']);
 });

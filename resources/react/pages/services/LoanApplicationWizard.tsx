@@ -8,7 +8,7 @@ import ServiceModal from './ServiceModal';
 
 interface CoMaker { id: number; name: string; user_number: string }
 
-const peso = (n: number | string) => `₱${Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+const peso = (n: number | string) => `₱${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const penaltySummary = (product: any) => Number(product?.penalty_amount) > 0
     ? `${product.penalty_type === 'percent' ? `${product.penalty_amount}%` : peso(product.penalty_amount)} ${product.penalty_frequency === 'per_due' ? 'per overdue installment' : product.penalty_frequency}`

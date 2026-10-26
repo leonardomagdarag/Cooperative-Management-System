@@ -20,6 +20,7 @@ use function Pest\Laravel\actingAs;
 beforeEach(function () {
     $this->seed(SpatieRolePermissionSeeder::class);
     $this->seed(UserSeeder::class);
+    $this->seed(SpatieRolePermissionSeeder::class);
     $this->seed(AccountSeeder::class);
     $this->seed(FinancialSettingSeeder::class);
 
@@ -239,6 +240,7 @@ test('interest run requires countersign and credits on approval', function () {
 
     $request = PrivilegedActionRequest::findOrFail($response->json('request_id'));
     expect($request->action_type)->toBe('financial.interest.run')
+        ->and($request->active_key)->toBe('financial.interest.run:savings')
         ->and(InterestDisbursement::where('account_type', 'savings')->exists())->toBeFalse();
 
     app(CountersignService::class)->approve($request, $this->chairman);
@@ -247,7 +249,14 @@ test('interest run requires countersign and credits on approval', function () {
     $batch = InterestDisbursement::where('account_type', 'savings')->first();
     expect($batch)->not->toBeNull()
         ->and($batch->trigger)->toBe('manual')
+        ->and($batch->requested_by)->toBe($this->admin->id)
+        ->and($batch->approved_by)->toBe($this->chairman->id)
         ->and($batch->items()->where('user_id', $this->member->id)->where('skipped', false)->exists())->toBeTrue();
+
+    $interestTxn = Transaction::where('transaction_type', 'interest')->latest('id')->firstOrFail();
+    expect($interestTxn->approved_by)->toBe($this->chairman->id)
+        ->and($interestTxn->recorded_by)->toBeNull()
+        ->and($request->fresh()->active_key)->toBeNull();
 });
 
 test('manual interest run is rejected when no rate is configured', function () {
@@ -292,4 +301,17 @@ test('interest disbursements can be exported as a report', function () {
             'format' => 'excel',
         ])
         ->assertForbidden();
+});
+
+test('duplicate pending interest run is rejected with 409', function () {
+    SystemSetting::set('financial_savings_interest_rate', 12);
+
+    actingAs($this->admin)
+        ->postJson('/api/settings/financial/interest/run', ['account_type' => 'savings'])
+        ->assertAccepted();
+
+    actingAs($this->admin)
+        ->postJson('/api/settings/financial/interest/run', ['account_type' => 'savings'])
+        ->assertStatus(409)
+        ->assertJsonPath('message', 'An interest run for this account type is already awaiting approval.');
 });

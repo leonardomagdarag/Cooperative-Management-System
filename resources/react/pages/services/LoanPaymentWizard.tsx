@@ -6,11 +6,11 @@ import ServiceModal from './ServiceModal';
 import StepCircles from './StepCircles';
 import ReceiptQR from '../../components/ReceiptQR';
 import {
-    getPayMongoMethods,
-    createPayMongoCheckout,
-    verifyPayMongoPayment,
+    getXenditStatus,
+    createXenditCheckout,
+    verifyXenditPayment,
     type CheckoutResponse,
-} from '../../api/paymongo';
+} from '../../api/xendit';
 
 interface AvailabilityFlags {
     global?: boolean;
@@ -36,8 +36,11 @@ interface LoanOption {
         period: number;
         due_date: string | null;
         payment: number;
+        paid: number | boolean;
+        amount_due: number;
         principal: number;
         interest: number;
+        penalty: number;
         balance: number;
     }>;
 }
@@ -52,25 +55,28 @@ const modeLabels: Record<string, { title: string; sub: string; icon: string }> =
     bank_transfer: { title: 'Bank Transfer', sub: 'Offline bank transfer with proof of payment', icon: 'fa-landmark' },
 };
 
-function unpaidSchedules(loan?: LoanOption) {
-    if (!loan?.payment_schedule) return [];
-    let cumulative = 0;
-    const schedules: Array<{ period: number; due_date: string | null; payment_amount: number; amount_due: number; penalty_amount: number }> = [];
-    for (const installment of loan.payment_schedule) {
-        const entry = Number(installment.payment);
-        const covered = Math.min(Math.max(Number(loan.schedule_paid ?? loan.total_paid ?? 0) - cumulative, 0), entry);
-        const amountDue = Math.round((entry - covered) * 100) / 100;
-        cumulative += entry;
-        if (amountDue > 0) schedules.push({ period: installment.period, due_date: installment.due_date, payment_amount: entry, amount_due: amountDue, penalty_amount: 0 });
-    }
+function isDueDateOnOrBeforeToday(value: string | null) {
+    if (!value) return false;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return false;
+    const due = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const overdueIndex = schedules.findIndex(s => s.due_date && new Date(s.due_date) < today);
-    if (overdueIndex >= 0 && Number(loan.accrued_penalty) > 0) {
-        schedules[overdueIndex].penalty_amount = Number(loan.accrued_penalty);
-        schedules[overdueIndex].amount_due = Math.round((schedules[overdueIndex].amount_due + schedules[overdueIndex].penalty_amount) * 100) / 100;
-    }
-    return schedules;
+    return due <= today;
+}
+
+function overdueSchedules(loan?: LoanOption) {
+    if (!loan?.payment_schedule) return [];
+    return loan.payment_schedule
+        .map(installment => ({
+            period: installment.period,
+            due_date: installment.due_date,
+            payment_amount: Number(installment.payment),
+            paid: installment.paid,
+            amount_due: Math.round(Number(installment.amount_due) * 100) / 100,
+            penalty_amount: Math.round(Number(installment.penalty ?? 0) * 100) / 100,
+        }))
+        .filter(installment => isDueDateOnOrBeforeToday(installment.due_date) && installment.amount_due > 0.009);
 }
 
 export default function LoanPaymentWizard({ onComplete, onRequestClose, selectedMember, onDirtyChange, availability }: {
@@ -81,7 +87,9 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
     availability?: AvailabilityFlags;
 }) {
     const [step, setStep] = useState(1);
-    const [form, setForm] = useState({ loan_id: '', schedule_key: '', amount: '', transaction_mode: '', note: '' });
+    const [form, setForm] = useState({ loan_id: '', transaction_mode: '', note: '' });
+    const [selectedPeriods, setSelectedPeriods] = useState<number[]>([]);
+    const [allocationAmounts, setAllocationAmounts] = useState<Record<number, string>>({});
     const [receipt, setReceipt] = useState<any>(null);
     const [checkoutSession, setCheckoutSession] = useState<CheckoutResponse | null>(null);
     const [proof, setProof] = useState<File | null>(null);
@@ -89,23 +97,23 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
     const { addToast } = useToast();
     const requestIdRef = useRef<string | null>(null);
 
-    // Fetch PayMongo enabled status and active methods
-    const { data: paymongoData } = useQuery({
-        queryKey: ['paymongo-methods'],
-        queryFn: getPayMongoMethods,
+    // Fetch Xendit enabled status and active methods
+    const { data: xenditData } = useQuery({
+        queryKey: ['xendit-methods'],
+        queryFn: getXenditStatus,
     });
 
-    const isPayMongoAvailable = Boolean(paymongoData?.enabled && paymongoData.methods.length > 0);
+    const isXenditAvailable = Boolean(xenditData?.enabled);
 
     const setField = (key: string, value: string) => setForm(f => ({ ...f, [key]: value }));
 
     useEffect(() => {
-        onDirtyChange?.(!receipt && (form.loan_id !== '' || form.schedule_key !== '' || form.amount !== '' || form.transaction_mode !== '' || form.note !== '' || !!proof));
-    }, [form, receipt, onDirtyChange, proof]);
+        onDirtyChange?.(!receipt && (form.loan_id !== '' || selectedPeriods.length > 0 || form.transaction_mode !== '' || form.note !== '' || !!proof));
+    }, [form, receipt, onDirtyChange, proof, selectedPeriods]);
 
-    const isModeAvailable = (mode: 'counter' | 'online' | 'bank_transfer' | 'paymongo'): boolean => {
-        if (mode === 'paymongo') {
-            if (!isPayMongoAvailable) return false;
+    const isModeAvailable = (mode: 'counter' | 'online' | 'bank_transfer' | 'xendit'): boolean => {
+        if (mode === 'xendit') {
+            if (!isXenditAvailable) return false;
             if (availability && (!availability.global || availability.online === false)) return false;
             return true;
         }
@@ -120,38 +128,58 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
     });
 
     const loans: LoanOption[] = loansData?.data?.data ?? [];
-    const activeLoans = loans.filter(l => l.loan_status === 'approved' || l.loan_status === 'active');
+    const activeLoans = loans.filter(l => l.loan_status === 'active');
     const selectedLoan = activeLoans.find(l => l.id === Number(form.loan_id));
 
-    const availableSchedules = useMemo(() => {
-        return unpaidSchedules(selectedLoan);
-    }, [selectedLoan]);
-
-    const selectedSchedule = availableSchedules.find(s => String(s.period) === form.schedule_key) ?? null;
+    const availableSchedules = useMemo(() => overdueSchedules(selectedLoan), [selectedLoan]);
+    const selectedSchedules = availableSchedules.filter(s => selectedPeriods.includes(s.period));
+    const installmentAmount = selectedSchedules.reduce((sum, schedule) => sum + (Number(allocationAmounts[schedule.period]) || 0), 0);
+    const penaltyAmount = Math.round(selectedSchedules.reduce((sum, schedule) => sum + schedule.penalty_amount, 0) * 100) / 100;
+    const totalAmount = Math.round((installmentAmount + penaltyAmount) * 100) / 100;
 
     const selectLoan = (id: string) => {
-        const loan = activeLoans.find(l => l.id === Number(id));
-        let value = { loan_id: id, schedule_key: '', amount: '' };
-        if (!loan) { setForm(f => ({ ...f, ...value })); return; }
-        const schedules = unpaidSchedules(loan);
-        if (schedules.length === 1) {
-            value = { loan_id: id, schedule_key: String(schedules[0].period), amount: String(schedules[0].amount_due) };
-        }
+        setForm(f => ({ ...f, loan_id: id }));
+        setSelectedPeriods([]);
+        setAllocationAmounts({});
         setErrors({});
-        setForm(f => ({ ...f, ...value }));
     };
 
-    const selectSchedule = (key: string) => {
-        const s = availableSchedules.find(x => String(x.period) === key);
-        setErrors(prev => ({ ...prev, schedule_key: '', amount: '' }));
-        setForm(f => ({ ...f, schedule_key: key, amount: s ? String(s.amount_due) : '' }));
+    const toggleSchedule = (schedule: typeof availableSchedules[number], checked: boolean) => {
+        setErrors(prev => ({ ...prev, installments: '', amount: '' }));
+        if (checked) {
+            setSelectedPeriods(periods => periods.includes(schedule.period) ? periods : [...periods, schedule.period]);
+            setAllocationAmounts(amounts => ({ ...amounts, [schedule.period]: schedule.amount_due.toFixed(2) }));
+        } else {
+            setSelectedPeriods(periods => periods.filter(period => period !== schedule.period));
+            setAllocationAmounts(amounts => {
+                const next = { ...amounts };
+                delete next[schedule.period];
+                return next;
+            });
+        }
+    };
+
+    const updateAllocationAmount = (period: number, value: string, max: number) => {
+        setErrors(prev => ({ ...prev, amount: '' }));
+        if (value === '') {
+            setAllocationAmounts(amounts => ({ ...amounts, [period]: '' }));
+            return;
+        }
+        const numeric = Number(value);
+        const capped = Number.isFinite(numeric) ? Math.min(Math.max(numeric, 0), max) : 0;
+        setAllocationAmounts(amounts => ({ ...amounts, [period]: String(Math.round(capped * 100) / 100) }));
     };
 
     const validateStepOne = () => {
         const next: Record<string, string> = {};
         if (!form.loan_id) next.loan_id = 'Please select a loan.';
-        if (!form.schedule_key) next.schedule_key = 'Please select a payment schedule.';
-        if (!next.schedule_key && selectedSchedule && Number(form.amount) > Number(selectedLoan?.remaining_balance ?? 0)) {
+        if (selectedPeriods.length === 0) next.installments = 'Select at least one overdue installment.';
+        else if (selectedSchedules.length !== selectedPeriods.length) next.installments = 'The loan schedule changed. Review the overdue installments and select them again.';
+        if (!next.installments && selectedSchedules.some(schedule => {
+            const amount = Number(allocationAmounts[schedule.period]);
+            return !Number.isFinite(amount) || amount <= 0 || amount > schedule.amount_due;
+        })) next.amount = 'Enter a positive amount no greater than the unpaid amount for each selected installment.';
+        if (!next.installments && !next.amount && totalAmount > Number(selectedLoan?.remaining_balance ?? 0)) {
             next.amount = `Payment exceeds remaining loan balance (${peso(selectedLoan?.remaining_balance ?? 0)})`;
         }
         setErrors(next);
@@ -171,19 +199,21 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
         setStep(3);
     };
 
-    const paymongoCheckoutMutation = useMutation({
+    const xenditCheckoutMutation = useMutation({
         mutationFn: () => {
             requestIdRef.current = requestIdRef.current ?? crypto.randomUUID();
             const note = [
                 selectedMember ? 'Processed by officer' : '',
                 `Loan payment for ${selectedLoan?.loan_number ?? ''}`,
-                'PayMongo Checkout',
+                'Xendit Checkout',
                 form.note,
             ].filter(Boolean).join(' | ');
-            return createPayMongoCheckout({
+            return createXenditCheckout({
                 service_type: 'loan_payment',
-                amount: form.amount,
+                amount: totalAmount.toFixed(2),
                 loan_id: Number(form.loan_id),
+                installment_allocations: selectedSchedules.map(schedule => ({ period: schedule.period, amount: Number(allocationAmounts[schedule.period]) })),
+                penalty_amount: penaltyAmount.toFixed(2),
                 note,
                 client_request_id: requestIdRef.current!,
                 ...(selectedMember ? { user_id: selectedMember.id } : {}),
@@ -197,12 +227,12 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
             }
         },
         onError: (err: any) => {
-            addToast(err.response?.data?.message || 'Failed to initialize PayMongo checkout.', 'error');
+            addToast(err.response?.data?.message || 'Failed to initialize Xendit checkout.', 'error');
         },
     });
 
     const verifyMutation = useMutation({
-        mutationFn: (txnNumber: string) => verifyPayMongoPayment(txnNumber),
+        mutationFn: (txnNumber: string) => verifyXenditPayment(txnNumber),
         onSuccess: (res) => {
             if (res.is_paid || res.status === 'completed') {
                 addToast('Payment verified successfully!', 'success');
@@ -227,7 +257,12 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
             ].filter(Boolean).join(' | ');
             const fd = new FormData();
             fd.append('loan_id', String(form.loan_id));
-            fd.append('amount', String(form.amount));
+            fd.append('amount', totalAmount.toFixed(2));
+            fd.append('penalty_amount', penaltyAmount.toFixed(2));
+            selectedSchedules.forEach((schedule, index) => {
+                fd.append(`installment_allocations[${index}][period]`, String(schedule.period));
+                fd.append(`installment_allocations[${index}][amount]`, Number(allocationAmounts[schedule.period]).toFixed(2));
+            });
             fd.append('transaction_mode', form.transaction_mode);
             fd.append('note', note || '');
             fd.append('client_request_id', requestIdRef.current!);
@@ -237,7 +272,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
         },
         onSuccess: (res: any) => {
             requestIdRef.current = null;
-            addToast('Loan payment submitted', 'success');
+            addToast(res.data?.data?.status === 'completed' ? 'Counter loan payment recorded' : 'Loan payment submitted for manager or chairman approval', 'success');
             setReceipt(res.data?.data || { message: res.data?.message });
             setStep(form.transaction_mode === 'counter' ? 99 : form.transaction_mode === 'bank_transfer' ? 5 : 4);
         },
@@ -248,8 +283,8 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
     });
 
     const handleSubmit = () => {
-        if (form.transaction_mode === 'paymongo') {
-            paymongoCheckoutMutation.mutate();
+        if (form.transaction_mode === 'xendit') {
+            xenditCheckoutMutation.mutate();
             return;
         }
         if (form.transaction_mode === 'bank_transfer' && !proof) {
@@ -261,7 +296,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
         submitMutation.mutate();
     };
 
-    const stepCount = form.transaction_mode === 'paymongo' ? 4 : 3;
+    const stepCount = form.transaction_mode === 'xendit' ? 4 : 3;
 
     return (
         <ServiceModal
@@ -331,41 +366,68 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                     )}
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Payment Schedule *</label>
-                        <select
-                            value={form.schedule_key}
-                            onChange={e => selectSchedule(e.target.value)}
-                            disabled={!form.loan_id || availableSchedules.length === 0}
-                            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.schedule_key ? 'border-red-400' : 'border-gray-300'} ${!form.loan_id ? 'opacity-50' : ''}`}
-                        >
-                            <option value="">-- Choose a scheduled payment --</option>
-                            {availableSchedules.map(s => (
-                                <option key={s.period} value={s.period}>
-                                    Due {s.due_date ?? '—'} - {peso(s.amount_due)}
-                                </option>
-                            ))}
-                        </select>
-                        {form.loan_id && availableSchedules.length === 0 && (
-                            <p className="mt-2 text-xs text-amber-700">No unpaid scheduled installments remain for this loan.</p>
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                            <label className="block text-sm font-medium text-gray-700">Overdue installments *</label>
+                            {availableSchedules.length > 0 && <span className="text-xs text-gray-500">Select one or more</span>}
+                        </div>
+                        {availableSchedules.length === 0 ? (
+                            <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                                {form.loan_id ? 'No unpaid installments are due today or overdue for this loan.' : 'Select a loan to see overdue installments.'}
+                            </p>
+                        ) : (
+                            <div className="space-y-3">
+                                {availableSchedules.map(schedule => {
+                                    const checked = selectedPeriods.includes(schedule.period);
+                                    return (
+                                        <div key={schedule.period} className={`rounded-xl border p-4 ${checked ? 'border-blue-300 bg-blue-50/50' : 'border-gray-200'}`}>
+                                            <label className="flex cursor-pointer items-start gap-3">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={checked}
+                                                    onChange={event => toggleSchedule(schedule, event.target.checked)}
+                                                    className="mt-1 h-4 w-4 accent-blue-600"
+                                                    aria-label={`Select installment ${schedule.period}, due ${schedule.due_date}`}
+                                                />
+                                                <span className="min-w-0 flex-1">
+                                                    <span className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                                                        <span className="font-semibold text-gray-900">Installment {schedule.period}</span>
+                                                        <span className="text-red-700">Due {schedule.due_date}</span>
+                                                    </span>
+                                                    <span className="mt-1 block text-xs text-gray-600">Unpaid installment: {peso(schedule.amount_due)}</span>
+                                                    {schedule.penalty_amount > 0 && <span className="mt-1 block text-xs font-medium text-amber-700">Accrued penalty: {peso(schedule.penalty_amount)}</span>}
+                                                </span>
+                                            </label>
+                                            {checked && (
+                                                <div className="mt-3 pl-7">
+                                                    <label htmlFor={`installment-amount-${schedule.period}`} className="mb-1 block text-xs font-medium text-gray-700">Amount to pay on this installment</label>
+                                                    <input
+                                                        id={`installment-amount-${schedule.period}`}
+                                                        type="number"
+                                                        inputMode="decimal"
+                                                        min="0.01"
+                                                        max={schedule.amount_due}
+                                                        step="0.01"
+                                                        value={allocationAmounts[schedule.period] ?? ''}
+                                                        onChange={event => updateAllocationAmount(schedule.period, event.target.value, schedule.amount_due)}
+                                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                                                    />
+                                                    <p className="mt-1 text-xs text-gray-500">Partial payments are allowed, up to {peso(schedule.amount_due)}.</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         )}
-                        {errors.schedule_key && <span className="text-red-500 text-xs">{errors.schedule_key}</span>}
+                        {errors.installments && <p className="mt-2 text-xs text-red-600">{errors.installments}</p>}
+                        {errors.amount && <p className="mt-2 text-xs text-red-600">{errors.amount}</p>}
                     </div>
 
-                    {selectedSchedule && (
-                        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm space-y-1">
-                            <div className="flex justify-between">
-                                <span className="text-gray-600">Selected Due Date:</span>
-                                <span className="font-semibold text-gray-900">{selectedSchedule.due_date ?? '—'}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-600">Scheduled Amount:</span>
-                                <span className="font-semibold text-gray-900">{peso(selectedSchedule.payment_amount)}</span>
-                            </div>
-                            {selectedSchedule.penalty_amount > 0 && <div className="flex justify-between"><span className="text-gray-600">Accrued Penalty:</span><span className="font-semibold text-amber-700">{peso(selectedSchedule.penalty_amount)}</span></div>}
-                            <div className="flex justify-between">
-                                <span className="text-gray-600">Amount Due:</span>
-                                <span className="font-semibold text-blue-700">{peso(selectedSchedule.amount_due)}</span>
-                            </div>
+                    {selectedSchedules.length > 0 && (
+                        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm space-y-2">
+                            <div className="flex justify-between"><span className="text-gray-600">Selected installment amounts:</span><span className="font-semibold text-gray-900">{peso(installmentAmount)}</span></div>
+                            <div className="flex justify-between"><span className="text-gray-600">Selected accrued penalties:</span><span className="font-semibold text-amber-700">{peso(penaltyAmount)}</span></div>
+                            <div className="flex justify-between border-t border-gray-200 pt-2"><span className="font-medium text-gray-700">Total payment:</span><span className="font-bold text-blue-700">{peso(totalAmount)}</span></div>
                         </div>
                     )}
 
@@ -394,25 +456,25 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                     <h4 className="text-lg font-semibold text-gray-900 mb-4">Choose Payment Method</h4>
 
                     <div className="space-y-3">
-                        {/* Option 1: PayMongo Secure Gateway (only when online payment is enabled) */}
-                        {isModeAvailable('paymongo') && (
+                        {/* Option 1: Xendit Secure Gateway (only when online payment is enabled) */}
+                        {isModeAvailable('xendit') && (
                             <button
                                 type="button"
-                                onClick={() => { setField('transaction_mode', 'paymongo'); setErrors(prev => ({ ...prev, transaction_mode: '' })); }}
-                                className={`w-full p-4 border-2 rounded-lg text-left transition-all ${form.transaction_mode === 'paymongo' ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-300'}`}
+                                onClick={() => { setField('transaction_mode', 'xendit'); setErrors(prev => ({ ...prev, transaction_mode: '' })); }}
+                                className={`w-full p-4 border-2 rounded-lg text-left transition-all ${form.transaction_mode === 'xendit' ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-300'}`}
                             >
                                 <div className="flex items-center gap-3">
-                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${form.transaction_mode === 'paymongo' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${form.transaction_mode === 'xendit' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
                                         <i className="fas fa-shield-alt text-xl"></i>
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
-                                            <p className="font-semibold text-gray-900">PayMongo Online Payment</p>
+                                            <p className="font-semibold text-gray-900">Xendit Online Payment</p>
                                             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-blue-100 text-blue-800">Automated</span>
                                         </div>
-                                        <p className="text-sm text-gray-600 truncate">GCash, Maya, GrabPay, Cards, QR Ph & Direct Online Banking</p>
+                                <p className="text-sm text-gray-600 truncate">GCash, Maya, GrabPay, Cards, QR Ph & Direct Online Banking; approval required after verification</p>
                                     </div>
-                                    {form.transaction_mode === 'paymongo' && <i className="fas fa-check-circle text-blue-600 text-xl"></i>}
+                                    {form.transaction_mode === 'xendit' && <i className="fas fa-check-circle text-blue-600 text-xl"></i>}
                                 </div>
                             </button>
                         )}
@@ -468,21 +530,22 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                                 <span className="font-semibold text-gray-900">{selectedLoan.loan_number}</span>
                             </div>
                         )}
-                        {selectedSchedule && (
-                            <div className="flex justify-between">
-                                <span className="text-gray-600">Scheduled Due Date:</span>
-                                <span className="font-semibold text-gray-900">{selectedSchedule.due_date ?? '—'}</span>
+                        {selectedSchedules.map(schedule => (
+                            <div key={schedule.period} className="flex justify-between gap-4">
+                                <span className="text-gray-600">Installment {schedule.period} · {schedule.due_date}:</span>
+                                <span className="font-semibold text-gray-900">{peso(allocationAmounts[schedule.period] || 0)}</span>
                             </div>
-                        )}
+                        ))}
+                        {penaltyAmount > 0 && <div className="flex justify-between"><span className="text-gray-600">Penalties:</span><span className="font-semibold text-amber-700">{peso(penaltyAmount)}</span></div>}
                         <div className="flex justify-between">
                             <span className="text-gray-600">Payment Amount:</span>
-                            <span className="font-semibold text-gray-900">{peso(form.amount)}</span>
+                            <span className="font-semibold text-gray-900">{peso(totalAmount)}</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-gray-600">Payment Method:</span>
                             <span className="font-semibold text-gray-900">
-                                {form.transaction_mode === 'paymongo'
-                                    ? 'PayMongo Online Payment'
+                                {form.transaction_mode === 'xendit'
+                                    ? 'Xendit Online Payment'
                                     : form.transaction_mode === 'counter'
                                         ? 'Over the Counter'
                                         : 'Bank Transfer (Requires Proof)'}
@@ -496,18 +559,18 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                         )}
                     </div>
 
-                    {form.transaction_mode === 'paymongo' ? (
+                    {form.transaction_mode === 'xendit' ? (
                         <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
                             <p className="text-sm text-blue-700">
                                 <i className="fas fa-info-circle mr-2"></i>
-                                You will be redirected to PayMongo's secure payment portal to complete your payment.
+                                You will be redirected to Xendit's secure payment portal to complete your payment.
                             </p>
                         </div>
                     ) : form.transaction_mode === 'counter' ? (
                         <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
                             <p className="text-sm text-blue-700">
                                 <i className="fas fa-info-circle mr-2"></i>
-                                Please visit our office with your payment to complete this transaction.
+                                Bring your payment to the office. A staff member will record the cash; member-submitted counter requests stay pending for manager or chairman approval.
                             </p>
                         </div>
                     ) : (
@@ -520,6 +583,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                                 className={`block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 ${errors.proof ? 'border-red-400' : ''}`}
                             />
                             <p className="text-xs text-gray-500">Upload a screenshot, receipt, or PDF proof of your bank transfer before submitting.</p>
+                            <p className="text-xs text-amber-700">Online and bank-transfer payments stay pending until a manager or chairman approves them. Xendit payments also wait for approval after provider verification.</p>
                             {proof && <p className="text-xs font-medium text-gray-700">Selected: {proof.name}</p>}
                             {errors.proof && <span className="text-red-500 text-xs">{errors.proof}</span>}
                         </div>
@@ -532,10 +596,10 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                         <button
                             type="button"
                             onClick={handleSubmit}
-                            disabled={submitMutation.isPending || paymongoCheckoutMutation.isPending}
+                            disabled={submitMutation.isPending || xenditCheckoutMutation.isPending}
                             className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
                         >
-                            {(submitMutation.isPending || paymongoCheckoutMutation.isPending) ? 'Processing...' : (<><i className="fas fa-check mr-2"></i> Confirm</>)}
+                            {(submitMutation.isPending || xenditCheckoutMutation.isPending) ? 'Processing...' : (<><i className="fas fa-check mr-2"></i> Confirm</>)}
                         </button>
                     </div>
                 </div>
@@ -546,8 +610,8 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                     </div>
 
                     <div>
-                        <h4 className="text-xl font-bold text-gray-900">PayMongo Checkout Session</h4>
-                        <p className="text-sm text-gray-600 mt-1">Complete your payment in PayMongo's secure payment portal</p>
+                        <h4 className="text-xl font-bold text-gray-900">Xendit Checkout Session</h4>
+                        <p className="text-sm text-gray-600 mt-1">Complete your payment in Xendit's secure payment portal</p>
                     </div>
 
                     <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 text-left space-y-2 text-sm">
@@ -563,7 +627,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                         )}
                         <div className="flex justify-between">
                             <span className="text-gray-600">Total Amount:</span>
-                            <span className="font-bold text-blue-600">{peso(form.amount)}</span>
+                            <span className="font-bold text-blue-600">{peso(totalAmount)}</span>
                         </div>
                     </div>
 
@@ -585,13 +649,13 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                             className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-medium rounded-lg shadow-sm disabled:opacity-50"
                         >
                             <i className={`fas fa-sync-alt ${verifyMutation.isPending ? 'animate-spin' : ''}`}></i>
-                            <span>{verifyMutation.isPending ? 'Verifying with PayMongo...' : "I've Paid / Check Status"}</span>
+                            <span>{verifyMutation.isPending ? 'Verifying with Xendit...' : "I've Paid / Check Status"}</span>
                         </button>
                     </div>
 
                     <p className="text-xs text-gray-500 pt-2">
                         <i className="fas fa-info-circle mr-1"></i>
-                        After finishing the transaction on PayMongo, click <strong>"I've Paid / Check Status"</strong> above to verify your payment.
+                        After finishing the transaction on Xendit, click <strong>"I've Paid / Check Status"</strong> above to verify your payment.
                     </p>
                 </div>
             ) : step === 4 ? (
@@ -601,11 +665,11 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                             <i className="fas fa-credit-card text-blue-600 text-3xl"></i>
                         </div>
                         <h4 className="text-lg font-semibold text-gray-900 mb-2">Online Payment Portal</h4>
-                        <p className="text-gray-600 mb-6">Complete your payment through your preferred digital wallet or bank transfer</p>
+                        <p className="text-gray-600 mb-6">Complete your external payment through online checkout or bank transfer.</p>
 
                         <div className="bg-gray-50 rounded-lg p-6 mb-6">
                             <p className="text-sm text-gray-600 mb-4">Payment integration coming soon!</p>
-                            <p className="text-2xl font-bold text-gray-900">{peso(form.amount)}</p>
+                            <p className="text-2xl font-bold text-gray-900">{peso(totalAmount)}</p>
                         </div>
                     </div>
 
@@ -619,8 +683,8 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                         <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                             <i className="fas fa-receipt text-green-600 text-3xl"></i>
                         </div>
-                        <h4 className="text-xl font-bold text-gray-900 mb-2">Transaction Successful!</h4>
-                        <p className="text-gray-600">Your transaction has been completed</p>
+                        <h4 className="text-xl font-bold text-gray-900 mb-2">{receipt.status === 'completed' ? 'Payment Completed' : 'Payment Submitted'}</h4>
+                        <p className="text-gray-600">{receipt.status === 'completed' ? 'Your payment was approved and applied to your loan.' : 'Your payment is pending manager or chairman approval.'}</p>
                     </div>
 
                     <div className="bg-gray-50 rounded-lg p-6 mb-4 space-y-3 border-2 border-dashed border-gray-300">
@@ -647,7 +711,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                         </div>
                         <div className="flex justify-between text-sm pt-3 border-t border-gray-300">
                             <span className="text-gray-600">Amount:</span>
-                            <span className="text-2xl font-bold text-green-600">{peso(Number(receipt.amount ?? form.amount))}</span>
+                            <span className="text-2xl font-bold text-green-600">{peso(Number(receipt.amount ?? totalAmount))}</span>
                         </div>
                         {receipt.note && (
                             <div className="text-sm pt-3 border-t border-gray-300">
@@ -658,13 +722,13 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                         <div className="flex justify-between text-sm pt-3 border-t border-gray-300">
                             <span className="text-gray-600">Payment Method:</span>
                             <span className="font-semibold text-gray-900">
-                                {receipt.payment_gateway === 'paymongo'
-                                    ? `PayMongo (${capitalize(receipt.payment_method_used || 'online')})`
+                                {receipt.payment_gateway === 'xendit'
+                                    ? `Xendit (${capitalize(receipt.payment_method_used || 'online')})`
                                     : receipt.transaction_mode === 'counter'
                                         ? 'Over the Counter'
                                         : receipt.transaction_mode === 'bank_transfer'
                                             ? 'Bank Transfer'
-                                            : 'Online/Digital Wallet'}
+                                            : 'Online payment'}
                             </span>
                         </div>
                         <div className="flex justify-between text-sm">
@@ -683,7 +747,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                         <div className="pt-4 border-t border-gray-300">
                             <div className="bg-white rounded p-4 text-center">
                                 <div className="h-24 flex items-center justify-center border-2 border-dashed border-gray-300 rounded mb-2">
-                                    <ReceiptQR value={JSON.stringify({ type: 'loan_payment', ref: receipt.transaction_number ?? receipt.id ?? '', amount: form.amount, date: receipt.transaction_date ?? new Date().toISOString() })} />
+                                    <ReceiptQR value={JSON.stringify({ type: 'loan_payment', ref: receipt.transaction_number ?? receipt.id ?? '', amount: totalAmount, date: receipt.transaction_date ?? new Date().toISOString() })} />
                                 </div>
                                 <p className="text-xs text-gray-500">Scan for verification</p>
                             </div>

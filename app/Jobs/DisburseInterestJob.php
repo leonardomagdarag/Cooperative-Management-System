@@ -31,6 +31,7 @@ class DisburseInterestJob implements ShouldQueue
         public string $accountType,
         public ?int $actorId = null,
         public string $trigger = 'scheduled',
+        public ?int $approverId = null,
     ) {
         $this->onQueue('default');
     }
@@ -41,6 +42,7 @@ class DisburseInterestJob implements ShouldQueue
             $this->accountType,
             $this->actorId ? User::find($this->actorId) : null,
             $this->trigger,
+            $this->approverId ? User::find($this->approverId) : null,
         );
     }
 

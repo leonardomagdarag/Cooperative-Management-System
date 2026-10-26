@@ -12,21 +12,21 @@ class BackupRunTierCommand extends Command
      * The name and signature of the console command.
      */
     protected $signature = 'backup:run-tier
-                            {tier : The backup tier to run (hourly|daily|offsite)}
+                            {tier : The backup tier to run (daily|offsite)}
                             {--scope= : Override the scope (db|files|both). Defaults to both.}
                             {--user= : User ID that triggered the run (for audit attribution).}';
 
     /**
      * The console command description.
      */
-    protected $description = 'Run a backup for a single tier (hourly, daily or offsite)';
+    protected $description = 'Run a backup for a single tier (daily or offsite)';
 
     public function handle(BackupService $backupService): int
     {
         $tier = $this->argument('tier');
 
         if (! BackupService::isValidTier($tier)) {
-            $this->error("Unknown backup tier [{$tier}]. Expected: hourly, daily or offsite.");
+            $this->error("Unknown backup tier [{$tier}]. Expected: daily or offsite.");
 
             return self::INVALID;
         }

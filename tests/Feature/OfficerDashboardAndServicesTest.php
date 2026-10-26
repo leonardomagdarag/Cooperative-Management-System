@@ -62,7 +62,7 @@ test('F015-2: GET /api/dashboard returns admin overview for admin role', functio
             'backup_status' => [
                 'health',
                 'last_run_at',
-                'tiers' => ['hourly', 'daily', 'offsite'],
+                'tiers' => ['daily', 'offsite'],
             ],
         ]);
 });
@@ -73,10 +73,10 @@ test('F015-2: GET /api/dashboard returns admin overview for admin role', functio
 
 test('F015-2b: admin dashboard backup status reflects per-tier backup runs', function () {
     BackupRun::create([
-        'tier' => 'hourly',
+        'tier' => 'daily',
         'scope' => 'both',
         'status' => 'success',
-        'filename' => 'Settlers Credit Cooperative/backup-hourly-2026-09-22-01-00-00.zip',
+        'filename' => 'Settlers Credit Cooperative/backup-daily-2026-09-22-01-00-00.zip',
         'size' => 2048,
         'started_at' => now()->subHours(2),
         'finished_at' => now()->subHours(2)->addMinutes(1),
@@ -96,12 +96,11 @@ test('F015-2b: admin dashboard backup status reflects per-tier backup runs', fun
         ->getJson('/api/dashboard')
         ->assertOk()
         ->assertJsonPath('backup_status.health', 'attention')
-        ->assertJsonPath('backup_status.tiers.hourly.last_status', 'success')
-        ->assertJsonPath('backup_status.tiers.hourly.last_scope', 'both')
-        ->assertJsonPath('backup_status.tiers.hourly.last_size', 2048)
+        ->assertJsonPath('backup_status.tiers.daily.last_status', 'success')
+        ->assertJsonPath('backup_status.tiers.daily.last_scope', 'both')
+        ->assertJsonPath('backup_status.tiers.daily.last_size', 2048)
         ->assertJsonPath('backup_status.tiers.offsite.last_status', 'failed')
-        ->assertJsonPath('backup_status.tiers.offsite.message', 'Could not reach Backblaze B2.')
-        ->assertJsonPath('backup_status.tiers.daily.last_status', null);
+        ->assertJsonPath('backup_status.tiers.offsite.message', 'Could not reach Backblaze B2.');
 });
 
 test('chairman dashboard gives a cooperative-wide overview without administrator backup details', function () {

@@ -84,6 +84,23 @@ class SpatieRolePermissionSeeder extends Seeder
             }
         }
 
+        // Maker-checker exceptions belong to officer-level overrides, never
+        // to built-in roles. Remove stale grants from installations seeded
+        // before this permission was taken out of the presets.
+        Role::query()
+            ->whereIn('name', array_keys($rolePermissions))
+            ->where('guard_name', 'web')
+            ->get()
+            ->each(fn (Role $role) => $role->revokePermissionTo('transactions.approve-own'));
+
+        // System logs are reserved for the administrator and chairman roles.
+        // Remove stale grants from manager roles created by older presets.
+        Role::query()
+            ->where('name', 'manager')
+            ->where('guard_name', 'web')
+            ->get()
+            ->each(fn (Role $role) => $role->revokePermissionTo('logs.view'));
+
         // === ASSIGN ROLES & PERMISSIONS TO EXISTING USERS ===
 
         // 1. Keep active members on the member role and outside officer flows.

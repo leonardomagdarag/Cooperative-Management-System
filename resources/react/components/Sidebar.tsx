@@ -1,4 +1,5 @@
 import { NavLink, useLocation } from 'react-router';
+import { Fragment } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSidebar } from '../contexts/SidebarContext';
 
@@ -9,6 +10,7 @@ interface NavItem {
     permission?: string;
     multiPermission?: string[];
     roles?: string[];
+    group?: string;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -30,6 +32,13 @@ const NAV_ITEMS: NavItem[] = [
     { label: 'Reports', path: '/dashboard/reports', icon: 'fas fa-chart-bar', permission: 'reports.view' },
     { label: 'Logs', path: '/dashboard/logs', icon: 'fas fa-clipboard-list', permission: 'logs.view' },
     { label: 'Settings', path: '/dashboard/settings', icon: 'fas fa-cog' },
+    { label: 'Public Page', path: '/dashboard/public-content', icon: 'fas fa-globe', roles: ['admin'], group: 'System Settings' },
+    { label: 'Loan Products', path: '/dashboard/loan-products', icon: 'fas fa-hand-holding-usd', permission: 'settings.update', group: 'System Settings' },
+    { label: 'Roles & Permissions', path: '/dashboard/role-permissions', icon: 'fas fa-user-shield', roles: ['admin'], group: 'System Settings' },
+    { label: 'Service Availability', path: '/dashboard/service-availability', icon: 'fas fa-toggle-on', roles: ['admin'], group: 'System Settings' },
+    { label: 'Financial Accounts', path: '/dashboard/financial-accounts', icon: 'fas fa-piggy-bank', permission: 'financial_settings.update', group: 'System Settings' },
+    { label: 'Integrations', path: '/dashboard/integrations', icon: 'fas fa-plug', permission: 'settings.update', roles: ['admin'], group: 'System Settings' },
+    { label: 'Backup & Restore', path: '/dashboard/backups', icon: 'fas fa-hard-drive', multiPermission: ['backups.view', 'backups.manage'], roles: ['admin'], group: 'System Settings' },
 ];
 
 const ADMIN_NAV_PATHS = new Set([
@@ -40,6 +49,13 @@ const ADMIN_NAV_PATHS = new Set([
     '/dashboard/reports',
     '/dashboard/logs',
     '/dashboard/settings',
+    '/dashboard/public-content',
+    '/dashboard/loan-products',
+    '/dashboard/role-permissions',
+    '/dashboard/service-availability',
+    '/dashboard/financial-accounts',
+    '/dashboard/integrations',
+    '/dashboard/backups',
 ]);
 
 export default function Sidebar() {
@@ -55,13 +71,11 @@ export default function Sidebar() {
         if (user?.primary_role === 'admin' && !ADMIN_NAV_PATHS.has(item.path)) {
             return false;
         }
-        if (item.roles && (!user || !item.roles.includes(user.primary_role))) {
-            return false;
-        }
+        if (item.roles && user && item.roles.includes(user.primary_role)) return true;
         if (item.multiPermission) {
-            return item.multiPermission.some(p => user?.permissions?.includes(p));
+            return item.multiPermission.some(p => user?.permissions?.includes(p)) || false;
         }
-        if (!item.permission) return true;
+        if (!item.permission) return !item.roles;
         return user?.permissions?.includes(item.permission);
     });
 
@@ -86,8 +100,14 @@ export default function Sidebar() {
 
             <nav className="flex-1 overflow-y-auto py-4">
                 <ul className="space-y-1 px-3">
-                    {filteredItems.map(item => (
-                        <li key={item.path}>
+                    {filteredItems.map((item, index) => (
+                        <Fragment key={item.path}>
+                        {item.group && filteredItems[index - 1]?.group !== item.group && (
+                            <li className={`overflow-hidden whitespace-nowrap px-3.5 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-gray-400 transition-all duration-300 ${labelClass}`}>
+                                {item.group}
+                            </li>
+                        )}
+                        <li>
                             <NavLink
                                 to={item.path}
                                 end={item.path === '/dashboard'}
@@ -113,6 +133,7 @@ export default function Sidebar() {
                                 </span>
                             </NavLink>
                         </li>
+                        </Fragment>
                     ))}
                 </ul>
             </nav>

@@ -21,6 +21,8 @@ export default function LoansPage() {
     const [sort, setSort] = useState('created_at');
     const [direction, setDirection] = useState<'asc' | 'desc'>('desc');
     const [selectedLoanId, setSelectedLoanId] = useState<number | null>(null);
+    const [disbursementLoan, setDisbursementLoan] = useState<any>(null);
+    const [disbursementDestination, setDisbursementDestination] = useState<'cash' | 'savings'>('cash');
     const [activeTab, setActiveTab] = useState('overview');
     const [showEncodeModal, setShowEncodeModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
@@ -82,8 +84,8 @@ export default function LoansPage() {
     });
 
     const disburseMutation = useMutation({
-        mutationFn: (id: number) => api.post(`/api/loans/${id}/disburse`),
-        onSuccess: () => { setConfirmState(s => ({ ...s, isOpen: false })); queryClient.invalidateQueries({ queryKey: ['loans'] }); queryClient.invalidateQueries({ queryKey: ['loan-detail', selectedLoanId] }); addToast('Loan disbursed', 'success'); },
+        mutationFn: ({ id, destination }: { id: number; destination: 'cash' | 'savings' }) => api.post(`/api/loans/${id}/disburse`, { destination }),
+        onSuccess: () => { setDisbursementLoan(null); queryClient.invalidateQueries({ queryKey: ['loans'] }); queryClient.invalidateQueries({ queryKey: ['loan-detail', selectedLoanId] }); addToast('Loan disbursed', 'success'); },
         onError: (err: any) => addToast(err.response?.data?.message || 'Disbursement failed', 'error'),
     });
 
@@ -246,14 +248,20 @@ export default function LoansPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {loans.map((l: any) => (
-                                    <tr key={l.id} className="hover:bg-gray-50">
+                                {loans.map((l: any) => {
+                                    // The API changes approved loans to active only when
+                                    // disbursement completes, so approved means awaiting disbursement.
+                                    const awaitingDisbursement = l.loan_status === 'approved';
+
+                                    return (
+                                    <tr key={l.id} className={awaitingDisbursement ? 'bg-emerald-50 hover:bg-emerald-100' : 'hover:bg-gray-50'}>
                                         <td className="p-4 text-sm font-medium text-gray-900">{l.loan_number}</td>
                                         <td className="p-4 text-sm font-medium text-gray-900 truncate" title={l.borrower?.name || 'Unknown'}>{l.borrower?.name || 'Unknown'}{l.borrower?.user_number && <div className="text-xs text-gray-500">{l.borrower.user_number}</div>}</td>
                                         <td className="p-4 text-base font-semibold text-gray-900">₱{Number(l.loan_amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                         <td className="p-4 truncate" title={l.loan_product_name || l.loan_product || l.loan_type}><span className="px-2.5 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800 rounded capitalize">{l.loan_product_name || l.loan_product || l.loan_type}</span></td>
                                         <td className="p-4">
                                             <span className={`px-2.5 py-0.5 text-xs font-medium rounded ${getStatusColor(l.loan_status)}`}>{getStatusLabel(l.loan_status)}</span>
+                                            {awaitingDisbursement && <div className="mt-1 text-xs font-medium text-emerald-800">Awaiting disbursement</div>}
                                         </td>
                                         {canAssignBranch && <td className="p-4 truncate" title={l.branch_name}><BranchBadge name={l.branch_name} /></td>}
                                         <td className="p-4 text-sm text-gray-900">{l.created_at}</td>
@@ -263,14 +271,7 @@ export default function LoansPage() {
                                                     <i className="fas fa-eye"></i>
                                                 </button>
                                                 {canDisburse && l.loan_status === 'approved' && (
-                                                    <button onClick={() => setConfirmState({
-                                                        isOpen: true,
-                                                        title: 'Disburse Loan',
-                                                        message: `Disburse loan funds of ₱${Number(l.loan_amount).toLocaleString()} to borrower savings?`,
-                                                        confirmText: 'Disburse Funds',
-                                                        variant: 'primary',
-                                                        onConfirm: () => disburseMutation.mutate(l.id),
-                                                    })} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="Disburse">
+                                                    <button onClick={() => { setDisbursementLoan(l); setDisbursementDestination('cash'); }} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="Disburse">
                                                         <i className="fas fa-money-bill-wave"></i>
                                                     </button>
                                                 )}
@@ -306,7 +307,8 @@ export default function LoansPage() {
                                             </div>
                                         </td>
                                     </tr>
-                                ))}
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
@@ -398,6 +400,8 @@ export default function LoansPage() {
                                         <InfoRow label="Approved" value={detail.approved_at || '—'} />
                                         <InfoRow label="Due Date" value={detail.due_date ? new Date(`${String(detail.due_date).slice(0, 10)}T00:00:00`).toLocaleDateString() : '—'} hint="The final date by which the whole loan should be repaid." />
                                         <InfoRow label="Approved By" value={detail.approved_by?.name || '—'} />
+                                        {detail.reviewed_by?.name && <InfoRow label="Reviewed / Endorsed By" value={detail.reviewed_by.name} />}
+                                        {detail.next_approver && <InfoRow label="Next Approver" value={detail.next_approver} />}
                                     </div>
                                 </div>
                             )}
@@ -583,6 +587,34 @@ export default function LoansPage() {
                             <button type="submit" form="edit-loan-form" disabled={editMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700 rounded-lg focus:ring-2 focus:ring-emerald-500/20 text-white px-4 py-2 text-sm font-medium shadow-xs disabled:opacity-50 transition-colors cursor-pointer">{editMutation.isPending ? 'Saving...' : 'Save'}</button>
                         </div>
                     </div>
+                </div>
+            )}
+            {disbursementLoan && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm" role="presentation" onClick={() => !disburseMutation.isPending && setDisbursementLoan(null)}>
+                    <section className="w-full max-w-lg rounded-2xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="loan-disbursement-title" onClick={e => e.stopPropagation()}>
+                        <div className="border-b border-gray-200 px-6 py-5">
+                            <h2 id="loan-disbursement-title" className="text-lg font-bold text-gray-900">Confirm Loan Disbursement</h2>
+                            <p className="mt-1 text-sm text-gray-600">{disbursementLoan.loan_number} · ₱{Number(disbursementLoan.loan_amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                        </div>
+                        <div className="space-y-3 p-6">
+                            <p className="text-sm text-gray-700">Choose how the borrower will receive the loan proceeds:</p>
+                            <label className={`flex cursor-pointer gap-3 rounded-xl border p-4 ${disbursementDestination === 'cash' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200'}`}>
+                                <input type="radio" name="loan-disbursement-destination" value="cash" checked={disbursementDestination === 'cash'} onChange={() => setDisbursementDestination('cash')} className="mt-1 accent-emerald-600" />
+                                <span><span className="block text-sm font-semibold text-gray-900">Cash received</span><span className="mt-1 block text-xs text-gray-600">Record that the borrower received the loan proceeds physically.</span></span>
+                            </label>
+                            <label className={`flex cursor-pointer gap-3 rounded-xl border p-4 ${disbursementDestination === 'savings' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200'}`}>
+                                <input type="radio" name="loan-disbursement-destination" value="savings" checked={disbursementDestination === 'savings'} onChange={() => setDisbursementDestination('savings')} className="mt-1 accent-emerald-600" />
+                                <span><span className="block text-sm font-semibold text-gray-900">Credit to savings</span><span className="mt-1 block text-xs text-gray-600">Post the loan proceeds to the borrower’s savings ledger.</span></span>
+                            </label>
+                            <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">Confirm the selected delivery method only after the disbursement has been completed.</p>
+                        </div>
+                        <div className="flex justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4">
+                            <button type="button" disabled={disburseMutation.isPending} onClick={() => setDisbursementLoan(null)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-700 hover:bg-white disabled:opacity-50">Cancel</button>
+                            <button type="button" disabled={disburseMutation.isPending} onClick={() => disburseMutation.mutate({ id: disbursementLoan.id, destination: disbursementDestination })} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+                                {disburseMutation.isPending ? 'Processing...' : `Confirm ${disbursementDestination === 'cash' ? 'Cash Received' : 'Savings Credit'}`}
+                            </button>
+                        </div>
+                    </section>
                 </div>
             )}
             <ConfirmDialog

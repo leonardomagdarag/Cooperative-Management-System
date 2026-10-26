@@ -216,6 +216,10 @@ class AuthController extends Controller
             }
         }
 
+        if (! $user->hasRole('chairman')) {
+            $permissions = array_values(array_diff($permissions, ['oversight.approve']));
+        }
+
         return [
             'id' => $user->id,
             'name' => $user->name,

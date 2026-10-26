@@ -1,6 +1,6 @@
 import { api } from './client';
 
-export type BackupTier = 'hourly' | 'daily' | 'offsite';
+export type BackupTier = 'daily' | 'offsite';
 export type BackupScope = 'db' | 'files' | 'both';
 
 export interface BackupItem {
@@ -16,7 +16,6 @@ export interface BackupTierInfo {
     scope: BackupScope;
     retention: { keep?: number; days?: number };
     last_auto_run: string | null;
-    enabled?: boolean;
 }
 
 export interface OffsiteStatus {
@@ -27,11 +26,11 @@ export interface OffsiteStatus {
 
 export interface BackupSettings {
     tiers: Record<BackupTier, BackupTierInfo>;
+    daily_time: string;
     offsite: OffsiteStatus;
 }
 
 export interface BackupTierList {
-    hourly: { disk: string; items: BackupItem[] };
     daily: { disk: string; items: BackupItem[] };
     offsite: { disk: string; items: BackupItem[] };
 }
@@ -59,7 +58,7 @@ export async function getBackups() {
     return api.get('/api/backups');
 }
 
-export async function updateBackupSettings(data: { hourly_enabled: boolean }) {
+export async function updateBackupSettings(data: { daily_time?: string; archive_password?: string; archive_password_confirmation?: string }) {
     return api.put('/api/backups/settings', data);
 }
 
@@ -90,7 +89,6 @@ export async function restoreBackup(data: {
     scope: BackupScope;
     current_password: string;
     confirmation: string;
-    archive_password: string;
 }) {
     if (data.archive) {
         const form = new FormData();
@@ -98,7 +96,6 @@ export async function restoreBackup(data: {
         form.append('scope', data.scope);
         form.append('current_password', data.current_password);
         form.append('confirmation', data.confirmation);
-        form.append('archive_password', data.archive_password);
         return api.post('/api/backups/restore', form);
     }
 

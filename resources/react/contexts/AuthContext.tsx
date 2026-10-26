@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 
 interface User {
@@ -29,19 +30,21 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+    const queryClient = useQueryClient();
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [sessionEnded, setSessionEnded] = useState(false);
 
     useEffect(() => {
         const handleSessionEnded = () => {
+            queryClient.clear();
             setUser(null);
             setSessionEnded(true);
         };
 
         window.addEventListener('auth:session-ended', handleSessionEnded);
         return () => window.removeEventListener('auth:session-ended', handleSessionEnded);
-    }, []);
+    }, [queryClient]);
 
     const clearSessionEnded = useCallback(() => setSessionEnded(false), []);
 
@@ -80,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const logout = async () => {
         await api.post('/api/logout');
+        queryClient.clear();
         setUser(null);
     };
 

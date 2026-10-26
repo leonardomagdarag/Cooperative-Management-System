@@ -133,6 +133,38 @@ test('F020-7: CheckServiceAvailability middleware blocks disabled service with H
         ]);
 });
 
+test('approval of an existing loan payment is blocked while loan payments are disabled', function () {
+    SystemSetting::set('service_loan_payment_enabled', false);
+    $loan = Loan::factory()->create([
+        'user_id' => $this->member->id,
+        'account_id' => $this->account->id,
+        'branch_id' => $this->manager->branch_id,
+        'loan_amount' => 1000,
+        'interest_rate' => 0,
+        'term_months' => 1,
+        'loan_status' => 'active',
+        'disbursed_at' => now()->subMonths(2),
+    ]);
+    $payment = Transaction::create([
+        'account_id' => null,
+        'loan_id' => $loan->id,
+        'branch_id' => $this->manager->branch_id,
+        'transaction_type' => 'loan_payment',
+        'transaction_mode' => 'counter',
+        'amount' => 1,
+        'penalty_amount' => 0,
+        'status' => 'pending',
+        'recorded_by' => $this->member->id,
+        'transaction_date' => now(),
+    ]);
+
+    $this->actingAs($this->manager)->postJson("/api/services/approve/{$payment->id}", ['action' => 'approve'])
+        ->assertStatus(423)
+        ->assertJsonPath('service', 'loan_payment');
+
+    expect($payment->fresh()->status)->toBe('pending');
+});
+
 test('F020-8: transaction mode toggle blocks specific channel with 423 while allowing other channels', function () {
     // Enable member deposits, but disable online deposits while keeping counter deposits enabled
     SystemSetting::set('service_deposit_enabled', true);
@@ -286,6 +318,7 @@ test('F020-12: offline bank transfer loan payment stays available when online pa
         'term_months' => 1,
         'payment_frequency' => 'monthly',
         'loan_status' => 'active',
+        'disbursed_at' => now()->subMonths(2),
     ]);
 
     $this->actingAs($this->member);
@@ -303,6 +336,8 @@ test('F020-12: offline bank transfer loan payment stays available when online pa
         'loan_id' => $loan->id,
         'amount' => 620,
         'transaction_mode' => 'bank_transfer',
+        'installment_allocations' => [['period' => 1, 'amount' => 620]],
+        'penalty_amount' => 0,
         'proof' => UploadedFile::fake()->create('transfer.jpg', 100, 'image/jpeg'),
     ])->assertCreated();
 
@@ -318,4 +353,87 @@ test('F020-12: offline bank transfer loan payment stays available when online pa
         ->and($payment->proof_of_payment_path)->not->toBeNull()
         ->and($loan->fresh()->loan_status)->toBe('active')
         ->and((float) $this->account->fresh()->balance)->toBe(5000.0);
+});
+
+test('member counter loan payment waits for approval without debiting savings', function () {
+    SystemSetting::set('service_loan_payment_enabled', true);
+    SystemSetting::set('service_loan_payment_member_enabled', true);
+    SystemSetting::set('service_loan_payment_counter_enabled', true);
+    $this->account->update(['balance' => 0]);
+
+    $loan = Loan::factory()->create([
+        'user_id' => $this->member->id,
+        'account_id' => $this->account->id,
+        'loan_amount' => 1000,
+        'interest_rate' => 0,
+        'term_months' => 1,
+        'loan_status' => 'active',
+        'disbursed_at' => now()->subMonths(2),
+    ]);
+
+    $remainingBefore = $loan->remainingBalance();
+    $response = $this->actingAs($this->member)->postJson('/api/services/loan-payment', [
+        'loan_id' => $loan->id,
+        'amount' => 1,
+        'transaction_mode' => 'counter',
+        'installment_allocations' => [['period' => 1, 'amount' => 1]],
+        'penalty_amount' => 0,
+    ]);
+
+    $response->assertCreated()
+        ->assertJsonPath('data.status', 'pending')
+        ->assertJsonPath('data.account_id', null);
+
+    $payment = Transaction::query()->where('loan_id', $loan->id)->latest('id')->firstOrFail();
+    expect($payment->recorded_by)->toBe($this->member->id)
+        ->and((float) $this->account->fresh()->balance)->toBe(0.0)
+        ->and($loan->fresh()->remainingBalance())->toBe($remainingBefore);
+
+    $this->actingAs($this->manager)->getJson('/api/services/pending')
+        ->assertOk()
+        ->assertJsonFragment(['id' => $payment->id]);
+
+    $this->postJson("/api/services/approve/{$payment->id}", ['action' => 'approve'])
+        ->assertOk();
+
+    expect($payment->fresh()->status)->toBe('completed')
+        ->and($payment->fresh()->approved_by)->toBe($this->manager->id)
+        ->and((float) $this->account->fresh()->balance)->toBe(0.0)
+        ->and($loan->fresh()->remainingBalance())->toBe($remainingBefore - 1.0);
+});
+
+test('officer counter loan payment records cash without debiting member savings', function () {
+    SystemSetting::set('service_loan_payment_enabled', true);
+    SystemSetting::set('service_loan_payment_officer_enabled', true);
+    SystemSetting::set('service_loan_payment_counter_enabled', true);
+    $this->account->update(['balance' => 0]);
+
+    $loan = Loan::factory()->create([
+        'user_id' => $this->member->id,
+        'account_id' => $this->account->id,
+        'loan_amount' => 1000,
+        'interest_rate' => 0,
+        'term_months' => 1,
+        'loan_status' => 'active',
+        'disbursed_at' => now()->subMonths(2),
+    ]);
+
+    $response = $this->actingAs($this->manager)->postJson('/api/services/loan-payment', [
+        'loan_id' => $loan->id,
+        'member_id' => $this->member->id,
+        'amount' => 1,
+        'transaction_mode' => 'counter',
+        'installment_allocations' => [['period' => 1, 'amount' => 1]],
+        'penalty_amount' => 0,
+    ]);
+
+    $response->assertCreated()
+        ->assertJsonPath('data.status', 'completed')
+        ->assertJsonPath('data.account_id', null);
+
+    $payment = Transaction::query()->where('loan_id', $loan->id)->latest('id')->firstOrFail();
+    expect($payment->recorded_by)->toBe($this->manager->id)
+        ->and($payment->approved_by)->toBeNull()
+        ->and((float) $this->account->fresh()->balance)->toBe(0.0)
+        ->and($loan->fresh()->remainingBalance())->toBe(999.0);
 });

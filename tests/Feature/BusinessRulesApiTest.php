@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Account;
+use App\Models\Branch;
 use App\Models\Contact;
 use App\Models\Loan;
 use App\Models\LoanProduct;
@@ -250,7 +251,9 @@ test('loan payment schedule reconciles exactly to the model payable amount', fun
         'loan_amount' => 3000,
         'interest_rate' => 3,
         'term_months' => 3,
+        'loan_status' => 'active',
         'approved_at' => now()->startOfDay(),
+        'disbursed_at' => now()->startOfDay(),
     ]);
 
     $schedule = $loan->paymentSchedule();
@@ -262,9 +265,11 @@ test('loan payment schedule reconciles exactly to the model payable amount', fun
         ->and($schedule[2]['balance'])->toEqual(0.0);
 });
 
-test('counter loan payment covers the full payable amount and marks the loan paid off', function () {
+test('member counter loan payment waits for confirmation without debiting savings', function () {
+    $branch = Branch::create(['name' => 'Counter Loan Payment Branch']);
     $member = User::factory()->create();
     $member->assignRole('member');
+    $member->update(['branch_id' => $branch->id]);
 
     $account = Account::factory()->create([
         'user_id' => $member->id,
@@ -274,11 +279,13 @@ test('counter loan payment covers the full payable amount and marks the loan pai
 
     $loan = Loan::factory()->create([
         'user_id' => $member->id,
+        'branch_id' => $branch->id,
         'loan_amount' => 1000,
         'interest_rate' => 12,
         'term_months' => 1,
         'payment_frequency' => 'monthly',
         'loan_status' => 'active',
+        'disbursed_at' => now()->subMonths(2),
     ]);
 
     actingAs($member);
@@ -288,15 +295,20 @@ test('counter loan payment covers the full payable amount and marks the loan pai
         'account_id' => $account->id,
         'amount' => $loan->totalPayable(),
         'transaction_mode' => 'counter',
+        'installment_allocations' => [['period' => 1, 'amount' => $loan->totalPayable()]],
+        'penalty_amount' => 0,
     ])->assertCreated();
 
-    expect($loan->fresh()->loan_status)->toBe('paid_off')
-        ->and((float) $loan->fresh()->remainingBalance())->toBe(0.0);
+    expect($loan->fresh()->loan_status)->toBe('active')
+        ->and(Transaction::where('loan_id', $loan->id)->where('transaction_type', 'loan_payment')->value('status'))->toBe('pending')
+        ->and((float) $account->fresh()->balance)->toBe(5000.0);
 });
 
 test('online loan payment stays pending and does not change balances', function () {
+    $branch = Branch::create(['name' => 'Online Loan Payment Branch']);
     $member = User::factory()->create();
     $member->assignRole('member');
+    $member->update(['branch_id' => $branch->id]);
 
     $account = Account::factory()->create([
         'user_id' => $member->id,
@@ -306,11 +318,13 @@ test('online loan payment stays pending and does not change balances', function 
 
     $loan = Loan::factory()->create([
         'user_id' => $member->id,
+        'branch_id' => $branch->id,
         'loan_amount' => 1000,
         'interest_rate' => 12,
         'term_months' => 1,
         'payment_frequency' => 'monthly',
         'loan_status' => 'active',
+        'disbursed_at' => now()->subMonths(2),
     ]);
 
     actingAs($member);
@@ -320,6 +334,8 @@ test('online loan payment stays pending and does not change balances', function 
         'account_id' => $account->id,
         'amount' => 620,
         'transaction_mode' => 'online',
+        'installment_allocations' => [['period' => 1, 'amount' => 620]],
+        'penalty_amount' => 0,
     ])->assertCreated();
 
     $payment = Transaction::query()
@@ -413,6 +429,9 @@ test('loan product duplicate code is rejected on create but allowed on update', 
         'max_amount' => 50000,
         'max_term' => 24,
         'minimum_membership_years' => 1,
+        'penalty_type' => 'flat',
+        'penalty_amount' => 0,
+        'penalty_frequency' => 'per_due',
         'required_co_makers' => 1,
         'sort_order' => 5,
     ];
@@ -479,6 +498,7 @@ test('loan close rejects loans that still have an outstanding balance', function
         'term_months' => 1,
         'payment_frequency' => 'monthly',
         'loan_status' => 'active',
+        'disbursed_at' => now()->subMonths(2),
     ]);
 
     actingAs($this->admin);
@@ -651,8 +671,10 @@ test('withdrawal with a duplicate client_request_id is not created twice', funct
 });
 
 test('loan payment with a duplicate client_request_id is not created twice', function () {
+    $branch = Branch::create(['name' => 'Duplicate Loan Payment Branch']);
     $member = User::factory()->create();
     $member->assignRole('member');
+    $member->update(['branch_id' => $branch->id]);
 
     $account = Account::factory()->create([
         'user_id' => $member->id,
@@ -662,11 +684,13 @@ test('loan payment with a duplicate client_request_id is not created twice', fun
 
     $loan = Loan::factory()->create([
         'user_id' => $member->id,
+        'branch_id' => $branch->id,
         'loan_amount' => 1000,
         'interest_rate' => 12,
         'term_months' => 1,
         'payment_frequency' => 'monthly',
         'loan_status' => 'active',
+        'disbursed_at' => now()->subMonths(2),
     ]);
 
     actingAs($member);
@@ -677,6 +701,8 @@ test('loan payment with a duplicate client_request_id is not created twice', fun
         'amount' => 500,
         'transaction_mode' => 'counter',
         'client_request_id' => 'req_lp_0001',
+        'installment_allocations' => [['period' => 1, 'amount' => 500]],
+        'penalty_amount' => 0,
     ];
 
     $this->postJson('/api/services/loan-payment', $payload)->assertCreated();
@@ -823,7 +849,7 @@ test('loan payment rejects payments on pending or unapproved loans', function ()
         'amount' => 500,
         'transaction_mode' => 'counter',
     ])->assertStatus(422)
-        ->assertJsonPath('message', 'Payments can only be made on active or approved loans.');
+        ->assertJsonPath('message', 'Payments can only be made on disbursed loans.');
 
     expect(Transaction::where('loan_id', $pendingLoan->id)->count())->toBe(0)
         ->and((float) $savingsAccount->fresh()->balance)->toBe(5000.0)

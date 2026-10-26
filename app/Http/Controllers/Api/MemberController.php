@@ -186,6 +186,14 @@ class MemberController extends Controller
             ->take(8)
             ->get();
 
+        $pendingWithdrawalsByAccount = Transaction::query()
+            ->whereIn('account_id', $user->accounts->pluck('id'))
+            ->where('transaction_type', 'withdrawal')
+            ->where('status', 'pending')
+            ->selectRaw('account_id, SUM(amount) as total')
+            ->groupBy('account_id')
+            ->pluck('total', 'account_id');
+
         return response()->json([
             'id' => $user->id,
             'user_number' => $user->user_number,
@@ -240,6 +248,7 @@ class MemberController extends Controller
             'accounts' => $user->accounts->map(fn ($a) => [
                 'id' => $a->id, 'account_number' => $a->account_number,
                 'account_type' => $a->account_type, 'balance' => $a->balance,
+                'pending_withdrawals' => (float) ($pendingWithdrawalsByAccount[$a->id] ?? 0),
             ]),
             'beneficiaries' => $user->beneficiaries->map(fn ($b) => [
                 'id' => $b->id, 'first_name' => $b->first_name, 'mid_name' => $b->mid_name,

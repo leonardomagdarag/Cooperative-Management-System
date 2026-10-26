@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\TransactionNumberAllocator;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -34,6 +35,9 @@ class Transaction extends Model
         'paymongo_payment_intent_id',
         'paymongo_payment_id',
         'paymongo_fee',
+        'xendit_session_id',
+        'xendit_mode',
+        'xendit_payment_id',
         'reversal_of_id',
     ];
 
@@ -46,25 +50,22 @@ class Transaction extends Model
         'proof_of_payment_uploaded_at' => 'datetime',
     ];
 
+    public static function netAmountExpression(): string
+    {
+        return 'CASE WHEN transactions.reversal_of_id IS NULL THEN transactions.amount ELSE -transactions.amount END';
+    }
+
     protected static function boot()
     {
         parent::boot();
 
         static::creating(function ($transaction) {
+            $allocator = app(TransactionNumberAllocator::class);
+
             if (empty($transaction->transaction_number)) {
-                // Get the latest transaction_number for today
-                $datePrefix = 'TXN'.date('Ymd');
-                $latest = static::where('transaction_number', 'like', $datePrefix.'%')
-                    ->orderByRaw('CAST(SUBSTRING(transaction_number, 12) AS UNSIGNED) DESC')
-                    ->first();
-
-                if ($latest && preg_match('/'.preg_quote($datePrefix, '/').'(\d+)/', $latest->transaction_number, $matches)) {
-                    $nextNumber = intval($matches[1]) + 1;
-                } else {
-                    $nextNumber = 1;
-                }
-
-                $transaction->transaction_number = $datePrefix.str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
+                $transaction->transaction_number = $allocator->next();
+            } else {
+                $allocator->observe($transaction->transaction_number);
             }
         });
     }
@@ -111,6 +112,11 @@ class Transaction extends Model
     public function recordedBy()
     {
         return $this->belongsTo(User::class, 'recorded_by');
+    }
+
+    public function approvedBy()
+    {
+        return $this->belongsTo(User::class, 'approved_by');
     }
 
     // Scopes for filtering by type

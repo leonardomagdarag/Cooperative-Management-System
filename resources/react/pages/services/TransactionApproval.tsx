@@ -252,6 +252,9 @@ export default function TransactionApproval({ onComplete, onRequestClose }: { on
 
                 {/* Main Content */}
                 <div className="flex-1 overflow-y-auto p-6 relative bg-slate-50">
+                    <div className="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+                        <strong>Approval workflow:</strong> Staff-recorded member counter cash posts immediately. Member requests and online or bank transfers stay pending for a manager or chairman. Managers can approve only their branch when branch bypass is off; when bypass is on, only the chairman can approve. Xendit must verify payment before approval.
+                    </div>
                     {isFetching && (
                         <div className="absolute top-4 right-4">
                             <i className="fas fa-circle-notch fa-spin text-brand-500 text-xl"></i>
@@ -281,6 +284,8 @@ export default function TransactionApproval({ onComplete, onRequestClose }: { on
                             
                             {transactions.map((t: any) => {
                                 const isSelected = selectedId === t.id;
+                                const isRecordedByCurrentUser = Number(t.recorded_by_id) === Number(user?.id);
+                                const isSelfApprovalBlocked = isRecordedByCurrentUser && !user?.permissions?.includes('transactions.approve-own');
                                 const typeBadgeClass = getTypeColor(t.transaction_type);
                                 return (
                                     <div key={t.id} className={`bg-white border rounded-xl p-5 transition-all ${isSelected ? 'border-brand-400 ring-1 ring-brand-400 shadow-sm' : 'border-slate-200 hover:border-brand-200 shadow-sm'}`}>
@@ -297,6 +302,19 @@ export default function TransactionApproval({ onComplete, onRequestClose }: { on
                                                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-slate-100 text-slate-600 border-slate-200 uppercase tracking-wider">
                                                             Pending
                                                         </span>
+                                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-200 uppercase tracking-wider">
+                                                            {String(t.transaction_mode || 'counter').replace('_', ' ')}
+                                                        </span>
+                                                        {t.provider_payment_verified && (
+                                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200 uppercase tracking-wider">
+                                                                Xendit verified
+                                                            </span>
+                                                        )}
+                                                        {isRecordedByCurrentUser && (
+                                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-amber-50 text-amber-800 border-amber-200 uppercase tracking-wider">
+                                                                Recorded by you
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     <h4 className="font-bold text-slate-900 text-lg">
                                                         {t.account_holder ?? 'N/A'}
@@ -319,6 +337,14 @@ export default function TransactionApproval({ onComplete, onRequestClose }: { on
                                             <div>
                                                 <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Transaction ID</span>
                                                 <p className="font-mono text-slate-900 mt-0.5">{padId(t.id)}</p>
+                                            </div>
+                                            <div>
+                                                <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Recorded By</span>
+                                                <p className="font-medium text-slate-900 mt-0.5">{t.recorded_by || 'Member request'}</p>
+                                            </div>
+                                            <div>
+                                                <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Next Approver</span>
+                                                <p className="font-medium text-slate-900 mt-0.5">{t.next_approver || 'Authorized officer'}</p>
                                             </div>
                                             {t.loan_number && (
                                                 <div className="col-span-2">
@@ -347,18 +373,26 @@ export default function TransactionApproval({ onComplete, onRequestClose }: { on
 
                                         {isSelected ? (
                                             <div className="bg-slate-100 rounded-lg p-5 border border-slate-200">
-                                                <div className="flex gap-3 mb-5">
-                                                    <button onClick={() => setAction('approve')} type="button"
-                                                        className={`flex-1 py-2 rounded-lg font-medium transition-colors ${action === 'approve' ? 'bg-brand-600 text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
-                                                        <i className="fas fa-check mr-2"></i>Approve
-                                                    </button>
-                                                    <button onClick={() => setAction('reject')} type="button"
-                                                        className={`flex-1 py-2 rounded-lg font-medium transition-colors ${action === 'reject' ? 'bg-red-600 text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
-                                                        <i className="fas fa-times mr-2"></i>Reject
-                                                    </button>
-                                                </div>
+                                                {isSelfApprovalBlocked ? (
+                                                    <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                                                        You recorded this transaction. Another authorized officer must approve or reject it.
+                                                    </p>
+                                                ) : null}
 
-                                                {action === 'reject' && (
+                                                {!isSelfApprovalBlocked && (
+                                                    <div className="flex gap-3 mb-5">
+                                                        <button onClick={() => setAction('approve')} type="button"
+                                                            className={`flex-1 py-2 rounded-lg font-medium transition-colors ${action === 'approve' ? 'bg-brand-600 text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
+                                                            <i className="fas fa-check mr-2"></i>Approve
+                                                        </button>
+                                                        <button onClick={() => setAction('reject')} type="button"
+                                                            className={`flex-1 py-2 rounded-lg font-medium transition-colors ${action === 'reject' ? 'bg-red-600 text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
+                                                            <i className="fas fa-times mr-2"></i>Reject
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                {!isSelfApprovalBlocked && action === 'reject' && (
                                                     <div className="mb-5">
                                                         <label className="block text-sm font-medium text-slate-700 mb-2">Rejection Reason *</label>
                                                         <textarea
@@ -372,7 +406,7 @@ export default function TransactionApproval({ onComplete, onRequestClose }: { on
                                                     </div>
                                                 )}
 
-                                                {action === 'approve' && requiresOtp && (
+                                                {!isSelfApprovalBlocked && action === 'approve' && requiresOtp && (
                                                     <div className="mb-5 rounded-lg border border-slate-200 bg-slate-100 p-4">
                                                         <p className="text-sm text-slate-700 mb-3">
                                                             OTP is required for withdrawals at or above {peso(otpThreshold)}.
@@ -399,18 +433,17 @@ export default function TransactionApproval({ onComplete, onRequestClose }: { on
                                                         {otpError && <p className="mt-1 text-xs text-red-500">{otpError}</p>}
                                                     </div>
                                                 )}
-
                                                 <div className="flex gap-3 justify-end pt-4 border-t border-slate-200">
                                                     <button type="button" onClick={resetForm}
                                                         className="px-4 py-2 border border-transparent rounded-lg text-slate-600 font-medium hover:bg-slate-200">
                                                         Cancel
                                                     </button>
-                                                    {action === 'approve' ? (
+                                                    {!isSelfApprovalBlocked && action === 'approve' ? (
                                                         <button type="button" onClick={confirmApprove} disabled={approveMutation.isPending}
                                                             className="px-6 py-2 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50 shadow-sm">
                                                             <i className="fas fa-check mr-2"></i>{approveMutation.isPending ? 'Processing...' : 'Confirm Approval'}
                                                         </button>
-                                                    ) : action === 'reject' ? (
+                                                    ) : !isSelfApprovalBlocked && action === 'reject' ? (
                                                         <button type="button" onClick={confirmReject} disabled={rejectMutation.isPending}
                                                             className="px-6 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 disabled:opacity-50 shadow-sm">
                                                             <i className="fas fa-times mr-2"></i>{rejectMutation.isPending ? 'Rejecting...' : 'Confirm Rejection'}

@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\SystemSetting;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
 
 /**
  * System settings.
@@ -123,6 +124,14 @@ class SystemSettingSeeder extends Seeder
                 'label' => 'Encrypt Backups',
                 'description' => 'Encrypt every backup archive with BACKUP_ARCHIVE_PASSWORD',
             ],
+            [
+                'key' => 'backup_daily_time',
+                'value' => '03:00',
+                'type' => 'text',
+                'group' => 'backup',
+                'label' => 'Daily Backup Time',
+                'description' => 'Time of day when daily and off-site backups are scheduled',
+            ],
 
             // ── Collections ───────────────────────────────────────────────
             [
@@ -148,6 +157,18 @@ class SystemSettingSeeder extends Seeder
 
         foreach ($settings as $setting) {
             SystemSetting::updateOrCreate(['key' => $setting['key']], $setting);
+        }
+
+        $archivePassword = SystemSetting::firstOrNew(['key' => 'backup_archive_password']);
+        if (! $archivePassword->exists) {
+            $archivePassword->fill([
+                'value' => (string) (config('backup.backup.password') ?: Str::random(16).'A1'),
+                'type' => 'encrypted',
+                'group' => 'backup',
+                'label' => 'Backup Encryption Password',
+                'description' => 'Encrypted password used for backup archives',
+                'is_editable' => true,
+            ])->save();
         }
 
         SystemSetting::firstOrCreate(['key' => 'sms_service_enabled'], [

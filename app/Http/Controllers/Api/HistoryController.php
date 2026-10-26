@@ -71,6 +71,7 @@ class HistoryController extends Controller
                 'id' => $t->id,
                 'transaction_number' => $t->transaction_number,
                 'transaction_type' => $t->transaction_type,
+                'reversal_of_id' => $t->reversal_of_id,
                 'amount' => $t->amount,
                 'status' => $t->status,
                 'note' => $t->note,

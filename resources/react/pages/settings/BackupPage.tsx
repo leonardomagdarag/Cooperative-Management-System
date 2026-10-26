@@ -24,22 +24,18 @@ import { formatBytes, formatDate } from '../../lib/format';
 const SCOPE_LABELS: Record<string, string> = { db: 'Database', files: 'Files', both: 'Database + Files' };
 
 const TIER_DEFS: Record<BackupTier, { title: string; description: string; icon: string }> = {
-    hourly: { title: 'Hourly Backups', description: 'Every hour on this server. Only the 3 most recent copies are kept.', icon: 'fas fa-clock' },
-    daily: { title: 'Daily Backups', description: 'Every day at 3:00 AM on this server. Retained for 30 days.', icon: 'fas fa-server' },
-    offsite: { title: 'Off-Site Backups', description: 'Daily at 3:00 AM, stored in Backblaze B2 for 7 days.', icon: 'fas fa-cloud' },
+    daily: { title: 'Daily Backups', description: 'Daily on this server. Retained for 30 days.', icon: 'fas fa-server' },
+    offsite: { title: 'Off-Site Backups', description: 'Daily in Backblaze B2 for 7 days.', icon: 'fas fa-cloud' },
 };
 
-function scheduleLabel(schedule: string): string {
-    const map: Record<string, string> = {
-        '0 * * * *': 'Every hour, on the hour',
-        '0 3 * * *': 'Every day at 3:00 AM',
-    };
-    return map[schedule] ?? schedule;
+function scheduleLabel(time: string): string {
+    const [hour, minute] = time.split(':').map(Number);
+    const suffix = hour >= 12 ? 'PM' : 'AM';
+    return `Every day at ${hour % 12 || 12}:${String(minute).padStart(2, '0')} ${suffix}`;
 }
 
 function retentionLabel(tier: BackupTier): string {
     switch (tier) {
-        case 'hourly': return 'Keep the 3 newest copies';
         case 'daily': return 'Retain 30 days';
         case 'offsite': return 'Retain 7 days';
         default: return '';
@@ -96,10 +92,12 @@ export default function BackupPage() {
     const canRestore = user?.permissions?.includes('backups.restore');
 
     const [runTarget, setRunTarget] = useState<{ tier: BackupTier; scope: BackupScope } | null>(null);
-    const [hourlyToggleTarget, setHourlyToggleTarget] = useState<boolean | null>(null);
+    const [dailyTime, setDailyTime] = useState('');
     const [deleteTarget, setDeleteTarget] = useState<{ tier: BackupTier; item: BackupItem } | null>(null);
     const [restoreTarget, setRestoreTarget] = useState<{ tier?: BackupTier; item?: BackupItem; archive?: File } | null>(null);
-    const [restoreForm, setRestoreForm] = useState({ scope: 'both' as BackupScope, current_password: '', confirmation: '', archive_password: '', acknowledged: false });
+    const [restoreForm, setRestoreForm] = useState({ scope: 'both' as BackupScope, current_password: '', confirmation: '', acknowledged: false });
+    const [archivePassword, setArchivePassword] = useState('');
+    const [archivePasswordConfirmation, setArchivePasswordConfirmation] = useState('');
     const archiveInput = useRef<HTMLInputElement>(null);
 
     const { data, isLoading, isError, error, refetch, isFetching } = useQuery({ queryKey: ['backups'], queryFn: getBackups, refetchInterval: query => {
@@ -110,18 +108,25 @@ export default function BackupPage() {
 
     const invalidate = () => queryClient.invalidateQueries({ queryKey: ['backups'] });
 
-    const hourlyToggleMutation = useMutation({
-        mutationFn: (enabled: boolean) => updateBackupSettings({ hourly_enabled: enabled }),
-        onSuccess: (res: any, enabled) => {
+    const dailyScheduleMutation = useMutation({
+        mutationFn: (time: string) => updateBackupSettings({ daily_time: time }),
+        onSuccess: (res: any) => {
             invalidate();
-            setHourlyToggleTarget(null);
-            addToast(
-                res?.data?.message || `Hourly backup ${enabled ? 'enable' : 'disable'} request submitted for chairman approval.`,
-                'info',
-                8000,
-            );
+            addToast(res?.data?.message || 'Daily backup schedule change submitted for chairman approval.', 'info', 8000);
         },
-        onError: (err: any) => addToast(err.response?.data?.message || 'Failed to request the hourly backup setting change.', 'error'),
+        onError: (err: any) => addToast(err.response?.data?.message || 'Failed to request the daily backup schedule change.', 'error'),
+    });
+    const archivePasswordMutation = useMutation({
+        mutationFn: () => updateBackupSettings({
+            archive_password: archivePassword,
+            archive_password_confirmation: archivePasswordConfirmation,
+        }),
+        onSuccess: (res: any) => {
+            setArchivePassword('');
+            setArchivePasswordConfirmation('');
+            addToast(res?.data?.message || 'Backup password change submitted for chairman approval.', 'info', 8000);
+        },
+        onError: (err: any) => addToast(err.response?.data?.message || 'Failed to request the backup password change.', 'error'),
     });
 
     const runMutation = useMutation({
@@ -162,12 +167,11 @@ export default function BackupPage() {
             scope: restoreForm.scope,
             current_password: restoreForm.current_password,
             confirmation: restoreForm.confirmation,
-            archive_password: restoreForm.archive_password,
         }),
         onSuccess: (res: any) => {
             invalidate();
             setRestoreTarget(null);
-            setRestoreForm({ scope: 'both', current_password: '', confirmation: '', archive_password: '', acknowledged: false });
+            setRestoreForm({ scope: 'both', current_password: '', confirmation: '', acknowledged: false });
             const isPending = res?.data?.status === 'pending' || res?.status === 202;
             const message = res?.data?.message || (isPending ? 'Restore requested and requires countersign approval.' : 'Restore queued.');
             addToast(message, isPending ? 'info' : 'success', isPending ? 8000 : undefined);
@@ -180,12 +184,13 @@ export default function BackupPage() {
 
     const settings = payload!.settings;
     const offsiteStatus = settings.offsite;
+    const configuredDailyTime = settings.daily_time || '03:00';
 
     const tierTotal = (tier: BackupTier) =>
         payload!.tiers[tier].items.reduce((sum, item) => sum + (item.size ?? 0), 0);
-    const onServerTotal = tierTotal('hourly') + tierTotal('daily');
+    const onServerTotal = tierTotal('daily');
     const offsiteTotal = tierTotal('offsite');
-    const onServerCount = payload!.tiers.hourly.items.length + payload!.tiers.daily.items.length;
+    const onServerCount = payload!.tiers.daily.items.length;
     const offsiteCount = payload!.tiers.offsite.items.length;
     const totalArchives = onServerCount + offsiteCount;
 
@@ -194,30 +199,10 @@ export default function BackupPage() {
             <SettingsTabHeader
                 eyebrow="Data integrity"
                 title="Backup & Restore"
-                description="Automatic encrypted backups run on a fixed schedule. Download archives, test the off-site connection, or restore when needed."
+                description="Automatic encrypted backups run daily at the selected time. Download archives, test the off-site connection, or restore when needed."
                 icon="fas fa-hard-drive"
                 helpText="Keep backups in a separate location and confirm schedules are running. Restoring replaces current data with the selected archive, so verify the archive and scope before starting a restore."
             />
-
-            {canRestore && <div className="flex justify-end">
-                <input
-                    ref={archiveInput}
-                    type="file"
-                    accept=".zip,application/zip"
-                    className="hidden"
-                    onChange={event => {
-                        const archive = event.target.files?.[0];
-                        if (archive) {
-                            setRestoreForm({ scope: 'both', current_password: '', confirmation: '', archive_password: '', acknowledged: false });
-                            setRestoreTarget({ archive });
-                        }
-                        event.target.value = '';
-                    }}
-                />
-                <button type="button" onClick={() => archiveInput.current?.click()} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100">
-                    <i className="fas fa-upload mr-2"></i>Restore Downloaded Backup
-                </button>
-            </div>}
 
             {/* Off-site connection */}
             <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -254,11 +239,6 @@ export default function BackupPage() {
                     )}
                 </div>
             </section>
-            {/* Encryption and local-copy guidance */}
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                <p className="font-semibold flex items-center gap-2"><i className="fas fa-lock"></i> Backups are encrypted by default</p>
-                <p className="mt-1">Keep a copy of your backups on your local machine as well. Store <code className="rounded bg-white/70 px-1">BACKUP_ARCHIVE_PASSWORD</code> safely; it is required to restore encrypted archives.</p>
-            </div>
             {/* Storage summary */}
             <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
                 <div className="grid grid-cols-1 divide-y divide-gray-100 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
@@ -267,7 +247,7 @@ export default function BackupPage() {
                         <div className="min-w-0">
                             <p className="text-xs uppercase tracking-wide text-gray-500">On-server storage</p>
                             <p className="text-lg font-semibold tabular-nums text-gray-900">{formatBytes(onServerTotal)}</p>
-                            <p className="text-xs text-gray-500">{onServerCount} archive{onServerCount === 1 ? '' : 's'} (hourly + daily)</p>
+                            <p className="text-xs text-gray-500">{onServerCount} archive{onServerCount === 1 ? '' : 's'} (daily)</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-3 px-5 py-4">
@@ -290,31 +270,21 @@ export default function BackupPage() {
             </section>
             {/* Tier lists */}
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-                {(Object.keys(TIER_DEFS) as BackupTier[]).map(tier => {
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:col-span-2">
+                    {(Object.keys(TIER_DEFS) as BackupTier[]).map(tier => {
                     const t = payload!.tiers[tier];
                     const offsiteUnconfigured = tier === 'offsite' && !offsiteStatus.configured;
-                    const hourlyDisabled = tier === 'hourly' && !t.enabled;
                     return (
-                        <section key={tier} className={`flex flex-col rounded-xl border shadow-sm ${tier === 'hourly' && !t.enabled ? 'border-gray-300 bg-gray-100' : 'border-gray-200 bg-white'}`}>
-                            <div className={`flex items-center justify-between gap-4 border-b px-5 py-4 ${tier === 'hourly' && !t.enabled ? 'border-gray-200' : 'border-gray-100'}`}>
-                                    <div className={`flex min-w-0 items-center gap-3 ${hourlyDisabled ? 'opacity-55 grayscale' : ''}`}>
-                                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${tier === 'hourly' && !t.enabled ? 'bg-gray-200 text-gray-500' : 'bg-emerald-50 text-emerald-600'}`}><i className={TIER_DEFS[tier].icon}></i></div>
+                        <section key={tier} className="flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm">
+                            <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-5 py-4">
+                                    <div className="flex min-w-0 items-center gap-3">
+                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><i className={TIER_DEFS[tier].icon}></i></div>
                                     <div className="min-w-0">
                                         <h3 className="font-semibold text-gray-900">{TIER_DEFS[tier].title}</h3>
                                         <p className="mt-0.5 text-xs text-gray-500">{TIER_DEFS[tier].description}</p>
                                     </div>
                                 </div>
-                                <div className={`flex shrink-0 items-center gap-2 ${hourlyDisabled ? '[&>div]:opacity-55 [&>button:last-child]:opacity-55' : ''}`}>
-                                {tier === 'hourly' && canManage && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setHourlyToggleTarget(!Boolean(t.enabled))}
-                                        disabled={hourlyToggleMutation.isPending}
-                                        className={`rounded-lg px-3 py-2 text-xs font-semibold text-white ${t.enabled ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}
-                                    >
-                                        {t.enabled ? 'Disable' : 'Enable'}
-                                    </button>
-                                )}
+                                <div className="flex shrink-0 items-center gap-2">
                                 {!offsiteUnconfigured && (
                                     <div className="shrink-0 text-right">
                                         <p className="text-sm font-semibold tabular-nums text-gray-900">{formatBytes(tierTotal(tier))}</p>
@@ -326,7 +296,7 @@ export default function BackupPage() {
                                 </button>
                                 </div>
                             </div>
-                            <div className={hourlyDisabled ? 'opacity-55 grayscale' : ''}>
+                            <div>
                             {offsiteUnconfigured ? (
                                 <div className="p-5 text-center text-sm text-gray-500">
                                     <i className="fas fa-cloud-upload-alt mb-2 text-3xl text-gray-300"></i>
@@ -377,8 +347,85 @@ export default function BackupPage() {
                             </div>
                         </section>
                     );
-                })}
+                    })}
+                </div>
+                <div className="grid grid-cols-1 gap-6">
+                    <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                        <div className="flex items-start gap-3">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><i className="fas fa-clock"></i></div>
+                            <div className="min-w-0">
+                                <h3 className="font-semibold text-gray-900">Daily backup schedule</h3>
+                                <p className="mt-1 text-xs text-gray-500">Daily and off-site backups run at this time. Changes require chairman countersign approval.</p>
+                            </div>
+                        </div>
+                        <div className="mt-4 flex items-end gap-2">
+                            <label className="flex-1 text-sm text-gray-600">
+                                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide">Time</span>
+                                <input type="time" value={dailyTime || configuredDailyTime} onChange={event => setDailyTime(event.target.value)} disabled={!canManage} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-50" />
+                            </label>
+                            {canManage && (
+                                <button type="button" onClick={() => dailyScheduleMutation.mutate(dailyTime || configuredDailyTime)} disabled={dailyScheduleMutation.isPending} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+                                    {dailyScheduleMutation.isPending ? 'Requesting...' : 'Save'}
+                                </button>
+                            )}
+                        </div>
+                        <p className="mt-3 text-xs text-gray-500">Current: <strong>{scheduleLabel(configuredDailyTime)}</strong></p>
+                    </section>
+                    <section className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+                        <div className="flex items-start gap-3">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700"><i className="fas fa-upload"></i></div>
+                            <div>
+                                <h3 className="font-semibold text-amber-900">Restore backup</h3>
+                                <p className="mt-1 text-xs text-amber-800">Upload a downloaded archive to restore it with the required confirmation checks.</p>
+                            </div>
+                        </div>
+                        {canRestore && (
+                            <>
+                                <input
+                                    ref={archiveInput}
+                                    type="file"
+                                    accept=".zip,application/zip"
+                                    className="hidden"
+                                    onChange={event => {
+                                        const archive = event.target.files?.[0];
+                                        if (archive) {
+                                            setRestoreForm({ scope: 'both', current_password: '', confirmation: '', acknowledged: false });
+                                            setRestoreTarget({ archive });
+                                        }
+                                        event.target.value = '';
+                                    }}
+                                />
+                                <button type="button" onClick={() => archiveInput.current?.click()} className="mt-4 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100">
+                                    <i className="fas fa-upload mr-2"></i>Restore downloaded backup
+                                </button>
+                            </>
+                        )}
+                    </section>
+                </div>
             </div>
+
+            <section className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800 shadow-sm">
+                <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700"><i className="fas fa-lock"></i></div>
+                    <div className="min-w-0 flex-1">
+                        <p className="font-semibold">Backup encryption</p>
+                        <p className="mt-1">Backups are encrypted by default. Keep a local copy of your archives; the archive password is encrypted in the database and never shown after it is saved.</p>
+                        {canManage && (
+                            <div className="mt-4 border-t border-amber-200 pt-4">
+                                    <p className="text-xs font-semibold uppercase tracking-wide">Change encryption password</p>
+                                    <p className="mt-1 text-xs">Hidden after entry. Use at least 8 characters with uppercase, lowercase, a number, and a symbol.</p>
+                                    <div className="mt-2 grid gap-2">
+                                        <input type="password" value={archivePassword} onChange={event => setArchivePassword(event.target.value)} className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm" placeholder="New archive password" autoComplete="new-password" />
+                                        <input type="password" value={archivePasswordConfirmation} onChange={event => setArchivePasswordConfirmation(event.target.value)} className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm" placeholder="Confirm archive password" autoComplete="new-password" />
+                                        <button type="button" onClick={() => archivePasswordMutation.mutate()} disabled={archivePasswordMutation.isPending || archivePassword.length < 8 || archivePassword !== archivePasswordConfirmation} className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
+                                            {archivePasswordMutation.isPending ? 'Requesting...' : 'Request password change'}
+                                        </button>
+                                    </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </section>
 
             {/* Recent runs */}
             <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -404,22 +451,6 @@ export default function BackupPage() {
                     ))}
                 </div>
             </section>
-
-            {/* Run backup modal */}
-            <ConfirmModal
-                open={hourlyToggleTarget !== null}
-                title={hourlyToggleTarget ? 'Enable automatic hourly backups?' : 'Disable automatic hourly backups?'}
-                description={hourlyToggleTarget
-                    ? 'Backups will be scheduled every hour. This change will take effect only after chairman countersign approval.'
-                    : 'Scheduled hourly backups will stop after chairman countersign approval. Existing archives will remain available, and you can still run a manual backup.'}
-                onCancel={() => setHourlyToggleTarget(null)}
-                onConfirm={() => hourlyToggleTarget !== null && hourlyToggleMutation.mutate(hourlyToggleTarget)}
-                confirmLabel={hourlyToggleMutation.isPending ? 'Requesting...' : `Request ${hourlyToggleTarget ? 'Enable' : 'Disable'}`}
-                danger={hourlyToggleTarget === false}
-                confirmDisabled={hourlyToggleMutation.isPending || hourlyToggleTarget === null}
-            >
-                <p className="text-sm text-gray-600">A chairman must approve this request before the hourly schedule changes. Your current setting will remain unchanged until approval.</p>
-            </ConfirmModal>
 
             <ConfirmModal
                 open={!!runTarget}
@@ -456,15 +487,15 @@ export default function BackupPage() {
                 title="Restore from backup"
                 description={restoreTarget?.item?.name ?? restoreTarget?.archive?.name}
                 danger
-                onCancel={() => { setRestoreTarget(null); setRestoreForm({ scope: 'both', current_password: '', confirmation: '', archive_password: '', acknowledged: false }); }}
+                onCancel={() => { setRestoreTarget(null); setRestoreForm({ scope: 'both', current_password: '', confirmation: '', acknowledged: false }); }}
                 onConfirm={() => restoreTarget && restoreMutation.mutate()}
                 confirmLabel={restoreMutation.isPending ? 'Restoring...' : 'Restore Now'}
-                confirmDisabled={restoreMutation.isPending || restoreForm.current_password.length === 0 || restoreForm.archive_password.length === 0 || restoreForm.confirmation !== 'RESTORE' || !restoreForm.acknowledged}
+                confirmDisabled={restoreMutation.isPending || restoreForm.current_password.length === 0 || restoreForm.confirmation !== 'RESTORE' || !restoreForm.acknowledged}
             >
 <div className="space-y-4">
                     <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                         <p className="font-semibold flex items-center gap-2"><i className="fas fa-exclamation-triangle"></i> The whole system goes offline</p>
-                        <p className="mt-1 text-xs">For the entire duration of the restore, the cooperative management system is completely unavailable. Every member, officer and administrator is signed out and blocked &mdash; including you, and including the officer who started the restore. Nobody can deposit, withdraw, borrow, repay, or use any other feature until it finishes. It is gated by your password and requires typing <strong>RESTORE</strong> to confirm.</p>
+                        <p className="mt-1 text-xs">The restore requires chairman approval. After approval, there is a 15-second grace period before the cooperative management system goes offline for the restore. During the restore, every member, officer and administrator is blocked; nobody can deposit, withdraw, borrow, repay, or use any other feature until it finishes. It is gated by your password and requires typing <strong>RESTORE</strong> to confirm.</p>
                     </div>
                     <div>
                         <label className="mb-1 block text-xs font-medium text-gray-600">What to restore</label>
@@ -477,10 +508,6 @@ export default function BackupPage() {
                     <div>
                         <label className="mb-1 block text-xs font-medium text-gray-600">Your password (verification)</label>
                         <input type="password" value={restoreForm.current_password} onChange={e => setRestoreForm(f => ({ ...f, current_password: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
-                    </div>
-                    <div>
-                        <label className="mb-1 block text-xs font-medium text-gray-600">Backup password</label>
-                        <input type="password" required value={restoreForm.archive_password} onChange={e => setRestoreForm(f => ({ ...f, archive_password: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" placeholder="Enter the backup password" />
                     </div>
 <div>
                         <label className="mb-1 block text-xs font-medium text-gray-600">Type <strong>RESTORE</strong> to confirm</label>

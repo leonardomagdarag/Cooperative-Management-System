@@ -126,6 +126,7 @@ class LoanController extends Controller
             'product',
             'user.personalData',
             'approvedBy.personalData',
+            'reviewer.personalData',
             'payments',
             'groupMembers.personalData',
             'documents.uploadedBy.personalData',
@@ -172,6 +173,12 @@ class LoanController extends Controller
             'approved_by' => $loan->approvedBy?->personalData ? [
                 'name' => trim($loan->approvedBy->personalData->first_name.' '.$loan->approvedBy->personalData->last_name),
             ] : null,
+            'reviewed_by' => $loan->reviewer?->personalData ? [
+                'name' => trim($loan->reviewer->personalData->first_name.' '.$loan->reviewer->personalData->last_name),
+            ] : null,
+            'next_approver' => $loan->loan_status === 'pending'
+                ? ($loan->review_status === 'endorsed_for_approval' ? 'Chairman' : 'Loan reviewer')
+                : null,
             'payments' => $loan->payments->sortBy(fn ($p) => $p->transaction_date ?? $p->created_at)->values()->map(fn ($p, $idx) => [
                 'id' => $p->id,
                 'payment_number' => $idx + 1,
@@ -386,7 +393,7 @@ class LoanController extends Controller
             'interest_rate' => $validated['interest_rate'],
             'term_months' => $validated['term_months'],
             'payment_frequency' => $validated['payment_frequency'],
-            'due_date' => $validated['due_date'] ?? $loan->due_date,
+            'due_date' => $loan->disbursed_at ? ($validated['due_date'] ?? $loan->due_date) : null,
         ];
 
         if (! empty($validated['loan_product'])) {
@@ -410,53 +417,65 @@ class LoanController extends Controller
         return response()->json(['message' => 'Loan updated.', 'data' => $loan->fresh()]);
     }
 
-    public function disburse(Loan $loan): JsonResponse
+    public function disburse(Request $request, Loan $loan): JsonResponse
     {
         $user = Auth::user();
         Gate::authorize('disburse', $loan);
 
-        if ($loan->loan_status === 'active') {
-            return response()->json(['message' => 'Loan is already active.'], 422);
-        }
+        $validated = $request->validate([
+            'destination' => 'required|in:cash,savings',
+        ]);
 
-        if ($loan->loan_status !== 'approved') {
-            return response()->json(['message' => 'Only approved loans can be disbursed.'], 422);
-        }
+        $releasedLoan = DB::transaction(function () use ($loan, $user, $validated) {
+            $lockedLoan = Loan::whereKey($loan->id)->lockForUpdate()->firstOrFail();
+            abort_unless($lockedLoan->loan_status === 'approved' && ! $lockedLoan->disbursed_at, 409, 'Only approved loans that have not been disbursed can be released.');
 
-        $account = $loan->user?->accounts()->where('account_type', 'savings')->first();
-        if (! $account) {
-            return response()->json(['message' => 'Borrower has no savings account.'], 422);
-        }
+            $account = null;
+            if ($validated['destination'] === 'savings') {
+                $account = $lockedLoan->user?->accounts()
+                    ->where('account_type', 'savings')
+                    ->lockForUpdate()
+                    ->first();
+                abort_unless($account, 422, 'Borrower has no savings account.');
+            }
 
-        DB::transaction(function () use ($loan, $account, $user) {
             Transaction::create([
-                'account_id' => $account->id,
-                'loan_id' => $loan->id,
-                'branch_id' => $loan->branch_id,
+                'account_id' => $account?->id,
+                'loan_id' => $lockedLoan->id,
+                'branch_id' => $lockedLoan->branch_id,
                 'transaction_type' => 'loan_disbursement',
-                'amount' => $loan->loan_amount,
+                'amount' => $lockedLoan->loan_amount,
                 'status' => 'completed',
                 'transaction_mode' => 'counter',
                 'transaction_date' => now(),
                 'recorded_by' => $user->id,
+                'note' => $validated['destination'] === 'cash' ? 'Loan disbursed as physical cash.' : 'Loan disbursed to savings account.',
             ]);
 
-            $account->increment('balance', $loan->loan_amount);
+            if ($account) {
+                $account->increment('balance', $lockedLoan->loan_amount);
+            }
 
-            $loan->update([
+            $lockedLoan->update([
                 'loan_status' => 'active',
-                'account_id' => $account->id,
-                'approved_by' => $loan->approved_by ?? $user->id,
-                'approved_at' => $loan->approved_at ?? now(),
-                'due_date' => now()->addMonths((int) $loan->term_months)->toDateString(),
+                'account_id' => $account?->id,
+                'approved_by' => $lockedLoan->approved_by ?? $user->id,
+                'approved_at' => $lockedLoan->approved_at ?? now(),
+                'disbursed_at' => now(),
+                'due_date' => now()->addMonths((int) $lockedLoan->term_months)->toDateString(),
             ]);
 
-            app(AuditLogService::class)->log('loan.disbursed', 'Loan funds released.', 'loan', $loan, $user);
+            app(AuditLogService::class)->log('loan.disbursed', 'Loan funds released.', 'loan', $lockedLoan, $user, [
+                'destination' => $validated['destination'],
+                'amount' => $lockedLoan->loan_amount,
+            ]);
+
+            return $lockedLoan->fresh();
         });
 
-        app(NotificationService::class)->notifyLoanDisbursed($loan);
+        app(NotificationService::class)->notifyLoanDisbursed($releasedLoan);
 
-        return response()->json(['message' => 'Loan disbursed.', 'data' => $loan->fresh()]);
+        return response()->json(['message' => 'Loan disbursed.', 'data' => $releasedLoan]);
     }
 
     public function close(Loan $loan): JsonResponse
@@ -589,6 +608,7 @@ class LoanController extends Controller
                     'loan_status' => 'approved',
                     'approved_by' => $user->id,
                     'approved_at' => now(),
+                    'due_date' => null,
                 ]);
                 app(NotificationService::class)->notifyLoanApproved($loan);
                 break;

@@ -34,8 +34,9 @@ class CheckLoanDueNotifications extends Command
     {
         $this->info('Checking for loans due soon...');
 
-        // Get approved and active loans that are not yet paid
-        $loans = Loan::whereIn('loan_status', ['approved', 'active'])
+        // Only disbursed loans have a repayment schedule and due date.
+        $loans = Loan::where('loan_status', 'active')
+            ->whereNotNull('disbursed_at')
             ->whereNotNull('due_date')
             ->whereHas('user')
             ->get();

@@ -432,6 +432,18 @@ class PayMongoService
                 return $transaction;
             }
 
+            if ($transaction->transaction_type === 'loan_payment') {
+                $allocations = DB::table('loan_payment_installment_allocations')
+                    ->where('transaction_id', $transaction->id)
+                    ->get(['period', 'amount'])
+                    ->map(fn ($allocation) => ['period' => (int) $allocation->period, 'amount' => (float) $allocation->amount])
+                    ->all();
+                if ($allocations !== []) {
+                    $loan = Loan::whereKey($transaction->loan_id)->lockForUpdate()->firstOrFail();
+                    app(LoanPaymentAllocationService::class)->validate($loan, $transaction, $allocations, (float) $transaction->penalty_amount);
+                }
+            }
+
             $paymentId = $paymentData['id'] ?? $transaction->paymongo_payment_id;
             $paymentAttrs = $paymentData['attributes'] ?? [];
             $fee = isset($paymentAttrs['fee']) ? ((float) $paymentAttrs['fee']) / 100 : null;
@@ -453,12 +465,13 @@ class PayMongoService
                 }
             } elseif ($transaction->transaction_type === 'loan_payment') {
                 // If loan payment was made via online portal, credit loan payment
-                $loan = Loan::find($transaction->loan_id);
+                $loan = Loan::whereKey($transaction->loan_id)->lockForUpdate()->first();
                 if ($loan) {
                     $loan->refresh();
                     if ($loan->remainingBalance() <= 0 && $loan->loan_status !== 'paid_off') {
                         $loan->update(['loan_status' => 'paid_off']);
                     }
+                    app(CollectionRunService::class)->notifyOpenRunOfficersOfExternalPayment($loan, (float) $transaction->amount);
                 }
             }
 

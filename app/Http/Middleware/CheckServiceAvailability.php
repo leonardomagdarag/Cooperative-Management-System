@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\SystemSetting;
+use App\Models\Transaction;
 use App\Support\PermissionCatalog;
 use Closure;
 use Illuminate\Http\Request;
@@ -18,6 +19,27 @@ class CheckServiceAvailability
 
         if (! $user) {
             return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
+
+        // The approval endpoint handles several transaction types. Resolve
+        // the service from the bound transaction so approvals obey the same
+        // availability switches as submissions.
+        if ($service === 'transaction') {
+            $transaction = $request->route('transaction');
+            abort_unless($transaction instanceof Transaction, 404);
+
+            $service = match ($transaction->transaction_type) {
+                'deposit' => 'deposit',
+                'withdrawal' => 'withdrawal',
+                'loan_payment' => 'loan_payment',
+                // Ledger-only entries such as fees do not have a member service
+                // availability switch. Their own approval permission still applies.
+                default => null,
+            };
+
+            if ($service === null) {
+                return $next($request);
+            }
         }
 
         $isOfficer = (bool) ($user->is_officer
