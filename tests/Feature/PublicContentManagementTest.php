@@ -68,10 +68,9 @@ test('admin sees can_manage true and the editor schema when reading public conte
         ]);
 });
 
-test('non-admin users see can_manage false when reading public content', function () {
+test('users without settings.update see can_manage false when reading public content', function () {
     $this->seed(SpatieRolePermissionSeeder::class);
     $user = makeUnauthorizedUser();
-    $user->givePermissionTo('settings.update');
 
     actingAs($user)
         ->getJson('/api/public-content')
@@ -189,10 +188,9 @@ test('board visibility toggle is reflected back through the api', function () {
         ->assertJsonPath('form.board.is_visible', false);
 });
 
-test('non-admin users cannot save public content', function () {
+test('users without settings.update cannot save public content', function () {
     $this->seed(SpatieRolePermissionSeeder::class);
     $user = makeUnauthorizedUser();
-    $user->givePermissionTo('settings.update');
 
     actingAs($user)
         ->putJson('/api/public-content', ['form' => fullForm()])

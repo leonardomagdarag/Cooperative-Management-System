@@ -1,10 +1,11 @@
 import { useState, useRef } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { api } from '../../api/client';
 import DatePicker from '../../components/DatePicker';
 import AddressSelector, { type AddressValues } from '../../components/AddressSelector';
 import TurnstileWidget, { type TurnstileWidgetRef } from '../../components/TurnstileWidget';
+import PolicyModal from '../../components/PolicyModal';
 import { validate, registerStepSchemas, passwordStrength, type FieldErrors } from '../../lib/validation';
 
 const steps = [
@@ -20,12 +21,16 @@ export default function RegisterPage() {
         first_name: '', middle_name: '', last_name: '', gender: '', birthdate: '', age: '',
         phone: '', email: '', region: '', province: '', city: '', barangay: '', street: '', zip_code: '',
         occupation: '', monthly_income: '', membership_type: 'Regular', referred_by: '',
-        password: '', password_confirmation: '', terms: false,
+        password: '', password_confirmation: '', terms: false, privacy_acknowledged: false,
     });
     const [success, setSuccess] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
     const [errors, setErrors] = useState<FieldErrors>({});
+    const [policyToView, setPolicyToView] = useState<'terms_and_conditions' | 'privacy_policy' | null>(null);
+    const { data: publicContent } = useQuery({ queryKey: ['public-content'], queryFn: () => api.get('/api/public-content') });
+    const policyTitles = { terms_and_conditions: 'Terms and Conditions', privacy_policy: 'Data Privacy Policy' };
+    const policyContent = policyToView ? publicContent?.data?.form?.policies?.[policyToView] : undefined;
     const turnstileRef = useRef<TurnstileWidgetRef>(null);
 
     const registerMutation = useMutation({
@@ -282,11 +287,20 @@ export default function RegisterPage() {
 {!pwdConfirmOk && form.password_confirmation && <p className="mt-1 text-xs text-red-500">Passwords do not match</p>}
                                          </div>
                                          <div className="md:col-span-2">
-                                             <label className="flex items-start gap-2 cursor-pointer">
-                                                 <input type="checkbox" checked={Boolean(form.terms)} onChange={e => set('terms', e.target.checked)} required className="mt-1 w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-2 focus:ring-emerald-500 cursor-pointer" />
-                                                 <span className="text-sm text-slate-700">I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-emerald-700 hover:underline">Terms and Conditions</a> and <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-emerald-700 hover:underline">Privacy Policy</a> <span className="text-red-500">*</span></span>
+                                             <div className="mb-3 flex flex-wrap gap-2">
+                                                 <button type="button" onClick={() => setPolicyToView('terms_and_conditions')} className="rounded border border-slate-200 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50">View Terms and Conditions</button>
+                                                 <button type="button" onClick={() => setPolicyToView('privacy_policy')} className="rounded border border-slate-200 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50">View Data Privacy Policy</button>
+                                             </div>
+                                             <label className="mb-3 flex items-start gap-2 cursor-pointer">
+                                                 <input type="checkbox" checked={Boolean(form.terms)} onChange={e => set('terms', e.target.checked)} required className="mt-1 h-4 w-4 cursor-pointer rounded border-slate-300 text-emerald-600 focus:ring-2 focus:ring-emerald-500" />
+                                                 <span className="text-sm text-slate-700">I agree to the Terms and Conditions. <span className="text-red-500">*</span></span>
                                              </label>
                                              {errors.terms && <p className="mt-1 text-xs text-red-500">{errors.terms}</p>}
+                                             <label className="flex items-start gap-2 cursor-pointer">
+                                                 <input type="checkbox" checked={Boolean(form.privacy_acknowledged)} onChange={e => set('privacy_acknowledged', e.target.checked)} required className="mt-1 h-4 w-4 cursor-pointer rounded border-slate-300 text-emerald-600 focus:ring-2 focus:ring-emerald-500" />
+                                                 <span className="text-sm text-slate-700">I have read the Data Privacy Policy and acknowledge how the Cooperative will process my personal information as described in it. <span className="text-red-500">*</span></span>
+                                             </label>
+                                             {errors.privacy_acknowledged && <p className="mt-1 text-xs text-red-500">{errors.privacy_acknowledged}</p>}
                                          </div>
                                      </div>
                                 )}
@@ -334,6 +348,7 @@ export default function RegisterPage() {
                     </div>
                 </div>
             </section>
+            {policyToView && <PolicyModal title={policyTitles[policyToView]} content={policyContent} onClose={() => setPolicyToView(null)} />}
         </div>
     );
 }

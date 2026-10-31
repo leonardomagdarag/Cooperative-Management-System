@@ -19,11 +19,12 @@
 | Manager | `manager` | Yes | Broad operational oversight |
 | Accountant (Treasurer) | `accountant` | Yes | Transactions, services, financial reporting |
 | Loan Officer | `loan` | Yes | Loan processing and member loan support |
-| Developer / Inactive / Terminated | `developer`, `inactive`, `terminated` | No | No active permissions / lifecycle states |
+| Developer (testing) | `developer` | Yes | All catalog permissions except chairman-only countersign, granted through the normal permission matrix |
+| Inactive / Terminated | `inactive`, `terminated` | No | Lifecycle states with no active permissions |
 
 Access is enforced by:
 - Auth (`auth:web`), email verification (`verified`), OTP verification (`otp.verified`), profile completion (`profile.completed`), service toggles (`service.availability:*`).
-- Frontend `PermissionGate` in `App.tsx` (e.g. `members.view`, `loans.view`, `reports.view`, `services.view`, `transactions.view`, `announcements.view`, `officers.view`, `branches.view`, `logs.view`, `settings.update`, `role: admin`).
+- Frontend `PermissionGate` in `App.tsx` (e.g. `members.view`, `loans.view`, `reports.view`, `services.view`, `transactions.view`, `announcements.view`, `officers.view`, `branches.view`, `logs.view`, `settings.update`, `officers.manage-permissions`, `oversight.approve`).
 - Backend permission checks (`can(...)` / `abort_unless(...can(...))`).
 
 Role dashboards (`/dashboard` with no section routes by role):
@@ -198,7 +199,9 @@ The admin preset is limited to system configuration, backups, security logs, tro
 ### 5.1.1 Chairman (`chairman`)
 Preset: operational member, service, loan, transaction, deposit, withdrawal, branch, announcement, and report permissions; `oversight.approve`; collections review/approval; and receipt reissue. The chairman is the countersign approver for privileged actions and is subject to the same server-side branch, OTP, separation-of-duty, and workflow checks as every other user.
 
-`oversight.approve` is chairman-only. Role and officer permission editors omit it, server authorization rejects it for non-chairman accounts (including developers), and pending permission changes cannot grant it. Ledger transaction changes remain in the chairman countersign workflow.
+`oversight.approve` is chairman-only. Role and officer permission editors omit it, server authorization rejects it for non-chairman accounts (including the developer testing role), and pending permission changes cannot grant it. Ledger transaction changes remain in the chairman countersign workflow.
+
+The `developer` role is a local testing role, not a production officer preset. It receives every catalog permission except `oversight.approve` and `transactions.approve-own`, so it exercises the same `can(...)` checks as any other role. Remove the account (and optionally the role preset) when testing is finished.
 
 ### 5.2 Manager (`manager`)
 Preset: members (view/create/update/approve plus detail facets), services (view/create/update), loans (view/create/encode/update/approve/reject/disburse), transactions (view/view-all/create/update/approve/reversal/export), deposits & withdrawals (view/create/approve/reject), reports (view/export/financial), announcements (view), `branches.bypass`, logs (view), settings (view), tickets, notifications, profile, and collections review/approval. The default manager preset does not grant member deletion, announcement writes, officer management, or `settings.update`. Managers have cross-branch access through `branches.bypass`.

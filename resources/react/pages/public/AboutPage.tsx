@@ -21,13 +21,22 @@ export default function AboutPage() {
         { key: 'statement3', quoteClass: 'text-slate-700', avatarClass: 'bg-slate-700' },
     ];
 
+    const communityMilestones = [
+        { year: '1999', title: 'The Calauan Housing Project', description: 'The site that would become Southville 7 was completed as a housing project for government employees.' },
+        { year: '2006', title: 'The site becomes Southville 7', description: 'The site began welcoming families from outside Calauan, including families displaced by a major fire and infrastructure projects. It was renamed Southville 7 as it shifted toward housing relocated informal settlers.' },
+        { year: '2009', title: 'Families displaced by Typhoon Ondoy', description: 'Southville 7 opened to thousands of families affected by the typhoon. The National Housing Authority and ABS-CBN Lingkod Kapamilya Foundation began working together on community management and support.' },
+        { year: '2012', title: 'Partnerships for community development', description: 'The Asian Development Bank’s Japan Fund for Poverty Reduction approved a grant supporting community integration, partnerships, innovation, and social entrepreneurship.' },
+        { year: '2013', title: 'Local livelihood initiatives', description: 'Community partners launched the Community Innovation Fund to help residents build small businesses and strengthen self-help capacity.' },
+        { year: '2015', title: 'Community water partnership', description: 'Construction of communal water stations was completed in March, and clean water began flowing in May. Homeowners’ associations took part in operating the stations, which also generated income for community activities.' },
+    ];
+
     return (
         <div className="public-page">
             <section className="relative overflow-hidden bg-slate-950 px-4 pb-20 pt-32">
                 <div className="pointer-events-none absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.03%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')] opacity-60"></div>
                 <div className="relative mx-auto max-w-4xl text-center">
                     <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-1.5 text-sm font-semibold text-emerald-300">
-                        <i className="fas fa-leaf text-xs"></i> Our Cooperative Story
+                        <i className="fas fa-leaf text-xs"></i> Settlers Credit Cooperative
                     </span>
                     <h1 className="text-4xl md:text-6xl font-extrabold text-white mb-6 leading-tight tracking-tight">About Us</h1>
                     <div className="w-16 h-1 bg-emerald-400 mx-auto rounded-full mb-8"></div>
@@ -56,6 +65,36 @@ export default function AboutPage() {
                             <FallbackImage src={aboutImage} alt="Cooperative member Pictures" className="w-full h-80 md:h-[420px] object-cover rounded-2xl shadow-xl" />
                         </div>
                     </div>
+                </div>
+            </section>
+
+            <section className="public-section bg-slate-50">
+                <div className="public-shell">
+                    <div className="mx-auto mb-12 max-w-3xl text-center">
+                        <span className="mb-4 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                            <i className="fas fa-map-marker-alt text-xs"></i> Southville 7 Community Background
+                        </span>
+                        <h2 className="public-heading mb-4 text-3xl md:text-4xl">A community shaped by resilience</h2>
+                        <p className="text-base leading-relaxed text-gray-600">
+                            The timeline below summarizes the history of Southville 7 as a resettlement community, based on an Asian Development Bank publication. It describes the community and its development partners; it is not a timeline of Settlers Credit Cooperative.
+                        </p>
+                    </div>
+                    <ol className="relative mx-auto max-w-4xl border-s border-emerald-200">
+                        {communityMilestones.map((milestone, index) => (
+                            <li key={milestone.year + milestone.title} className="ms-8 pb-9 last:pb-0">
+                                <span className="absolute -start-3 flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 ring-8 ring-slate-50">
+                                    <i className={`fas ${index === communityMilestones.length - 1 ? 'fa-seedling' : 'fa-check'} text-[9px] text-white`} aria-hidden="true"></i>
+                                </span>
+                                <p className="mb-1 text-sm font-bold uppercase tracking-wider text-emerald-700">{milestone.year}</p>
+                                <h3 className="mb-2 text-lg font-bold text-gray-900">{milestone.title}</h3>
+                                <p className="leading-relaxed text-gray-600">{milestone.description}</p>
+                            </li>
+                        ))}
+                    </ol>
+                    <p className="mx-auto mt-10 max-w-4xl text-sm leading-relaxed text-gray-500">
+                        The cooperative has rebranded from Southville 7 Credit Cooperative to Settlers Credit Cooperative, as provided by the cooperative. The ADB report does not document the cooperative’s history or rebranding. Its milestones below refer to Southville 7 as a community.{' '}
+                        <a className="font-semibold text-emerald-700 underline underline-offset-2 hover:text-emerald-800" href="https://www.adb.org/sites/default/files/publication/220531/transforming-southville-7.pdf" target="_blank" rel="noreferrer">Read the ADB publication, “Southville 7: Making Resettlement Work”</a>.
+                    </p>
                 </div>
             </section>
 

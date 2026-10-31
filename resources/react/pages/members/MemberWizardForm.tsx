@@ -8,6 +8,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
 import { validate, memberStepSchemas, memberEditStepSchemas, memberSchema, memberEditSchema, passwordStrength, onlyDigits, formatGroupedDigits, EMPLOYMENT_TYPES, type FieldErrors } from '../../lib/validation';
 import OtpVerifyField from '../../components/OtpVerifyField';
+import PolicyModal from '../../components/PolicyModal';
 
 const STEPS = ['personal', 'address', 'contact', 'ids', 'employment', 'login', 'beneficiaries', 'agreement', 'review'];
 
@@ -77,6 +78,10 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
     const { markDirty, requestClose, renderDialog } = useDiscardGuard();
     const queryClient = useQueryClient();
     const { addToast } = useToast();
+    const [policyToView, setPolicyToView] = useState<'terms_and_conditions' | 'privacy_policy' | null>(null);
+    const { data: publicContent } = useQuery({ queryKey: ['public-content'], queryFn: () => api.get('/api/public-content') });
+    const policyTitles = { terms_and_conditions: 'Terms and Agreement', privacy_policy: 'Data Privacy Policy' };
+    const policyContent = policyToView ? publicContent?.data?.form?.policies?.[policyToView] : undefined;
 
     const { data: detailData, isLoading: detailLoading } = useQuery({
         queryKey: ['member-detail', member?.id],
@@ -521,7 +526,7 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
                                 <i className="fas fa-info-circle text-blue-600 mt-0.5"></i>
                                 <div className="text-sm text-blue-800">
                                     <p className="font-semibold">Terms, Privacy &amp; Agreement</p>
-                                    <p className="mt-0.5">Please read and accept the terms and conditions before proceeding. You may also upload a signed membership agreement or any supporting document.</p>
+                                    <p className="mt-0.5">Please show the member the terms and privacy notice and record their acceptance before creating the account. You may also upload a signed membership agreement or supporting document.</p>
                                 </div>
                             </div>
 
@@ -530,10 +535,10 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
                                     <i className="fas fa-file-contract"></i> Review the policy documents
                                 </h4>
                                 <div className="grid gap-3 sm:grid-cols-2">
-                                    <button type="button" className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700">
+                                    <button type="button" onClick={() => setPolicyToView('terms_and_conditions')} className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700">
                                         <i className="fas fa-file-contract"></i> View Terms and Agreement
                                     </button>
-                                    <button type="button" className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700">
+                                    <button type="button" onClick={() => setPolicyToView('privacy_policy')} className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700">
                                         <i className="fas fa-shield-halved"></i> View Privacy Policy
                                     </button>
                                 </div>
@@ -543,7 +548,7 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
                                 <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-gray-200 bg-white p-4 hover:bg-gray-50 transition-colors">
                                     <input type="checkbox" checked={form.agreement} onChange={e => { set('agreement', e.target.checked); clearError('agreement'); }} className="mt-0.5 h-4 w-4 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500 cursor-pointer" />
                                     <span className="text-sm text-gray-700 leading-5">
-                                        I have reviewed the cooperative's <span className="font-semibold text-cyan-700 underline underline-offset-2">Terms and Agreement</span> and <span className="font-semibold text-cyan-700 underline underline-offset-2">Privacy Policy</span>. I voluntarily agree to be bound by these terms. <span className="text-red-500">*</span>
+                                        The member has reviewed and accepts the Terms and Agreement and acknowledges receipt of the Data Privacy Policy. <span className="text-red-500">*</span>
                                     </span>
                                 </label>
                                 {errors.agreement && <p className="mt-1.5 text-xs text-red-600 flex items-center gap-1"><i className="fas fa-exclamation-circle"></i> {errors.agreement}</p>}
@@ -649,6 +654,7 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
             </div>
 
             {renderDialog()}
+            {policyToView && <PolicyModal title={policyTitles[policyToView]} content={policyContent} onClose={() => setPolicyToView(null)} />}
         </div>
     );
 }

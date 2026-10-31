@@ -649,24 +649,24 @@ class SiteContentCatalog
 HTML,
                 'privacy_policy' => <<<'HTML'
 <h3>Data Privacy Policy</h3>
-<p>The Cooperative Management System for Settlers Credit Cooperative is committed to protecting the privacy, confidentiality, and security of all personal and financial information collected from members, employees, and authorized users of the system. This policy is established in accordance with the National Privacy Commission and Republic Act No. 10173, also known as the Data Privacy Act of 2012.</p>
-<h4>1. Collection of Information</h4>
-<p>The system collects necessary personal and transaction-related information including but not limited to full name, address, contact information, membership details, loan records, savings and deposit records, payment transactions, and user account credentials. The collected data is limited only to information necessary for cooperative operations and management.</p>
-<h4>2. Purpose of Data Collection</h4>
-<p>The collected information shall only be used for legitimate purposes such as member registration and management, loan processing and monitoring, savings and financial transaction management, report generation, authentication and system security, and audit and administrative purposes.</p>
-<h4>3. Data Protection and Security</h4>
-<p>The system implements reasonable security measures to protect user data from unauthorized access, disclosure, alteration, or destruction. These measures include secure login authentication, role-based access control, password encryption, database backup procedures, and restricted administrative access.</p>
-<p>Only authorized personnel are permitted to access confidential information based on their assigned responsibilities.</p>
-<h4>4. Data Confidentiality</h4>
-<p>All personal and financial records stored in the system shall remain confidential. Information will not be shared with third parties unless authorized by the data owner, required by law or government authorities, or necessary for legitimate cooperative operations.</p>
-<h4>5. Data Retention</h4>
-<p>User information and transaction records shall be retained only for as long as necessary for operational, legal, and auditing purposes. Obsolete or inactive records may be archived or securely disposed of following cooperative policies.</p>
-<h4>6. Rights of Users</h4>
-<p>Users of the system have the right to access their personal information, request correction of inaccurate records, request updates to their information, and be informed regarding how their data is used.</p>
-<h4>7. Limitation of Liability</h4>
-<p>While the system implements security measures to protect information, the cooperative cannot guarantee absolute protection against cyberattacks, unauthorized access, or technical failures beyond reasonable control.</p>
-<h4>8. Amendments</h4>
-<p>The cooperative reserves the right to modify or update this Data Privacy Policy whenever necessary to comply with legal requirements or improve system operations.</p>
+<p>Settlers Credit Cooperative (the Cooperative) handles personal information under Republic Act No. 10173, the Data Privacy Act of 2012, its Implementing Rules and Regulations, and applicable National Privacy Commission issuances. The Cooperative is the personal information controller for information it collects and uses to process membership and provide cooperative services.</p>
+<h4>1. Personal information we process</h4>
+<p>Depending on the service and information you provide, this may include your name, date and place of birth, contact details, address, government identification numbers and ID images, employment and income information, membership and beneficiary details, account credentials, and records of savings, share capital, loans, payments, and other transactions. We may also process system, security, and audit logs. We ask for information relevant to the stated purpose and applicable requirements.</p>
+<h4>2. Purposes and lawful criteria</h4>
+<p>We use personal information to assess and administer membership applications; maintain member and beneficiary records; provide and administer cooperative savings, share capital, credit, and payment services; communicate with members; meet accounting, reporting, recordkeeping, and other legal obligations; protect accounts and prevent or investigate fraud and security incidents; and maintain reliable operations and audit trails.</p>
+<p>Depending on the processing, we rely on your consent where required, steps taken at your request before entering a membership or service relationship and performance of that relationship, compliance with legal obligations, or legitimate interests such as account security and service administration where those interests are not overridden by your rights. We do not treat consent as the only basis for processing where another lawful criterion applies.</p>
+<p>Information required to assess an application or provide a requested service must be supplied when indicated. If it is not supplied, we may be unable to assess the application or provide that service. Optional information will be identified where applicable.</p>
+<h4>3. Sharing and service providers</h4>
+<p>Access is limited to authorized Cooperative personnel who need the information for their duties. We may disclose relevant information to service providers that support system hosting, communications, security, payment processing, or other operations under appropriate confidentiality and security safeguards; to regulators, government agencies, courts, or law enforcement when required or authorized by law; and to other parties when necessary to provide a requested service or when you have authorized the disclosure. We do not sell personal information.</p>
+<h4>4. Retention</h4>
+<p>We retain information only for as long as needed for the purposes described above and for applicable statutory, regulatory, accounting, dispute-resolution, and audit requirements. Retention periods vary by record type. When information is no longer required, it will be securely deleted, anonymized, or archived with access restricted where deletion is not yet permitted.</p>
+<h4>5. Security and incidents</h4>
+<p>The Cooperative applies reasonable organizational, physical, and technical safeguards, including role-based access, account security controls, restricted administrative access, and protected records and backups. No system can guarantee absolute security. If a personal data breach occurs, the Cooperative will assess and notify affected individuals and the National Privacy Commission when notification is required by law.</p>
+<h4>6. Your data privacy rights</h4>
+<p>Subject to the conditions and exceptions in law, you may ask to be informed about processing, access your personal information, object to certain processing, request correction or erasure/blocking, request data portability where applicable, claim damages for proven violations, and file a complaint with the National Privacy Commission. You may also withdraw consent where processing is based on consent; withdrawal does not affect processing already lawfully carried out or processing supported by another lawful criterion.</p>
+<p>To exercise a right or ask a question, <a href="/contact">contact Settlers Credit Cooperative</a> and ask for the person responsible for data privacy matters. We may need to verify your identity and clarify the request before acting. We will respond within the period required by applicable law.</p>
+<h4>7. Updates</h4>
+<p>We may update this notice as our services or legal requirements change. The current version is available through this website and during member registration. Material changes will be communicated through appropriate channels.</p>
 HTML,
             ],
         ];

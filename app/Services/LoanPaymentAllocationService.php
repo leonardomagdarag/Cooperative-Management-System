@@ -34,6 +34,14 @@ class LoanPaymentAllocationService
         abort_unless($loan->loan_status === 'active' && $loan->disbursed_at !== null, 409, 'Loan is no longer open for payment.');
 
         $schedule = collect($loan->paymentSchedule() ?? [])->keyBy('period');
+        $reservedAllocations = DB::table('loan_payment_installment_allocations as allocations')
+            ->join('transactions', 'transactions.id', '=', 'allocations.transaction_id')
+            ->where('transactions.loan_id', $loan->id)
+            ->where('transactions.status', 'pending')
+            ->where('transactions.id', '!=', $transaction->id)
+            ->selectRaw('allocations.period, SUM(allocations.amount) as amount')
+            ->groupBy('allocations.period')
+            ->pluck('amount', 'period');
         $today = now()->startOfDay();
         $periods = [];
         $allocatedTotal = 0.0;
@@ -47,7 +55,10 @@ class LoanPaymentAllocationService
             $dueDate = Carbon::createFromFormat('M d, Y', $installment['due_date'])->startOfDay();
             abort_if($dueDate->greaterThan($today), 422, 'Only installments due today or overdue can be paid here.');
 
-            $remaining = max(0.0, (float) $installment['amount_due']);
+            $remaining = max(
+                0.0,
+                (float) $installment['amount_due'] - (float) ($reservedAllocations[$period] ?? 0)
+            );
             $amount = round((float) $allocation['amount'], 2);
             abort_if($amount > $remaining + 0.01, 422, 'An installment allocation exceeds its unpaid amount.');
             $allocatedTotal += $amount;

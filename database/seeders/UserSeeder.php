@@ -228,6 +228,8 @@ class UserSeeder extends Seeder
             'email' => 'developer@example.com',
             'password' => Hash::make('password'),
             'role' => 'developer',
+            'is_officer' => true,
+            'profile_completed_at' => now(),
             'branch_id' => $mainBranch->id,
         ], [
             'first_name' => 'Leo',

@@ -102,8 +102,15 @@ Route::post('/webhooks/xendit', [XenditWebhookController::class, 'handle'])->mid
 
 // Current user (auth + OTP only — must remain reachable so the SPA can
 // surface the "verify your email" gate instead of a blank session failure)
+Route::middleware(['web', 'auth:web'])->group(function () {
+    Route::get('/login-handoffs/status', [AuthController::class, 'loginHandoffStatus']);
+    Route::post('/login-handoffs/complete', [AuthController::class, 'completeLoginHandoff']);
+});
+
 Route::middleware(['web', 'auth:web', 'otp.verified'])->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
+    Route::get('/login-handoffs', [AuthController::class, 'loginHandoffs']);
+    Route::post('/login-handoffs/{loginHandoff}/decision', [AuthController::class, 'decideLoginHandoff']);
 });
 
 // Resend the email verification link (no `verified` — that is what we gate on)
@@ -337,7 +344,7 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
 
     // Xendit payment flow (existing protected group and profile completion gate)
     Route::get('/services/xendit/status', [XenditPaymentController::class, 'status']);
-    Route::post('/services/xendit/deposit/checkout', [XenditPaymentController::class, 'createDepositCheckout'])->middleware(['profile.completed', 'service.availability:deposit']);
-    Route::post('/services/xendit/loan-payment/checkout', [XenditPaymentController::class, 'createLoanPaymentCheckout'])->middleware(['profile.completed', 'service.availability:loan_payment']);
+    Route::post('/services/xendit/deposit/checkout', [XenditPaymentController::class, 'createDepositCheckout'])->middleware(['profile.completed', 'service.availability:deposit', 'permission:transactions.create|services.create']);
+    Route::post('/services/xendit/loan-payment/checkout', [XenditPaymentController::class, 'createLoanPaymentCheckout'])->middleware(['profile.completed', 'service.availability:loan_payment', 'permission:transactions.create|services.create']);
     Route::get('/services/xendit/verify/{transactionNumber}', [XenditPaymentController::class, 'verify']);
 });

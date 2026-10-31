@@ -38,11 +38,14 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(PersonalData::class, MemberPolicy::class);
 
         Gate::before(function (User $user, string $ability) {
+            // Countersign approval is reserved for an active chairman. This is
+            // the one ability that cannot be granted through the permission
+            // catalog, including to the developer testing role.
             if ($ability === 'oversight.approve') {
                 return $user->hasRole('chairman') ? null : false;
             }
 
-            return $user->hasRole('developer') && $ability !== 'finalApprove' ? true : null;
+            return null;
         });
 
         Gate::define('reports.view', [ReportPolicy::class, 'viewAny']);

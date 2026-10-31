@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\TrustedDevice;
+use App\Models\LoginHandoff;
 use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\NotificationService;
@@ -87,6 +88,9 @@ class PasswordResetController extends Controller
                 $user->forceFill(['password' => Hash::make($password), 'remember_token' => Str::random(60)])->save();
                 event(new PasswordReset($user));
                 $user->invalidateOtherSessions();
+                $user->clearCurrentSession();
+                LoginHandoff::query()->where('user_id', $user->id)->whereIn('status', ['pending', 'approved'])
+                    ->update(['status' => 'expired', 'decided_at' => now()]);
                 TrustedDevice::query()->where('user_id', $user->id)->update(['is_active' => false]);
                 app(NotificationService::class)->notifyPasswordChanged($user);
             }

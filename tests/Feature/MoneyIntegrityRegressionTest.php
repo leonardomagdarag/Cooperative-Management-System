@@ -4,6 +4,8 @@ use App\Models\Account;
 use App\Models\Loan;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\LoanPaymentAllocationService;
+use App\Services\XenditService;
 use Carbon\Carbon;
 use Database\Seeders\AccountSeeder;
 use Database\Seeders\SpatieRolePermissionSeeder;
@@ -112,6 +114,165 @@ test('selected installment allocations reduce only the installment selected', fu
 
     expect($schedule[0]['amount_due'])->toBe(1000.0)
         ->and($schedule[1]['amount_due'])->toBe(600.0);
+});
+
+test('pending payment allocations reserve an installment for concurrent checkouts', function () {
+    $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $loan = Loan::factory()->create([
+        'user_id' => $member->id,
+        'loan_amount' => 12000,
+        'interest_rate' => 0,
+        'term_months' => 12,
+        'loan_status' => 'active',
+        'disbursed_at' => now()->subMonths(3),
+        'penalty_amount' => 0,
+    ]);
+    $existingPayment = Transaction::create([
+        'loan_id' => $loan->id,
+        'transaction_type' => 'loan_payment',
+        'transaction_mode' => 'online',
+        'payment_gateway' => 'xendit',
+        'amount' => 1000,
+        'penalty_amount' => 0,
+        'status' => 'pending',
+        'transaction_date' => now(),
+        'recorded_by' => $member->id,
+    ]);
+    DB::table('loan_payment_installment_allocations')->insert([
+        'transaction_id' => $existingPayment->id,
+        'period' => 1,
+        'amount' => 1000,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    $newPayment = Transaction::make([
+        'loan_id' => $loan->id,
+        'transaction_type' => 'loan_payment',
+        'transaction_mode' => 'online',
+        'payment_gateway' => 'xendit',
+        'amount' => 1,
+        'penalty_amount' => 0,
+        'status' => 'pending',
+        'transaction_date' => now(),
+        'recorded_by' => $member->id,
+    ]);
+
+    expect(fn () => app(LoanPaymentAllocationService::class)->validate(
+        $loan->fresh(),
+        $newPayment,
+        [['period' => 1, 'amount' => 1]],
+        0
+    ))->toThrow('An installment allocation exceeds its unpaid amount.');
+});
+
+test('rejected Xendit sessions no longer reserve installment allocations', function () {
+    $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $loan = Loan::factory()->create([
+        'user_id' => $member->id,
+        'loan_amount' => 12000,
+        'interest_rate' => 0,
+        'term_months' => 12,
+        'loan_status' => 'active',
+        'disbursed_at' => now()->subMonths(3),
+        'penalty_amount' => 0,
+    ]);
+    $abandonedPayment = Transaction::create([
+        'loan_id' => $loan->id,
+        'transaction_type' => 'loan_payment',
+        'transaction_mode' => 'online',
+        'payment_gateway' => 'xendit',
+        'amount' => 1000,
+        'penalty_amount' => 0,
+        'status' => 'rejected',
+        'rejection_reason' => 'Xendit payment session expired or was canceled.',
+        'transaction_date' => now(),
+        'recorded_by' => $member->id,
+    ]);
+    DB::table('loan_payment_installment_allocations')->insert([
+        'transaction_id' => $abandonedPayment->id,
+        'period' => 1,
+        'amount' => 1000,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    $newPayment = Transaction::make([
+        'loan_id' => $loan->id,
+        'transaction_type' => 'loan_payment',
+        'transaction_mode' => 'online',
+        'payment_gateway' => 'xendit',
+        'amount' => 1000,
+        'penalty_amount' => 0,
+        'status' => 'pending',
+        'transaction_date' => now(),
+        'recorded_by' => $member->id,
+    ]);
+
+    app(LoanPaymentAllocationService::class)->validate(
+        $loan->fresh(),
+        $newPayment,
+        [['period' => 1, 'amount' => 1000]],
+        0
+    );
+
+    expect(true)->toBeTrue();
+});
+
+test('a provider-confirmed Xendit transaction cannot be retried or expired locally', function () {
+    $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $loan = Loan::factory()->create([
+        'user_id' => $member->id,
+        'loan_amount' => 12000,
+        'interest_rate' => 0,
+        'term_months' => 12,
+        'loan_status' => 'active',
+        'disbursed_at' => now()->subMonths(3),
+        'penalty_amount' => 0,
+    ]);
+    $transaction = Transaction::create([
+        'loan_id' => $loan->id,
+        'branch_id' => $member->branch_id,
+        'client_request_id' => 'xendit-provider-confirmed-001',
+        'transaction_type' => 'loan_payment',
+        'transaction_mode' => 'online',
+        'payment_gateway' => 'xendit',
+        'amount' => 1000,
+        'penalty_amount' => 0,
+        'status' => 'pending',
+        'xendit_session_id' => 'session-provider-confirmed',
+        'xendit_payment_id' => 'payment-provider-confirmed',
+        'transaction_date' => now(),
+        'recorded_by' => $member->id,
+    ]);
+    DB::table('loan_payment_installment_allocations')->insert([
+        'transaction_id' => $transaction->id,
+        'period' => 1,
+        'amount' => 1000,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $this->partialMock(XenditService::class, function ($mock) {
+        $mock->shouldReceive('isEnabled')->andReturnTrue();
+        $mock->shouldReceive('isConfigured')->andReturnTrue();
+    });
+
+    $this->actingAs($member)->postJson('/api/services/xendit/loan-payment/checkout', [
+        'service_type' => 'loan_payment',
+        'loan_id' => $loan->id,
+        'member_id' => $member->id,
+        'amount' => 1000,
+        'installment_allocations' => [['period' => 1, 'amount' => 1000]],
+        'penalty_amount' => 0,
+        'client_request_id' => 'xendit-provider-confirmed-001',
+    ])->assertStatus(409);
+
+    app(XenditService::class)->processWebhook([
+        'event' => 'payment_session.expired',
+        'data' => ['payment_session_id' => 'session-provider-confirmed'],
+    ]);
+
+    expect($transaction->fresh()->status)->toBe('pending')
+        ->and($transaction->fresh()->xendit_payment_id)->toBe('payment-provider-confirmed');
 });
 
 test('daily penalties continue while an installment remains partially unpaid and stop when settled', function () {

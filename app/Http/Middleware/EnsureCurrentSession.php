@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\TrustedDevice;
+use App\Models\LoginHandoff;
 use App\Models\User;
 use App\Services\SecurityOtpService;
 use Closure;
@@ -20,6 +21,28 @@ class EnsureCurrentSession
         }
 
         $sessionId = $request->session()->getId();
+
+        $pendingForSession = LoginHandoff::query()->where('user_id', $user->id)
+            ->where('pending_session_id', $sessionId)->whereIn('status', ['pending', 'approved', 'rejected', 'expired'])
+            ->where('expires_at', '>', now())->exists();
+        if ($pendingForSession) {
+            if (in_array($request->path(), ['api/login-handoffs/status', 'api/login-handoffs/complete'], true)) {
+                return $next($request);
+            }
+
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'This sign-in is waiting for approval on your active device.', 'reason' => 'login_approval_pending'], 409);
+            }
+        }
+
+        $activeHandoff = LoginHandoff::query()->where('user_id', $user->id)
+            ->where('current_session_id', $sessionId)->whereIn('status', ['pending', 'approved'])
+            ->where('expires_at', '>', now())->exists();
+        if ($activeHandoff && ! str_starts_with($request->path(), 'api/login-handoffs')) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'Approve or reject the pending sign-in to continue.', 'reason' => 'login_approval_required'], 409);
+            }
+        }
 
         // Adopt a valid pre-deployment session once. A conditional update makes
         // the first request win if two legacy sessions race during rollout.

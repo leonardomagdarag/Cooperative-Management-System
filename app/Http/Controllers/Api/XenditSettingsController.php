@@ -15,24 +15,24 @@ class XenditSettingsController extends Controller
 {
     public function __construct(private XenditService $xendit, private AuditLogService $auditLog) {}
 
-    private function authorizeAdmin(): mixed
+    private function authorizeSettingsManager(): mixed
     {
         $user = Auth::user();
-        abort_unless($user?->hasRole('admin'), 403);
+        abort_unless($user?->can('settings.update'), 403);
 
         return $user;
     }
 
     public function index(): JsonResponse
     {
-        $this->authorizeAdmin();
+        $this->authorizeSettingsManager();
 
         return response()->json(['data' => $this->xendit->summary()]);
     }
 
     public function updateSettings(Request $request): JsonResponse
     {
-        $user = $this->authorizeAdmin();
+        $user = $this->authorizeSettingsManager();
         $validated = $request->validate([
             'enabled' => 'required|boolean',
             'mode' => 'required|in:test,live',
@@ -51,7 +51,7 @@ class XenditSettingsController extends Controller
 
     public function updateCredentials(Request $request): JsonResponse
     {
-        $user = $this->authorizeAdmin();
+        $user = $this->authorizeSettingsManager();
         $validated = $request->validate([
             'test_secret_key' => 'nullable|string|max:255',
             'test_webhook_token' => 'nullable|string|max:255',
@@ -66,7 +66,7 @@ class XenditSettingsController extends Controller
 
     public function clearCredentials(): JsonResponse
     {
-        $user = $this->authorizeAdmin();
+        $user = $this->authorizeSettingsManager();
         $this->xendit->clearCredentials();
         $this->auditLog->log('settings.xendit.credentials_cleared', 'Xendit credentials cleared.', 'settings', null, $user);
 
@@ -75,7 +75,7 @@ class XenditSettingsController extends Controller
 
     public function testConnection(): JsonResponse
     {
-        $this->authorizeAdmin();
+        $this->authorizeSettingsManager();
         try {
             return response()->json(['message' => 'Connected to Xendit successfully.', 'data' => $this->xendit->testConnection()]);
         } catch (Throwable $exception) {

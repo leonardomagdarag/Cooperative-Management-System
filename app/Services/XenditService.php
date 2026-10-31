@@ -228,6 +228,11 @@ class XenditService
 
         $session = $this->getSession($sessionId, $transaction->xendit_mode);
         if (($session['status'] ?? null) !== 'COMPLETED') {
+            if (in_array($session['status'] ?? null, ['EXPIRED', 'CANCELED', 'CANCELLED'], true)) {
+                $this->rejectPendingSession($sessionId, 'Xendit payment session expired or was canceled.');
+                $transaction->refresh();
+            }
+
             return ['status' => $transaction->status, 'is_paid' => false, 'message' => 'Xendit has not marked this payment as completed.'];
         }
 
@@ -302,14 +307,35 @@ class XenditService
                     throw new RuntimeException('Xendit has not confirmed the payment as successful yet.');
                 }
                 $this->completeSessionPayment($sessionId, $session, $payment);
+            } elseif (in_array($session['status'] ?? null, ['EXPIRED', 'CANCELED', 'CANCELLED'], true)) {
+                $this->rejectPendingSession($sessionId, 'Xendit payment session expired or was canceled.');
             }
-        } elseif (! in_array($eventType, ['payment_session.expired'], true)) {
+        } elseif (in_array($eventType, ['payment_session.expired', 'payment_session.canceled', 'payment_session.cancelled'], true)) {
+            $this->rejectPendingSession($sessionId, 'Xendit payment session expired or was canceled.');
+        } else {
             Log::info('Ignoring unsupported Xendit webhook event.', ['event' => $eventType]);
         }
 
         $event->update(['processed_at' => now()]);
 
         return ['status' => 'processed', 'event_id' => $eventId];
+    }
+
+    private function rejectPendingSession(string $sessionId, string $reason): void
+    {
+        DB::transaction(function () use ($sessionId, $reason) {
+            $transaction = Transaction::query()
+                ->where('xendit_session_id', $sessionId)
+                ->lockForUpdate()
+                ->first();
+
+            if ($transaction?->status === 'pending' && blank($transaction->xendit_payment_id)) {
+                $transaction->update([
+                    'status' => 'rejected',
+                    'rejection_reason' => $reason,
+                ]);
+            }
+        });
     }
 
     private function completeSessionPayment(string $sessionId, array $session, array $payment): Transaction
@@ -343,6 +369,27 @@ class XenditService
                     'reference_id' => $session['reference_id'] ?? null,
                 ]);
                 throw new RuntimeException('Xendit payment details did not match the transaction.');
+            }
+
+            if ($transaction->transaction_type === 'loan_payment') {
+                $allocations = DB::table('loan_payment_installment_allocations')
+                    ->where('transaction_id', $transaction->id)
+                    ->get(['period', 'amount'])
+                    ->map(fn ($allocation) => [
+                        'period' => (int) $allocation->period,
+                        'amount' => (float) $allocation->amount,
+                    ])
+                    ->all();
+
+                if ($allocations !== []) {
+                    $loan = Loan::whereKey($transaction->loan_id)->lockForUpdate()->firstOrFail();
+                    app(LoanPaymentAllocationService::class)->validate(
+                        $loan,
+                        $transaction,
+                        $allocations,
+                        (float) $transaction->penalty_amount
+                    );
+                }
             }
 
             $update = [

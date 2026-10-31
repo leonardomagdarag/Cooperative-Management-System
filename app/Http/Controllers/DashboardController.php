@@ -23,7 +23,7 @@ class DashboardController extends Controller
         'expenses' => 'transactions.view',
         'logs' => 'logs.view',
         'announcements' => 'announcements.view',
-        'role-permissions' => 'role:admin',
+        'role-permissions' => 'officers.manage-permissions',
         'loan-products' => 'settings.update',
         'public-content' => 'settings.update',
         'backups' => 'backups.view',

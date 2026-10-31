@@ -49,6 +49,10 @@ export default function LoginPage() {
                 window.location.assign(result.redirect || '/security/verify-otp');
                 return;
             }
+            if (result.requiresApproval) {
+                navigate('/login/approval');
+                return;
+            }
             navigate(result.redirect || '/dashboard');
         } catch (err: any) {
             const message = err.response?.data?.message || 'Login failed. Please try again.';

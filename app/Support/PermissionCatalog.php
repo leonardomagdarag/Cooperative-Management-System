@@ -148,6 +148,7 @@ class PermissionCatalog
             'manager' => 'Manager',
             'accountant' => 'Accountant',
             'loan' => 'Loan Officer',
+            'developer' => 'Developer',
         ];
     }
 
@@ -159,6 +160,7 @@ class PermissionCatalog
             'manager' => 'Broad operational oversight across officers, members, services, and reporting.',
             'accountant' => 'Transaction handling, service processing, member onboarding, and financial reporting support.',
             'loan' => 'Loan processing, service transactions, and member loan support.',
+            'developer' => 'Full testing access granted through the permission catalog. Countersign approval remains chairman-only.',
         ];
     }
 
@@ -360,6 +362,13 @@ class PermissionCatalog
                 'collections.review',
                 'interest.view',
             ],
+            // Testing role: every catalog permission is granted through the
+            // normal authorization path. The two maker-checker permissions are
+            // excluded because they are intentionally not role-grantable.
+            'developer' => array_values(array_diff(
+                self::allPermissions(),
+                ['oversight.approve', 'transactions.approve-own'],
+            )),
             'loan' => [
                 'dashboard.view',
                 'members.view',

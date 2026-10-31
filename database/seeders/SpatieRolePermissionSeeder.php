@@ -41,7 +41,7 @@ class SpatieRolePermissionSeeder extends Seeder
             'manager' => $officerPresets['manager'],
             'accountant' => $officerPresets['accountant'],
             'loan' => $officerPresets['loan'],
-            'developer' => [],
+            'developer' => $officerPresets['developer'],
 
             // Regular members: limited self-service permissions
             'member' => [
@@ -115,13 +115,16 @@ class SpatieRolePermissionSeeder extends Seeder
                 }
             });
 
-        // 2. Preserve the developer role for local/dev accounts.
+        // 2. Preserve the developer role for local/dev accounts. The developer
+        // role is a normal officer-level role whose permissions come from the
+        // catalog, so officer-scoped guards apply without special-casing.
         User::query()
             ->where('role', 'developer')
             ->chunk(100, function ($users) {
                 foreach ($users as $user) {
                     $user->account_status = 'active';
-                    $user->is_officer = false;
+                    $user->is_officer = true;
+                    $user->profile_completed_at = $user->profile_completed_at ?? now();
                     $user->save();
                     $user->syncRoles(['developer']);
                 }

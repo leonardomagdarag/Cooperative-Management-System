@@ -22,10 +22,10 @@ export default function XenditPage() {
     const { user } = useAuth();
     const { addToast } = useToast();
     const queryClient = useQueryClient();
-    const isAdmin = user?.primary_role === 'admin';
+    const canManageSettings = !!user?.permissions?.includes('settings.update');
     const [form, setForm] = useState({ enabled: false, mode: 'test' as 'test' | 'live' });
     const [secrets, setSecrets] = useState<Record<string, string>>({});
-    const { data, isLoading } = useQuery({ queryKey: ['xendit-settings'], queryFn: getXenditSettings, enabled: isAdmin });
+    const { data, isLoading } = useQuery({ queryKey: ['xendit-settings'], queryFn: getXenditSettings, enabled: canManageSettings });
     const summary: XenditSummary | undefined = data?.data;
 
     useEffect(() => {
@@ -54,7 +54,7 @@ export default function XenditPage() {
         onError: (error: any) => addToast(error.response?.data?.message || 'Xendit connection test failed.', 'error'),
     });
 
-    if (!isAdmin) return <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Only administrators can configure the Xendit payment gateway.</p>;
+    if (!canManageSettings) return <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">You need the settings.update permission to configure the Xendit payment gateway.</p>;
     if (isLoading) return <div className="h-64 animate-pulse rounded-xl bg-gray-100" />;
 
     const webhookUrl = `${window.location.origin}/api/webhooks/xendit`;

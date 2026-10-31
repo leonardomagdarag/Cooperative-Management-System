@@ -27,6 +27,7 @@ use App\Support\PermissionCatalog;
 use App\Support\PersonFieldRules;
 use App\Support\PersonPasswordPolicy;
 use App\Support\SearchFilter;
+use App\Support\SiteContentCatalog;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -340,6 +341,7 @@ class MemberController extends Controller
                 $request->input('last_name'),
             ])),
             'password_confirmation' => 'required|string|same:password',
+            'agreement' => 'required|accepted',
             'role' => ['nullable', 'string', Rule::exists('roles', 'name')->where('guard_name', 'web')],
             'beneficiaries' => 'nullable|array|max:5',
             'beneficiaries.*.first_name' => PersonFieldRules::name(true),
@@ -476,7 +478,13 @@ class MemberController extends Controller
             $isOfficer = ! empty($validated['role']);
 
             $submittedData = collect($validated)->except(['password', 'password_confirmation', 'otp_code', 'profile_photo', 'national_id_photo', 'tin_photo', 'sss_photo', 'philhealth_photo', 'barangay_id_photo', 'agreement_file'])->toArray();
-            app(AuditLogService::class)->log($isOfficer ? 'officer.created' : 'member.created', $isOfficer ? 'New officer created.' : 'New member created.', $isOfficer ? 'officer' : 'member', $user, Auth::user(), ['attributes' => $submittedData]);
+            app(AuditLogService::class)->log($isOfficer ? 'officer.created' : 'member.created', $isOfficer ? 'New officer created.' : 'New member created.', $isOfficer ? 'officer' : 'member', $user, Auth::user(), [
+                'attributes' => $submittedData,
+                'privacy_notice_acknowledged' => true,
+                'privacy_notice_version' => hash('sha256', (string) SiteContentCatalog::editorContent()['policies']['privacy_policy']),
+                'privacy_notice_acknowledged_at' => now()->toIso8601String(),
+                'privacy_notice_acknowledgment_method' => 'staff_recorded_member_acknowledgment',
+            ]);
 
             return $user;
         });

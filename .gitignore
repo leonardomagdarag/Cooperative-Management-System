@@ -35,8 +35,10 @@ Thumbs.db
 
 # Documentation, non-system planning, and QA material (kept on disk, never committed).
 /docs/*
-!/docs/BACKUPS.md
-!/docs/DATABASE_DICTIONARY.csv
+!/docs/system details/
+/docs/system details/*
+!/docs/system details/BACKUPS.md
+!/docs/system details/DATABASE_DICTIONARY.csv
 /*_REWORK.md
 /REWORK_IMPLEMENTATION_SUMMARY.md
 /tests/e2e/screenshot.spec.ts

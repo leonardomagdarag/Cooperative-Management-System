@@ -10,12 +10,11 @@ type IntegrationKey = 'sms' | 'email' | 'xendit';
 export default function IntegrationsSettingsPage() {
     const { user } = useAuth();
     const [searchParams, setSearchParams] = useSearchParams();
-    const isAdmin = user?.primary_role === 'admin';
-    const canManageSettings = isAdmin || user?.permissions?.includes('settings.update');
+    const canManageSettings = !!user?.permissions?.includes('settings.update');
     const integrations: { key: IntegrationKey; label: string; icon: string; visible: boolean }[] = [
-        { key: 'sms', label: 'SMS', icon: 'fas fa-comment-sms', visible: isAdmin },
-        { key: 'email', label: 'Email', icon: 'fas fa-envelope', visible: Boolean(canManageSettings) },
-        { key: 'xendit', label: 'Payments', icon: 'fas fa-credit-card', visible: isAdmin },
+        { key: 'sms', label: 'SMS', icon: 'fas fa-comment-sms', visible: canManageSettings },
+        { key: 'email', label: 'Email', icon: 'fas fa-envelope', visible: canManageSettings },
+        { key: 'xendit', label: 'Payments', icon: 'fas fa-credit-card', visible: canManageSettings },
     ];
     const visibleIntegrations = integrations.filter(integration => integration.visible);
     const requested = searchParams.get('subTab');

@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\LoanPaymentAllocationService;
 use App\Services\XenditService;
+use App\Support\BranchScope;
 use App\Support\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -46,6 +47,11 @@ class XenditPaymentController extends Controller
     private function createCheckout(Request $request, string $requiredServiceType): JsonResponse
     {
         $user = Auth::user();
+        abort_unless(
+            $user && ($user->can('transactions.create') || $user->can('services.create')),
+            403,
+            'Unauthorized to submit payments.'
+        );
         if (! $this->xendit->isEnabled()) {
             return response()->json(['message' => 'Online payments via Xendit are currently disabled.', 'code' => 'xendit_disabled'], 422);
         }
@@ -105,6 +111,13 @@ class XenditPaymentController extends Controller
             $account = null;
         }
 
+        $targetBranchId = $loan?->branch_id ?? $targetUser->branch_id;
+        abort_unless(
+            BranchScope::canAccessBranch($user, $targetBranchId),
+            403,
+            'You can only manage members in your branch.'
+        );
+
         $existing = null;
         if (! empty($validated['client_request_id'])) {
             $existing = Transaction::query()->where('client_request_id', $validated['client_request_id'])->first();
@@ -118,6 +131,12 @@ class XenditPaymentController extends Controller
             }
             if ($existing?->status === 'completed') {
                 return response()->json(['message' => 'This payment request has already been completed.', 'transaction_number' => $existing->transaction_number], 409);
+            }
+            if ($existing && filled($existing->xendit_payment_id)) {
+                return response()->json([
+                    'message' => 'Xendit has already received this payment. The transaction cannot be retried; contact the cooperative for resolution.',
+                    'transaction_number' => $existing->transaction_number,
+                ], 409);
             }
             if ($existing && $existing->xendit_session_id && $existing->status === 'pending') {
                 try {
@@ -179,7 +198,13 @@ class XenditPaymentController extends Controller
             return $transaction;
         });
         if ($existing) {
-            $transaction->update(['status' => 'pending', 'rejection_reason' => null, 'xendit_session_id' => null, 'xendit_mode' => null]);
+            $transaction->update([
+                'status' => 'pending',
+                'rejection_reason' => null,
+                'xendit_session_id' => null,
+                'xendit_mode' => null,
+                'xendit_payment_id' => null,
+            ]);
         }
 
         $baseUrl = rtrim((string) config('app.url'), '/');
@@ -250,6 +275,15 @@ class XenditPaymentController extends Controller
             || ($transaction->loan && (int) $transaction->loan->user_id === (int) $user->id);
         $isOfficer = (bool) ($user->is_officer || $user->hasRole('admin') || $user->hasAnyRole(PermissionCatalog::officerRoles()));
         abort_unless($isOwner || $isOfficer, 403, 'Unauthorized to view this transaction.');
+        $transactionBranchId = $transaction->branch_id
+            ?? $transaction->loan?->branch_id
+            ?? $transaction->loan?->user?->branch_id
+            ?? $transaction->account?->user?->branch_id;
+        abort_unless(
+            BranchScope::canAccessBranch($user, $transactionBranchId),
+            403,
+            'You can only access transactions in your branch.'
+        );
 
         if (! $transaction->xendit_session_id) {
             return response()->json(['message' => 'This transaction is not linked to a Xendit payment session.', 'status' => $transaction->status], 422);

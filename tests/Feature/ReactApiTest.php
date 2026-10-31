@@ -27,6 +27,28 @@ test('react api login establishes an authenticated session', function () {
         ->assertJsonPath('email', $user->email);
 });
 
+test('a sign-in on a different session waits for approval without replacing the active session', function () {
+    $user = User::factory()->create([
+        'email' => 'pending-handoff@example.com',
+        'password' => 'password',
+        'role' => 'member',
+    ]);
+    $user->forceFill(['current_session_id' => 'already-active-session'])->save();
+
+    $response = $this->postJson('/api/login', [
+        'email' => $user->email,
+        'password' => 'password',
+    ])->assertOk()
+        ->assertJsonPath('requires_approval', true);
+
+    $handoff = \App\Models\LoginHandoff::query()->where('user_id', $user->id)->firstOrFail();
+
+    expect($handoff->status)->toBe('pending')
+        ->and($handoff->current_session_id)->toBe('already-active-session')
+        ->and($handoff->pending_session_id)->not->toBe('already-active-session')
+        ->and($user->fresh()->current_session_id)->toBe('already-active-session');
+});
+
 test('new member device login requires otp and blocks protected api access', function () {
     $user = User::factory()->create([
         'email' => 'new-device@example.com',

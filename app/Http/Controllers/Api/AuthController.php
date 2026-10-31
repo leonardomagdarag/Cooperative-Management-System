@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\OfficerPermissionOverride;
+use App\Models\LoginHandoff;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\AuditLogService;
@@ -11,10 +12,10 @@ use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
 use App\Services\TurnstileService;
 use App\Support\MaintenanceState;
-use App\Support\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
@@ -101,9 +102,25 @@ class AuthController extends Controller
             return response()->json(['message' => 'Your account is not active.'], 403);
         }
 
+        $previousSessionId = $request->session()->getId();
         Auth::guard('web')->login($user, $request->boolean('remember'));
-
         $request->session()->regenerate();
+
+        $handoff = app(\App\Services\LoginHandoffService::class)->requestApproval($user, $previousSessionId, $request);
+        if ($handoff) {
+
+            $this->auditLogService->log('auth.login_approval_requested', 'A sign-in is waiting for approval from the active device.', 'auth', $handoff, $user, [
+                'device' => $handoff->device_label,
+                'ip_address' => $handoff->ip_address,
+            ]);
+
+            $request->session()->put('security.pending_login_handoff', $handoff->id);
+
+            return response()->json([
+                'requires_approval' => true,
+                'message' => 'Approve this sign-in from your currently active device. This request expires in 5 minutes.',
+            ]);
+        }
 
         $fingerprint = $this->securityOtpService->buildDeviceFingerprint($request);
         $redirect = $request->session()->pull('url.intended', route('dashboard', absolute: false));
@@ -146,6 +163,116 @@ class AuthController extends Controller
             'user' => $this->formatUser($user),
             'redirect' => $redirect,
         ]);
+    }
+
+    public function loginHandoffs(Request $request): JsonResponse
+    {
+        $user = $request->user('web');
+        $sessionId = $request->session()->getId();
+        $handoff = LoginHandoff::query()->where('user_id', $user->id)
+            ->where('current_session_id', $sessionId)->whereIn('status', ['pending', 'approved'])
+            ->where('expires_at', '>', now())->latest('id')->first();
+
+        return response()->json(['request' => $handoff ? [
+            'id' => $handoff->id,
+            'device' => $handoff->device_label,
+            'ip_address' => $handoff->ip_address,
+            'created_at' => $handoff->created_at,
+            'expires_at' => $handoff->expires_at,
+            'status' => $handoff->status,
+        ] : null]);
+    }
+
+    public function decideLoginHandoff(Request $request, LoginHandoff $loginHandoff): JsonResponse
+    {
+        $request->validate(['decision' => 'required|in:approve,reject']);
+        $updated = DB::transaction(function () use ($request, $loginHandoff) {
+            $user = User::query()->lockForUpdate()->findOrFail($request->user('web')->id);
+            $updated = LoginHandoff::query()->whereKey($loginHandoff->id)
+                ->where('user_id', $user->id)
+                ->where('current_session_id', $request->session()->getId())
+                ->where('status', 'pending')->where('expires_at', '>', now())
+                ->update(['status' => $request->input('decision') === 'approve' ? 'approved' : 'rejected', 'decided_at' => now()]);
+
+            if ($updated && $request->input('decision') === 'approve') {
+                LoginHandoff::query()->where('user_id', $user->id)->where('current_session_id', $request->session()->getId())
+                    ->where('id', '!=', $loginHandoff->id)->whereIn('status', ['pending', 'approved'])
+                    ->update(['status' => 'rejected', 'decided_at' => now()]);
+            }
+
+            return $updated;
+        });
+
+        abort_unless($updated, 409, 'This sign-in request has expired or was already handled.');
+
+        $this->auditLogService->log(
+            $request->input('decision') === 'approve' ? 'auth.login_approved' : 'auth.login_rejected',
+            $request->input('decision') === 'approve' ? 'A pending sign-in was approved from the active device.' : 'A pending sign-in was rejected from the active device.',
+            'auth',
+            $loginHandoff,
+            $request->user('web'),
+            ['device' => $loginHandoff->device_label, 'ip_address' => $loginHandoff->ip_address]
+        );
+
+        return response()->json(['status' => $request->input('decision') === 'approve' ? 'approved' : 'rejected']);
+    }
+
+    public function loginHandoffStatus(Request $request): JsonResponse
+    {
+        $handoffId = $request->session()->get('security.pending_login_handoff');
+        $handoff = LoginHandoff::query()->whereKey($handoffId)
+            ->where('user_id', $request->user('web')->id)
+            ->where('pending_session_id', $request->session()->getId())->first();
+
+        if (! $handoff || $handoff->expires_at->isPast()) {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+            return response()->json(['status' => 'expired']);
+        }
+
+        if (in_array($handoff->status, ['rejected', 'expired'], true)) {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
+
+        return response()->json(['status' => $handoff->status]);
+    }
+
+    public function completeLoginHandoff(Request $request): JsonResponse
+    {
+        $handoffId = $request->session()->get('security.pending_login_handoff');
+        $handoff = LoginHandoff::query()->whereKey($handoffId)->where('user_id', $request->user('web')->id)
+            ->where('pending_session_id', $request->session()->getId())->where('status', 'approved')
+            ->where('expires_at', '>', now())->first();
+        abort_unless($handoff, 403, 'This sign-in was not approved or has expired.');
+        abort_if($request->session()->get('security.login_handoff_otp_started'), 409, 'Security verification has already started.');
+
+        $user = $request->user('web');
+        $fingerprint = $this->securityOtpService->buildDeviceFingerprint($request);
+        $isNewDevice = ! $this->securityOtpService->isTrustedDevice($user, $fingerprint);
+        if ($isNewDevice && $this->securityOtpService->shouldEnforceNewDeviceOtp()) {
+            $purpose = $this->securityOtpService->newDevicePurpose();
+            $issued = $this->securityOtpService->issueChallenge($user, $purpose, ['fingerprint' => $fingerprint]);
+            $this->securityOtpService->sendOtpMail($user, $purpose, $issued['otp_code']);
+            $request->session()->put(['security.pending_otp' => true, 'security.pending_otp_purpose' => $purpose, 'security.pending_otp_fingerprint' => $fingerprint]);
+            $request->session()->put('security.login_handoff_otp_started', true);
+            $this->securityOtpService->stashDebugCode($request->session(), $issued['otp_code']);
+            return response()->json(['requires_otp' => true, 'redirect' => route('otp.challenge.show')]);
+        }
+
+        $handoff->update(['status' => 'completed']);
+        $request->session()->forget('security.login_handoff_otp_started');
+        $this->securityOtpService->trustDevice($user, $fingerprint, $request->userAgent(), $request->ip(), $request->session()->getId());
+        $user->activateSession($request->session()->getId());
+        $user->invalidateOtherSessions($request->session()->getId());
+        $this->notificationService->notifyNewDeviceLogin($user, $request->ip(), 'approved');
+        $this->auditLogService->log('auth.login_success', 'User completed an approved device sign-in.', 'auth', $handoff, $user, [
+            'role' => $user->primary_role,
+            'ip_address' => $request->ip(),
+        ]);
+        return response()->json(['success' => true, 'user' => $this->formatUser($user), 'redirect' => route('dashboard', absolute: false)]);
     }
 
     public function logout(Request $request): JsonResponse
@@ -196,14 +323,7 @@ class AuthController extends Controller
 
         $permissions = $user->getAllPermissions()->pluck('name')->toArray();
 
-        // Developers are superusers at the authorization layer (see AppServiceProvider),
-        // so expose the same effective access to the React permission gates.
-        if ($user->hasRole('developer')) {
-            $permissions = array_values(array_unique(array_merge(
-                $permissions,
-                PermissionCatalog::allPermissions(),
-            )));
-        } elseif ($user->is_officer) {
+        if ($user->is_officer) {
             $overrides = OfficerPermissionOverride::query()
                 ->where('user_id', $user->id)
                 ->pluck('effect', 'permission');

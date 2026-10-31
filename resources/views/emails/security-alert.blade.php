@@ -54,6 +54,9 @@
             @case('verified')
                 <p>This device was verified with a one-time code.</p>
                 @break
+            @case('approved')
+                <p>This sign-in was approved from the device already signed in to your account.</p>
+                @break
             @default
                 <p>No one-time code was needed because this device was already trusted.</p>
             @endswitch

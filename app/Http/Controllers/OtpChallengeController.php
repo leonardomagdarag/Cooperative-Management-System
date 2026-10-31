@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\OtpChallenge;
+use App\Models\LoginHandoff;
 use App\Services\NotificationService;
+use App\Services\AuditLogService;
 use App\Services\SecurityOtpService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -66,8 +68,18 @@ class OtpChallengeController extends Controller
         }
 
         if ($purpose === $this->securityOtpService->newDevicePurpose()) {
+            $handoff = LoginHandoff::query()->whereKey($request->session()->get('security.pending_login_handoff'))
+                ->where('pending_session_id', $request->session()->getId())
+                ->where('status', 'approved')->first();
+            $handoff?->update(['status' => 'completed']);
             $user->activateSession($request->session()->getId());
             $user->invalidateOtherSessions($request->session()->getId());
+            if ($handoff) {
+                app(AuditLogService::class)->log('auth.login_success', 'User completed an approved device sign-in with security verification.', 'auth', $handoff, $user, [
+                    'role' => $user->primary_role,
+                    'ip_address' => $request->ip(),
+                ]);
+            }
         }
 
         $request->session()->forget([
@@ -75,6 +87,8 @@ class OtpChallengeController extends Controller
             'security.pending_otp_purpose',
             'security.pending_otp_fingerprint',
             'security.pending_otp_debug_code',
+            'security.pending_login_handoff',
+            'security.login_handoff_otp_started',
         ]);
 
         $intended = (string) $request->session()->pull('security.intended_url', route('dashboard', absolute: false));

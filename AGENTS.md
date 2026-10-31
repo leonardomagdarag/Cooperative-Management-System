@@ -50,7 +50,7 @@ npm run build       # production assets -> public/build
 vendor/bin/pint     # formatter, laravel preset (no pint.json in repo)
 ```
 
-- Scheduler (`php artisan schedule:run` every minute) must be running. `backup:ping` reads per-tier cron expressions from `SystemSetting` rows and only runs what is due, and a scheduled `queue:work --queue=default,emails,backups --stop-when-empty` drains the queue (shared hosting has no persistent worker). `composer dev` runs its own `queue:listen` on the same three queues. See `docs/BACKUPS.md`.
+- Scheduler (`php artisan schedule:run` every minute) must be running. `backup:ping` reads per-tier cron expressions from `SystemSetting` rows and only runs what is due, and a scheduled `queue:work --queue=default,emails,backups --stop-when-empty` drains the queue (shared hosting has no persistent worker). `composer dev` runs its own `queue:listen` on the same three queues. See `docs/system details/BACKUPS.md`.
 
 ## Testing
 
@@ -66,7 +66,7 @@ vendor/bin/pint     # formatter, laravel preset (no pint.json in repo)
   });
   ```
   `DatabaseSeeder` runs `SpatieRolePermissionSeeder` **twice** (once to create roles, once after `UserSeeder` to backfill) — if you add seeded users, keep that two-pass ordering.
-- Seeded logins are all `password`: officers use `leo.baluyot039+{role}@gmail.com` (e.g. `leo.baluyot039+admin@gmail.com`), members use `leo.baluyot039+{first}.{last}@gmail.com` (e.g. `leo.baluyot039+arjay.ramos@gmail.com`) — except the one real-gmail member `leo.baluyot.magdarag039@gmail.com` and the deprecated `developer@example.com`, which are left untouched.
+- Seeded logins are all `password`: officers use `leo.baluyot039+{role}@gmail.com` (e.g. `leo.baluyot039+admin@gmail.com`), members use `leo.baluyot039+{first}.{last}@gmail.com` (e.g. `leo.baluyot039+arjay.ramos@gmail.com`) — except the one real-gmail member `leo.baluyot.magdarag039@gmail.com`. `developer@example.com` is the local all-access testing account: the `developer` role is built from `PermissionCatalog::allPermissions()` minus the two maker-checker permissions (`oversight.approve`, `transactions.approve-own`), with no `Gate::before` superuser bypass. Delete the account (and the `developer` preset) when testing is finished.
 - **E2E: Playwright**, `tests/e2e/*.spec.ts`, `npx playwright test`. `workers: 1` and `fullyParallel: false` are deliberate — the specs mutate a **real shared MySQL database** and will conflict if parallelized. 90s timeout, 1 retry.
 - E2E prerequisites: `php artisan serve` on `127.0.0.1:8000`, assets built (`npm run build`) or Vite running, and a **seeded MySQL** database. `tests/e2e/helpers/auth.ts` reads one-time OTPs out of `storage/logs/laravel.log`, so logging must be capturing them.
 - No ESLint, no `tsc`, no frontend test runner. Verification order: `vendor/bin/pint --test` → `php artisan test` → `npm run build`.
@@ -96,9 +96,9 @@ vendor/bin/pint     # formatter, laravel preset (no pint.json in repo)
 
 - **`FUNCTIONALIT_LIST.md` (repo root) is the system-functionality reference** for workflows and role capabilities; `app/Support/PermissionCatalog.php`, seeders, and active backend authorization remain authoritative for actual access. Read the functionality reference before changing access rules, then verify expectations against code.
 - `docs/QA/CODE_DOCUMENT_ALIGNMENT.md` records known code/documentation drift; `docs/QA/QA_RESULT_1.md`, `docs/QA/QA_LOG.md`, and role-specific reports under `docs/QA/` hold browser QA findings and their current statuses. Check the latest register before repeating or closing a finding.
-- `docs/BACKUPS.md` covers the three backup tiers, B2 off-site setup, restore safety, and ops commands; `docs/DATABASE_DICTIONARY.csv` documents table/column meanings when changing schema.
-- Rework files under `docs/Implementations and Reworks/system-reworks/` (`COLLECTIONS_REWORK`, `ROLE_REWORK`, `LEDGER_OTP_REWORK`, `TRANSACTION_APPROVAL_REWORK`, `FINANCIAL_ACCOUNTS_REWORK`, `REWORK_IMPLEMENTATION_SUMMARY`, `SMS_FALLBACK_REWORK`) are uncommitted working notes for the current rework — orientation only, verify against code.
-- `Leo/` (gitignored; pipeline runner and state) and `docs/diagrams/scripts/` (diagram generation scripts) hold planning, audit, and generation tools. Not authoritative.
+- `docs/system details/` is the home for documents about the system, including backup and database references, data-flow inventories, audits, research, capstone materials, and diagrams. Read the relevant references before changing system behavior; verify working notes and audit conclusions against current code.
+- Rework notes live under `docs/system details/reworks/` (including collections, roles, ledger/OTP, transaction approval, financial accounts, and SMS fallback). They are orientation only, not authoritative behavior specifications.
+- System diagrams and their generation tools live under `docs/system details/diagrams/`. Local QA captures, scratch files, and audit runner artifacts live under `docs/QA/local artifacts/`; these are not authoritative system behavior documentation.
 - `README.md` references a `setup.sh` that does not exist in this repo. Ignore it.
 - Commit messages use Conventional Commits: `feat(auth):`, `fix(loans):`, `chore(gitignore):`, `test(audit):`.
 - There is no `opencode.json`, CI workflow, or pre-commit hook. Nothing runs verification automatically.

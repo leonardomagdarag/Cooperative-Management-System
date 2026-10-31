@@ -395,6 +395,11 @@ class SecurityOtpService
         return "{$browser} on {$os}";
     }
 
+    public function deviceLabel(?string $userAgent): string
+    {
+        return $this->resolveDeviceLabel($userAgent);
+    }
+
     private function notifyOtpIssued(User $user, string $purpose): void
     {
         $title = 'Security verification code sent';

@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use App\Models\LoginHandoff;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Support\Facades\Notification;
 
@@ -34,6 +35,15 @@ test('password can be reset with valid token', function () {
     Notification::fake();
 
     $user = User::factory()->create();
+    $user->forceFill(['current_session_id' => 'old-active-session'])->save();
+    $handoff = LoginHandoff::query()->create([
+        'user_id' => $user->id,
+        'current_session_id' => 'old-active-session',
+        'pending_session_id' => 'waiting-session',
+        'device_label' => 'Browser on Windows',
+        'status' => 'pending',
+        'expires_at' => now()->addMinutes(5),
+    ]);
 
     $this->postJson('/forgot-password', ['email' => $user->email])->assertOk();
 
@@ -46,6 +56,8 @@ test('password can be reset with valid token', function () {
         ]);
 
         $response->assertOk();
+        expect($user->fresh()->current_session_id)->toBeNull()
+            ->and($handoff->fresh()->status)->toBe('expired');
 
         return true;
     });

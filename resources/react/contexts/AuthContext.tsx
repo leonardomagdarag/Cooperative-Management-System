@@ -22,7 +22,9 @@ interface AuthContextType {
     isLoading: boolean;
     sessionEnded: boolean;
     clearSessionEnded: () => void;
-    login: (email: string, password: string, remember?: boolean, turnstileToken?: string | null) => Promise<{ requiresOtp: boolean; redirect?: string }>;
+    pendingLoginHandoff: { id: number; device: string; ip_address: string | null; status: string } | null;
+    decideLoginHandoff: (id: number, decision: 'approve' | 'reject') => Promise<void>;
+    login: (email: string, password: string, remember?: boolean, turnstileToken?: string | null) => Promise<{ requiresOtp: boolean; requiresApproval: boolean; redirect?: string }>;
     logout: () => Promise<void>;
     refreshUser: () => Promise<void>;
 }
@@ -34,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [sessionEnded, setSessionEnded] = useState(false);
+    const [pendingLoginHandoff, setPendingLoginHandoff] = useState<AuthContextType['pendingLoginHandoff']>(null);
 
     useEffect(() => {
         const handleSessionEnded = () => {
@@ -66,19 +69,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         const interval = window.setInterval(() => {
             void api.get('/api/user').catch(() => {});
-        }, 30_000);
+            void api.get('/api/login-handoffs').then(({ data }) => setPendingLoginHandoff(data.request)).catch(() => {});
+        }, 5_000);
 
         return () => window.clearInterval(interval);
     }, [user?.id, sessionEnded]);
 
+    const decideLoginHandoff = async (id: number, decision: 'approve' | 'reject') => {
+        await api.post(`/api/login-handoffs/${id}/decision`, { decision });
+        if (decision === 'reject') setPendingLoginHandoff(null);
+        else setPendingLoginHandoff((current) => current ? { ...current, status: 'approved' } : current);
+    };
+
     const login = async (email: string, password: string, remember: boolean = false, turnstileToken: string | null = null) => {
         await api.get('/sanctum/csrf-cookie');
         const { data } = await api.post('/api/login', { email, password, remember, 'cf-turnstile-response': turnstileToken });
+        if (data.requires_approval) return { requiresOtp: false, requiresApproval: true };
         if (data.requires_otp) {
-            return { requiresOtp: true, redirect: data.redirect };
+            return { requiresOtp: true, requiresApproval: false, redirect: data.redirect };
         }
         await fetchUser();
-        return { requiresOtp: false, redirect: data.redirect };
+        return { requiresOtp: false, requiresApproval: false, redirect: data.redirect };
     };
 
     const logout = async () => {
@@ -92,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     return (
-        <AuthContext.Provider value={{ user, isLoading, sessionEnded, clearSessionEnded, login, logout, refreshUser }}>
+        <AuthContext.Provider value={{ user, isLoading, sessionEnded, clearSessionEnded, pendingLoginHandoff, decideLoginHandoff, login, logout, refreshUser }}>
             {children}
         </AuthContext.Provider>
     );

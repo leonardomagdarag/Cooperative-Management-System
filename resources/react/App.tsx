@@ -4,6 +4,7 @@ import { useAuth } from './contexts/AuthContext';
 import DashboardLayout from './layouts/DashboardLayout';
 import PublicLayout from './layouts/PublicLayout';
 const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
+const LoginApprovalPage = lazy(() => import('./pages/auth/LoginApprovalPage'));
 const ForgotPasswordPage = lazy(() => import('./pages/auth/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage'));
 const VerifyEmailPage = lazy(() => import('./pages/auth/VerifyEmailPage'));
@@ -146,11 +147,11 @@ function DashboardRouter() {
         'settings': <SettingsPageRoute />,
         'member-loans': <MemberLoansPage />,
         'collections': <CollectionsPage />,
-        'approvals': <PermissionGate role="chairman"><OversightApprovalsPage /></PermissionGate>,
-        'public-content': <PermissionGate role="admin"><PublicContentPage /></PermissionGate>,
+        'approvals': <PermissionGate permission="oversight.approve"><OversightApprovalsPage /></PermissionGate>,
+        'public-content': <PermissionGate permission="settings.update"><PublicContentPage /></PermissionGate>,
         'loan-products': <PermissionGate permission="settings.update"><LoanProductsPage /></PermissionGate>,
-        'role-permissions': <PermissionGate role="admin"><RolePermissionsPage /></PermissionGate>,
-        'service-availability': <PermissionGate role="admin"><ServiceAvailabilityPage /></PermissionGate>,
+        'role-permissions': <PermissionGate permission="officers.manage-permissions"><RolePermissionsPage /></PermissionGate>,
+        'service-availability': <PermissionGate permission="settings.update"><ServiceAvailabilityPage /></PermissionGate>,
         'financial-accounts': <PermissionGate permission="financial_settings.update"><FinancialAccountsPage /></PermissionGate>,
         'integrations': <PermissionGate permission="settings.update" role="admin"><IntegrationsSettingsPage /></PermissionGate>,
         'backups': <PermissionGate multiPermission={['backups.view', 'backups.manage']} role="admin"><BackupPage /></PermissionGate>,
@@ -172,7 +173,7 @@ function DashboardRouter() {
 
     if (sectionMap[section]) return sectionMap[section];
 
-    const isSupportStaff = ['admin', 'manager', 'accountant'].includes(user?.primary_role || '');
+    const isSupportStaff = !!user?.permissions?.includes('tickets.view');
 
     if (section === 'tickets') {
         if (isSupportStaff) {
@@ -227,29 +228,47 @@ function DefaultOverview({ role, isOfficer }: { role: string; isOfficer?: boolea
 }
 
 export default function App() {
-    const { sessionEnded, clearSessionEnded } = useAuth();
+    const { sessionEnded, clearSessionEnded, pendingLoginHandoff, decideLoginHandoff, logout } = useAuth();
     const navigate = useNavigate();
-
-    useEffect(() => {
-        if (!sessionEnded) return;
-
-        const timer = window.setTimeout(() => {
-            clearSessionEnded();
-            navigate('/login', { replace: true, state: { sessionEnded: true } });
-        }, 5000);
-
-        return () => window.clearTimeout(timer);
-    }, [sessionEnded, clearSessionEnded, navigate]);
 
     const returnToLogin = () => {
         clearSessionEnded();
         navigate('/login', { replace: true, state: { sessionEnded: true } });
     };
 
+    const resetPassword = () => {
+        clearSessionEnded();
+        navigate('/forgot-password', { replace: true });
+    };
+
+    const rejectAndResetPassword = async () => {
+        if (!pendingLoginHandoff) return;
+        await decideLoginHandoff(pendingLoginHandoff.id, 'reject');
+        await logout();
+        navigate('/forgot-password', { replace: true });
+    };
+
     return (
         <>
             <ScrollToTop />
             <ToastContainer />
+            {pendingLoginHandoff && !sessionEnded && (
+                <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 p-4" role="presentation">
+                    <section role="dialog" aria-modal="true" aria-labelledby="login-handoff-title" className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-700"><i className="fas fa-shield-halved" aria-hidden="true" /></div>
+                        <h2 id="login-handoff-title" className="mt-4 text-xl font-bold text-slate-900">Sign-in approval requested</h2>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">A sign-in attempt from <strong>{pendingLoginHandoff.device}</strong>{pendingLoginHandoff.ip_address ? ` (${pendingLoginHandoff.ip_address})` : ''} is waiting. While you decide, account actions are paused.</p>
+                        {pendingLoginHandoff.status === 'approved' ? (
+                            <p className="mt-5 rounded-lg bg-emerald-50 p-3 text-sm font-medium text-emerald-800">Approved. Waiting for the other device to finish security verification.</p>
+                        ) : (
+                            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                                <button type="button" onClick={() => void decideLoginHandoff(pendingLoginHandoff.id, 'approve')} className="rounded-lg bg-emerald-700 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-800">It was me — approve</button>
+                                <button type="button" onClick={() => void rejectAndResetPassword()} className="rounded-lg border border-red-200 bg-white px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-50">Not me — reject and reset password</button>
+                            </div>
+                        )}
+                    </section>
+                </div>
+            )}
             {sessionEnded ? (
                 <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
                     <section role="alert" aria-live="assertive" className="w-full max-w-lg rounded-2xl border border-amber-200 bg-white p-8 text-center shadow-sm">
@@ -258,11 +277,16 @@ export default function App() {
                         </div>
                         <h1 className="mt-5 text-xl font-bold text-slate-900">This session has ended</h1>
                         <p className="mt-2 text-sm leading-6 text-slate-600">
-                            Your account was signed in on another device. For your security, you have been signed out and will be returned to the login page shortly.
+                            Your account was signed in on another device, so this session has ended. If you did not approve that sign-in, reset your password now.
                         </p>
-                        <button type="button" onClick={returnToLogin} className="mt-6 rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2">
+                        <div className="mt-6 flex flex-wrap justify-center gap-3">
+                        <button type="button" onClick={resetPassword} className="rounded-lg bg-red-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2">
+                            This wasn’t me — reset password
+                        </button>
+                        <button type="button" onClick={returnToLogin} className="rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2">
                             Return to login now
                         </button>
+                        </div>
                     </section>
                 </main>
             ) : (
@@ -278,6 +302,7 @@ export default function App() {
                     </Route>
 
                     <Route path="/login" element={<IsolatedPage><GuestRoute><LoginPage /></GuestRoute></IsolatedPage>} />
+                        <Route path="/login/approval" element={<IsolatedPage><LoginApprovalPage /></IsolatedPage>} />
                     <Route path="/forgot-password" element={<IsolatedPage><GuestRoute><ForgotPasswordPage /></GuestRoute></IsolatedPage>} />
                     <Route path="/reset-password" element={<IsolatedPage><GuestRoute><ResetPasswordPage /></GuestRoute></IsolatedPage>} />
                     <Route path="/verify-email" element={<IsolatedPage><ProtectedRoute><VerifyEmailPage /></ProtectedRoute></IsolatedPage>} />

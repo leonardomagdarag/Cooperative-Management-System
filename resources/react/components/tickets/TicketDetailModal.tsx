@@ -32,7 +32,8 @@ export default function TicketDetailModal({
     const { addToast } = useToast();
     const queryClient = useQueryClient();
 
-    const isSupport = ['admin', 'manager', 'accountant'].includes(user?.primary_role || '');
+    const isSupport = ['tickets.view', 'tickets.reply', 'tickets.manage']
+        .some(permission => user?.permissions?.includes(permission));
 
     const [replyText, setReplyText] = useState('');
     const [isInternal, setIsInternal] = useState(false);

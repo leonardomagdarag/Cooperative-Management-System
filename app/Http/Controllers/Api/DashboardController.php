@@ -13,6 +13,7 @@ use App\Models\SystemSetting;
 use App\Models\Ticket;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\XenditService;
 use App\Support\BranchScope;
 use App\Support\PermissionCatalog;
 use Carbon\Carbon;
@@ -273,7 +274,7 @@ class DashboardController extends Controller
         $totalMemberFunds = $totalSavings + $totalShareCapital;
 
         $backupStatus = $includeBackupStatus ? $this->buildBackupStatus() : null;
-        $telemetry = ($includeBackupStatus && (Auth::user()?->hasRole('admin') || Auth::user()?->primary_role === 'admin'))
+        $telemetry = ($includeBackupStatus && Auth::user()?->can('backups.view'))
             ? $this->buildAdminSystemTelemetry($backupStatus ?? [])
             : [];
 
@@ -346,7 +347,7 @@ class DashboardController extends Controller
             'configured' => ! empty($smsApiKey),
         ];
 
-        $xenditSummary = app(\App\Services\XenditService::class)->summary();
+        $xenditSummary = app(XenditService::class)->summary();
         $xendit = [
             'name' => 'Xendit Payments',
             'enabled' => $xenditSummary['enabled'],

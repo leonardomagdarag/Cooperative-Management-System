@@ -16,6 +16,7 @@ use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
 use App\Services\TurnstileService;
 use App\Support\PersonPasswordPolicy;
+use App\Support\SiteContentCatalog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -72,6 +73,7 @@ class LoginController extends Controller
         $email = User::normalizeEmail($request->input('email'));
         $password = (string) $request->input('password');
         $ipAddress = (string) ($request->ip() ?? 'unknown');
+        $previousSessionId = $request->session()->getId();
 
         // Attempt login
         if ($this->attemptLoginWithNormalizedEmailFallback($email, $password)) {
@@ -137,6 +139,21 @@ class LoginController extends Controller
 
             $primaryRole = $user->primary_role;
             $redirectUrl = route('dashboard', absolute: false);
+
+            $handoff = app(\App\Services\LoginHandoffService::class)->requestApproval($user, $previousSessionId, $request);
+            if ($handoff) {
+                $this->auditLogService->log('auth.login_approval_requested', 'A sign-in is waiting for approval from the active device.', 'auth', $handoff, $user, [
+                    'device' => $handoff->device_label,
+                    'ip_address' => $handoff->ip_address,
+                ]);
+                $request->session()->put('security.pending_login_handoff', $handoff->id);
+
+                if ($request->ajax() || $request->wantsJson()) {
+                    return response()->json(['success' => true, 'requires_approval' => true]);
+                }
+
+                return redirect('/login/approval');
+            }
 
             $fingerprint = $this->securityOtpService->buildDeviceFingerprint($request);
             $isNewDevice = ! $this->securityOtpService->isTrustedDevice($user, $fingerprint);
@@ -372,6 +389,7 @@ class LoginController extends Controller
                 'monthly_income' => $request->input('monthly_income', 'Below 10000'),
                 'membership_type' => $request->input('membership_type', 'Regular'),
                 'terms' => true,
+                'privacy_acknowledged' => true,
             ]);
         }
 
@@ -410,6 +428,7 @@ class LoginController extends Controller
                 $request->input('last_name'),
             ])), ['confirmed']),
             'terms' => 'required|accepted',
+            'privacy_acknowledged' => 'required|accepted',
         ];
 
         if (! $isTestingCompatibilityRegistration) {
@@ -514,7 +533,13 @@ class LoginController extends Controller
                 'member',
                 $user,
                 $user,
-                ['email' => $user->email]
+                [
+                    'email' => $user->email,
+                    'privacy_notice_acknowledged' => true,
+                    'privacy_notice_version' => hash('sha256', (string) SiteContentCatalog::editorContent()['policies']['privacy_policy']),
+                    'privacy_notice_acknowledged_at' => now()->toIso8601String(),
+                    'privacy_notice_acknowledgment_method' => 'public_registration',
+                ]
             );
 
             if ($isTestingCompatibilityRegistration) {

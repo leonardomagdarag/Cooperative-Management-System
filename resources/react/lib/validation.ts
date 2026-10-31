@@ -590,6 +590,7 @@ export const registerStepSchemas: Record<number, z.ZodTypeAny> = {
         password: passwordPolicy,
         password_confirmation: requiredString('Please confirm your password'),
         terms: z.boolean().refine(v => v === true, { message: 'You must accept the terms and conditions' }),
+        privacy_acknowledged: z.boolean().refine(v => v === true, { message: 'Please acknowledge the Data Privacy Policy' }),
     }).refine(d => d.password === d.password_confirmation, { message: 'Passwords do not match', path: ['password_confirmation'] }),
 };
 

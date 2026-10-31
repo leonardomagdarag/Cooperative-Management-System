@@ -21,7 +21,7 @@ class PublicContentController extends Controller
 {
     public function index(): JsonResponse
     {
-        $canManage = (bool) Auth::user()?->hasRole('admin');
+        $canManage = (bool) Auth::user()?->can('settings.update');
 
         $payload = [
             'form' => SiteContentCatalog::editorContent(),
@@ -52,7 +52,7 @@ class PublicContentController extends Controller
 
     public function save(Request $request): JsonResponse
     {
-        abort_unless(Auth::user()?->hasRole('admin'), 403);
+        abort_unless(Auth::user()?->can('settings.update'), 403);
 
         $validated = $request->validate($this->rules(), $this->messages(), $this->attributes());
 
@@ -100,7 +100,7 @@ class PublicContentController extends Controller
 
     public function uploadImage(Request $request): JsonResponse
     {
-        abort_unless(Auth::user()?->hasRole('admin'), 403);
+        abort_unless(Auth::user()?->can('settings.update'), 403);
 
         $validated = $request->validate([
             'key' => ['required', 'string', 'in:home.hero_image,about.about_image,login.login_image'],

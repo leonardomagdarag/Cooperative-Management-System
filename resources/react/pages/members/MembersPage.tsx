@@ -36,7 +36,6 @@ export default function MembersPage() {
     const canApprove = perms.includes('members.approve');
     const canAssignBranch = perms.includes('branches.view');
     const hasActions = canEdit || canDelete;
-    const isAdmin = user?.primary_role === 'admin';
     const [searchParams, setSearchParams] = useSearchParams();
     const [status, setStatus] = useState(searchParams.get('status') && STATUS_FILTERS.some(f => f.value === searchParams.get('status')) ? searchParams.get('status')! : 'all');
     const [search, setSearch] = useState('');
@@ -234,7 +233,7 @@ export default function MembersPage() {
                                                     <div className="flex items-center gap-1">
                                                         <button onClick={() => setViewing(m)} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="View"><i className="fas fa-eye text-sm"></i></button>
                                                         {m.archived_at ? (
-                                                            isAdmin && <>
+                                                            canDelete && <>
                                                                 <button onClick={() => setConfirmState({
                                                                     isOpen: true,
                                                                     title: 'Restore Member',
@@ -288,7 +287,7 @@ export default function MembersPage() {
             </div>
 
             {showWizard && <MemberWizardForm member={editing} onClose={() => { setShowWizard(false); setEditing(null); }} />}
-            {viewing && <MemberProfileModal memberId={viewing.id} onClose={() => setViewing(null)} canApprove={canApprove} onApprove={(id) => approveMutation.mutate(id)} onDecline={() => setDeclining(viewing)} isApproving={approveMutation.isPending} isDeclining={declineMutation.isPending} onEdit={() => { setViewing(null); setEditing(viewing); setShowWizard(true); }} canEdit={canEdit} canViewIds={canViewIds} canViewLoans={canViewLoans} canViewActivity={canViewActivity} canViewFinancial={canViewFinancial} isAdmin={isAdmin} onRestore={() => { setConfirmState({ isOpen: true, title: 'Restore Member', message: 'Restore this archived member?', confirmText: 'Restore', variant: 'primary', onConfirm: () => { restoreMutation.mutate(viewing.id); setViewing(null); } }); }} onForceDelete={() => { setConfirmState({ isOpen: true, title: 'Permanently Delete Member', message: 'Permanently delete this member? This cannot be undone.', confirmText: 'Permanently Delete', variant: 'danger', onConfirm: () => { forceDeleteMutation.mutate(viewing.id); setViewing(null); } }); }} isRestoring={restoreMutation.isPending} isForceDeleting={forceDeleteMutation.isPending} />}
+            {viewing && <MemberProfileModal memberId={viewing.id} onClose={() => setViewing(null)} canApprove={canApprove} onApprove={(id) => approveMutation.mutate(id)} onDecline={() => setDeclining(viewing)} isApproving={approveMutation.isPending} isDeclining={declineMutation.isPending} onEdit={() => { setViewing(null); setEditing(viewing); setShowWizard(true); }} canEdit={canEdit} canViewIds={canViewIds} canViewLoans={canViewLoans} canViewActivity={canViewActivity} canViewFinancial={canViewFinancial} isAdmin={canDelete} onRestore={() => { setConfirmState({ isOpen: true, title: 'Restore Member', message: 'Restore this archived member?', confirmText: 'Restore', variant: 'primary', onConfirm: () => { restoreMutation.mutate(viewing.id); setViewing(null); } }); }} onForceDelete={() => { setConfirmState({ isOpen: true, title: 'Permanently Delete Member', message: 'Permanently delete this member? This cannot be undone.', confirmText: 'Permanently Delete', variant: 'danger', onConfirm: () => { forceDeleteMutation.mutate(viewing.id); setViewing(null); } }); }} isRestoring={restoreMutation.isPending} isForceDeleting={forceDeleteMutation.isPending} />}
             {declining && <DeclineApplicationModal member={declining} onConfirm={(reason) => declineMutation.mutate({ id: declining.id, reason })} onClose={() => setDeclining(null)} submitting={declineMutation.isPending} />}
             {showExport && <MemberExportModal onClose={() => setShowExport(false)} />}
             <ConfirmDialog
