@@ -146,7 +146,14 @@ class ReportController extends Controller
         $activityType = $request->string('activity_type', 'all')->toString();
         $memberId = $request->integer('member_id');
         $branchId = BranchScope::resolveBranchId(Auth::user(), $request->integer('branch_id'));
-        $allowedTypes = ['all', 'deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'fee'];
+        $allowedTypes = ['all', 'deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'interest', 'fee'];
+        $sortBy = $request->string('sort_by', 'date')->toString();
+        $sortDirection = strtolower($request->string('sort_direction', 'desc')->toString());
+        $sortColumns = [
+            'date' => 'transaction_date',
+            'amount' => 'amount',
+            'type' => 'transaction_type',
+        ];
 
         $query = $this->completedTransactions($branchId)
             ->with(['account.user.personalData', 'loan.user.personalData'])
@@ -168,7 +175,17 @@ class ReportController extends Controller
             $query->where('transaction_type', $activityType);
         }
 
-        $paginator = $query->latest('transaction_date')->paginate(10);
+        if ($sortBy === 'member') {
+            $query->orderByRaw("COALESCE(
+                (SELECT pd.last_name FROM accounts a JOIN users u ON u.id = a.user_id JOIN personal_data pd ON pd.id = u.personal_data_id WHERE a.id = transactions.account_id),
+                (SELECT pd.last_name FROM loans l JOIN users u ON u.id = l.user_id JOIN personal_data pd ON pd.id = u.personal_data_id WHERE l.id = transactions.loan_id)
+            ) ".($sortDirection === 'asc' ? 'ASC' : 'DESC'));
+        } else {
+            $query->orderBy($sortColumns[$sortBy] ?? 'transaction_date', $sortDirection === 'asc' ? 'asc' : 'desc');
+        }
+        $query->orderByDesc('transactions.id');
+
+        $paginator = $query->paginate(10);
 
         $items = collect($paginator->items())->map(function (Transaction $transaction) {
             $user = $transaction->account?->user ?? $transaction->loan?->user;
@@ -943,7 +960,9 @@ class ReportController extends Controller
     {
         $activityType = $request->string('activity_type', 'all')->toString();
         $memberId = $request->integer('member_id');
-        $allowedTypes = ['all', 'deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'fee'];
+        $allowedTypes = ['all', 'deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'interest', 'fee'];
+        $sortBy = $request->string('sort_by', 'date')->toString();
+        $sortDirection = strtolower($request->string('sort_direction', 'desc')->toString());
 
         $query = $this->completedTransactions($branchId)
             ->with(['account.user.personalData', 'loan.user.personalData'])
@@ -964,11 +983,22 @@ class ReportController extends Controller
             $query->where('transaction_type', $activityType);
         }
 
+        if ($sortBy === 'member') {
+            $query->orderByRaw("COALESCE(
+                (SELECT pd.last_name FROM accounts a JOIN users u ON u.id = a.user_id JOIN personal_data pd ON pd.id = u.personal_data_id WHERE a.id = transactions.account_id),
+                (SELECT pd.last_name FROM loans l JOIN users u ON u.id = l.user_id JOIN personal_data pd ON pd.id = u.personal_data_id WHERE l.id = transactions.loan_id)
+            ) ".($sortDirection === 'asc' ? 'ASC' : 'DESC'));
+        } else {
+            $query->orderBy($sortBy === 'amount' ? 'amount' : ($sortBy === 'type' ? 'transaction_type' : 'transaction_date'), $sortDirection === 'asc' ? 'asc' : 'desc');
+        }
+        $query->orderByDesc('transactions.id');
+
         $typeLabels = [
             'deposit' => 'Deposit',
             'withdrawal' => 'Withdrawal',
             'loan_disbursement' => 'Loan Disbursement',
             'loan_payment' => 'Loan Payment',
+            'interest' => 'Interest Credit',
             'fee' => 'Fee',
         ];
 
@@ -986,10 +1016,10 @@ class ReportController extends Controller
 
         return $this->singleSectionPayload(
             'member_activity',
-            'Member Activity Report',
+            'Financial History Report',
             $rangeLabel,
             'member-activity',
-            'Member Activity',
+            'Financial History',
             [
                 ['key' => 'member', 'label' => 'Member'],
                 ['key' => 'type', 'label' => 'Transaction Type'],

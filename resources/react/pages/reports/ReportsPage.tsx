@@ -29,7 +29,7 @@ function txBadgeText(type: string): string {
 }
 
 function activityTypeLabel(type: string): string {
-    const c: Record<string, string> = { deposit: 'Deposit', withdrawal: 'Withdrawal', loan_payment: 'Payment', loan_disbursement: 'Loan', fee: 'Fee' };
+    const c: Record<string, string> = { deposit: 'Deposit', withdrawal: 'Withdrawal', loan_payment: 'Payment', loan_disbursement: 'Loan', interest: 'Interest Credit', fee: 'Fee' };
     return c[type] || type?.replace(/_/g, ' ') || 'Unknown';
 }
 
@@ -101,6 +101,102 @@ function Pagination({ meta, page, setPage }: { meta: any; page: number; setPage:
 const selectCls = 'bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2';
 const thCls = 'p-4 text-xs font-medium text-left text-gray-500 uppercase';
 
+function MemberSearch({
+    members,
+    value,
+    onChange,
+}: {
+    members: any[];
+    value: string;
+    onChange: (memberId: string) => void;
+}) {
+    const [search, setSearch] = useState('');
+    const [isOpen, setIsOpen] = useState(false);
+
+    useEffect(() => {
+        const selected = members.find(member => String(member.id) === value);
+        if (selected) setSearch(selected.name);
+    }, [members, value]);
+
+    const normalizedSearch = search.trim().toLowerCase();
+    const matches = members
+        .filter(member => {
+            if (!normalizedSearch) return true;
+            return [member.name, member.email, member.user_number]
+                .filter(Boolean)
+                .some(field => String(field).toLowerCase().includes(normalizedSearch));
+        })
+        .slice(0, 10);
+
+    const selectMember = (member: any) => {
+        onChange(String(member.id));
+        setSearch(member.name);
+        setIsOpen(false);
+    };
+
+    return (
+        <div className="flex items-center gap-2">
+            <label htmlFor="report-member" className="text-xs font-medium text-gray-500">Member</label>
+            <div className="relative w-56">
+                <input
+                    id="report-member"
+                    type="search"
+                    value={search}
+                    onChange={event => {
+                        setSearch(event.target.value);
+                        setIsOpen(true);
+                        if (value) onChange('');
+                    }}
+                    onFocus={() => setIsOpen(true)}
+                    onBlur={() => setTimeout(() => setIsOpen(false), 150)}
+                    placeholder="Search members..."
+                    autoComplete="off"
+                    className={`${selectCls} w-full pr-8`}
+                    role="combobox"
+                    aria-expanded={isOpen}
+                    aria-controls="report-member-options"
+                />
+                {search && (
+                    <button
+                        type="button"
+                        onMouseDown={event => event.preventDefault()}
+                        onClick={() => { setSearch(''); onChange(''); setIsOpen(false); }}
+                        className="absolute inset-y-0 right-0 px-2 text-gray-400 hover:text-gray-700"
+                        aria-label="Clear member selection"
+                    >
+                        <i className="fas fa-times text-xs"></i>
+                    </button>
+                )}
+                {isOpen && (
+                    <div id="report-member-options" className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-gray-300 bg-white py-1 shadow-lg">
+                        {matches.length > 0 ? matches.map(member => (
+                            <button
+                                type="button"
+                                key={member.id}
+                                onMouseDown={event => event.preventDefault()}
+                                onClick={() => selectMember(member)}
+                                className={`block w-full px-3 py-2 text-left text-sm hover:bg-blue-50 ${String(member.id) === value ? 'bg-blue-50 text-blue-700' : 'text-gray-700'}`}
+                            >
+                                <span className="block truncate">{member.name}</span>
+                                {(member.email || member.user_number) && (
+                                    <span className="block truncate text-xs text-gray-400">{member.email || member.user_number}</span>
+                                )}
+                            </button>
+                        )) : (
+                            <p className="px-3 py-2 text-sm text-gray-500">No members found.</p>
+                        )}
+                    </div>
+                )}
+            </div>
+            {!value && !search && (
+                <button type="button" onClick={() => setIsOpen(true)} className="text-xs text-gray-500 hover:text-blue-600">
+                    All Members
+                </button>
+            )}
+        </div>
+    );
+}
+
 export default function ReportsPage() {
     const { user } = useAuth();
     const { addToast } = useToast();
@@ -120,6 +216,8 @@ export default function ReportsPage() {
     const [loanFilter, setLoanFilter] = useState('all');
     const [expenseCategory, setExpenseCategory] = useState('');
     const [activityType, setActivityType] = useState('all');
+    const [activitySort, setActivitySort] = useState('date');
+    const [activitySortDirection, setActivitySortDirection] = useState('desc');
     const [refreshKey, setRefreshKey] = useState(0);
     const [reportPages, setReportPages] = useState<Record<string, number>>({});
 
@@ -145,7 +243,7 @@ export default function ReportsPage() {
         { key: 'loans', label: 'Loan Report', icon: 'fas fa-file-invoice-dollar' },
         { key: 'payments', label: 'Payment Collection', icon: 'fas fa-money-bill-wave' },
         { key: 'expenses', label: 'Expense Report', icon: 'fas fa-receipt' },
-        { key: 'member_activity', label: 'Member Activity', icon: 'fas fa-user-clock' },
+        { key: 'member_activity', label: 'Financial History', icon: 'fas fa-user-clock' },
         ...(canViewFinancial ? [{ key: 'balance_sheet', label: 'Balance Sheet', icon: 'fas fa-balance-scale' }] : []),
         ...(canViewMembers ? [{ key: 'members', label: 'Members Report', icon: 'fas fa-id-card' }] : []),
         ...(canViewOfficers ? [{ key: 'officers', label: 'Officers Report', icon: 'fas fa-user-tie' }] : []),
@@ -195,8 +293,8 @@ export default function ReportsPage() {
     });
 
     const { data: memberActivityData } = useQuery({
-        queryKey: ['reports-member-activity', from, to, branchId, memberId, activityType, page, refreshKey],
-        queryFn: () => api.get('/api/reports/member-activity', { params: { from, to, branch_id: branchId || undefined, member_id: memberId || undefined, activity_type: activityType, page } }),
+        queryKey: ['reports-member-activity', from, to, branchId, memberId, activityType, activitySort, activitySortDirection, page, refreshKey],
+        queryFn: () => api.get('/api/reports/member-activity', { params: { from, to, branch_id: branchId || undefined, member_id: memberId || undefined, activity_type: activityType, sort_by: activitySort, sort_direction: activitySortDirection, page } }),
         enabled: reportType === 'member_activity',
     });
 
@@ -278,7 +376,11 @@ export default function ReportsPage() {
         if (reportType === 'member_savings' || reportType === 'member_activity') params.member_id = memberId || undefined;
         if (reportType === 'loans') params.filter = loanFilter === 'all' ? undefined : loanFilter;
         if (reportType === 'expenses') params.category = expenseCategory || undefined;
-        if (reportType === 'member_activity') params.activity_type = activityType === 'all' ? undefined : activityType;
+        if (reportType === 'member_activity') {
+            params.activity_type = activityType === 'all' ? undefined : activityType;
+            params.sort_by = activitySort;
+            params.sort_direction = activitySortDirection;
+        }
 
         try {
             const res = await api.post('/api/reports/export', params, { responseType: 'blob' });
@@ -373,13 +475,11 @@ export default function ReportsPage() {
                     )}
 
                     {(reportType === 'member_savings' || reportType === 'member_activity') && (
-                        <div className="flex items-center gap-2">
-                            <label htmlFor="report-member" className="text-xs font-medium text-gray-500">Member</label>
-                            <select id="report-member" value={memberId} onChange={e => { setMemberId(e.target.value); setPage(1); }} className={selectCls}>
-                                <option value="">All Members</option>
-                                {members.map((m: any) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                            </select>
-                        </div>
+                        <MemberSearch
+                            members={members}
+                            value={memberId}
+                            onChange={(id) => { setMemberId(id); setPage(1); }}
+                        />
                     )}
 
                     {reportType === 'loans' && (
@@ -416,6 +516,21 @@ export default function ReportsPage() {
                                 <option value="interest">Interest Credit</option>
                                 <option value="fee">Fee</option>
                             </select>
+                            <label htmlFor="activity-sort" className="text-xs font-medium text-gray-500">Sort</label>
+                            <select id="activity-sort" value={activitySort} onChange={e => { setActivitySort(e.target.value); setPage(1); }} className={selectCls}>
+                                <option value="member">Member</option>
+                                <option value="type">Transaction Type</option>
+                                <option value="date">Date</option>
+                                <option value="amount">Amount</option>
+                            </select>
+                            <button
+                                type="button"
+                                onClick={() => { setActivitySortDirection(value => value === 'asc' ? 'desc' : 'asc'); setPage(1); }}
+                                className="px-3 py-2 text-xs border border-gray-300 rounded-lg hover:bg-gray-50"
+                                aria-label={`Sort ${activitySortDirection === 'asc' ? 'descending' : 'ascending'}`}
+                            >
+                                {activitySortDirection === 'asc' ? 'Ascending' : 'Descending'}
+                            </button>
                         </div>
                     )}
                 </div>
@@ -835,7 +950,7 @@ export default function ReportsPage() {
                                     <tbody className="bg-white divide-y divide-gray-200">
                                         {memberActivityRows.length === 0 ? (
                                             <tr>
-                                                <td colSpan={4} className="p-6 text-sm text-gray-500">No member activity found for the selected filters.</td>
+                                                <td colSpan={4} className="p-6 text-sm text-gray-500">No financial history found for the selected filters.</td>
                                             </tr>
                                         ) : memberActivityRows.map((row: any) => (
                                             <tr key={row.id} className="hover:bg-gray-50">

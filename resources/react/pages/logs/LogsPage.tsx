@@ -42,10 +42,41 @@ const intensityStyles: Record<Intensity, { label: string; icon: string; classNam
 };
 
 function displayValue(value: unknown) {
-    if (value === null || value === undefined || value === '') return '—';
+    if (value === null || value === undefined || value === '') return 'Not provided';
     if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-    if (typeof value === 'object') return JSON.stringify(value, null, 2);
+    if (typeof value === 'object') return value;
     return String(value);
+}
+
+const detailLabels: Record<string, string> = {
+    id: 'Record number', user_id: 'User number', member_id: 'Member number', loan_id: 'Loan number',
+    transaction_id: 'Transaction number', branch_id: 'Branch number', amount: 'Amount',
+    old: 'Previous information', new: 'Updated information', attributes: 'Information saved',
+    old_values: 'Previous information', new_values: 'Updated information', reason: 'Reason',
+    status: 'Status', action: 'Action', delivery_method: 'How funds were delivered',
+    approved_by: 'Approved by', rejected_by: 'Reviewed by',
+};
+
+function detailLabel(key: string): string {
+    return detailLabels[key.toLowerCase()] ?? readableLabel(key);
+}
+
+const technicalRequestDetails = new Set(['path', 'route', 'method']);
+
+function PropertyDetails({ value, depth = 0 }: { value: unknown; depth?: number }) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+        const entries = Object.entries(value as Record<string, unknown>)
+            .filter(([key]) => !technicalRequestDetails.has(key.toLowerCase()));
+        if (entries.length) return <dl className={depth ? 'mt-2 space-y-2 border-l-2 border-slate-200 pl-3' : 'divide-y divide-slate-100'}>
+            {entries.map(([key, child]) => <div key={key} className="py-2 first:pt-0 last:pb-0">
+                <dt className="text-xs font-semibold text-slate-600">{detailLabel(key)}</dt>
+                <dd className="mt-0.5 break-words text-sm text-slate-800"><PropertyDetails value={child} depth={depth + 1} /></dd>
+            </div>)}
+        </dl>;
+        return 'None';
+    }
+    if (Array.isArray(value)) return value.length ? <ul className="mt-1 list-inside list-disc space-y-1">{value.map((item, index) => <li key={index}><PropertyDetails value={item} depth={depth + 1} /></li>)}</ul> : 'None';
+    return <>{displayValue(value) as string}</>;
 }
 
 export default function LogsPage() {
@@ -235,6 +266,7 @@ export default function LogsPage() {
                 {selectedLog && (() => {
                     const intensity = intensityStyles[intensityFor(selectedLog.event)];
                     const properties = selectedLog.properties && typeof selectedLog.properties === 'object' ? selectedLog.properties as Record<string, unknown> : {};
+                    const permission = properties.permission ?? properties.permissions;
                     return <div className="space-y-5">
                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                             <div className="flex flex-wrap items-center gap-2">
@@ -250,14 +282,15 @@ export default function LogsPage() {
                             <Detail label="Related record" value={selectedLog.subject_name || (selectedLog.subject_type ? `${readableLabel(selectedLog.subject_type)}${selectedLog.subject_id ? ` #${selectedLog.subject_id}` : ''}` : 'No related record')} />
                         </dl>
                         <section>
-                            <h3 className="text-sm font-semibold text-slate-800">Details and changes</h3>
-                            {Object.keys(properties).length === 0 ? <p className="mt-2 rounded-lg bg-slate-50 p-4 text-sm text-slate-500">No additional details were recorded.</p> : (
-                                <dl className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
-                                    {Object.entries(properties).map(([key, value]) => <div key={key} className="grid gap-1 px-4 py-3 sm:grid-cols-[minmax(9rem,0.35fr)_1fr] sm:gap-4">
-                                        <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">{readableLabel(key)}</dt>
-                                        <dd className="min-w-0 whitespace-pre-wrap break-words text-sm text-slate-800">{displayValue(value)}</dd>
-                                    </div>)}
-                                </dl>
+                            <h3 className="text-sm font-semibold text-slate-800">Permission accessed</h3>
+                            <p className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                                {permission ? <PropertyDetails value={permission} /> : 'The permission used for this action was not recorded.'}
+                            </p>
+                        </section>
+                        <section>
+                            <h3 className="text-sm font-semibold text-slate-800">What changed or was recorded?</h3>
+                            {Object.keys(properties).length === 0 ? <p className="mt-2 rounded-lg bg-slate-50 p-4 text-sm text-slate-500">No extra details were saved for this action.</p> : (
+                                <div className="mt-2 rounded-lg border border-slate-200 px-4 py-3"><PropertyDetails value={properties} /></div>
                             )}
                         </section>
                     </div>;

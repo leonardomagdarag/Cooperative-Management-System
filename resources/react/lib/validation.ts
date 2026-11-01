@@ -602,6 +602,7 @@ export const loanProductSchema = z.object({
     interest_rate: z.coerce.number().min(0, 'Interest rate cannot be negative').max(100, 'Interest rate cannot exceed 100%'),
     max_amount: z.coerce.number().min(500, 'Max amount must be at least \u20b1500').max(5000000, 'Max amount cannot exceed \u20b15,000,000'),
     max_term: z.coerce.number().int('Max term must be a whole number').min(1, 'Max term must be at least 1 month').max(120, 'Max term cannot exceed 120 months'),
+    interest_extension_penalty: z.boolean(),
     minimum_share_capital: z.coerce.number().min(0, 'Cannot be negative').optional().or(z.literal('')),
     minimum_membership_years: z.coerce.number().int('Must be a whole number').min(0).max(50, 'Cannot exceed 50 years'),
     required_co_makers: z.coerce.number().int('Must be a whole number').min(0).max(20, 'Cannot exceed 20 co-makers'),

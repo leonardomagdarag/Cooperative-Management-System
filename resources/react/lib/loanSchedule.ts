@@ -14,6 +14,8 @@ export interface ScheduleRow {
     principal: number;
     interest: number;
     penalty?: number;
+    interest_extension?: number;
+    amount_due?: number;
     balance: number;
     total_interest?: number;
     total_payment?: number;
@@ -87,8 +89,12 @@ export function deriveInstallments(
 
     return schedule.map((row) => {
         const entry = Number(row.payment) || 0;
-        const covered = Math.min(Math.max(paid - cumulative, 0), entry);
-        const amountDue = Math.round((entry - covered) * 100) / 100;
+        const allocatedAmountDue = Number(row.amount_due);
+        const hasAllocatedAmountDue = Number.isFinite(allocatedAmountDue);
+        const covered = hasAllocatedAmountDue
+            ? Math.min(entry, Math.max(0, entry - allocatedAmountDue))
+            : Math.min(Math.max(paid - cumulative, 0), entry);
+        const amountDue = Math.round((hasAllocatedAmountDue ? allocatedAmountDue : entry - covered) * 100) / 100;
         cumulative += entry;
 
         let status: InstallmentStatus;

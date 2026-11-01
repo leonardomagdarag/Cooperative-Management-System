@@ -124,7 +124,11 @@ class LoanController extends Controller
 
         $loan->load([
             'product',
-            'user.personalData',
+            'user.personalData.contact',
+            'user.personalData.employment',
+            'user.personalData.memberId',
+            'user.accounts',
+            'user.loans' => fn ($query) => $query->where('id', '!=', $loan->id)->latest(),
             'approvedBy.personalData',
             'reviewer.personalData',
             'payments',
@@ -162,6 +166,7 @@ class LoanController extends Controller
             'penalty_type' => $loan->penalty_type,
             'penalty_amount' => $loan->penalty_amount,
             'penalty_frequency' => $loan->penalty_frequency,
+            'interest_extension_penalty' => (bool) $loan->interest_extension_penalty,
             'progress' => $totalPayable > 0 ? round(($loan->schedulePaid() / $totalPayable) * 100, 1) : 0,
             'estimated_interest' => $lastInstallment['total_interest'] ?? 0,
             'estimated_total_repayment' => $lastInstallment['total_payment'] ?? $loan->totalPayable(),
@@ -169,6 +174,78 @@ class LoanController extends Controller
             'borrower' => $loan->user?->personalData ? [
                 'name' => trim($loan->user->personalData->first_name.' '.$loan->user->personalData->last_name),
                 'user_number' => $loan->user->user_number,
+                'email' => $loan->user->email,
+                'phone' => $loan->user->personalData->contact?->phone_no,
+                'employment' => $loan->user->personalData->employment ? [
+                    'type' => $loan->user->personalData->employment->employment_type,
+                    'company' => $loan->user->personalData->employment->company,
+                    'position' => $loan->user->personalData->employment->position,
+                    'monthly_income' => $loan->user->personalData->employment->monthly_income,
+                    'other_income_source' => $loan->user->personalData->employment->other_income_source,
+                    'other_income_amount' => $loan->user->personalData->employment->other_income_amount,
+                ] : null,
+                'accounts' => $loan->user->accounts->map(fn ($account) => [
+                    'type' => $account->account_type,
+                    'balance' => $account->balance,
+                ])->values(),
+                'active_loans' => $loan->user->loans->where('loan_status', 'active')->map(function ($memberLoan) {
+                    $schedule = $memberLoan->paymentSchedule() ?? [];
+                    $overdueCount = collect($schedule)->filter(fn ($installment) =>
+                        Carbon::createFromFormat('M d, Y', $installment['due_date'])->startOfDay()->lt(now()->startOfDay())
+                        && (float) $installment['amount_due'] > 0.001
+                    )->count();
+
+                    return [
+                        'loan_number' => $memberLoan->loan_number,
+                        'type' => $memberLoan->loan_type,
+                        'principal' => $memberLoan->loan_amount,
+                        'total_repayment' => $memberLoan->totalPayable() + collect($schedule)->sum(fn ($installment) => (float) ($installment['interest_extension'] ?? 0)),
+                        'paid_amount' => $memberLoan->schedulePaid(),
+                        'expected_end' => $memberLoan->disbursed_at?->copy()->addMonths((int) $memberLoan->term_months)->format('M d, Y'),
+                        'payments_done' => $memberLoan->completedPayments()->whereNull('reversal_of_id')->count(),
+                        'overdue_count' => $overdueCount,
+                        'remaining_balance' => $memberLoan->remainingBalance(),
+                    ];
+                })->values(),
+                'previous_loans' => $loan->user->loans->where('loan_status', 'paid_off')->map(function ($memberLoan) {
+                    $schedule = $memberLoan->paymentSchedule() ?? [];
+                    $dueDates = collect($schedule)->keyBy('period')->map(fn ($installment) => Carbon::createFromFormat('M d, Y', $installment['due_date'])->startOfDay());
+                    $overdueCount = DB::table('loan_payment_installment_allocations as allocations')
+                        ->join('transactions', 'transactions.id', '=', 'allocations.transaction_id')
+                        ->where('transactions.loan_id', $memberLoan->id)
+                        ->where('transactions.transaction_type', 'loan_payment')
+                        ->where('transactions.status', 'completed')
+                        ->whereNull('transactions.reversal_of_id')
+                        ->whereNotNull('transactions.transaction_date')
+                        ->get(['allocations.period', 'transactions.transaction_date'])
+                        ->filter(fn ($allocation) => $dueDates->has($allocation->period)
+                            && Carbon::parse($allocation->transaction_date)->startOfDay()->gt($dueDates[$allocation->period]))
+                        ->pluck('period')
+                        ->unique()
+                        ->count();
+
+                    return [
+                        'loan_number' => $memberLoan->loan_number,
+                        'type' => $memberLoan->loan_type,
+                        'amount' => $memberLoan->loan_amount,
+                        'duration_months' => $memberLoan->term_months,
+                        'overdue_count' => $overdueCount,
+                    ];
+                })->values(),
+                'ids' => $loan->user->personalData->memberId ? [
+                    'national_id' => $loan->user->personalData->memberId->national_id,
+                    'tin' => $loan->user->personalData->memberId->tin,
+                    'sss' => $loan->user->personalData->memberId->sss,
+                    'philhealth' => $loan->user->personalData->memberId->philhealth,
+                    'barangay_id' => $loan->user->personalData->memberId->barangay_id,
+                    'photos' => collect([
+                        'National ID' => $loan->user->personalData->memberId->national_id_photo,
+                        'TIN' => $loan->user->personalData->memberId->tin_photo,
+                        'SSS' => $loan->user->personalData->memberId->sss_photo,
+                        'PhilHealth' => $loan->user->personalData->memberId->philhealth_photo,
+                        'Barangay ID' => $loan->user->personalData->memberId->barangay_id_photo,
+                    ])->filter()->map(fn ($path) => asset('storage/'.$path))->values(),
+                ] : null,
             ] : null,
             'approved_by' => $loan->approvedBy?->personalData ? [
                 'name' => trim($loan->approvedBy->personalData->first_name.' '.$loan->approvedBy->personalData->last_name),
@@ -338,6 +415,7 @@ class LoanController extends Controller
             'penalty_type' => $product?->penalty_type ?? 'flat',
             'penalty_amount' => $product?->penalty_amount ?? 0,
             'penalty_frequency' => $product?->penalty_frequency ?? 'per_due',
+            'interest_extension_penalty' => $product?->interest_extension_penalty ?? false,
             'term_months' => $validated['term_months'],
             'payment_frequency' => $validated['payment_frequency'],
             'loan_status' => 'pending',
@@ -404,6 +482,7 @@ class LoanController extends Controller
                 $updateData['penalty_type'] = $product->penalty_type;
                 $updateData['penalty_amount'] = $product->penalty_amount;
                 $updateData['penalty_frequency'] = $product->penalty_frequency;
+                $updateData['interest_extension_penalty'] = $product->interest_extension_penalty;
             }
         } elseif (! empty($validated['loan_type'])) {
             $updateData['loan_type'] = $validated['loan_type'];
@@ -568,8 +647,28 @@ class LoanController extends Controller
                 break;
 
             case 'endorse':
+                $chairmanAutoApproves = $user->hasRole('chairman') && $user->can('loans.approve');
+                if ($chairmanAutoApproves) {
+                    Gate::authorize('finalApprove', $loan);
+                }
                 $loan->update(['review_status' => 'endorsed_for_approval', 'reviewed_by' => $user->id, 'reviewed_at' => now()]);
                 app(NotificationService::class)->notifyLoanEndorsedForApproval($loan);
+                if ($chairmanAutoApproves) {
+                    $loan->update([
+                        'loan_status' => 'approved',
+                        'approved_by' => $user->id,
+                        'approved_at' => now(),
+                        'due_date' => null,
+                    ]);
+                    app(NotificationService::class)->notifyLoanApproved($loan);
+                    app(AuditLogService::class)->log(
+                        'loan.approved',
+                        'Loan endorsed and directly approved by chairman.',
+                        'loan',
+                        $loan,
+                        $user
+                    );
+                }
                 break;
 
             case 'reject':

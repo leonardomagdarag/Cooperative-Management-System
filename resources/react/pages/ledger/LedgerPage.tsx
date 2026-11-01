@@ -263,7 +263,7 @@ export default function LedgerPage() {
                                     <tr key={t.id} className="hover:bg-gray-50">
                                         <td className="p-4 text-sm font-medium text-gray-900"><span className="block truncate" title={t.transaction_number}>{t.transaction_number}</span></td>
                                         <td className="p-4 text-sm text-gray-900"><span className="block truncate" title={t.account_holder || '—'}>{t.account_holder || '—'}</span>{t.user_number && <div className="text-xs text-gray-500 truncate" title={t.user_number}>{t.user_number}</div>}</td>
-                                        <td className="p-4 overflow-hidden"><span className={`inline-block max-w-full truncate px-2.5 py-0.5 text-xs font-medium rounded ${getTypeColor(t.transaction_type)}`}>{t.reversal_of_id ? `Reversal · ${getTypeLabel(t.transaction_type)}` : getTypeLabel(t.transaction_type)}</span>{t.reversal_of_id && <div className="text-xs text-gray-500 mt-1 truncate" title={t.reversal_of_transaction_number}>Reverses {t.reversal_of_transaction_number || `transaction #${t.reversal_of_id}`}</div>}</td>
+                                        <td className="p-4 overflow-hidden"><span className={`inline-block max-w-full truncate px-2.5 py-0.5 text-xs font-medium rounded ${getTypeColor(t.transaction_type)}`}>{t.reversal_of_id ? `Reversal · ${getTypeLabel(t.transaction_type)}` : getTypeLabel(t.transaction_type)}</span>{t.installment_allocations?.some((allocation: any) => allocation.is_interest_extension) && <span className="mt-1 inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-950 ring-1 ring-amber-300"><i className="fa-solid fa-circle-exclamation" aria-hidden="true" />Post-term interest</span>}{t.reversal_of_id && <div className="text-xs text-gray-500 mt-1 truncate" title={t.reversal_of_transaction_number}>Reverses {t.reversal_of_transaction_number || `transaction #${t.reversal_of_id}`}</div>}</td>
                                         <td className={`p-4 text-sm font-semibold whitespace-nowrap ${(['withdrawal', 'fee'].includes(t.transaction_type) !== !!t.reversal_of_id) ? 'text-red-600' : 'text-green-600'}`}>{(['withdrawal', 'fee'].includes(t.transaction_type) !== !!t.reversal_of_id) ? '-' : '+'}₱{Number(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                         <td className="w-20 p-3"><span className={`block truncate text-xs font-medium ${t.status === 'completed' ? 'text-emerald-600' : 'text-amber-600'}`} title={t.status}>{t.status}</span></td>
                                         <td className="w-28 p-3 text-sm text-gray-500"><span className="block truncate" title={t.transaction_date || '—'}>{t.transaction_date || '—'}</span></td>
@@ -447,6 +447,17 @@ export default function LedgerPage() {
                         <div className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</div>
                         <div className="mt-1 break-words text-sm text-gray-900">{value}</div>
                     </div>)}
+                    {!!viewingTransaction.installment_allocations?.length && <div className="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                        <div className="text-xs font-bold uppercase tracking-wide text-amber-950">Loan installments covered</div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                            {viewingTransaction.installment_allocations.map((allocation: any) => (
+                                <span key={allocation.period} className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm ${allocation.is_interest_extension ? 'bg-amber-200 font-semibold text-amber-950 ring-1 ring-amber-400' : 'bg-white text-gray-800 ring-1 ring-gray-200'}`}>
+                                    {allocation.is_interest_extension ? 'Post-term interest only' : 'Scheduled installment'} #{allocation.period}
+                                    <strong>₱{Number(allocation.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                                </span>
+                            ))}
+                        </div>
+                    </div>}
                     <div className="sm:col-span-2"><div className="text-xs font-medium uppercase tracking-wide text-gray-500">Note</div><div className="mt-1 whitespace-pre-wrap break-words text-sm text-gray-900">{viewingTransaction.note || '—'}</div></div>
                 </div>}
             </Modal>

@@ -394,6 +394,7 @@ export default function LoansPage() {
                                         <InfoRow label="Term" value={`${detail.term_months} months`} hint="How long the borrower has to repay the loan, in months." />
                                         <InfoRow label="Payment Frequency" value={detail.payment_frequency} hint="How often an installment is due (for example, monthly)." />
                                         <InfoRow label="Overdue Penalty" value={detail.penalty_amount > 0 ? `${detail.penalty_type === 'percent' ? `${detail.penalty_amount}%` : formatPeso(detail.penalty_amount)} · ${detail.penalty_frequency === 'per_due' ? 'per overdue installment' : detail.penalty_frequency}` : 'None'} hint="Penalty rules are copied from the loan product when the loan is created." />
+                                        <InfoRow label="Post-term interest amortization" value={<span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${detail.interest_extension_penalty ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300' : 'bg-gray-100 text-gray-600'}`}><i className={`fa-solid ${detail.interest_extension_penalty ? 'fa-circle-exclamation' : 'fa-circle-minus'}`} aria-hidden="true" />{detail.interest_extension_penalty ? 'Enabled' : 'Disabled'}</span>} hint="When enabled, interest-only installments are added at each payment interval after the final due date while scheduled amounts remain unpaid." />
                                         <InfoRow label="Amount Due Now" value={formatPeso(detail.amount_due || 0)} hint="Unpaid scheduled installments plus accrued overdue penalties." />
                                         <InfoRow label="Status" value={<span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${getStatusColor(detail.loan_status)}`}>{getStatusLabel(detail.loan_status)}</span>} />
                                         <InfoRow label="Applied" value={detail.applied_at || '—'} />
@@ -417,6 +418,7 @@ export default function LoansPage() {
                             {/* Tab: Amortization Schedule */}
                             {activeTab === 'schedule' && (
                                 <div className="space-y-3">
+                                    {detail?.interest_extension_penalty && <p className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950"><i className="fa-solid fa-circle-exclamation mt-0.5" aria-hidden="true" />Amber rows marked <strong>Interest only</strong> are the post-term amortizations configured for this loan product.</p>}
                                     <p className="flex flex-wrap items-center gap-1 text-sm text-gray-500">
                                         Each row is one installment. <span className="inline-flex items-center gap-1">Payment <HelpTip text="The amount due for this period: principal plus interest." /></span>
                                         = <span className="inline-flex items-center gap-1">Principal <HelpTip text="The part of this payment that reduces the amount borrowed." /></span>

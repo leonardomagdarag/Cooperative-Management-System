@@ -6,6 +6,7 @@ export interface Transaction {
     transaction_type: string;
     reversal_of_id?: number | null;
     amount: number;
+    balance_after: number | null;
     status: string;
     note: string;
     transaction_date: string;

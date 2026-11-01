@@ -14,7 +14,8 @@ class HistoryController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = Auth::user();
-        $userAccounts = $user->accounts->pluck('id');
+        $accounts = $user->accounts;
+        $userAccounts = $accounts->pluck('id');
 
         $query = Transaction::with(['account', 'loan', 'recordedBy'])
             ->whereIn('account_id', $userAccounts);
@@ -61,7 +62,40 @@ class HistoryController extends Controller
         // Sort
         $sortDirection = $request->string('direction', 'desc')->toString();
         $query->orderBy('transaction_date', $sortDirection)
-            ->orderBy('created_at', $sortDirection);
+            ->orderBy('created_at', $sortDirection)
+            ->orderBy('id', $sortDirection);
+
+        $accountBalances = $userAccounts->mapWithKeys(fn ($accountId) => [
+            $accountId => (float) $accounts->firstWhere('id', $accountId)->balance,
+        ]);
+        $runningBalances = [];
+        $completedTransactions = Transaction::query()
+            ->whereIn('account_id', $userAccounts)
+            ->where('status', 'completed')
+            ->orderBy('transaction_date')
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get(['id', 'account_id', 'transaction_type', 'amount', 'reversal_of_id']);
+
+        // Anchor the running balances to the current account totals so legacy
+        // accounts with an opening balance remain accurate.
+        $initialBalances = $accountBalances->mapWithKeys(function (float $balance, $accountId) use ($completedTransactions) {
+            $totalEffect = $completedTransactions
+                ->where('account_id', $accountId)
+                ->sum(fn ($transaction) => $this->balanceEffect($transaction));
+
+            return [$accountId => $balance - $totalEffect];
+        });
+
+        foreach ($initialBalances as $accountId => $balance) {
+            $runningBalances[$accountId] = $balance;
+        }
+
+        $balancesAfter = [];
+        foreach ($completedTransactions as $transaction) {
+            $runningBalances[$transaction->account_id] += $this->balanceEffect($transaction);
+            $balancesAfter[$transaction->id] = round($runningBalances[$transaction->account_id], 2);
+        }
 
         $perPage = max(5, min((int) $request->integer('per_page', 15), 50));
         $paginator = $query->paginate($perPage);
@@ -73,6 +107,7 @@ class HistoryController extends Controller
                 'transaction_type' => $t->transaction_type,
                 'reversal_of_id' => $t->reversal_of_id,
                 'amount' => $t->amount,
+                'balance_after' => $balancesAfter[$t->id] ?? null,
                 'status' => $t->status,
                 'note' => $t->note,
                 'transaction_date' => $t->transaction_date?->format('Y-m-d'),
@@ -98,5 +133,16 @@ class HistoryController extends Controller
                 'total' => $paginator->total(),
             ],
         ]);
+    }
+
+    private function balanceEffect(Transaction $transaction): float
+    {
+        $effect = match ($transaction->transaction_type) {
+            'deposit', 'loan_disbursement', 'interest' => (float) $transaction->amount,
+            'withdrawal', 'loan_payment' => -(float) $transaction->amount,
+            default => 0.0,
+        };
+
+        return $transaction->reversal_of_id === null ? $effect : -$effect;
     }
 }

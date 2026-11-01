@@ -28,7 +28,7 @@ export default function AmortizationTable({ schedule, totalPaid, compact = false
         <div className="space-y-3">
             {showLegend && <Legend />}
             <div className="overflow-x-auto">
-                <table className="min-w-[760px] w-full text-sm">
+                <table className="min-w-[820px] w-full text-sm">
                     <thead className="bg-gray-50">
                         <tr className="text-left text-xs font-semibold uppercase tracking-wider text-gray-400">
                             <th className={head}>#</th>
@@ -45,8 +45,9 @@ export default function AmortizationTable({ schedule, totalPaid, compact = false
                         {rows.map((row) => {
                             const style = INSTALLMENT_STATUS[row.status];
                             const isNext = row.status === 'due';
+                            const isInterestExtension = Number(row.interest_extension) > 0;
                             return (
-                                <tr key={row.period} className={`${style.rowClass} hover:bg-gray-50`}>
+                                <tr key={row.period} className={`${isInterestExtension ? 'bg-amber-50 ring-1 ring-inset ring-amber-200' : style.rowClass} hover:bg-gray-50`}>
                                     <td className={`${pad} ${isNext ? 'border-l-4 border-emerald-500 font-semibold text-emerald-800' : ''}`}>
                                         <span className="inline-flex items-center gap-1.5">
                                             {row.status === 'paid' && <i className="fas fa-check text-emerald-600" aria-label="Paid" />}
@@ -54,11 +55,12 @@ export default function AmortizationTable({ schedule, totalPaid, compact = false
                                             {isNext && <i className="fas fa-arrow-right text-emerald-600" aria-label="Next due" />}
                                             {row.period}
                                         </span>
+                                        {isInterestExtension && <span className="mt-1 block whitespace-nowrap rounded bg-amber-200 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-950">Interest only</span>}
                                     </td>
                                     <td className={`${pad} text-gray-600`}>{row.due_date || '—'}</td>
                                     <td className={`${pad} text-right font-medium text-gray-900`}>{formatPeso(row.payment)}</td>
                                     <td className={`${pad} text-right text-gray-600`}>{formatPeso(row.principal)}</td>
-                                    <td className={`${pad} text-right text-gray-500`}>{formatPeso(row.interest)}</td>
+                                    <td className={`${pad} text-right ${isInterestExtension ? 'font-semibold text-amber-900' : 'text-gray-500'}`}>{formatPeso(row.interest)}</td>
                                     <td className={`${pad} text-right ${Number(row.penalty) > 0 ? 'font-medium text-amber-700' : 'text-gray-400'}`}>{Number(row.penalty) > 0 ? formatPeso(row.penalty) : '—'}</td>
                                     <td className={`${pad} text-right text-gray-500`}>{Number(row.balance) > 0 ? formatPeso(row.balance) : '—'}</td>
                                     <td className={pad}><Badge variant={style.badgeVariant}>{style.label}</Badge></td>

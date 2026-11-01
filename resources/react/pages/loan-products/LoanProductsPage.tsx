@@ -13,6 +13,7 @@ interface LoanProduct {
     id: number; code: string; name: string; description: string; base_type: string;
     icon: string; interest_rate: number; max_amount: number; max_term: number;
     penalty_type: 'flat' | 'percent'; penalty_amount: number; penalty_frequency: 'daily' | 'weekly' | 'per_due';
+    interest_extension_penalty: boolean;
     is_active: boolean; requires_no_existing_loan: boolean; minimum_share_capital: number;
     minimum_membership_years: number; required_co_makers: number; requires_interview: boolean;
     requires_special_eligibility: boolean; sort_order: number;
@@ -22,6 +23,7 @@ const emptyProduct: Partial<LoanProduct> = {
     code: '', name: '', description: '', base_type: 'business', icon: 'wallet',
     interest_rate: 0, max_amount: 0, max_term: 1, is_active: true,
     penalty_type: 'flat', penalty_amount: 0, penalty_frequency: 'per_due',
+    interest_extension_penalty: false,
     requires_no_existing_loan: false, minimum_share_capital: 0, minimum_membership_years: 0,
     required_co_makers: 0, requires_interview: false, requires_special_eligibility: false, sort_order: 0,
 };
@@ -270,6 +272,10 @@ export default function LoanProductsPage() {
                                                     ) : (
                                                         <span className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-3 py-1 text-xs text-gray-500">No overdue penalty</span>
                                                     )}
+                                                    <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${p.interest_extension_penalty ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300' : 'bg-gray-100 text-gray-600'}`}>
+                                                        <i className={`fa-solid ${p.interest_extension_penalty ? 'fa-circle-exclamation' : 'fa-circle-minus'}`} aria-hidden="true"></i>
+                                                        Post-term interest: {p.interest_extension_penalty ? 'On' : 'Off'}
+                                                    </span>
                                                     {p.requires_no_existing_loan && (
                                                         <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700">
                                                             <i className="fa-solid fa-ban text-xs"></i> No active loan
@@ -464,6 +470,23 @@ export default function LoanProductsPage() {
                                                     <option value="daily">Daily after due date</option>
                                                     <option value="weekly">Weekly after due date</option>
                                                 </select>
+                                            </div>
+                                        </div>
+                                    </fieldset>
+
+                                    <fieldset className={`rounded-xl border-2 p-5 transition-colors ${form.interest_extension_penalty ? 'border-amber-500 bg-amber-50' : 'border-amber-200 bg-white'}`}>
+                                        <legend className="px-2 text-sm font-extrabold uppercase tracking-wide text-amber-900">Post-term interest amortization</legend>
+                                        <div className="flex items-start gap-4">
+                                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800" aria-hidden="true">
+                                                <i className="fa-solid fa-calendar-plus text-lg"></i>
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <label htmlFor="interest-extension-penalty" className="block text-base font-bold text-gray-900">Add interest-only installments after the loan term</label>
+                                                <p className="mt-1 text-sm leading-5 text-gray-700">If any scheduled amount is still unpaid after the final due date, add an installment for the final schedule's interest at every payment interval. Weekly loans add one each week.</p>
+                                                <label htmlFor="interest-extension-penalty" className="mt-4 inline-flex cursor-pointer items-center gap-3 rounded-lg border border-amber-300 bg-white px-4 py-3 shadow-sm hover:bg-amber-100/60 focus-within:ring-2 focus-within:ring-amber-500">
+                                                    <input id="interest-extension-penalty" type="checkbox" checked={!!form.interest_extension_penalty} onChange={e => setField('interest_extension_penalty', e.target.checked)} className="h-5 w-5 rounded border-gray-400 text-amber-700 focus:ring-amber-600" />
+                                                    <span className="text-sm font-bold text-gray-900">{form.interest_extension_penalty ? 'Enabled' : 'Disabled'}</span>
+                                                </label>
                                             </div>
                                         </div>
                                     </fieldset>

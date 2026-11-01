@@ -74,8 +74,9 @@ class LoanPolicy
     }
 
     /**
-     * Final approval is restricted to the chairman and separated from the
-     * applicant, encoder, and reviewer.
+     * Final approval is separated from the applicant and encoder. A chairman
+     * may approve their own endorsement; their endorsement action completes
+     * both steps in one request.
      */
     public function finalApprove(User $user, Loan $loan): bool
     {
@@ -85,7 +86,7 @@ class LoanPolicy
 
         if ((int) $loan->user_id === (int) $user->id
             || (int) $loan->encoded_by === (int) $user->id
-            || (int) $loan->reviewed_by === (int) $user->id) {
+            || ((int) $loan->reviewed_by === (int) $user->id && ! $user->hasRole('chairman'))) {
             return false;
         }
 

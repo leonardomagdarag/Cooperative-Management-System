@@ -190,6 +190,7 @@ class LoanSeeder extends Seeder
             'penalty_type' => $product->penalty_type,
             'penalty_amount' => $product->penalty_amount,
             'penalty_frequency' => $product->penalty_frequency,
+            'interest_extension_penalty' => $product->interest_extension_penalty,
             'term_months' => $termMonths,
             // The repayment schedule is monthly, so the seeded loans are too.
             'payment_frequency' => 'monthly',

@@ -25,6 +25,7 @@ class Loan extends Model
         'penalty_type',
         'penalty_amount',
         'penalty_frequency',
+        'interest_extension_penalty',
         'term_months',
         'payment_frequency',
         'loan_status',
@@ -56,6 +57,7 @@ class Loan extends Model
         'reviewed_at' => 'datetime',
         'due_date' => 'date',
         'interview_schedule' => 'datetime',
+        'interest_extension_penalty' => 'boolean',
     ];
 
     /** Loans that are still actionable in the officer review queue. */
@@ -205,7 +207,10 @@ class Loan extends Model
 
     public function remainingBalance()
     {
-        return max(0, round($this->totalPayable() - $this->schedulePaid(), 2)) + $this->accruedPenalty();
+        $schedule = $this->paymentSchedule() ?? [];
+        $extensionTotal = collect($schedule)->sum(fn ($installment) => $installment['interest_extension'] ?? 0);
+
+        return max(0, round($this->totalPayable() + $extensionTotal - $this->schedulePaid(), 2)) + $this->accruedPenalty();
     }
 
     /**
@@ -297,6 +302,61 @@ class Loan extends Model
                 'total_interest' => $totalInterestCents / 100,
                 'total_payment' => $totalPaymentCents / 100,
             ];
+        }
+
+        // Once the original term ends, an enabled product can add interest-only
+        // amortizations at the loan's payment frequency while an amount remains
+        // unpaid. These periods are derived from the schedule date and allocation
+        // records, so recalculating the schedule cannot create duplicate charges.
+        $baseOutstanding = round(array_sum(array_column($schedule, 'amount_due')), 2);
+        if ($this->interest_extension_penalty && $baseOutstanding > 0.001 && ($interestPerPeriod + $interestRemainder) > 0) {
+            $lastDueDate = $startDate->copy()->addMonths($term)->startOfDay();
+            $frequency = match ($this->payment_frequency) {
+                'weekly' => ['addWeeks', 1],
+                'bi-weekly' => ['addWeeks', 2],
+                'quarterly' => ['addMonths', 3],
+                'annually' => ['addYears', 1],
+                default => ['addMonths', 1],
+            };
+            $extensionInterestCents = $interestPerPeriod + $interestRemainder;
+            $extensionInterest = $extensionInterestCents / 100;
+            $period = $term + 1;
+            $extensionOutstanding = 0.0;
+            $interestPaid = DB::table('loan_payment_installment_allocations as allocations')
+                ->join('transactions', 'transactions.id', '=', 'allocations.transaction_id')
+                ->where('transactions.loan_id', $this->id)
+                ->where('transactions.status', 'completed')
+                ->where('allocations.period', '>', $term)
+                ->selectRaw('COALESCE(SUM(CASE WHEN transactions.reversal_of_id IS NULL THEN allocations.amount ELSE -allocations.amount END), 0) as amount')
+                ->value('amount');
+            $interestPaid = (float) $interestPaid;
+
+            while (true) {
+                $dueDate = $lastDueDate->copy()->{$frequency[0]}($frequency[1])->startOfDay();
+                if ($dueDate->greaterThan($now) || $baseOutstanding + $extensionOutstanding <= 0.001) {
+                    break;
+                }
+
+                $paid = min($extensionInterest, $interestPaid);
+                $interestPaid -= $paid;
+                $extensionOutstanding += $extensionInterest - $paid;
+                $schedule[] = [
+                    'period' => $period,
+                    'due_date' => $dueDate->format('M d, Y'),
+                    'payment' => $extensionInterest,
+                    'paid' => $paid,
+                    'amount_due' => max(0.0, $extensionInterest - $paid),
+                    'principal' => 0.0,
+                    'interest' => $extensionInterest,
+                    'penalty' => 0.0,
+                    'interest_extension' => $extensionInterest,
+                    'balance' => 0.0,
+                    'total_interest' => ($totalInterestCents / 100) + ($extensionInterest * ($period - $term)),
+                    'total_payment' => ($totalPaymentCents / 100) + ($extensionInterest * ($period - $term)),
+                ];
+                $lastDueDate = $dueDate;
+                $period++;
+            }
         }
 
         // Penalty payments are stored on the loan transaction rather than an

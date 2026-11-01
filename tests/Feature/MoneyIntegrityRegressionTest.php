@@ -338,6 +338,92 @@ test('daily penalties continue while an installment remains partially unpaid and
         ->and($loan->fresh()->paymentSchedule()[0]['penalty'])->toBe(0.0);
 });
 
+test('enabled weekly interest extension adds an interest-only installment for each overdue week', function () {
+    $this->travelTo(Carbon::parse('2026-10-22 12:00:00'));
+    $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $loan = Loan::factory()->create([
+        'user_id' => $member->id,
+        'loan_amount' => 12000,
+        'interest_rate' => 3,
+        'term_months' => 1,
+        'payment_frequency' => 'weekly',
+        'loan_status' => 'active',
+        'disbursed_at' => Carbon::parse('2026-09-01 12:00:00'),
+        'interest_extension_penalty' => true,
+        'penalty_amount' => 0,
+    ]);
+
+    $schedule = $loan->paymentSchedule();
+    expect($schedule)->toHaveCount(4)
+        ->and($schedule[1]['due_date'])->toBe('Oct 08, 2026')
+        ->and($schedule[1]['payment'])->toEqual(360.0)
+        ->and($schedule[1]['principal'])->toEqual(0.0)
+        ->and($schedule[2]['due_date'])->toBe('Oct 15, 2026')
+        ->and($schedule[3]['due_date'])->toBe('Oct 22, 2026')
+        ->and($loan->remainingBalance())->toEqual(13440.0);
+
+    $payment = Transaction::create([
+        'loan_id' => $loan->id,
+        'transaction_type' => 'loan_payment',
+        'transaction_mode' => 'counter',
+        'amount' => 360,
+        'penalty_amount' => 0,
+        'status' => 'completed',
+        'transaction_date' => now(),
+        'recorded_by' => $member->id,
+    ]);
+    DB::table('loan_payment_installment_allocations')->insert([
+        'transaction_id' => $payment->id,
+        'period' => 2,
+        'amount' => 360,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    expect($loan->fresh()->paymentSchedule()[1]['amount_due'])->toEqual(0.0)
+        ->and($loan->fresh()->remainingBalance())->toEqual(13080.0);
+});
+
+test('ledger marks payments allocated to post-term interest installments', function () {
+    $this->travelTo(Carbon::parse('2026-10-22 12:00:00'));
+    $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $loan = Loan::factory()->create([
+        'user_id' => $member->id,
+        'loan_amount' => 12000,
+        'interest_rate' => 3,
+        'term_months' => 1,
+        'payment_frequency' => 'weekly',
+        'loan_status' => 'active',
+        'disbursed_at' => Carbon::parse('2026-09-01 12:00:00'),
+        'interest_extension_penalty' => true,
+        'penalty_amount' => 0,
+    ]);
+    $payment = Transaction::create([
+        'loan_id' => $loan->id,
+        'transaction_type' => 'loan_payment',
+        'transaction_mode' => 'counter',
+        'amount' => 360,
+        'penalty_amount' => 0,
+        'status' => 'completed',
+        'transaction_date' => now(),
+        'recorded_by' => $member->id,
+    ]);
+    DB::table('loan_payment_installment_allocations')->insert([
+        'transaction_id' => $payment->id,
+        'period' => 2,
+        'amount' => 360,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    $accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
+
+    $this->actingAs($accountant)->getJson('/api/ledger?category=loan_payment')
+        ->assertOk()
+        ->assertJsonPath('data.0.loan_number', $loan->loan_number)
+        ->assertJsonPath('data.0.installment_allocations.0.period', 2)
+        ->assertJsonPath('data.0.installment_allocations.0.is_interest_extension', true);
+});
+
 test('member can submit a partial external payment for a selected installment without savings debit', function () {
     $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
     $account = Account::where('user_id', $member->id)->where('account_type', 'savings')->firstOrFail();

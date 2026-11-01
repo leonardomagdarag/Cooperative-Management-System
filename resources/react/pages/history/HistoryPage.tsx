@@ -154,6 +154,11 @@ export default function HistoryPage() {
                                 </div>
                                 <div className="text-right">
                                     <p className={`text-xl font-bold ${amountColor}`}>{isCredit ? '+' : '-'}&#8369;{Number(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                    {t.balance_after !== null && (
+                                        <p className="text-sm text-gray-600">
+                                            Balance after: &#8369;{Number(t.balance_after).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </p>
+                                    )}
                                     <div className="mt-1 flex items-center gap-2 justify-end">
                                         <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusColor(t.status)}`}>
                                             {t.status}

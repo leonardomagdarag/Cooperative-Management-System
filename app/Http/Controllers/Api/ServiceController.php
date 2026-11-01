@@ -370,6 +370,7 @@ class ServiceController extends Controller
                 'penalty_type' => $product->penalty_type,
                 'penalty_amount' => $product->penalty_amount,
                 'penalty_frequency' => $product->penalty_frequency,
+                'interest_extension_penalty' => $product->interest_extension_penalty,
                 'term_months' => $validated['term_months'],
                 'payment_frequency' => $validated['payment_frequency'],
                 'loan_status' => 'pending',

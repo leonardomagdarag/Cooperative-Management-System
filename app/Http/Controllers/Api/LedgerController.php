@@ -63,6 +63,15 @@ class LedgerController extends Controller
 
         $perPage = max(5, min((int) $request->integer('per_page', 10), 50));
         $paginator = $query->paginate($perPage);
+        $transactionIds = $paginator->getCollection()
+            ->flatMap(fn ($transaction) => [$transaction->id, $transaction->reversal_of_id])
+            ->filter()
+            ->unique();
+        $installmentAllocations = DB::table('loan_payment_installment_allocations')
+            ->whereIn('transaction_id', $transactionIds)
+            ->orderBy('period')
+            ->get()
+            ->groupBy('transaction_id');
 
         return response()->json([
             'data' => $paginator->getCollection()->map(fn ($t) => [
@@ -80,6 +89,15 @@ class LedgerController extends Controller
                 'account_holder' => $t->account?->user ? trim(($t->account->user->personalData->first_name ?? '').' '.($t->account->user->personalData->last_name ?? '')) : null,
                 'user_number' => $t->account?->user?->user_number,
                 'loan_number' => $t->loan?->loan_number,
+                'installment_allocations' => $installmentAllocations
+                    ->get($t->reversal_of_id ?? $t->id, collect())
+                    ->map(fn ($allocation) => [
+                        'period' => (int) $allocation->period,
+                        'amount' => (float) $allocation->amount,
+                        'is_interest_extension' => (bool) ($t->loan?->interest_extension_penalty
+                            && (int) $allocation->period > (int) $t->loan->term_months),
+                    ])
+                    ->values(),
                 'branch_id' => $t->branch_id,
                 'branch_name' => $t->branch?->name,
                 'recorded_by' => $t->recordedBy ? trim(($t->recordedBy->personalData->first_name ?? '').' '.($t->recordedBy->personalData->last_name ?? '')) : null,
@@ -160,14 +178,34 @@ class LedgerController extends Controller
         }
 
         $transactions = $query->orderByDesc('created_at')->get();
+        $transactionIds = $transactions
+            ->flatMap(fn ($transaction) => [$transaction->id, $transaction->reversal_of_id])
+            ->filter()
+            ->unique();
+        $installmentAllocations = DB::table('loan_payment_installment_allocations')
+            ->whereIn('transaction_id', $transactionIds)
+            ->orderBy('period')
+            ->get()
+            ->groupBy('transaction_id');
 
         $filename = 'ledger-'.now()->format('Y-m-d').'.csv';
 
-        return response()->streamDownload(function () use ($transactions) {
+        return response()->streamDownload(function () use ($transactions, $installmentAllocations) {
             $out = fopen('php://output', 'w');
-            fputcsv($out, ['Transaction #', 'Type', 'Amount', 'Status', 'Mode', 'Member', 'User #', 'Loan #', 'Reversal Of', 'Note', 'Date', 'Recorded By']);
+            fputcsv($out, ['Transaction #', 'Type', 'Amount', 'Status', 'Mode', 'Member', 'User #', 'Loan #', 'Installment allocations', 'Reversal Of', 'Note', 'Date', 'Recorded By']);
 
             foreach ($transactions as $t) {
+                $allocationLabel = $installmentAllocations
+                    ->get($t->reversal_of_id ?? $t->id, collect())
+                    ->map(fn ($allocation) => sprintf(
+                        '%s #%d: %.2f',
+                        $t->loan?->interest_extension_penalty && (int) $allocation->period > (int) $t->loan->term_months
+                            ? 'Post-term interest installment'
+                            : 'Installment',
+                        $allocation->period,
+                        $allocation->amount
+                    ))
+                    ->implode('; ');
                 fputcsv($out, [
                     $t->transaction_number,
                     $t->transaction_type,
@@ -177,6 +215,7 @@ class LedgerController extends Controller
                     $t->account?->user ? trim(($t->account->user->personalData->first_name ?? '').' '.($t->account->user->personalData->last_name ?? '')) : '',
                     $t->account?->user?->user_number,
                     $t->loan?->loan_number,
+                    $allocationLabel,
                     $t->reversalOf?->transaction_number,
                     $t->note,
                     $t->transaction_date?->format('Y-m-d'),

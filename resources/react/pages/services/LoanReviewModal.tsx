@@ -44,12 +44,19 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
         queryKey: ['reviewable-loans'],
         queryFn: () => api.get('/api/loans?loan_status=pending&per_page=50'),
     });
+    const { data: detailData, isLoading: detailLoading } = useQuery({
+        queryKey: ['loan-detail', selectedLoanId],
+        queryFn: () => api.get(`/api/loans/${selectedLoanId}`),
+        enabled: selectedLoanId !== null,
+    });
     const loans: any[] = (data?.data?.data ?? []).filter(
         (l: any) => l.review_status === null || l.review_status === 'under_review' || l.review_status === 'endorsed_for_approval',
     );
-    const selectedLoan = selectedLoanId ? loans.find((l: any) => l.id === selectedLoanId) ?? null : null;
+    const selectedLoan = selectedLoanId
+        ? { ...(loans.find((l: any) => l.id === selectedLoanId) ?? {}), ...(detailData?.data ?? {}) }
+        : null;
     const isCurrentReviewer = selectedLoan && user
-        ? Number(selectedLoan.reviewed_by) === user.id
+        ? Number(selectedLoan.reviewed_by) === user.id && !(user.primary_role === 'chairman' && canFinalApprove)
         : false;
 
     const reviewMutation = useMutation({
@@ -98,6 +105,11 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
 
     const borderFor = (a: string | null) =>
         a === 'reject' ? 'border-red-200' : a === 'endorse' ? 'border-brand-200' : 'border-blue-200';
+
+    const memberLoans = [
+        ...(selectedLoan?.borrower?.active_loans ?? []).map((loan: any) => ({ ...loan, review_status: 'active' })),
+        ...(selectedLoan?.borrower?.previous_loans ?? []).map((loan: any) => ({ ...loan, review_status: 'paid_off' })),
+    ];
 
     return (
         <Modal
@@ -179,6 +191,10 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
                             </button>
                         </div>
                     )
+                ) : detailLoading ? (
+                    <div className="space-y-4">
+                        {[...Array(3)].map((_, i) => <div key={i} className="h-24 animate-pulse rounded-xl bg-slate-200" />)}
+                    </div>
                 ) : !selectedLoan ? (
                     <div className="text-center py-12">
                         <p className="text-slate-500">Loan not found. It may have been updated.</p>
@@ -260,6 +276,77 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
                             )}
                         </div>
 
+                        <div className="grid gap-4 lg:grid-cols-2">
+                            <section className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+                                <h4 className="font-bold text-slate-900 mb-3"><i className="fas fa-coins mr-2 text-brand-600"></i>Member financials</h4>
+                                <div className="grid grid-cols-2 gap-3">
+                                    {(['savings', 'share-capital'] as const).map(type => {
+                                        const account = selectedLoan.borrower?.accounts?.find((item: any) => item.type === type);
+                                        return <div key={type} className={`rounded-xl border p-4 ${type === 'savings' ? 'border-emerald-200 bg-emerald-50' : 'border-blue-200 bg-blue-50'}`}>
+                                            <p className={`text-xs font-bold uppercase tracking-wider ${type === 'savings' ? 'text-emerald-700' : 'text-blue-700'}`}>{type === 'savings' ? 'Savings' : 'Share Capital'}</p>
+                                            <p className={`mt-1 text-2xl font-extrabold ${type === 'savings' ? 'text-emerald-900' : 'text-blue-900'}`}>{peso(account?.balance ?? 0)}</p>
+                                        </div>;
+                                    })}
+                                </div>
+                                <h5 className="text-xs uppercase tracking-wider font-semibold text-slate-500 mt-5 mb-2">Employment and income</h5>
+                                {selectedLoan.borrower?.employment ? (
+                                    <div className="grid grid-cols-2 gap-3 text-sm">
+                                        <Summary label="Employment" value={selectedLoan.borrower.employment.type} />
+                                        <Summary label="Employer" value={selectedLoan.borrower.employment.company} />
+                                        <Summary label="Position" value={selectedLoan.borrower.employment.position} />
+                                        <Summary label="Monthly income" value={selectedLoan.borrower.employment.monthly_income != null ? peso(selectedLoan.borrower.employment.monthly_income) : null} />
+                                        <Summary label="Other income" value={selectedLoan.borrower.employment.other_income_amount != null ? `${selectedLoan.borrower.employment.other_income_source || 'Other'} · ${peso(selectedLoan.borrower.employment.other_income_amount)}` : null} />
+                                    </div>
+                                ) : <p className="text-sm text-slate-500">No employment or income details on file.</p>}
+                            </section>
+                            <section className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+                                <h4 className="font-bold text-slate-900 mb-3"><i className="fas fa-id-card mr-2 text-brand-600"></i>Member IDs</h4>
+                                {selectedLoan.borrower?.ids ? <div className="grid grid-cols-2 gap-2 text-sm">
+                                    {Object.entries(selectedLoan.borrower.ids).filter(([key]) => key !== 'photos').map(([key, value]) => <Summary key={key} label={key.replace('_', ' ')} value={value as string} />)}
+                                    {selectedLoan.borrower.ids.photos?.map((url: string, index: number) => <a key={url} href={url} target="_blank" rel="noreferrer" className="text-brand-700 underline">View ID image {index + 1}</a>)}
+                                </div> : <p className="text-sm text-slate-500">No ID details on file.</p>}
+                                <h5 className="text-xs uppercase tracking-wider font-semibold text-slate-500 mt-4 mb-2">Loan supporting documents</h5>
+                                {selectedLoan.documents?.length ? selectedLoan.documents.map((document: any) => (
+                                    <a key={document.id} href={document.url} target="_blank" rel="noreferrer" className="block text-sm text-brand-700 underline">{document.original_name}</a>
+                                )) : <p className="text-sm text-slate-500">No loan documents uploaded.</p>}
+                            </section>
+                        </div>
+
+                        <section className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+                            <h4 className="font-bold text-slate-900 mb-3"><i className="fas fa-file-invoice-dollar mr-2 text-brand-600"></i>Loans</h4>
+                            {memberLoans.length ? <div className="grid gap-3 md:grid-cols-2">
+                                {memberLoans.map((memberLoan: any) => {
+                                    const isActive = memberLoan.review_status === 'active';
+                                    return <article key={memberLoan.loan_number} className={`rounded-lg border p-4 ${isActive ? 'border-amber-200 bg-amber-50/50' : 'border-slate-200 bg-slate-50'}`}>
+                                        <div className="flex items-center justify-between gap-3">
+                                            <strong className="text-slate-900">{memberLoan.loan_number}</strong>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-semibold text-slate-600">{capitalize(memberLoan.type)}</span>
+                                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${isActive ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-700'}`}>
+                                                    {isActive ? 'Active' : 'Paid off'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className={`mt-3 grid gap-3 text-sm ${isActive ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                                            {isActive ? <>
+                                                <Summary label="Principal" value={peso(memberLoan.principal)} />
+                                                <Summary label="Total repayment" value={peso(memberLoan.total_repayment)} />
+                                                <Summary label="Paid so far" value={peso(memberLoan.paid_amount)} />
+                                                <Summary label="Remaining balance" value={peso(memberLoan.remaining_balance)} />
+                                                <Summary label="Payments made" value={memberLoan.payments_done} />
+                                                <Summary label="Overdue installments" value={memberLoan.overdue_count} />
+                                                <Summary label="Expected end" value={memberLoan.expected_end ? fmtDate(memberLoan.expected_end) : 'Not available'} />
+                                            </> : <>
+                                                <Summary label="Loan amount" value={peso(memberLoan.amount)} />
+                                                <Summary label="Duration" value={`${memberLoan.duration_months ?? '—'} months`} />
+                                                <Summary label="Times overdue" value={memberLoan.overdue_count} />
+                                            </>}
+                                        </div>
+                                    </article>;
+                                })}
+                            </div> : <p className="text-sm text-slate-500">No active or previous loans.</p>}
+                        </section>
+
                         {selectedLoan.review_status === null && (
                             <div className="bg-brand-50 border border-brand-200 rounded-xl p-5 shadow-sm">
                                 <p className="text-sm text-brand-700 mb-4 font-medium">
@@ -281,6 +368,9 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
 
                         {selectedLoan.review_status === 'under_review' && (
                             <div className="space-y-4">
+                                <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                                    <strong className="text-slate-900">Overall review verdict:</strong> choose Endorse to advance this application or Reject with a reason.
+                                </div>
                                 <div className="flex gap-3">
                                     {selectedLoan.interview_schedule && selectedLoan.interview_status !== 'completed' && (
                                         <button onClick={() => pickAction('interview_complete')}
@@ -290,7 +380,7 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
                                     )}
                                     <button onClick={() => pickAction('endorse')}
                                         className={`flex-1 py-2.5 rounded-lg font-medium transition-all text-sm shadow-sm border ${loanReviewAction === 'endorse' ? 'bg-brand-600 text-white border-transparent' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
-                                        <i className="fas fa-thumbs-up mr-1.5"></i>Endorse
+                                        <i className="fas fa-thumbs-up mr-1.5"></i>{user?.primary_role === 'chairman' && canFinalApprove ? 'Endorse & Approve' : 'Endorse'}
                                     </button>
                                     <button onClick={() => pickAction('reject')}
                                         className={`flex-1 py-2.5 rounded-lg font-medium transition-all text-sm shadow-sm border ${loanReviewAction === 'reject' ? 'bg-red-600 text-white border-transparent' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
@@ -328,7 +418,7 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
                                             {loanReviewAction === 'endorse' && (
                                                 <button onClick={() => confirmAction('endorse')} disabled={reviewMutation.isPending}
                                                     className="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50 shadow-sm">
-                                                    <i className="fas fa-thumbs-up mr-1.5"></i>{reviewMutation.isPending ? 'Processing...' : 'Confirm Endorsement'}
+                                                    <i className="fas fa-thumbs-up mr-1.5"></i>{reviewMutation.isPending ? 'Processing...' : user?.primary_role === 'chairman' && canFinalApprove ? 'Confirm Endorsement & Approval' : 'Confirm Endorsement'}
                                                 </button>
                                             )}
                                             {loanReviewAction === 'reject' && (
@@ -418,4 +508,11 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
             </div>
         </Modal>
     );
+}
+
+function Summary({ label, value }: { label: string; value?: string | number | null }) {
+    return <div>
+        <p className="text-xs text-slate-500 capitalize">{label.replace(/_/g, ' ')}</p>
+        <p className="font-medium text-slate-800">{value === null || value === undefined || value === '' ? 'Not on file' : value}</p>
+    </div>;
 }

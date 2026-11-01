@@ -21,7 +21,7 @@ beforeEach(function () {
     $this->applicant->assignRole('member');
 });
 
-test('only a chairman distinct from the applicant, encoder, and reviewer can final approve', function () {
+test('chairman may approve own endorsement but remains distinct from the applicant and encoder', function () {
     $loan = Loan::factory()->pending()->create([
         'user_id' => $this->applicant->id,
         'encoded_by' => $this->loanOfficer->id,
@@ -34,7 +34,7 @@ test('only a chairman distinct from the applicant, encoder, and reviewer can fin
         ->and(Gate::forUser($this->loanOfficer)->allows('finalApprove', $loan))->toBeFalse();
 
     $loan->update(['reviewed_by' => $this->chairman->id]);
-    expect(Gate::forUser($this->chairman)->allows('finalApprove', $loan->fresh()))->toBeFalse();
+    expect(Gate::forUser($this->chairman)->allows('finalApprove', $loan->fresh()))->toBeTrue();
 
     $loan->update(['reviewed_by' => $this->manager->id, 'encoded_by' => $this->chairman->id]);
     expect(Gate::forUser($this->chairman)->allows('finalApprove', $loan->fresh()))->toBeFalse();

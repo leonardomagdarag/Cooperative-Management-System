@@ -204,3 +204,34 @@ test('financial report counts credited interest as cash separately from collecte
     expect((float) $dashboard->json('month_interest_credits'))->toBe(55.0)
         ->and((float) $dashboard->json('month_net'))->toBe(55.0);
 });
+
+test('member financial history filters interest and supports safe sorting', function () {
+    $this->seed(SpatieRolePermissionSeeder::class);
+    $this->seed(UserSeeder::class);
+
+    $admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
+    $admin->givePermissionTo('reports.view');
+    $member = User::factory()->create();
+    $account = Account::factory()->create(['user_id' => $member->id, 'account_type' => 'savings']);
+
+    Transaction::factory()->create([
+        'account_id' => $account->id,
+        'transaction_type' => 'interest',
+        'amount' => 25,
+        'status' => 'completed',
+        'transaction_date' => '2024-06-02',
+    ]);
+    Transaction::factory()->create([
+        'account_id' => $account->id,
+        'transaction_type' => 'deposit',
+        'amount' => 100,
+        'status' => 'completed',
+        'transaction_date' => '2024-06-01',
+    ]);
+
+    $response = $this->actingAs($admin)->getJson('/api/reports/member-activity?from=2024-06-01&to=2024-06-30&member_id='.$member->id.'&activity_type=interest&sort_by=amount&sort_direction=asc')
+        ->assertOk()
+        ->assertJsonPath('data.0.transaction_type', 'interest')
+        ->assertJsonPath('data.0.amount', 25)
+        ->assertJsonPath('meta.total', 1);
+});
