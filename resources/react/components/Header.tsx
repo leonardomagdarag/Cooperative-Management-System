@@ -3,14 +3,18 @@ import { useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { useSidebar } from '../contexts/SidebarContext';
 import NotificationDropdown from './NotificationDropdown';
+import LanguageSwitcher from './LanguageSwitcher';
+import { useLanguage } from '../contexts/LanguageContext';
 import { globalSearch, SearchGroup, SearchItem } from '../api/search';
 
+import Button from './ui/Button';
 interface FlatItem {
     group: string;
     item: SearchItem;
 }
 
 export default function Header() {
+    const { t } = useLanguage();
     const { user } = useAuth();
     const { isOpen, toggle, toggleMobile } = useSidebar();
     const navigate = useNavigate();
@@ -161,7 +165,7 @@ export default function Header() {
                                 onChange={e => setQuery(e.target.value)}
                                 onKeyDown={onKeyDown}
                                 onFocus={() => query.trim().length >= 2 && setOpen(true)}
-                                placeholder="Search or type command..."
+                                placeholder={t('Search or type command...')}
                                 className="h-10 w-full rounded-lg border border-gray-200 bg-gray-50/50 py-2 pl-11 pr-16 text-sm text-gray-800 placeholder:text-gray-400 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 md:w-64 lg:w-80 xl:w-[420px] transition-all"
                             />
                             <span className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[11px] font-medium text-gray-500 shadow-xs">
@@ -174,12 +178,12 @@ export default function Header() {
                                         {loading && (
                                             <div className="flex items-center gap-2 px-3 py-3 text-sm text-gray-500">
                                                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-emerald-600" />
-                                                Searching...
+                                                {t('Searching...')}
                                             </div>
                                         )}
 
                                         {!loading && flatItems.length === 0 && (
-                                            <p className="px-3 py-4 text-center text-sm text-gray-500">No results found.</p>
+                                            <p className="px-3 py-4 text-center text-sm text-gray-500">{t('No results found.')}</p>
                                         )}
 
                                         {!loading && groups.map(group => (
@@ -233,12 +237,14 @@ export default function Header() {
 
                     <NotificationDropdown />
 
+                    <LanguageSwitcher compact />
+
                     <button
                         type="button"
                         onClick={() => navigate('/dashboard/settings?tab=help-support', { state: { tab: 'help-support' } })}
                         className="flex items-center justify-center w-10 h-10 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors cursor-pointer"
-                        title="Help & Support"
-                        aria-label="Help and Support"
+                        title={t('Help & Support')}
+                        aria-label={t('Help and Support')}
                     >
                         <i className="fas fa-question-circle text-base"></i>
                     </button>
@@ -246,7 +252,7 @@ export default function Header() {
                     <button
                         onClick={() => navigate('/dashboard/profile')}
                         className="flex items-center gap-2 sm:gap-3 pl-2 sm:pl-4 border-l border-gray-200 hover:opacity-80 transition-opacity cursor-pointer"
-                        title="View my profile"
+                        title={t('View my profile')}
                     >
                         <div className="hidden sm:block text-right">
                             <p className="text-sm font-medium text-gray-900 truncate max-w-[140px]">{displayName}</p>
@@ -280,7 +286,7 @@ export default function Header() {
                                     if (e.key === 'Escape') setMobileSearchOpen(false);
                                     else onKeyDown(e);
                                 }}
-                                placeholder="Search pages, members..."
+                                placeholder={t('Search pages, members...')}
                                 className="flex-1 bg-transparent text-sm text-gray-800 placeholder:text-gray-400 outline-none"
                             />
                             <button

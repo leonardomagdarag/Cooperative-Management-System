@@ -123,18 +123,18 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
                 <div className="flex items-center justify-between p-6 bg-white border-b border-slate-200">
                     <div className="flex items-center gap-4">
                         {selectedLoanId && (
-                            <button onClick={backToList} className="text-slate-500 hover:text-slate-700 transition-colors">
+                            <button onClick={backToList} className="text-slate-700 hover:text-slate-900 transition-colors">
                                 <i className="fas fa-arrow-left text-lg"></i>
                             </button>
                         )}
                         <div>
                             <h2 className="text-xl font-bold text-slate-900">{selectedLoanId ? 'Loan Application Detail' : 'Loan Application Review'}</h2>
-                            <p className="text-sm text-slate-500 mt-1">
+                            <p className="text-sm text-slate-700 mt-1">
                                 {selectedLoanId ? 'Review and take action on this application' : `${loans.length} application(s) awaiting review`}
                             </p>
                         </div>
                     </div>
-                    <button onClick={onRequestClose} className="text-slate-400 hover:text-slate-600">
+                    <button onClick={onRequestClose} className="text-slate-600 hover:text-slate-900">
                         <i className="fas fa-times text-xl"></i>
                     </button>
                 </div>
@@ -153,7 +153,7 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
                                     <div className="flex items-start justify-between">
                                         <div className="flex items-center gap-4">
                                             <div className="w-12 h-12 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-center flex-shrink-0">
-                                                <i className="fas fa-file-contract text-slate-500 text-xl"></i>
+                                                <i className="fas fa-file-contract text-slate-700 text-xl"></i>
                                             </div>
                                             <div>
                                                 <div className="flex items-center gap-2 mb-1">
@@ -164,9 +164,9 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
                                                 </div>
                                                 <p className="text-sm text-slate-700 font-medium">
                                                     {loan.borrower?.name ?? 'Unknown'}
-                                                    <span className="text-slate-500 font-normal ml-1">({loan.borrower?.user_number ?? 'N/A'})</span>
+                                                    <span className="text-slate-700 font-normal ml-1">({loan.borrower?.user_number ?? 'N/A'})</span>
                                                 </p>
-                                                <p className="text-xs text-slate-500 mt-1">
+                                                <p className="text-xs text-slate-700 mt-1">
                                                     {capitalize(loan.loan_type)} Loan · {peso(loan.loan_amount)} · Applied {loan.applied_at ? fmtDate(loan.applied_at) : 'N/A'}
                                                 </p>
                                             </div>
@@ -182,10 +182,10 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
                     ) : (
                         <div className="text-center py-16">
                             <div className="w-16 h-16 bg-slate-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <i className="fas fa-clipboard-check text-slate-400 text-3xl"></i>
+                                <i className="fas fa-clipboard-check text-slate-600 text-3xl"></i>
                             </div>
                             <h4 className="text-lg font-bold text-slate-900 mb-1">No Applications to Review</h4>
-                            <p className="text-slate-500 mb-6 text-sm">All loan applications have been processed or are awaiting member submission.</p>
+                            <p className="text-slate-700 mb-6 text-sm">All loan applications have been processed or are awaiting member submission.</p>
                             <button type="button" onClick={onComplete} className="ui-btn ui-btn-secondary">
                                 Close Modal
                             </button>
@@ -197,7 +197,7 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
                     </div>
                 ) : !selectedLoan ? (
                     <div className="text-center py-12">
-                        <p className="text-slate-500">Loan not found. It may have been updated.</p>
+                        <p className="text-slate-700">Loan not found. It may have been updated.</p>
                         <button onClick={backToList} className="mt-4 text-brand-600 hover:underline">← Back to list</button>
                     </div>
                 ) : (
@@ -217,19 +217,19 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
 
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-y-4 gap-x-4 text-sm">
                                 <div>
-                                    <p className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Loan Type</p>
+                                    <p className="text-slate-700 text-xs uppercase tracking-wider font-semibold">Loan Type</p>
                                     <p className="font-medium text-slate-900 mt-0.5">{capitalize(selectedLoan.loan_type)}</p>
                                 </div>
                                 <div>
-                                    <p className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Amount</p>
+                                    <p className="text-slate-700 text-xs uppercase tracking-wider font-semibold">Amount</p>
                                     <p className="font-medium text-slate-900 mt-0.5">{peso(selectedLoan.loan_amount)}</p>
                                 </div>
                                 <div>
-                                    <p className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Term / Freq</p>
+                                    <p className="text-slate-700 text-xs uppercase tracking-wider font-semibold">Term / Freq</p>
                                     <p className="font-medium text-slate-900 mt-0.5">{selectedLoan.term_months}mo · {capitalize(selectedLoan.payment_frequency)}</p>
                                 </div>
                                 <div>
-                                    <p className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Applied On</p>
+                                    <p className="text-slate-700 text-xs uppercase tracking-wider font-semibold">Applied On</p>
                                     <p className="font-medium text-slate-900 mt-0.5">{selectedLoan.applied_at ? fmtDate(selectedLoan.applied_at) : '—'}</p>
                                 </div>
                             </div>
@@ -237,11 +237,11 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
                             {selectedLoan.interview_schedule && (
                                 <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-4 text-sm">
                                     <div>
-                                        <p className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Interview Scheduled</p>
+                                        <p className="text-slate-700 text-xs uppercase tracking-wider font-semibold">Interview Scheduled</p>
                                         <p className="font-medium text-slate-900 mt-0.5">{fmtDateTime(selectedLoan.interview_schedule)}</p>
                                     </div>
                                     <div>
-                                        <p className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Interview Status</p>
+                                        <p className="text-slate-700 text-xs uppercase tracking-wider font-semibold">Interview Status</p>
                                         <p className="font-medium text-slate-900 mt-0.5">{interviewLabel(selectedLoan)}</p>
                                     </div>
                                 </div>
@@ -249,7 +249,7 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
 
                             {(selectedLoan.co_makers ?? []).length > 0 && (
                                 <div className="mt-4 pt-4 border-t border-slate-100">
-                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                                    <p className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
                                         Co-makers ({selectedLoan.co_makers.length})
                                     </p>
                                     <div className="flex flex-wrap gap-2">
@@ -258,7 +258,7 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
                                                 {m.name}
                                                 {m.has_approved
                                                     ? <i className="fas fa-check-circle text-brand-500 ml-1.5"></i>
-                                                    : <i className="fas fa-clock text-slate-400 ml-1.5"></i>}
+                                                    : <i className="fas fa-clock text-slate-600 ml-1.5"></i>}
                                             </span>
                                         ))}
                                     </div>
@@ -267,10 +267,10 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
 
                             {selectedLoan.review_notes && (
                                 <div className="mt-4 pt-4 border-t border-slate-100">
-                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Review Notes</p>
+                                    <p className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Review Notes</p>
                                     <p className="text-sm text-slate-700 bg-slate-50 p-2.5 rounded border border-slate-100 whitespace-pre-line">{selectedLoan.review_notes}</p>
                                     {selectedLoan.reviewer && (
-                                        <p className="text-xs text-slate-400 mt-1.5 text-right">— {selectedLoan.reviewer}</p>
+                                        <p className="text-xs text-slate-600 mt-1.5 text-right">— {selectedLoan.reviewer}</p>
                                     )}
                                 </div>
                             )}
@@ -288,7 +288,7 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
                                         </div>;
                                     })}
                                 </div>
-                                <h5 className="text-xs uppercase tracking-wider font-semibold text-slate-500 mt-5 mb-2">Employment and income</h5>
+                                <h5 className="text-xs uppercase tracking-wider font-semibold text-slate-700 mt-5 mb-2">Employment and income</h5>
                                 {selectedLoan.borrower?.employment ? (
                                     <div className="grid grid-cols-2 gap-3 text-sm">
                                         <Summary label="Employment" value={selectedLoan.borrower.employment.type} />
@@ -297,18 +297,18 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
                                         <Summary label="Monthly income" value={selectedLoan.borrower.employment.monthly_income != null ? peso(selectedLoan.borrower.employment.monthly_income) : null} />
                                         <Summary label="Other income" value={selectedLoan.borrower.employment.other_income_amount != null ? `${selectedLoan.borrower.employment.other_income_source || 'Other'} · ${peso(selectedLoan.borrower.employment.other_income_amount)}` : null} />
                                     </div>
-                                ) : <p className="text-sm text-slate-500">No employment or income details on file.</p>}
+                                ) : <p className="text-sm text-slate-700">No employment or income details on file.</p>}
                             </section>
                             <section className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
                                 <h4 className="font-bold text-slate-900 mb-3"><i className="fas fa-id-card mr-2 text-brand-600"></i>Member IDs</h4>
                                 {selectedLoan.borrower?.ids ? <div className="grid grid-cols-2 gap-2 text-sm">
                                     {Object.entries(selectedLoan.borrower.ids).filter(([key]) => key !== 'photos').map(([key, value]) => <Summary key={key} label={key.replace('_', ' ')} value={value as string} />)}
                                     {selectedLoan.borrower.ids.photos?.map((url: string, index: number) => <a key={url} href={url} target="_blank" rel="noreferrer" className="text-brand-700 underline">View ID image {index + 1}</a>)}
-                                </div> : <p className="text-sm text-slate-500">No ID details on file.</p>}
-                                <h5 className="text-xs uppercase tracking-wider font-semibold text-slate-500 mt-4 mb-2">Loan supporting documents</h5>
+                                </div> : <p className="text-sm text-slate-700">No ID details on file.</p>}
+                                <h5 className="text-xs uppercase tracking-wider font-semibold text-slate-700 mt-4 mb-2">Loan supporting documents</h5>
                                 {selectedLoan.documents?.length ? selectedLoan.documents.map((document: any) => (
                                     <a key={document.id} href={document.url} target="_blank" rel="noreferrer" className="block text-sm text-brand-700 underline">{document.original_name}</a>
-                                )) : <p className="text-sm text-slate-500">No loan documents uploaded.</p>}
+                                )) : <p className="text-sm text-slate-700">No loan documents uploaded.</p>}
                             </section>
                         </div>
 
@@ -344,7 +344,7 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
                                         </div>
                                     </article>;
                                 })}
-                            </div> : <p className="text-sm text-slate-500">No active or previous loans.</p>}
+                            </div> : <p className="text-sm text-slate-700">No active or previous loans.</p>}
                         </section>
 
                         {selectedLoan.review_status === null && (
@@ -512,7 +512,7 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
 
 function Summary({ label, value }: { label: string; value?: string | number | null }) {
     return <div>
-        <p className="text-xs text-slate-500 capitalize">{label.replace(/_/g, ' ')}</p>
+        <p className="text-xs text-slate-700 capitalize">{label.replace(/_/g, ' ')}</p>
         <p className="font-medium text-slate-800">{value === null || value === undefined || value === '' ? 'Not on file' : value}</p>
     </div>;
 }

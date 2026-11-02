@@ -9,6 +9,7 @@ import FallbackImage from '../../components/FallbackImage';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import TurnstileWidget from '../../components/TurnstileWidget';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 const loginSchema = z.object({
     email: z.string().min(1, 'Please enter your email or phone number'),
@@ -19,6 +20,7 @@ const loginSchema = z.object({
 type LoginForm = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
+    const { t } = useLanguage();
     const [showPassword, setShowPassword] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [loginError, setLoginError] = useState('');
@@ -55,7 +57,7 @@ export default function LoginPage() {
             }
             navigate(result.redirect || '/dashboard');
         } catch (err: any) {
-            const message = err.response?.data?.message || 'Login failed. Please try again.';
+            const message = err.response?.data?.message || t('Login failed. Please try again.');
             setLoginError(message);
             addToast(message, 'error');
         } finally {
@@ -73,7 +75,7 @@ export default function LoginPage() {
             </div>
             <Link to="/" className="absolute left-4 top-4 z-20 inline-flex items-center gap-2 rounded-full border border-white/30 bg-slate-950/25 px-4 py-2 text-sm font-medium text-white backdrop-blur transition-colors hover:bg-slate-950/45 sm:left-6 sm:top-6">
                 <i className="fas fa-arrow-left text-xs" />
-                <span>Back to Home</span>
+                <span>{t('Back to Home')}</span>
             </Link>
             <div className="public-card relative z-10 my-auto w-full max-w-md border border-white/50 bg-white/95 shadow-2xl shadow-slate-950/30 backdrop-blur-sm">
                 <div className="p-5 sm:p-6">
@@ -81,28 +83,28 @@ export default function LoginPage() {
                         <div className="mb-3 flex justify-center">
                             <FallbackImage src="/images/Logo.png" alt="Settlers Logo" className="h-12 w-12 rounded-full object-cover shadow-sm" />
                         </div>
-                        <h1 className="text-2xl font-extrabold text-slate-900 mb-1">Welcome back</h1>
+                        <h1 className="mb-1 text-2xl font-medium text-slate-900">{t('Welcome back')}</h1>
                         <p className="text-sm text-slate-600">
-                            Enter your credentials to access your account
+                            {t('Enter your credentials to access your account')}
                         </p>
                     </div>
 
                     {loginEnabled ? <form className="space-y-3" onSubmit={handleSubmit(onSubmit)}>
                         <div>
-                            <label htmlFor="email" className="block text-xs font-medium text-slate-500 mb-1.5">Email or Mobile Number</label>
+                            <label htmlFor="email" className="block text-xs font-medium text-slate-500 mb-1.5">{t('Email or Mobile Number')}</label>
                             <input
                                 type="text"
                                 id="email"
                                 autoComplete="username"
                                 {...register('email')}
                                 className="public-input text-sm"
-                                placeholder="Enter your email or phone number"
+                                placeholder={t('Enter your email or phone number')}
                             />
-                            {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email.message}</p>}
+                            {errors.email && <p className="mt-1 text-xs text-red-500">{t(errors.email.message || '')}</p>}
                         </div>
 
                         <div>
-                            <label htmlFor="password" className="block text-xs font-medium text-slate-500 mb-1.5">Password</label>
+                            <label htmlFor="password" className="block text-xs font-medium text-slate-500 mb-1.5">{t('Password')}</label>
                             <div className="relative">
                                 <input
                                     type={showPassword ? 'text' : 'password'}
@@ -110,7 +112,7 @@ export default function LoginPage() {
                                     autoComplete="current-password"
                                     {...register('password')}
                                     className="public-input pr-12 text-sm"
-                                    placeholder="Enter your password"
+                                    placeholder={t('Enter your password')}
                                 />
                                 <button
                                     type="button"
@@ -120,7 +122,7 @@ export default function LoginPage() {
                                     <i className={`fas fa-eye${showPassword ? '-slash' : ''}`}></i>
                                 </button>
                             </div>
-                            {errors.password && <p className="mt-1 text-xs text-red-500">{errors.password.message}</p>}
+                            {errors.password && <p className="mt-1 text-xs text-red-500">{t(errors.password.message || '')}</p>}
                         </div>
 
                         {loginError && (
@@ -138,10 +140,10 @@ export default function LoginPage() {
                         <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
                             <label className="flex items-center">
                                 <input type="checkbox" {...register('remember')} className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-2 focus:ring-emerald-500 cursor-pointer" />
-                                <span className="ml-2 text-sm text-slate-600 cursor-pointer select-none">Remember me</span>
+                                <span className="ml-2 text-sm text-slate-600 cursor-pointer select-none">{t('Remember me')}</span>
                             </label>
                             <Link to="/forgot-password" className="text-sm font-medium text-emerald-600 hover:text-emerald-700 transition-colors">
-                                Forgot password?
+                                {t('Forgot password?')}
                             </Link>
                         </div>
 
@@ -150,15 +152,15 @@ export default function LoginPage() {
                         </div>
 
                         <button type="submit" disabled={isSubmitting} className="public-btn public-btn-primary w-full">
-                            {isSubmitting ? 'Signing in...' : 'Sign in'}
+                            {t(isSubmitting ? 'Signing in...' : 'Sign in')}
                         </button>
 
                         {registrationEnabled && (
                             <div className="text-center pt-4 mt-4 border-t border-gray-200">
-                                <p className="text-sm text-slate-600 mb-2">Don't have an account?</p>
+                                <p className="text-sm text-slate-600 mb-2">{t("Don't have an account?")}</p>
                                 <Link to="/register" className="inline-flex items-center gap-2 text-emerald-700 hover:text-emerald-800 font-semibold transition-colors">
                                     <i className="fas fa-user-plus"></i>
-                                    <span>Create an Account</span>
+                                    <span>{t('Create an Account')}</span>
                                     <i className="fas fa-arrow-right text-sm"></i>
                                 </Link>
                             </div>
@@ -167,8 +169,8 @@ export default function LoginPage() {
                     </form> : (
                         <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
                             <i className="fas fa-sign-in-alt text-3xl text-amber-600 mb-3"></i>
-                            <p className="font-semibold text-amber-900">Login is currently unavailable</p>
-                            <p className="mt-1 text-sm text-amber-800">Online access has been temporarily suspended. Please check back later.</p>
+                            <p className="font-semibold text-amber-900">{t('Login is currently unavailable')}</p>
+                            <p className="mt-1 text-sm text-amber-800">{t('Online access has been temporarily suspended. Please check back later.')}</p>
                         </div>
                     )}
                 </div>

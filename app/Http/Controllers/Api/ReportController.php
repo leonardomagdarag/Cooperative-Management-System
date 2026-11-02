@@ -11,6 +11,7 @@ use App\Models\InterestDisbursementItem;
 use App\Models\Loan;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\ReportWorkbook;
 use App\Support\BranchScope;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -19,6 +20,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class ReportController extends Controller
 {
@@ -110,10 +113,11 @@ class ReportController extends Controller
             ->with('recordedBy.personalData')
             ->whereBetween('expense_date', [$start, $end])
             ->when($branchId !== null, fn ($q) => $q->where('expenses.branch_id', $branchId))
-            ->when($category !== '', fn ($q) => $q->where('category', $category))
-            ->orderByDesc('expense_date');
+            ->when($category !== '', fn ($q) => $q->where('category', $category));
+        $expenseSorts = ['date' => 'expense_date', 'amount' => 'amount', 'category' => 'category', 'description' => 'description'];
+        $query->orderBy($expenseSorts[$request->input('sort_by', 'date')] ?? 'expense_date', $request->input('sort_direction') === 'asc' ? 'asc' : 'desc')->orderBy('id');
 
-        $paginator = $query->paginate(10);
+        $paginator = $this->reportPagination($query, $request);
 
         $items = collect($paginator->items())->map(fn (Expense $e) => [
             'id' => $e->id,
@@ -153,6 +157,7 @@ class ReportController extends Controller
             'date' => 'transaction_date',
             'amount' => 'amount',
             'type' => 'transaction_type',
+            'reference' => 'transaction_number',
         ];
 
         $query = $this->completedTransactions($branchId)
@@ -176,16 +181,17 @@ class ReportController extends Controller
         }
 
         if ($sortBy === 'member') {
-            $query->orderByRaw("COALESCE(
+            $query->orderByRaw('COALESCE(
                 (SELECT pd.last_name FROM accounts a JOIN users u ON u.id = a.user_id JOIN personal_data pd ON pd.id = u.personal_data_id WHERE a.id = transactions.account_id),
                 (SELECT pd.last_name FROM loans l JOIN users u ON u.id = l.user_id JOIN personal_data pd ON pd.id = u.personal_data_id WHERE l.id = transactions.loan_id)
-            ) ".($sortDirection === 'asc' ? 'ASC' : 'DESC'));
+            ) '.($sortDirection === 'asc' ? 'ASC' : 'DESC'));
         } else {
             $query->orderBy($sortColumns[$sortBy] ?? 'transaction_date', $sortDirection === 'asc' ? 'asc' : 'desc');
         }
         $query->orderByDesc('transactions.id');
 
-        $paginator = $query->paginate(10);
+        $total = (float) (clone $query)->reorder()->selectRaw('SUM('.Transaction::netAmountExpression().') as aggregate_total')->value('aggregate_total');
+        $paginator = $this->reportPagination($query, $request);
 
         $items = collect($paginator->items())->map(function (Transaction $transaction) {
             $user = $transaction->account?->user ?? $transaction->loan?->user;
@@ -194,7 +200,7 @@ class ReportController extends Controller
                 'id' => $transaction->id,
                 'transaction_number' => $transaction->transaction_number,
                 'transaction_type' => $transaction->transaction_type,
-                'amount' => (float) $transaction->amount,
+                'amount' => ($transaction->reversal_of_id === null ? 1 : -1) * (float) $transaction->amount,
                 'transaction_date' => ($transaction->transaction_date ?? $transaction->created_at)->format('Y-m-d'),
                 'member_name' => $user?->name ?: $user?->email,
             ];
@@ -202,7 +208,7 @@ class ReportController extends Controller
 
         return response()->json([
             ...$this->withPagination($items, $paginator),
-            'total' => (float) $query->selectRaw('SUM('.Transaction::netAmountExpression().') as aggregate_total')->value('aggregate_total'),
+            'total' => $total,
         ]);
     }
 
@@ -220,8 +226,8 @@ class ReportController extends Controller
             ->when($memberId, fn ($q) => $q->where('user_id', $memberId))
             ->when($branchId !== null, fn ($q) => $q->whereHas('user', fn ($u) => $u->where('users.branch_id', $branchId)))
             ->with('user.personalData')
-            ->orderBy('id', 'desc')
-            ->paginate(10, ['id', 'user_id', 'balance']);
+            ->orderBy('id', 'desc');
+        $accounts = $this->reportPagination($accounts, $request, ['id', 'user_id', 'balance']);
 
         $accountIds = collect($accounts->items())->pluck('id')->filter()->values();
 
@@ -288,12 +294,12 @@ class ReportController extends Controller
         } elseif ($loanFilter === 'completed') {
             $query->whereIn('loan_status', $completedStatuses);
         } elseif ($loanFilter === 'overdue') {
-            $query->whereNotIn('loan_status', $completedStatuses)
+            $query->whereIn('loan_status', ['approved', 'active'])
                 ->whereNotNull('due_date')
                 ->whereDate('due_date', '<', Carbon::today());
         }
 
-        $paginator = $query->orderByDesc('created_at')->paginate(10);
+        $paginator = $this->reportPagination($query->orderByDesc('created_at'), $request);
 
         $items = collect($paginator->items())->map(function (Loan $loan) {
             $name = 'N/A';
@@ -303,12 +309,13 @@ class ReportController extends Controller
 
             $amountPaid = (float) $loan->totalPaid();
             $remaining = (float) $loan->remainingBalance();
-            $isOverdue = $loan->due_date && Carbon::parse($loan->due_date)->isPast() && $remaining > 0;
+            $isOverdue = in_array($loan->loan_status, ['approved', 'active'], true) && $loan->due_date && Carbon::parse($loan->due_date)->lt(Carbon::today()) && $remaining > 0;
 
             $status = match (true) {
-                in_array($loan->loan_status, ['paid', 'paid_off'], true) || $remaining <= 0 => 'Completed',
+                in_array($loan->loan_status, ['paid', 'paid_off'], true) => 'Completed',
                 $isOverdue => 'Overdue',
-                default => 'Active',
+                in_array($loan->loan_status, ['approved', 'active'], true) => 'Active',
+                default => ucwords(str_replace('_', ' ', $loan->loan_status)),
             };
 
             return [
@@ -340,9 +347,7 @@ class ReportController extends Controller
             ->where('status', 'completed')
             ->when($branchId !== null, fn ($q) => $q->where('transactions.branch_id', $branchId));
 
-        $paginator = $this->applyWindowToTransactions($query, $start, $end)
-            ->orderByDesc('transaction_date')
-            ->paginate(10);
+        $paginator = $this->reportPagination($this->applyWindowToTransactions($query, $start, $end)->orderByDesc('transaction_date')->orderByDesc('id'), $request);
 
         $items = collect($paginator->items())->map(function (Transaction $transaction) {
             $pd = $transaction->loan?->user?->personalData;
@@ -351,7 +356,7 @@ class ReportController extends Controller
             return [
                 'member_name' => $name,
                 'loan_number' => $transaction->loan?->loan_number ?? '—',
-                'amount' => (float) $transaction->amount,
+                'amount' => ($transaction->reversal_of_id === null ? 1 : -1) * (float) $transaction->amount,
                 'payment_date' => ($transaction->transaction_date ?? $transaction->created_at)->format('Y-m-d'),
                 'remaining_balance' => (float) ($transaction->loan?->remainingBalance() ?? 0),
             ];
@@ -409,26 +414,11 @@ class ReportController extends Controller
 
     public function downloadBalanceSheet(Request $request)
     {
-        abort_unless(Auth::user()?->can('reports.financial') || Auth::user()?->can('reports.export'), 403);
+        abort_unless(Auth::user()?->can('reports.view') && Auth::user()?->can('reports.financial') && Auth::user()?->can('reports.export'), 403);
 
-        [$start, $end] = $this->resolveRange($request);
-        $branchId = BranchScope::resolveBranchId(Auth::user(), $request->integer('branch_id'));
-        $balanceSheet = $this->buildBalanceSheet($start, $end, $branchId);
-        $branchName = $branchId !== null ? $balanceSheet['branch_name'] : null;
+        $request->merge(['report_type' => 'balance_sheet', 'format' => 'pdf']);
 
-        $pdf = Pdf::loadView('reports.balance-sheet-pdf', [
-            'balanceSheet' => $balanceSheet,
-            'appName' => config('app.name', 'Cooperative Management System'),
-            'generatedAt' => now(),
-            'generatedBy' => Auth::user(),
-            'branchName' => $branchName,
-        ]);
-
-        $filename = 'balance-sheet-'.$end->format('Y-m-d').'.pdf';
-
-        return response()->streamDownload(function () use ($pdf) {
-            echo $pdf->output();
-        }, $filename, ['Content-Type' => 'application/pdf']);
+        return $this->export($request);
     }
 
     public function members(Request $request): JsonResponse
@@ -492,6 +482,7 @@ class ReportController extends Controller
     {
         abort_unless(Auth::user()?->can('interest.view'), 403);
 
+        $this->resolveRange($request);
         $branchId = BranchScope::resolveBranchId(Auth::user(), $request->integer('branch_id'));
 
         $query = InterestDisbursement::query()
@@ -505,8 +496,14 @@ class ReportController extends Controller
             $query->whereBetween('interest_disbursements.created_at', [$start, $end]);
         }
 
+        $scopedItems = fn ($q) => $q->when($branchId !== null, fn ($items) => $items->whereHas('user', fn ($users) => $users->where('users.branch_id', $branchId)));
+        $query->withCount([
+            'items as scoped_member_count' => fn ($q) => $scopedItems($q)->where('skipped', false),
+            'items as scoped_skipped_count' => fn ($q) => $scopedItems($q)->where('skipped', true),
+        ])->withSum(['items as scoped_total_amount' => fn ($q) => $scopedItems($q)->where('skipped', false)], 'amount');
+
         $perPage = min(max((int) $request->integer('per_page', 15), 1), 100);
-        $paginator = $query->orderByDesc('created_at')->paginate($perPage);
+        $paginator = $this->reportPagination($query->orderByDesc('created_at')->orderByDesc('id'), $request, ['*'], $perPage);
 
         $items = collect($paginator->items())->map(function (InterestDisbursement $batch) {
             return [
@@ -516,9 +513,9 @@ class ReportController extends Controller
                 'rate' => (float) $batch->rate,
                 'interval' => $batch->interval,
                 'period_label' => $batch->period_label,
-                'member_count' => $batch->member_count,
-                'skipped_count' => $batch->skipped_count,
-                'total_amount' => (float) $batch->total_amount,
+                'member_count' => $batch->scoped_member_count,
+                'skipped_count' => $batch->scoped_skipped_count,
+                'total_amount' => (float) $batch->scoped_total_amount,
                 'status' => $batch->status,
                 'trigger' => $batch->trigger,
                 'requested_by' => $this->personName($batch->requestedBy?->personalData) ?: $batch->requestedBy?->email,
@@ -544,6 +541,11 @@ class ReportController extends Controller
                 fn ($q) => $q->where('skipped', false))
             ->orderByDesc('skipped')
             ->orderByDesc('amount');
+
+        $scopedStats = $interestDisbursement->items()
+            ->when($branchId !== null, fn ($q) => $q->whereHas('user', fn ($users) => $users->where('users.branch_id', $branchId)))
+            ->selectRaw('SUM(CASE WHEN skipped = 0 THEN 1 ELSE 0 END) as credited, SUM(CASE WHEN skipped = 1 THEN 1 ELSE 0 END) as skipped_count, SUM(CASE WHEN skipped = 0 THEN amount ELSE 0 END) as total_amount')
+            ->first();
 
         $perPage = min(max((int) $request->integer('per_page', 20), 1), 100);
         $paginator = $query->paginate($perPage);
@@ -572,9 +574,9 @@ class ReportController extends Controller
                     'rate' => (float) $interestDisbursement->rate,
                     'interval' => $interestDisbursement->interval,
                     'period_label' => $interestDisbursement->period_label,
-                    'member_count' => $interestDisbursement->member_count,
-                    'skipped_count' => $interestDisbursement->skipped_count,
-                    'total_amount' => (float) $interestDisbursement->total_amount,
+                    'member_count' => (int) $scopedStats->credited,
+                    'skipped_count' => (int) $scopedStats->skipped_count,
+                    'total_amount' => (float) $scopedStats->total_amount,
                     'status' => $interestDisbursement->status,
                     'trigger' => $interestDisbursement->trigger,
                     'created_at' => $interestDisbursement->created_at?->toIso8601String(),
@@ -586,36 +588,31 @@ class ReportController extends Controller
 
     public function export(Request $request)
     {
+        $request->validate([
+            'report_type' => ['required', 'string', 'in:financial_report,balance_sheet,member_savings,loans,payments,expenses,member_activity,members,officers,interest_disbursements'],
+            'format' => ['sometimes', 'string', 'in:pdf,excel'],
+        ]);
         $type = $request->string('report_type')->toString();
         $format = $request->string('format', 'pdf')->toString();
 
-        if (! in_array($format, ['pdf', 'excel'], true)) {
-            abort(422, 'Invalid export format.');
-        }
-
-        $allowedTypes = ['financial_report', 'balance_sheet', 'member_savings', 'loans', 'payments', 'expenses', 'member_activity', 'members', 'officers', 'interest_disbursements'];
-        if (! in_array($type, $allowedTypes, true)) {
-            abort(422, 'Invalid report type.');
-        }
-
         $viewer = Auth::user();
-        $canExport = $viewer?->can('reports.export') ?? false;
-        $allowed = match ($type) {
-            'balance_sheet' => $canExport || $viewer?->can('reports.financial'),
-            'members' => $canExport || $viewer?->can('members.view'),
-            'officers' => $canExport || $viewer?->can('officers.view') || $viewer?->can('members.view'),
-            'interest_disbursements' => $canExport || $viewer?->can('interest.view'),
-            default => $canExport || $viewer?->can('reports.view'),
+        $allowed = $viewer?->can('reports.view') && $viewer?->can('reports.export') && match ($type) {
+            'balance_sheet' => $viewer->can('reports.financial'),
+            'members' => $viewer->can('members.view'),
+            'officers' => $viewer->can('officers.view'),
+            'interest_disbursements' => $viewer->can('interest.view'),
+            default => true,
         };
         abort_unless($allowed, 403);
 
         [$start, $end] = $this->resolveRange($request);
         $branchId = BranchScope::resolveBranchId($viewer, $request->integer('branch_id'));
         $payload = $this->buildExportPayload($type, $request, $start, $end, $branchId);
+        $payload = $this->prepareExport($payload, $request, $branchId);
 
         return $format === 'pdf'
             ? $this->downloadReportPdf($payload, $end)
-            : $this->downloadReportExcel($payload);
+            : $this->downloadReportExcel($payload, $end);
     }
 
     private function buildExportPayload(string $type, Request $request, Carbon $start, Carbon $end, ?int $branchId): array
@@ -632,23 +629,20 @@ class ReportController extends Controller
         return match ($type) {
             'financial_report' => array_merge($base, $this->financialExportPayload($request, $rangeLabel)),
             'balance_sheet' => array_merge($base, $this->balanceSheetExportPayload($start, $end, $branchId)),
-            'member_savings' => array_merge($base, $this->memberSavingsExportPayload($request, $start, $end, $branchId, $rangeLabel)),
-            'loans' => array_merge($base, $this->loansExportPayload($request, $start, $end, $branchId, $rangeLabel)),
-            'payments' => array_merge($base, $this->paymentsExportPayload($start, $end, $branchId, $rangeLabel)),
-            'expenses' => array_merge($base, $this->expensesExportPayload($request, $start, $end, $branchId, $rangeLabel)),
-            'member_activity' => array_merge($base, $this->memberActivityExportPayload($request, $start, $end, $branchId, $rangeLabel)),
+            'member_savings', 'loans', 'payments', 'expenses', 'member_activity', 'interest_disbursements' => array_merge($base, $this->tableExportPayload($type, $request, $rangeLabel)),
             'members' => array_merge($base, $this->membersExportPayload($start, $end, $branchId, $rangeLabel)),
             'officers' => array_merge($base, $this->officersExportPayload($start, $end, $branchId, $rangeLabel)),
-            'interest_disbursements' => array_merge($base, $this->interestDisbursementsExportPayload($request, $start, $end, $branchId, $rangeLabel)),
         };
     }
 
     private function downloadReportPdf(array $payload, Carbon $end)
     {
-        $pdf = Pdf::loadView('reports.report-export-pdf', $payload + [
-            'generatedAt' => now(),
-            'generatedBy' => Auth::user(),
-        ]);
+        $wide = collect($payload['sections'])->contains(fn ($section) => count($section['columns']) > 6);
+        $pdf = Pdf::loadView('reports.report-export-pdf', $payload)->setPaper('a4', $wide ? 'landscape' : 'portrait');
+        $pdf->render();
+        $canvas = $pdf->getDomPDF()->getCanvas();
+        $font = $pdf->getDomPDF()->getFontMetrics()->getFont('DejaVu Sans');
+        $canvas->page_text($canvas->get_width() - 115, $canvas->get_height() - 25, 'Page {PAGE_NUM} of {PAGE_COUNT}', $font, 8, [0.4, 0.4, 0.4]);
 
         $filename = $payload['filename_slug'].'-'.$end->format('Y-m-d').'.pdf';
 
@@ -657,15 +651,18 @@ class ReportController extends Controller
         }, $filename, ['Content-Type' => 'application/pdf']);
     }
 
-    private function downloadReportExcel(array $payload)
+    private function downloadReportExcel(array $payload, Carbon $end)
     {
-        $xml = $this->buildReportSpreadsheetXml($payload);
+        $book = app(ReportWorkbook::class)->build($payload);
+        $filename = $payload['filename_slug'].'-'.$end->format('Y-m-d').'.xlsx';
 
-        $filename = $payload['filename_slug'].'-'.now()->format('Y-m-d').'.xls';
-
-        return response()->streamDownload(function () use ($xml) {
-            echo $xml;
-        }, $filename, ['Content-Type' => 'application/vnd.ms-excel; charset=UTF-8']);
+        return response()->streamDownload(function () use ($book) {
+            try {
+                (new Xlsx($book))->save('php://output');
+            } finally {
+                $book->disconnectWorksheets();
+            }
+        }, $filename, ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
     }
 
     private function financialExportPayload(Request $request, string $rangeLabel): array
@@ -746,289 +743,11 @@ class ReportController extends Controller
 
         return [
             'key' => 'balance_sheet',
-            'title' => 'Balance Sheet',
+            'title' => 'Balance Sheet ? Management Report',
             'subtitle' => 'As of '.$end->format('F d, Y'),
             'filename_slug' => 'balance-sheet',
             'sections' => $sections,
         ];
-    }
-
-    private function memberSavingsExportPayload(Request $request, Carbon $start, Carbon $end, ?int $branchId, string $rangeLabel): array
-    {
-        $memberId = $request->integer('member_id');
-
-        $accounts = Account::query()
-            ->where('account_type', 'savings')
-            ->whereNotNull('user_id')
-            ->when($memberId, fn ($q) => $q->where('user_id', $memberId))
-            ->when($branchId !== null, fn ($q) => $q->whereHas('user', fn ($u) => $u->where('users.branch_id', $branchId)))
-            ->with('user.personalData')
-            ->orderBy('id', 'desc')
-            ->get(['id', 'user_id', 'balance']);
-
-        $accountIds = $accounts->pluck('id')->filter()->values();
-
-        $totals = collect();
-        if ($accountIds->isNotEmpty()) {
-            $totals = $this->applyWindowToTransactions(
-                $this->completedTransactions($branchId)->whereIn('account_id', $accountIds),
-                $start,
-                $end
-            )
-                ->whereIn('transaction_type', ['deposit', 'withdrawal', 'interest'])
-                ->selectRaw('account_id, transaction_type, SUM('.Transaction::netAmountExpression().') as total')
-                ->groupBy('account_id', 'transaction_type')
-                ->get();
-        }
-
-        $byAccount = [];
-        foreach ($totals as $row) {
-            $byAccount[$row->account_id][$row->transaction_type] = (float) $row->total;
-        }
-
-        $rows = $accounts->map(function (Account $account) use ($byAccount) {
-            return [
-                $this->personName($account->user?->personalData),
-                $this->money($byAccount[$account->id]['deposit'] ?? 0),
-                $this->money($byAccount[$account->id]['interest'] ?? 0),
-                $this->money($byAccount[$account->id]['withdrawal'] ?? 0),
-                $this->money($account->balance),
-            ];
-        })->values()->all();
-
-        return $this->singleSectionPayload(
-            'member_savings',
-            'Member Savings Report',
-            $rangeLabel,
-            'member-savings',
-            'Member Savings',
-            [
-                ['key' => 'member', 'label' => 'Member'],
-                ['key' => 'deposits', 'label' => 'Total Deposits', 'align' => 'right'],
-                ['key' => 'interest_credits', 'label' => 'Interest Credits', 'align' => 'right'],
-                ['key' => 'withdrawals', 'label' => 'Total Withdrawals', 'align' => 'right'],
-                ['key' => 'balance', 'label' => 'Current Savings Balance', 'align' => 'right'],
-            ],
-            $rows
-        );
-    }
-
-    private function loansExportPayload(Request $request, Carbon $start, Carbon $end, ?int $branchId, string $rangeLabel): array
-    {
-        $loanFilter = $request->string('filter', 'all')->toString();
-        $completedStatuses = ['paid', 'paid_off'];
-
-        $query = BranchScope::applyToLoans(
-            Loan::query()
-                ->with('user.personalData')
-                ->where(function ($q) use ($start, $end) {
-                    $q->whereBetween('applied_at', [$start, $end])
-                        ->orWhere(function ($q2) use ($start, $end) {
-                            $q2->whereNull('applied_at')->whereBetween('created_at', [$start, $end]);
-                        });
-                }),
-            Auth::user(),
-            $branchId
-        );
-
-        if ($loanFilter === 'active') {
-            $query->whereIn('loan_status', ['approved', 'active']);
-        } elseif ($loanFilter === 'completed') {
-            $query->whereIn('loan_status', $completedStatuses);
-        } elseif ($loanFilter === 'overdue') {
-            $query->whereNotIn('loan_status', $completedStatuses)
-                ->whereNotNull('due_date')
-                ->whereDate('due_date', '<', Carbon::today());
-        }
-
-        $rows = $query->orderByDesc('created_at')->get()->map(function (Loan $loan) {
-            $remaining = (float) $loan->remainingBalance();
-            $isOverdue = $loan->due_date && Carbon::parse($loan->due_date)->isPast() && $remaining > 0;
-            $status = match (true) {
-                in_array($loan->loan_status, ['paid', 'paid_off'], true) || $remaining <= 0 => 'Completed',
-                $isOverdue => 'Overdue',
-                default => 'Active',
-            };
-
-            return [
-                $this->personName($loan->user?->personalData),
-                $this->money($loan->loan_amount),
-                number_format((float) $loan->interest_rate, 2).'%',
-                ($loan->applied_at ?? $loan->created_at)->format('M d, Y'),
-                $loan->due_date ? Carbon::parse($loan->due_date)->format('M d, Y') : '—',
-                $this->money($loan->totalPaid()),
-                $this->money($remaining),
-                $status,
-            ];
-        })->all();
-
-        return $this->singleSectionPayload(
-            'loans',
-            'Loan Report',
-            $rangeLabel,
-            'loan-report',
-            'Loans',
-            [
-                ['key' => 'member', 'label' => 'Member'],
-                ['key' => 'amount', 'label' => 'Loan Amount', 'align' => 'right'],
-                ['key' => 'interest', 'label' => 'Interest', 'align' => 'right'],
-                ['key' => 'date', 'label' => 'Loan Date'],
-                ['key' => 'due', 'label' => 'Due Date'],
-                ['key' => 'paid', 'label' => 'Paid', 'align' => 'right'],
-                ['key' => 'remaining', 'label' => 'Remaining Balance', 'align' => 'right'],
-                ['key' => 'status', 'label' => 'Status'],
-            ],
-            $rows
-        );
-    }
-
-    private function paymentsExportPayload(Carbon $start, Carbon $end, ?int $branchId, string $rangeLabel): array
-    {
-        $query = $this->completedTransactions($branchId)
-            ->with('loan.user.personalData')
-            ->where('transaction_type', 'loan_payment');
-
-        $rows = $this->applyWindowToTransactions($query, $start, $end)
-            ->orderByDesc('transaction_date')
-            ->get()
-            ->map(function (Transaction $transaction) {
-                return [
-                    $this->personName($transaction->loan?->user?->personalData),
-                    $transaction->loan?->loan_number ?? '—',
-                    $this->money($transaction->amount),
-                    ($transaction->transaction_date ?? $transaction->created_at)->format('M d, Y'),
-                    $this->money($transaction->loan?->remainingBalance() ?? 0),
-                ];
-            })->all();
-
-        return $this->singleSectionPayload(
-            'payments',
-            'Payment Collection Report',
-            $rangeLabel,
-            'payment-collection',
-            'Payment Collection',
-            [
-                ['key' => 'member', 'label' => 'Member'],
-                ['key' => 'loan', 'label' => 'Loan ID'],
-                ['key' => 'amount', 'label' => 'Payment Amount', 'align' => 'right'],
-                ['key' => 'date', 'label' => 'Payment Date'],
-                ['key' => 'remaining', 'label' => 'Remaining Balance', 'align' => 'right'],
-            ],
-            $rows
-        );
-    }
-
-    private function expensesExportPayload(Request $request, Carbon $start, Carbon $end, ?int $branchId, string $rangeLabel): array
-    {
-        $category = $request->string('category')->toString();
-
-        $rows = Expense::query()
-            ->with('recordedBy.personalData')
-            ->whereBetween('expense_date', [$start, $end])
-            ->when($branchId !== null, fn ($q) => $q->where('expenses.branch_id', $branchId))
-            ->when($category !== '', fn ($q) => $q->where('category', $category))
-            ->orderByDesc('expense_date')
-            ->get()
-            ->map(function (Expense $expense) {
-                return [
-                    $expense->category,
-                    $expense->description ?? '—',
-                    $this->money($expense->amount),
-                    $expense->expense_date?->format('M d, Y') ?? '—',
-                    $expense->recordedBy?->personalData ? $this->personName($expense->recordedBy->personalData) : '—',
-                ];
-            })->all();
-
-        return $this->singleSectionPayload(
-            'expenses',
-            'Expense Report',
-            $rangeLabel,
-            'expense-report',
-            'Expenses',
-            [
-                ['key' => 'category', 'label' => 'Category'],
-                ['key' => 'description', 'label' => 'Description'],
-                ['key' => 'amount', 'label' => 'Amount', 'align' => 'right'],
-                ['key' => 'date', 'label' => 'Date'],
-                ['key' => 'recorded', 'label' => 'Recorded By'],
-            ],
-            $rows
-        );
-    }
-
-    private function memberActivityExportPayload(Request $request, Carbon $start, Carbon $end, ?int $branchId, string $rangeLabel): array
-    {
-        $activityType = $request->string('activity_type', 'all')->toString();
-        $memberId = $request->integer('member_id');
-        $allowedTypes = ['all', 'deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'interest', 'fee'];
-        $sortBy = $request->string('sort_by', 'date')->toString();
-        $sortDirection = strtolower($request->string('sort_direction', 'desc')->toString());
-
-        $query = $this->completedTransactions($branchId)
-            ->with(['account.user.personalData', 'loan.user.personalData'])
-            ->where(function ($builder) {
-                $builder->whereHas('account.user')->orWhereHas('loan.user');
-            });
-
-        $query = $this->applyWindowToTransactions($query, $start, $end);
-
-        if ($memberId) {
-            $query->where(function ($q) use ($memberId) {
-                $q->whereHas('account', fn ($a) => $a->where('user_id', $memberId))
-                    ->orWhereHas('loan', fn ($l) => $l->where('user_id', $memberId));
-            });
-        }
-
-        if (in_array($activityType, array_slice($allowedTypes, 1), true)) {
-            $query->where('transaction_type', $activityType);
-        }
-
-        if ($sortBy === 'member') {
-            $query->orderByRaw("COALESCE(
-                (SELECT pd.last_name FROM accounts a JOIN users u ON u.id = a.user_id JOIN personal_data pd ON pd.id = u.personal_data_id WHERE a.id = transactions.account_id),
-                (SELECT pd.last_name FROM loans l JOIN users u ON u.id = l.user_id JOIN personal_data pd ON pd.id = u.personal_data_id WHERE l.id = transactions.loan_id)
-            ) ".($sortDirection === 'asc' ? 'ASC' : 'DESC'));
-        } else {
-            $query->orderBy($sortBy === 'amount' ? 'amount' : ($sortBy === 'type' ? 'transaction_type' : 'transaction_date'), $sortDirection === 'asc' ? 'asc' : 'desc');
-        }
-        $query->orderByDesc('transactions.id');
-
-        $typeLabels = [
-            'deposit' => 'Deposit',
-            'withdrawal' => 'Withdrawal',
-            'loan_disbursement' => 'Loan Disbursement',
-            'loan_payment' => 'Loan Payment',
-            'interest' => 'Interest Credit',
-            'fee' => 'Fee',
-        ];
-
-        $rows = $query->latest('transaction_date')->get()->map(function (Transaction $transaction) use ($typeLabels) {
-            $user = $transaction->account?->user ?? $transaction->loan?->user;
-
-            return [
-                $user?->name ?: ($user?->email ?? 'N/A'),
-                $typeLabels[$transaction->transaction_type] ?? ucwords(str_replace('_', ' ', (string) $transaction->transaction_type)),
-                $this->money($transaction->amount),
-                ($transaction->transaction_date ?? $transaction->created_at)->format('M d, Y'),
-                $transaction->transaction_number,
-            ];
-        })->all();
-
-        return $this->singleSectionPayload(
-            'member_activity',
-            'Financial History Report',
-            $rangeLabel,
-            'member-activity',
-            'Financial History',
-            [
-                ['key' => 'member', 'label' => 'Member'],
-                ['key' => 'type', 'label' => 'Transaction Type'],
-                ['key' => 'amount', 'label' => 'Amount', 'align' => 'right'],
-                ['key' => 'date', 'label' => 'Date'],
-                ['key' => 'ref', 'label' => 'Reference'],
-            ],
-            $rows
-        );
     }
 
     private function membersExportPayload(Carbon $start, Carbon $end, ?int $branchId, string $rangeLabel): array
@@ -1115,49 +834,99 @@ class ReportController extends Controller
         );
     }
 
-    private function interestDisbursementsExportPayload(Request $request, Carbon $start, Carbon $end, ?int $branchId, string $rangeLabel): array
+    private function reportPagination(Builder $query, Request $request, array $columns = ['*'], int $perPage = 10): LengthAwarePaginator
     {
-        $accountType = $request->string('account_type')->toString();
+        // Set only on an internal request after export authorization, never from user input.
+        if ($request->attributes->get('report_export') === true) {
+            $items = $query->get($columns);
 
-        $rows = InterestDisbursement::query()
-            ->when($branchId !== null, fn ($q) => $q->whereHas('items.user', fn ($u) => $u->where('users.branch_id', $branchId)))
-            ->when($accountType !== '', fn ($q) => $q->where('account_type', $accountType))
-            ->whereBetween('created_at', [$start, $end])
-            ->orderByDesc('created_at')
-            ->get()
-            ->map(function (InterestDisbursement $batch) {
-                return [
-                    $batch->created_at?->format('M d, Y H:i') ?? '—',
-                    $batch->account_type === 'share-capital' ? 'Share Capital' : 'Savings',
-                    (string) $batch->period_label,
-                    rtrim(rtrim(number_format((float) $batch->rate, 4, '.', ''), '0'), '.').'% / '.$batch->interval,
-                    (string) $batch->member_count,
-                    (string) $batch->skipped_count,
-                    $this->money($batch->total_amount),
-                    ucfirst((string) $batch->trigger),
-                    ucfirst((string) $batch->status),
-                ];
-            })->all();
+            return new LengthAwarePaginator($items, $items->count(), max(1, $items->count()));
+        }
 
-        return $this->singleSectionPayload(
-            'interest_disbursements',
-            'Interest Disbursements Report',
-            $rangeLabel,
-            'interest-disbursements',
-            'Interest Batches',
-            [
-                ['key' => 'date', 'label' => 'Date'],
-                ['key' => 'account', 'label' => 'Account'],
-                ['key' => 'period', 'label' => 'Period'],
-                ['key' => 'rate', 'label' => 'Rate'],
-                ['key' => 'members', 'label' => 'Members', 'align' => 'right'],
-                ['key' => 'skipped', 'label' => 'Skipped', 'align' => 'right'],
-                ['key' => 'total', 'label' => 'Total', 'align' => 'right'],
-                ['key' => 'trigger', 'label' => 'Trigger'],
-                ['key' => 'status', 'label' => 'Status'],
-            ],
-            $rows
-        );
+        return $query->paginate($perPage, $columns);
+    }
+
+    private function tableExportPayload(string $type, Request $request, string $range): array
+    {
+        [$reader, $title, $fields] = match ($type) {
+            'member_savings' => ['memberSavings', 'Member Savings', [
+                ['member_name', 'Member', 'text'], ['total_deposits', 'Deposits', 'money'],
+                ['total_withdrawals', 'Withdrawals', 'money'], ['total_interest_credits', 'Interest Credits', 'money'],
+                ['current_balance', 'Current Savings Balance', 'money'],
+            ]],
+            'loans' => ['loanReport', 'Loan Register', [
+                ['loan_number', 'Loan Number', 'text'], ['member_name', 'Member', 'text'],
+                ['loan_amount', 'Principal', 'money'], ['interest_rate', 'Interest Rate', 'percent'],
+                ['loan_date', 'Application Date', 'date'], ['due_date', 'Due Date', 'date'],
+                ['amount_paid', 'Paid to Date', 'money'], ['remaining_balance', 'Current Remaining Balance', 'money'],
+                ['status', 'Status', 'text'],
+            ]],
+            'payments' => ['payments', 'Loan Payment Collections', [
+                ['member_name', 'Member', 'text'], ['loan_number', 'Loan Number', 'text'],
+                ['amount', 'Net Payment', 'money'], ['payment_date', 'Payment Date', 'date'],
+                ['remaining_balance', 'Current Loan Balance', 'money'],
+            ]],
+            'expenses' => ['expenses', 'Operating Expenses', [
+                ['category', 'Category', 'text'], ['description', 'Description', 'text'],
+                ['amount', 'Amount', 'money'], ['expense_date', 'Expense Date', 'date'], ['recorded_by', 'Recorded By', 'text'],
+            ]],
+            'member_activity' => ['memberActivity', 'Transaction History', [
+                ['transaction_number', 'Reference', 'text'], ['member_name', 'Member', 'text'],
+                ['transaction_type', 'Transaction Type', 'text'], ['amount', 'Net Amount', 'money'], ['transaction_date', 'Transaction Date', 'date'],
+            ]],
+            'interest_disbursements' => ['interestDisbursements', 'Interest Credits', [
+                ['created_at', 'Batch Created', 'date'], ['account_label', 'Account', 'text'], ['period_label', 'Period', 'text'],
+                ['rate', 'Rate', 'percent'], ['interval', 'Interval', 'text'], ['member_count', 'Members Credited', 'number'],
+                ['skipped_count', 'Skipped', 'number'], ['total_amount', 'Amount Credited', 'money'],
+                ['trigger', 'Trigger', 'text'], ['status', 'Status', 'text'],
+            ]],
+        };
+        $exportRequest = $request->duplicate();
+        $exportRequest->attributes->set('report_export', true);
+        $data = $this->{$reader}($exportRequest)->getData(true);
+        $columns = array_map(fn ($field) => ['key' => $field[0], 'label' => $field[1], 'type' => $field[2], 'align' => in_array($field[2], ['money', 'number', 'percent']) ? 'right' : 'left'], $fields);
+        $rows = array_map(fn ($row) => array_map(fn ($field) => $row[$field[0]] ?? null, $fields), $data['data']);
+
+        return $this->singleSectionPayload($type, $title, $range, str_replace('_', '-', $type), $title, $columns, $rows);
+    }
+
+    private function prepareExport(array $payload, Request $request, ?int $branchId): array
+    {
+        $filters = ['Branch: '.($branchId === null ? 'All permitted branches' : Branch::find($branchId)?->name)];
+        foreach (['member_id' => 'Member ID', 'filter' => 'Loan status', 'category' => 'Category', 'activity_type' => 'Transaction type', 'account_type' => 'Account', 'status' => 'Status', 'sort_by' => 'Sort', 'sort_direction' => 'Direction'] as $key => $label) {
+            if ($request->filled($key)) {
+                $filters[] = $label.': '.$request->input($key);
+            }
+        }
+        $payload['filter_summary'] = implode(' · ', $filters);
+        $payload['generatedAt'] = now();
+        $payload['generatedBy'] = Auth::user()?->name ?: Auth::user()?->email;
+        $payload['note'] = match ($payload['key']) {
+            'balance_sheet' => 'Management report using simplified ledger calculations. Cash is calculated through the selected end date; savings, share capital and loan balances are current. Retained earnings is a residual. This is not an audited or fully historical financial statement.',
+            'member_savings' => 'Activity uses the selected transaction dates. Current savings balances are live balances, not historical closing balances.',
+            'loans' => 'Loans are selected by application date. Paid and remaining amounts reflect current balances.',
+            'payments' => 'Completed externally funded loan payments, net of reversals. Loan balances are current.',
+            'financial_report' => 'Period totals use the selected dates. Monthly breakdown covers the trailing six months through the selected end month. Collected loan interest is estimated and shown separately from interest credits.',
+            default => '',
+        };
+        foreach ($payload['sections'] as &$section) {
+            foreach ($section['columns'] as &$column) {
+                $column['type'] ??= ($column['align'] ?? '') === 'right' ? 'money' : 'text';
+            }
+            unset($column);
+            if (in_array($payload['key'], ['member_savings', 'loans', 'payments', 'expenses', 'member_activity', 'interest_disbursements'])) {
+                $section['totals'] = [];
+                foreach ($section['columns'] as $index => $column) {
+                    // A payment row repeats its loan's current balance; summing it would mislead.
+                    if ($column['type'] === 'money' && ! ($payload['key'] === 'payments' && $column['key'] === 'remaining_balance')) {
+                        $section['totals'][$index] = round(array_sum(array_column($section['rows'], $index)), 2);
+                    }
+                }
+            }
+        }
+        unset($section);
+
+        return $payload;
     }
 
     private function singleSectionPayload(string $key, string $title, string $subtitle, string $slug, string $sectionTitle, array $columns, array $rows): array
@@ -1173,50 +942,9 @@ class ReportController extends Controller
         ];
     }
 
-    private function buildReportSpreadsheetXml(array $payload): string
+    private function money(null|int|float|string $value): float
     {
-        $worksheets = collect($payload['sections'])->map(function (array $section) {
-            $header = '<Row>'.collect($section['columns'])
-                ->map(fn (array $column) => $this->excelCell($column['label']))
-                ->implode('').'</Row>';
-
-            $body = collect($section['rows'])
-                ->map(fn (array $row) => '<Row>'.collect($row)
-                    ->map(fn (string $value) => $this->excelCell($value))
-                    ->implode('').'</Row>')
-                ->implode('');
-
-            return '<Worksheet ss:Name="'.$this->worksheetName($section['title']).'"><Table>'.$header.$body.'</Table></Worksheet>';
-        })->implode('');
-
-        return '<?xml version="1.0" encoding="UTF-8"?>'
-            .'<?mso-application progid="Excel.Sheet"?>'
-            .'<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"'
-            .' xmlns:o="urn:schemas-microsoft-com:office:office"'
-            .' xmlns:x="urn:schemas-microsoft-com:office:excel"'
-            .' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"'
-            .' xmlns:html="http://www.w3.org/TR/REC-html40">'
-            .$worksheets
-            .'</Workbook>';
-    }
-
-    private function excelCell(string $value): string
-    {
-        $escaped = htmlspecialchars($value, ENT_QUOTES | ENT_XML1, 'UTF-8');
-
-        return '<Cell><Data ss:Type="String">'.$escaped.'</Data></Cell>';
-    }
-
-    private function worksheetName(string $title): string
-    {
-        $name = str_replace(' ', '_', trim((string) preg_replace('/[^A-Za-z0-9 _\-]/', '', $title)));
-
-        return mb_substr($name !== '' ? $name : 'Report', 0, 31);
-    }
-
-    private function money(null|int|float|string $value): string
-    {
-        return 'PHP '.number_format((float) $value, 2);
+        return round((float) $value, 2);
     }
 
     private function personName(?object $personalData): string
@@ -1428,14 +1156,24 @@ class ReportController extends Controller
 
     private function resolveRange(Request $request): array
     {
-        $from = $request->string('from')->toString();
-        $to = $request->string('to')->toString();
-
-        $end = $to !== '' ? Carbon::parse($to)->endOfDay() : now()->endOfDay();
-        $start = $from !== '' ? Carbon::parse($from)->startOfDay() : now()->startOfMonth();
-
+        $request->validate([
+            'all_time' => ['nullable', 'boolean'],
+            'from' => ['nullable', 'date_format:Y-m-d'],
+            'to' => ['nullable', 'date_format:Y-m-d', ...($request->filled('from') ? ['after_or_equal:from'] : [])],
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'member_id' => ['nullable', 'integer', 'exists:users,id'],
+            'filter' => ['nullable', 'in:all,active,completed,overdue'],
+            'activity_type' => ['nullable', 'in:all,deposit,withdrawal,loan_disbursement,loan_payment,interest,fee'],
+            'sort_by' => ['nullable', 'in:date,amount,type,member,reference,category,description'],
+            'sort_direction' => ['nullable', 'in:asc,desc'],
+            'category' => ['nullable', 'string', 'max:255'],
+            'account_type' => ['nullable', 'in:savings,share-capital'],
+            'status' => ['nullable', 'in:pending,approved,processing,completed,failed,rejected,cancelled,reversed'],
+        ]);
+        $end = $request->filled('to') ? Carbon::parse($request->input('to'))->endOfDay() : now()->endOfDay();
+        $start = $request->filled('from') ? Carbon::parse($request->input('from'))->startOfDay() : ($request->boolean('all_time') ? Carbon::create(1000, 1, 1)->startOfDay() : $end->copy()->startOfMonth());
         if ($start->gt($end)) {
-            $start = $end->copy()->startOfMonth();
+            throw ValidationException::withMessages(['to' => 'The end date must be on or after the start date.']);
         }
 
         return [$start, $end];

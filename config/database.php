@@ -67,6 +67,22 @@ return [
             ],
         ],
 
+        // Dedicated, disposable database used only by backup:verify-restore.
+        'restore_verification' => [
+            'driver' => 'mysql',
+            'host' => env('BACKUP_VERIFY_DB_HOST', '127.0.0.1'),
+            'port' => env('BACKUP_VERIFY_DB_PORT', '3306'),
+            'database' => env('BACKUP_VERIFY_DB_DATABASE'),
+            'username' => env('BACKUP_VERIFY_DB_USERNAME'),
+            'password' => env('BACKUP_VERIFY_DB_PASSWORD'),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'strict' => true,
+            'engine' => 'InnoDB',
+            'dump' => ['dump_binary_path' => env('DB_DUMP_BINARY_PATH', '')],
+        ],
+
         'mariadb' => [
             'driver' => 'mariadb',
             'url' => env('DB_URL'),

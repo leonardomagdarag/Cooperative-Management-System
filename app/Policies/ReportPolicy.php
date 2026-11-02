@@ -8,11 +8,12 @@ class ReportPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->hasPermissionTo('reports.view');
+        // This policy defines reports.view itself; can() would re-enter the same gate.
+        return $user->checkPermissionTo('reports.view');
     }
 
     public function export(User $user): bool
     {
-        return $user->hasPermissionTo('reports.export');
+        return $user->checkPermissionTo('reports.view') && $user->checkPermissionTo('reports.export');
     }
 }

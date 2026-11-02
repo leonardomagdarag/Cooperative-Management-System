@@ -116,6 +116,7 @@ export default function ConfirmDialog({
                     <Button
                         variant={style.confirmVariant}
                         size="md"
+                        disableOnClick
                         isLoading={isLoading}
                         loadingText="Processing..."
                         onClick={onConfirm}

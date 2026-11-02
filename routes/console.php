@@ -32,6 +32,22 @@ Schedule::command('backup:ping')
     ->withoutOverlapping()
     ->description('Run scheduled backups that are due');
 
+Schedule::command('backup:notify-admin')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->description('Notify administrators about backup downloads and storage capacity');
+
+// Run the expensive restore drill outside the minute-long scheduler tick.
+// It is opt-in until a disposable database and restricted account are configured.
+Schedule::command('backup:verify-restore')
+    ->weeklyOn(0, '04:00')
+    ->when(fn () => filled(config('database.connections.restore_verification.database'))
+        && filled(config('database.connections.restore_verification.username'))
+        && filled(config('database.connections.restore_verification.password')))
+    ->withoutOverlapping(180)
+    ->runInBackground()
+    ->description('Verify the latest complete daily backup in an isolated database');
+
 // Credit member interest on the configured cadence. Like backup:ping, this
 // command decides what is due and only dispatches the work; the actual
 // crediting runs as a queue job so it is drained by the worker tick below.

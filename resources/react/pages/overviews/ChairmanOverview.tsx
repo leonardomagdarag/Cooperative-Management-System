@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { api } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatBytes } from '../../lib/format';
+import LoadingIndicator from '../../components/ui/LoadingIndicator';
 
 const peso = (n: number | string | undefined | null, d = 2) =>
     '₱' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -33,16 +34,7 @@ export default function ChairmanOverview() {
 
     const d = data?.data || {};
 
-    if (isLoading) {
-        return (
-            <div className="space-y-4">
-                <div className="h-36 animate-pulse rounded-2xl bg-slate-100" />
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    {[...Array(4)].map((_, i) => <div key={i} className="h-24 animate-pulse rounded-2xl bg-slate-100" />)}
-                </div>
-            </div>
-        );
-    }
+    if (isLoading) return <LoadingIndicator message="Loading overview..." />;
 
     const net = Number(d.month_net || 0);
     const netPos = net >= 0;
@@ -64,8 +56,8 @@ export default function ChairmanOverview() {
                 <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                     <div>
                         <p className="text-emerald-200 text-sm font-medium uppercase tracking-widest mb-1">Chairman of the Board</p>
-                        <h1 className="text-3xl font-extrabold leading-tight">{d.greeting}, {user?.first_name || 'Chairman'}</h1>
-                        <p className="mt-1 text-emerald-200">Cooperative-wide overview — {d.period_label || ''}</p>
+                        <h1 className="text-2xl font-medium leading-tight">{d.greeting}, {user?.first_name || 'Chairman'}</h1>
+                        <p className="mt-1 text-sm text-emerald-200">Cooperative-wide overview — {d.period_label || ''}</p>
                     </div>
                     <div className="sm:text-right shrink-0">
                         <p className="text-emerald-200 text-xs uppercase tracking-wide">Today</p>

@@ -61,7 +61,7 @@ export default function ForgotPasswordPage() {
                         <div className="inline-flex items-center justify-center w-14 h-14 bg-emerald-50 rounded-2xl mb-3">
                             <i className="fas fa-envelope text-2xl text-emerald-700"></i>
                         </div>
-                        <h1 className="text-2xl md:text-3xl font-bold text-slate-800 mb-2">Forgot Password?</h1>
+                        <h1 className="mb-2 text-2xl font-medium text-slate-800 md:text-3xl">Forgot Password?</h1>
                         <p className="text-sm text-slate-600">
                             Enter your email to receive a password reset link
                         </p>
@@ -76,7 +76,7 @@ export default function ForgotPasswordPage() {
                             <div className={`w-16 h-1 rounded ${sent ? 'bg-emerald-500' : 'bg-gray-200'}`}></div>
                             <div className="flex flex-col items-center">
                                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold mb-2 ${sent ? 'bg-emerald-700 text-white shadow-xs' : 'bg-gray-200 text-gray-500'}`}>2</div>
-                                <span className={`text-xs font-medium ${sent ? 'text-emerald-700' : 'text-gray-500'}`}>Verify PIN</span>
+                                <span className={`text-xs font-medium ${sent ? 'text-emerald-700' : 'text-gray-500'}`}>Open Link</span>
                             </div>
                             <div className="w-16 h-1 bg-gray-200 rounded"></div>
                             <div className="flex flex-col items-center">
@@ -151,7 +151,7 @@ export default function ForgotPasswordPage() {
                                             type="email"
                                             id="email"
                                             {...register('email')}
-                                            className="public-input pl-12"
+                                            className="public-input public-input-with-icon"
                                             placeholder="Enter your registered email"
                                         />
                                     </div>

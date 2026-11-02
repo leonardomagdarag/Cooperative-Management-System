@@ -164,16 +164,28 @@ test('dashboard and services pending-loan totals exclude rejected review request
 // ---------------------------------------------------------------------------
 
 test('F015-3: GET /api/dashboard returns manager overview for manager role', function () {
+    $memberCount = User::query()->memberUsers()->count();
+    $shareCapital = (float) Account::query()->where('account_type', 'share-capital')->sum('balance');
     $response = $this->actingAs($this->manager)->getJson('/api/dashboard');
 
     $response->assertOk()
         ->assertJsonStructure([
             'greeting',
             'total_members',
+            'staff_total',
+            'savings_total',
+            'share_capital_total',
             'loans_active',
+            'loans_outstanding',
+            'loans_due_soon',
+            'loan_status_series',
+            'recent_expenses',
             'month_deposits',
             'month_withdrawals',
-        ]);
+        ])
+        ->assertJsonPath('total_members', $memberCount);
+
+    expect((float) $response->json('share_capital_total'))->toBe($shareCapital);
 });
 
 // ---------------------------------------------------------------------------

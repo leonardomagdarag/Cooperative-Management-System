@@ -5,11 +5,16 @@ import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
 import TransactionReceiptModal, { type TransactionReceiptData } from '../../components/TransactionReceiptModal';
 import Pagination from '../../components/ui/Pagination';
+import DateRangeFilter from '../../components/ui/DateRangeFilter';
+import { useLanguage } from '../../contexts/LanguageContext';
+import PageHeader from '../../components/ui/PageHeader';
 
 export default function HistoryPage() {
+    const { t: translate } = useLanguage();
     const [category, setCategory] = useState('all');
     const [status, setStatus] = useState('all');
-    const [dateFilter, setDateFilter] = useState('all');
+    const [from, setFrom] = useState('');
+    const [to, setTo] = useState('');
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
     const [direction, setDirection] = useState('desc');
@@ -17,11 +22,12 @@ export default function HistoryPage() {
     const { addToast } = useToast();
 
     const { data, isLoading, refetch } = useQuery({
-        queryKey: ['history', category, status, dateFilter, search, page, direction],
+        queryKey: ['history', category, status, from, to, search, page, direction],
         queryFn: () => getHistory({
             category: category === 'all' ? undefined : category,
             status: status === 'all' ? undefined : status,
-            date: dateFilter === 'all' ? undefined : dateFilter,
+            from: from || undefined,
+            to: to || undefined,
             search: search || undefined,
             page,
             per_page: 15,
@@ -66,31 +72,21 @@ export default function HistoryPage() {
 
     return (
         <div className="space-y-6">
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-bold text-gray-900">Transaction History</h1>
-                    <button
+            <div>
+                <PageHeader title={translate('Transaction History')} description={translate('Search and review your cooperative transactions.')} icon="fas fa-clock-rotate-left" action={<button
                         onClick={() => refetch()}
                         className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
                     >
                         <i className="fas fa-sync-alt mr-1"></i> Refresh
-                    </button>
-                </div>
-                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    </button>} />
+                <div className="table-toolbar mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <input
                         type="text"
-                        placeholder="Search transactions..."
+                        placeholder={translate('Search transactions...')}
                         value={search}
                         onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                         className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none"
                     />
-                    <select value={dateFilter} onChange={e => { setDateFilter(e.target.value); setPage(1); }} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none">
-                        <option value="all">All Time</option>
-                        <option value="today">Today</option>
-                        <option value="week">This Week</option>
-                        <option value="month">This Month</option>
-                        <option value="year">This Year</option>
-                    </select>
                     <select value={category} onChange={e => { setCategory(e.target.value); setPage(1); }} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none">
                         <option value="all">All Types</option>
                         <option value="deposit">Deposits</option>
@@ -100,7 +96,8 @@ export default function HistoryPage() {
                         <option value="interest">Interest</option>
                     </select>
                 </div>
-                <div className="mt-3 flex flex-wrap items-center gap-3">
+                <div className="table-toolbar mt-3">
+                    <DateRangeFilter from={from} to={to} onFromChange={value => { setFrom(value); setPage(1); }} onToChange={value => { setTo(value); setPage(1); }} />
                     <select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none">
                         <option value="all">All Status</option>
                         <option value="pending">Pending</option>
@@ -109,7 +106,7 @@ export default function HistoryPage() {
                         <option value="rejected">Rejected</option>
                     </select>
                     <button
-                        onClick={() => setDirection(d => d === 'desc' ? 'asc' : 'desc')}
+                        onClick={() => { setDirection(d => d === 'desc' ? 'asc' : 'desc'); setPage(1); }}
                         className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm hover:bg-gray-50"
                     >
                         <i className={`fas fa-sort-${direction === 'desc' ? 'down' : 'up'} mr-1`}></i>
@@ -127,7 +124,7 @@ export default function HistoryPage() {
             ) : transactions.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center">
                     <i className="fas fa-receipt text-4xl text-gray-300"></i>
-                    <p className="mt-4 text-sm text-gray-500">No transactions found</p>
+                    <p className="mt-4 text-sm text-gray-500">{translate('No transactions found')}</p>
                 </div>
             ) : (
                 <div className="space-y-3">
@@ -146,7 +143,7 @@ export default function HistoryPage() {
                                         <div className="flex items-center gap-2">
                                             <span className="font-medium text-gray-900">{t.transaction_number}</span>
                                             <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${getTypeColor(t.transaction_type)}`}>
-                                                {t.transaction_type === 'interest' ? 'Interest Credit' : t.transaction_type.replace(/_/g, ' ')}
+                                                {translate(t.transaction_type === 'interest' ? 'Interest Credit' : t.transaction_type.replace(/_/g, ' '))}
                                             </span>
                                         </div>
                                         <p className="text-xs text-gray-500">{t.transaction_date}</p>
@@ -156,7 +153,7 @@ export default function HistoryPage() {
                                     <p className={`text-xl font-bold ${amountColor}`}>{isCredit ? '+' : '-'}&#8369;{Number(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                     {t.balance_after !== null && (
                                         <p className="text-sm text-gray-600">
-                                            Balance after: &#8369;{Number(t.balance_after).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            {translate('Balance after:')} &#8369;{Number(t.balance_after).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </p>
                                     )}
                                     <div className="mt-1 flex items-center gap-2 justify-end">

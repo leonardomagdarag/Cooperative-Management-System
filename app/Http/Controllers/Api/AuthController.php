@@ -3,11 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\OfficerPermissionOverride;
 use App\Models\LoginHandoff;
+use App\Models\OfficerPermissionOverride;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Services\LoginHandoffService;
 use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
 use App\Services\TurnstileService;
@@ -106,7 +107,7 @@ class AuthController extends Controller
         Auth::guard('web')->login($user, $request->boolean('remember'));
         $request->session()->regenerate();
 
-        $handoff = app(\App\Services\LoginHandoffService::class)->requestApproval($user, $previousSessionId, $request);
+        $handoff = app(LoginHandoffService::class)->requestApproval($user, $previousSessionId, $request);
         if ($handoff) {
 
             $this->auditLogService->log('auth.login_approval_requested', 'A sign-in is waiting for approval from the active device.', 'auth', $handoff, $user, [
@@ -228,6 +229,7 @@ class AuthController extends Controller
             Auth::guard('web')->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
+
             return response()->json(['status' => 'expired']);
         }
 
@@ -237,14 +239,113 @@ class AuthController extends Controller
             $request->session()->regenerateToken();
         }
 
-        return response()->json(['status' => $handoff->status]);
+        $status = $request->session()->get('security.login_handoff_otp_started')
+            ? 'otp_pending'
+            : $handoff->status;
+        if ($status === 'otp_bypassed') {
+            $status = 'approved';
+        }
+
+        return response()->json([
+            'status' => $status,
+            'email_otp_bypassed' => ! $this->securityOtpService->shouldEnforceNewDeviceOtp(),
+        ]);
+    }
+
+    public function requestLoginHandoffOtp(Request $request): JsonResponse
+    {
+        $user = $request->user('web');
+        abort_if($request->session()->get('security.login_handoff_otp_started'), 409, 'A verification code has already been sent for this sign-in.');
+
+        if (! $this->securityOtpService->shouldEnforceNewDeviceOtp()) {
+            $handoff = DB::transaction(function () use ($request, $user) {
+                $handoff = LoginHandoff::query()
+                    ->whereKey($request->session()->get('security.pending_login_handoff'))
+                    ->where('user_id', $user->id)
+                    ->where('pending_session_id', $request->session()->getId())
+                    ->where('status', 'pending')
+                    ->where('expires_at', '>', now())
+                    ->lockForUpdate()
+                    ->first();
+
+                abort_unless($handoff, 409, 'This sign-in request has expired or was already handled. Please sign in again.');
+                $handoff->update(['status' => 'otp_bypassed']);
+
+                return $handoff;
+            });
+
+            $this->auditLogService->log(
+                'auth.login_otp_bypassed',
+                'New-device email verification was bypassed by the configured login OTP setting.',
+                'auth',
+                $handoff,
+                $user,
+                ['device' => $handoff->device_label, 'ip_address' => $handoff->ip_address]
+            );
+
+            return $this->completeLoginHandoff($request);
+        }
+
+        $otpRequest = DB::transaction(function () use ($request, $user) {
+            $handoff = LoginHandoff::query()
+                ->whereKey($request->session()->get('security.pending_login_handoff'))
+                ->where('user_id', $user->id)
+                ->where('pending_session_id', $request->session()->getId())
+                ->where('status', 'pending')
+                ->where('expires_at', '>', now())
+                ->lockForUpdate()
+                ->first();
+
+            abort_unless($handoff, 409, 'This sign-in request has expired or was already handled. Please sign in again.');
+
+            $fingerprint = $this->securityOtpService->buildDeviceFingerprint($request);
+            $purpose = $this->securityOtpService->newDevicePurpose();
+            $issued = $this->securityOtpService->issueChallenge($user, $purpose, [
+                'fingerprint' => $fingerprint,
+                'login_handoff_id' => $handoff->id,
+            ]);
+            $this->securityOtpService->sendOtpMail($user, $purpose, $issued['otp_code']);
+
+            $otpExpiryMinutes = max(1, (int) SystemSetting::get('security_otp_expiry_minutes', 10));
+            $handoff->update(['status' => 'otp_pending', 'expires_at' => now()->addMinutes($otpExpiryMinutes)]);
+
+            return [
+                'handoff' => $handoff,
+                'fingerprint' => $fingerprint,
+                'otp_code' => $issued['otp_code'],
+            ];
+        });
+        $handoff = $otpRequest['handoff'];
+        $request->session()->put([
+            'security.pending_otp' => true,
+            'security.pending_otp_purpose' => $this->securityOtpService->newDevicePurpose(),
+            'security.pending_otp_fingerprint' => $otpRequest['fingerprint'],
+            'security.intended_url' => route('dashboard', absolute: false),
+            'security.login_handoff_otp_started' => true,
+        ]);
+        $this->securityOtpService->stashDebugCode($request->session(), $otpRequest['otp_code']);
+
+        $this->auditLogService->log(
+            'auth.login_otp_requested',
+            'Email verification was requested as an alternative to active-device sign-in approval.',
+            'auth',
+            $handoff,
+            $user,
+            ['device' => $handoff->device_label, 'ip_address' => $handoff->ip_address]
+        );
+
+        return response()->json([
+            'requires_otp' => true,
+            'redirect' => route('otp.challenge.show'),
+            'message' => 'A verification code was sent to your registered email address.',
+        ]);
     }
 
     public function completeLoginHandoff(Request $request): JsonResponse
     {
         $handoffId = $request->session()->get('security.pending_login_handoff');
         $handoff = LoginHandoff::query()->whereKey($handoffId)->where('user_id', $request->user('web')->id)
-            ->where('pending_session_id', $request->session()->getId())->where('status', 'approved')
+            ->where('pending_session_id', $request->session()->getId())->whereIn('status', ['approved', 'otp_bypassed'])
             ->where('expires_at', '>', now())->first();
         abort_unless($handoff, 403, 'This sign-in was not approved or has expired.');
         abort_if($request->session()->get('security.login_handoff_otp_started'), 409, 'Security verification has already started.');
@@ -254,24 +355,38 @@ class AuthController extends Controller
         $isNewDevice = ! $this->securityOtpService->isTrustedDevice($user, $fingerprint);
         if ($isNewDevice && $this->securityOtpService->shouldEnforceNewDeviceOtp()) {
             $purpose = $this->securityOtpService->newDevicePurpose();
-            $issued = $this->securityOtpService->issueChallenge($user, $purpose, ['fingerprint' => $fingerprint]);
+            $issued = $this->securityOtpService->issueChallenge($user, $purpose, [
+                'fingerprint' => $fingerprint,
+                'login_handoff_id' => $handoff->id,
+            ]);
             $this->securityOtpService->sendOtpMail($user, $purpose, $issued['otp_code']);
+            $otpExpiryMinutes = max(1, (int) SystemSetting::get('security_otp_expiry_minutes', 10));
+            $handoff->update(['expires_at' => now()->addMinutes($otpExpiryMinutes)]);
             $request->session()->put(['security.pending_otp' => true, 'security.pending_otp_purpose' => $purpose, 'security.pending_otp_fingerprint' => $fingerprint]);
             $request->session()->put('security.login_handoff_otp_started', true);
             $this->securityOtpService->stashDebugCode($request->session(), $issued['otp_code']);
+
             return response()->json(['requires_otp' => true, 'redirect' => route('otp.challenge.show')]);
         }
 
-        $handoff->update(['status' => 'completed']);
+        $completed = LoginHandoff::query()
+            ->whereKey($handoff->id)
+            ->where('user_id', $user->id)
+            ->where('pending_session_id', $request->session()->getId())
+            ->whereIn('status', ['approved', 'otp_bypassed'])
+            ->where('expires_at', '>', now())
+            ->update(['status' => 'completed', 'decided_at' => now()]);
+        abort_unless($completed, 409, 'This sign-in was already completed or has expired.');
         $request->session()->forget('security.login_handoff_otp_started');
         $this->securityOtpService->trustDevice($user, $fingerprint, $request->userAgent(), $request->ip(), $request->session()->getId());
         $user->activateSession($request->session()->getId());
         $user->invalidateOtherSessions($request->session()->getId());
         $this->notificationService->notifyNewDeviceLogin($user, $request->ip(), 'approved');
-        $this->auditLogService->log('auth.login_success', 'User completed an approved device sign-in.', 'auth', $handoff, $user, [
+        $this->auditLogService->log('auth.login_success', 'User completed a device sign-in.', 'auth', $handoff, $user, [
             'role' => $user->primary_role,
             'ip_address' => $request->ip(),
         ]);
+
         return response()->json(['success' => true, 'user' => $this->formatUser($user), 'redirect' => route('dashboard', absolute: false)]);
     }
 

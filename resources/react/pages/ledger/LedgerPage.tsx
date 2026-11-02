@@ -1,4 +1,6 @@
+import SortableHeader from '../../components/ui/SortableHeader';
 import HelpTip from '../../components/ui/HelpTip';
+import PageHeader from '../../components/ui/PageHeader';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
@@ -13,6 +15,7 @@ import Pagination from '../../components/ui/Pagination';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import TransactionReceiptModal, { type TransactionReceiptData } from '../../components/TransactionReceiptModal';
+import DateRangeFilter from '../../components/ui/DateRangeFilter';
 
 /** Mirrors the backend's editable list in LedgerController/CountersignService. */
 const EDITABLE_TYPES = ['deposit', 'withdrawal', 'loan_payment', 'loan_disbursement', 'fee'];
@@ -22,6 +25,11 @@ export default function LedgerPage() {
     const [search, setSearch] = useState('');
     const [branchFilter, setBranchFilter] = useState<number | ''>('');
     const [page, setPage] = useState(1);
+    const [from, setFrom] = useState('');
+    const [to, setTo] = useState('');
+    const [status, setStatus] = useState('all');
+    const [sort, setSort] = useState('created_at');
+    const [direction, setDirection] = useState<'asc' | 'desc'>('desc');
     const [showAddModal, setShowAddModal] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
     const [reversalTarget, setReversalTarget] = useState<{ id: number; transactionNumber: string } | null>(null);
@@ -51,8 +59,8 @@ export default function LedgerPage() {
     const requestCloseGuard = () => requestClose(() => setShowAddModal(false));
 
     const { data, isLoading } = useQuery({
-        queryKey: ['ledger', category, search, page, branchFilter],
-        queryFn: () => api.get('/api/ledger', { params: { category: category === 'all' || category === 'corrections' ? undefined : category, corrections: category === 'corrections' ? 1 : undefined, search: search || undefined, branch_id: branchFilter || undefined, page, per_page: 10 } }),
+        queryKey: ['ledger', category, search, page, branchFilter, from, to, status, sort, direction],
+        queryFn: () => api.get('/api/ledger', { params: { category: category === 'all' || category === 'corrections' ? undefined : category, corrections: category === 'corrections' ? 1 : undefined, search: search || undefined, branch_id: branchFilter || undefined, from: from || undefined, to: to || undefined, status: status === 'all' ? undefined : status, sort, direction, page, per_page: 10 } }),
     });
 
     const { data: summaryData } = useQuery({
@@ -183,14 +191,16 @@ export default function LedgerPage() {
         saveMutation.mutate(form);
     };
 
+    const handleColumnSort = (field: string) => {
+        setDirection(sort === field && direction === 'asc' ? 'desc' : 'asc');
+        setSort(field);
+        setPage(1);
+    };
+
     return (
         <>
-            <div className="p-4 bg-white block sm:flex items-center justify-between border-b border-gray-200 lg:mt-1.5">
-                <div>
-                    <h1 className="flex items-center gap-2 text-xl font-semibold text-gray-900 sm:text-2xl">Ledger <HelpTip text="The ledger is the financial transaction record. Use filters to narrow the entries; exports follow the currently selected filters and your branch access." /></h1>
-                    <p className="text-sm text-gray-500">Track all financial transactions</p>
-                </div>
-                <div className="mt-3 sm:mt-0 flex gap-2">
+            <div className="p-4">
+                <PageHeader title={<>Ledger <HelpTip text="The ledger is the financial transaction record. Use filters to narrow the entries; exports follow the currently selected filters and your branch access." /></>} description="Track all financial transactions" icon="fas fa-book" action={<div className="flex gap-2">
                     <button onClick={exportCsv} className="bg-emerald-600 hover:bg-emerald-700 rounded-lg focus:ring-4 focus:ring-emerald-200 text-white px-4 py-2 text-sm font-medium transition-colors">
                         <i className="fas fa-download mr-1"></i> Export
                     </button>
@@ -199,7 +209,7 @@ export default function LedgerPage() {
                             <i className="fas fa-plus mr-1"></i> Add Entry
                         </button>
                     )}
-                </div>
+                </div>} />
             </div>
 
             <div className="p-4">
@@ -229,12 +239,11 @@ export default function LedgerPage() {
                     onChange={e => { setSearch(e.target.value); setPage(1); }}
                     className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-emerald-500 focus:border-emerald-500 block w-full p-2.5 mb-4"
                 />
-
-                {canAssignBranch && (
-                    <div className="mb-4 w-full sm:w-64">
-                        <BranchSelect label="" value={branchFilter} onChange={v => { setBranchFilter(v); setPage(1); }} allLabel="All branches" />
-                    </div>
-                )}
+                <div className="table-toolbar mb-4">
+                    <DateRangeFilter from={from} to={to} onFromChange={value => { setFrom(value); setPage(1); }} onToChange={value => { setTo(value); setPage(1); }} />
+                    <select value={status} onChange={event => { setStatus(event.target.value); setPage(1); }} aria-label="Filter transactions by status" className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm"><option value="all">All statuses</option><option value="pending">Pending</option><option value="completed">Completed</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select>
+                    {canAssignBranch && <div className="w-full sm:w-64"><BranchSelect label="" value={branchFilter} onChange={v => { setBranchFilter(v); setPage(1); }} allLabel="All branches" /></div>}
+                </div>
 
                 {/* Table */}
                 {isLoading ? (
@@ -249,12 +258,12 @@ export default function LedgerPage() {
                         <table className="min-w-[850px] w-full divide-y divide-gray-200 table-fixed">
                             <thead className="bg-gray-100">
                                 <tr>
-                                    <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Txn #</th>
-                                    <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Member</th>
-                                    <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Type</th>
-                                    <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Amount</th>
-                                    <th className="w-20 p-3 text-xs font-medium text-left text-gray-500 uppercase">Status</th>
-                                    <th className="w-28 p-3 text-xs font-medium text-left text-gray-500 uppercase">Date</th>
+                                    <SortableHeader field="transaction_number" sort={sort} direction={direction} onSort={handleColumnSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Txn #</SortableHeader>
+                                    <SortableHeader field="member" sort={sort} direction={direction} onSort={handleColumnSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Member</SortableHeader>
+                                    <SortableHeader field="transaction_type" sort={sort} direction={direction} onSort={handleColumnSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Type</SortableHeader>
+                                    <SortableHeader field="amount" sort={sort} direction={direction} onSort={handleColumnSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Amount</SortableHeader>
+                                    <SortableHeader field="status" sort={sort} direction={direction} onSort={handleColumnSort} className="w-20 p-3 text-xs font-medium text-left text-gray-500 uppercase">Status</SortableHeader>
+                                    <SortableHeader field="transaction_date" sort={sort} direction={direction} onSort={handleColumnSort} className="w-28 p-3 text-xs font-medium text-left text-gray-500 uppercase">Date</SortableHeader>
                                     <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Actions</th>
                                 </tr>
                             </thead>

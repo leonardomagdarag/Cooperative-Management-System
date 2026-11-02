@@ -3,11 +3,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getProfile, updateProfile, type ProfileData } from '../../api/profile';
 import EmailChangeVerification from '../../components/EmailChangeVerification';
 import FallbackImage from '../../components/FallbackImage';
+import LoadingIndicator from '../../components/ui/LoadingIndicator';
 import DatePicker from '../../components/DatePicker';
 import { useToast } from '../../contexts/ToastContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
 import { z } from 'zod';
 import { toFieldErrors, type FieldErrors } from '../../lib/validation';
+import { useLanguage } from '../../contexts/LanguageContext';
+import HelpTip from '../../components/ui/HelpTip';
+import PageHeader from '../../components/ui/PageHeader';
 
 type Tab = 'overview' | 'contact' | 'employment' | 'financial' | 'beneficiaries' | 'security' | 'privacy';
 
@@ -79,6 +83,7 @@ function createProfileFormData(profile: ProfileData, overrides: Record<string, a
 }
 
 export default function ProfilePage() {
+    const { t } = useLanguage();
     const [activeTab, setActiveTab] = useState<Tab>('overview');
     const [editModal, setEditModal] = useState<'personal'|'contact'|'address'|'ids'|'employment'|'beneficiaries'|'photo'|null>(null);
     const queryClient = useQueryClient();
@@ -96,20 +101,12 @@ export default function ProfilePage() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['profile'] });
             setEditModal(null);
-            addToast('Profile updated successfully', 'success');
+            addToast(t('Profile updated successfully'), 'success');
         },
-        onError: () => addToast('Failed to update profile', 'error'),
+        onError: () => addToast(t('Failed to update profile'), 'error'),
     });
 
-    if (isLoading) {
-        return (
-            <div className="space-y-4">
-                {[...Array(3)].map((_, i) => (
-                    <div key={i} className="h-32 animate-pulse rounded-xl bg-gray-100" />
-                ))}
-            </div>
-        );
-    }
+    if (isLoading) return <LoadingIndicator message={t('Loading your profile...')} />;
 
     if (!profile) return null;
 
@@ -117,6 +114,7 @@ export default function ProfilePage() {
 
     return (
         <div className="space-y-6">
+            <PageHeader title={t('My Profile')} description={t('Review your details and keep your information up to date.')} icon="fas fa-user" />
             <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
                 <div className="h-20 bg-gradient-to-r from-emerald-500 to-cyan-600 relative group cursor-pointer" onClick={() => setEditModal('photo')}>
                     <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-sm font-medium">
@@ -159,7 +157,7 @@ export default function ProfilePage() {
                         }`}
                     >
                         <i className={tab.icon}></i>
-                        {tab.label}
+                        {t(tab.label)}
                     </button>
                 ))}
             </div>
@@ -169,33 +167,33 @@ export default function ProfilePage() {
                     <div className="space-y-8">
                         <div>
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="font-semibold text-gray-900">Personal Information</h3>
+                                <h3 className="font-semibold text-gray-900">{t('Personal Information')}</h3>
                                 <button onClick={() => setEditModal('personal')} className="text-sm font-medium text-emerald-600 hover:text-emerald-700"><i className="fas fa-edit mr-1"></i>Edit</button>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                                <InfoCard label="First Name" value={personal_data?.first_name || '\u2014'} />
-                                <InfoCard label="Middle Name" value={personal_data?.mid_name || '\u2014'} />
-                                <InfoCard label="Last Name" value={personal_data?.last_name || '\u2014'} />
-                                <InfoCard label="Suffix" value={personal_data?.suffix || '\u2014'} />
-                                <InfoCard label="Gender" value={personal_data?.gender || '\u2014'} />
-                                <InfoCard label="Civil Status" value={personal_data?.civil_status || '\u2014'} />
-                                <InfoCard label="Birth Date" value={personal_data?.birth_date || '\u2014'} />
-                                <InfoCard label="Birthplace" value={personal_data?.birthplace || '\u2014'} />
-                                <InfoCard label="Religion" value={personal_data?.religion || '\u2014'} />
-                                <InfoCard label="Education" value={personal_data?.education || '\u2014'} />
+                                <InfoCard label={t('First Name')} value={personal_data?.first_name || '\u2014'} />
+                                <InfoCard label={t('Middle Name')} value={personal_data?.mid_name || '\u2014'} />
+                                <InfoCard label={t('Last Name')} value={personal_data?.last_name || '\u2014'} />
+                                <InfoCard label={t('Suffix')} value={personal_data?.suffix || '\u2014'} />
+                                <InfoCard label={t('Gender')} value={personal_data?.gender || '\u2014'} />
+                                <InfoCard label={t('Civil Status')} value={personal_data?.civil_status || '\u2014'} />
+                                <InfoCard label={t('Birth Date')} value={personal_data?.birth_date || '\u2014'} />
+                                <InfoCard label={t('Birthplace')} value={personal_data?.birthplace || '\u2014'} />
+                                <InfoCard label={t('Religion')} value={personal_data?.religion || '\u2014'} />
+                                <InfoCard label={t('Education')} value={personal_data?.education || '\u2014'} />
                             </div>
                         </div>
 
                         <div>
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="font-semibold text-gray-900">Government IDs</h3>
+                                <h3 className="font-semibold text-gray-900">{t('Government IDs')}</h3>
                                 <button onClick={() => setEditModal('ids')} className="text-sm font-medium text-emerald-600 hover:text-emerald-700"><i className="fas fa-edit mr-1"></i>Edit</button>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                                <InfoCard label="National ID" value={member_id?.national_id || '\u2014'} />
-                                <InfoCard label="TIN" value={member_id?.tin || '\u2014'} />
-                                <InfoCard label="SSS" value={member_id?.sss || '\u2014'} />
-                                <InfoCard label="PhilHealth" value={member_id?.philhealth || '\u2014'} />
+                                <InfoCard label={t('National ID')} value={member_id?.national_id || '\u2014'} />
+                                <InfoCard label={t('TIN')} value={member_id?.tin || '\u2014'} />
+                                <InfoCard label={t('SSS')} value={member_id?.sss || '\u2014'} />
+                                <InfoCard label={t('PhilHealth')} value={member_id?.philhealth || '\u2014'} />
                             </div>
                         </div>
                     </div>
@@ -205,29 +203,29 @@ export default function ProfilePage() {
                     <div className="space-y-8">
                         <div>
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="font-semibold text-gray-900">Contact Information</h3>
+                                <h3 className="font-semibold text-gray-900">{t('Contact Information')}</h3>
                                 <button onClick={() => setEditModal('contact')} className="text-sm font-medium text-emerald-600 hover:text-emerald-700"><i className="fas fa-edit mr-1"></i>Edit</button>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <InfoCard label="Phone" value={contact?.phone_no || '\u2014'} />
-                                <InfoCard label="Email" value={contact?.email || user.email} />
-                                <InfoCard label="Facebook" value={contact?.facebook || '\u2014'} />
+                                <InfoCard label={t('Phone')} value={contact?.phone_no || '\u2014'} />
+                                <InfoCard label={t('Email')} value={contact?.email || user.email} />
+                                <InfoCard label={t('Facebook')} value={contact?.facebook || '\u2014'} />
                             </div>
                         </div>
 
                         <div>
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="font-semibold text-gray-900">Address</h3>
+                                <h3 className="font-semibold text-gray-900">{t('Address')}</h3>
                                 <button onClick={() => setEditModal('address')} className="text-sm font-medium text-emerald-600 hover:text-emerald-700"><i className="fas fa-edit mr-1"></i>Edit</button>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <InfoCard label="Country" value={address?.country || '\u2014'} />
-                                <InfoCard label="Region" value={address?.region || '\u2014'} />
-                                <InfoCard label="Province" value={address?.province || '\u2014'} />
-                                <InfoCard label="City/Municipality" value={address?.city_municipality || '\u2014'} />
-                                <InfoCard label="Barangay" value={address?.barangay || '\u2014'} />
-                                <InfoCard label="Street" value={address?.street || '\u2014'} />
-                                <InfoCard label="ZIP Code" value={address?.zip_code || '\u2014'} />
+                                <InfoCard label={t('Country')} value={address?.country || '\u2014'} />
+                                <InfoCard label={t('Region')} value={address?.region || '\u2014'} />
+                                <InfoCard label={t('Province')} value={address?.province || '\u2014'} />
+                                <InfoCard label={t('City/Municipality')} value={address?.city_municipality || '\u2014'} />
+                                <InfoCard label={t('Barangay')} value={address?.barangay || '\u2014'} />
+                                <InfoCard label={t('Street')} value={address?.street || '\u2014'} />
+                                <InfoCard label={t('ZIP Code')} value={address?.zip_code || '\u2014'} />
                             </div>
                         </div>
                     </div>
@@ -236,21 +234,21 @@ export default function ProfilePage() {
                 {activeTab === 'employment' && (
                     <div className="space-y-4">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="font-semibold text-gray-900">Employment Information</h3>
+                            <h3 className="font-semibold text-gray-900">{t('Employment Information')}</h3>
                             <button onClick={() => setEditModal('employment')} className="text-sm font-medium text-emerald-600 hover:text-emerald-700"><i className="fas fa-edit mr-1"></i>Edit</button>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <InfoCard label="Employment Type" value={employment?.employment_type || '\u2014'} />
-                            <InfoCard label="Company / Employer" value={employment?.company || '\u2014'} />
-                            <InfoCard label="Position" value={employment?.position || '\u2014'} />
-                            <InfoCard label="Monthly Income" value={employment?.monthly_income ? `\u20B1${Number(employment.monthly_income).toLocaleString()}` : '\u2014'} />
+                            <InfoCard label={t('Employment Type')} value={employment?.employment_type || '\u2014'} />
+                            <InfoCard label={t('Company / Employer')} value={employment?.company || '\u2014'} />
+                            <InfoCard label={t('Position')} value={employment?.position || '\u2014'} />
+                            <InfoCard label={t('Monthly Income')} value={employment?.monthly_income ? `\u20B1${Number(employment.monthly_income).toLocaleString()}` : '\u2014'} />
                         </div>
                     </div>
                 )}
 
                 {activeTab === 'financial' && (
                     <div className="space-y-6">
-                        <h3 className="font-semibold text-gray-900">Accounts</h3>
+                        <h3 className="font-semibold text-gray-900">{t('Accounts')}</h3>
                         <div className="grid gap-4 md:grid-cols-2">
                             {accounts.map(a => (
                                 <div key={a.id} className="rounded-xl border border-gray-200 p-4 shadow-sm">
@@ -260,19 +258,19 @@ export default function ProfilePage() {
                                 </div>
                             ))}
                         </div>
-                        <h3 className="font-semibold text-gray-900 mt-6">Active Loans: {profile.active_loans_count}</h3>
+                        <h3 className="font-semibold text-gray-900 mt-6">{t('Active Loans:')} {profile.active_loans_count}</h3>
                     </div>
                 )}
 
                 {activeTab === 'beneficiaries' && (
                     <div className="space-y-4">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="font-semibold text-gray-900">Beneficiaries</h3>
+                            <h3 className="font-semibold text-gray-900">{t('Beneficiaries')}</h3>
                             <button onClick={() => setEditModal('beneficiaries')} className="text-sm font-medium text-emerald-600 hover:text-emerald-700"><i className="fas fa-edit mr-1"></i>Manage</button>
                         </div>
                         {beneficiaries.length === 0 ? (
                             <div className="rounded-xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500">
-                                No beneficiaries listed. Click manage to add.
+                                {t('No beneficiaries listed. Click manage to add.')}
                             </div>
                         ) : (
                             <div className="space-y-3">
@@ -296,26 +294,26 @@ export default function ProfilePage() {
 
                 {activeTab === 'security' && (
                     <div className="space-y-6">
-                        <h3 className="font-semibold text-gray-900">Trusted Devices</h3>
+                        <h3 className="font-semibold text-gray-900">{t('Trusted Devices')} <HelpTip text="Ito ang mga device na dati mong ginamit para mag-login. Kung may hindi ka kilalang device, kontakin agad ang cooperative para ma-check ang account mo." /></h3>
                         {trusted_devices.length === 0 ? (
-                            <p className="text-sm text-gray-500">No trusted devices on record.</p>
+                            <p className="text-sm text-gray-500">{t('No trusted devices on record.')}</p>
                         ) : (
                             <div className="space-y-2">
                                 {trusted_devices.map(d => (
                                     <div key={d.id} className="flex items-center justify-between rounded-xl border border-gray-100 p-3">
                                         <div>
-                                            <p className="text-sm font-medium text-gray-700">{d.device_label || 'Unknown device'}</p>
-                                            <p className="text-xs text-gray-500">{d.last_ip_address} &middot; {d.last_used_at ? `last used ${new Date(d.last_used_at).toLocaleString()}` : ''}</p>
+                                            <p className="text-sm font-medium text-gray-700">{d.device_label || t('Unknown device')}</p>
+                                            <p className="text-xs text-gray-500">{d.last_ip_address} &middot; {d.last_used_at ? `${t('Last used')} ${new Date(d.last_used_at).toLocaleString()}` : ''}</p>
                                         </div>
-                                        <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${d.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{d.is_active ? 'Active' : 'Inactive'}</span>
+                                        <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${d.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{t(d.is_active ? 'Active' : 'Inactive')}</span>
                                     </div>
                                 ))}
                             </div>
                         )}
-                        <h3 className="font-semibold text-gray-900 pt-4 border-t border-gray-100">Recent Activity</h3>
+                        <h3 className="font-semibold text-gray-900 pt-4 border-t border-gray-100">{t('Recent Activity')}</h3>
                         <div className="space-y-3">
                             {recent_logs.length === 0 ? (
-                                <p className="text-sm text-gray-500">No recent activity.</p>
+                                <p className="text-sm text-gray-500">{t('No recent activity.')}</p>
                             ) : recent_logs.map(log => (
                                 <div key={log.id} className="flex items-start gap-3">
                                     <div className="mt-0.5"><i className="fas fa-circle-dot text-[10px] text-gray-300"></i></div>
@@ -331,12 +329,11 @@ export default function ProfilePage() {
 
                 {activeTab === 'privacy' && (
                     <div className="space-y-4">
-                        <h3 className="font-semibold text-gray-900">Data Sharing Preferences</h3>
+                        <h3 className="font-semibold text-gray-900">{t('Data Sharing Preferences')}</h3>
                         <div className="rounded-xl border border-gray-200 bg-gray-50 p-6 text-center">
                             <i className="fas fa-shield-alt text-3xl text-gray-300 mb-3 block"></i>
                             <p className="text-sm text-gray-500">
-                                Data sharing preferences will be available in a future update.
-                                Your data is handled according to our privacy policy.
+                                {t('Data sharing preferences will be available in a future update. Your data is handled according to our privacy policy.')}
                             </p>
                         </div>
                     </div>
@@ -345,23 +342,23 @@ export default function ProfilePage() {
 
             {editModal === 'personal' && (
                 <EditModal
-                    title="Edit Personal Info"
+                    title={t('Edit Personal Info')}
                     onClose={() => setEditModal(null)}
                     onSave={(data) => updateMutation.mutate(createProfileFormData(profile, data))}
                     isSaving={updateMutation.isPending}
                 >
                     {(state, handleChange, errors) => (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <Field label="First Name" name="first_name" value={state.first_name ?? profile.personal_data?.first_name} onChange={handleChange} required error={errors.first_name} />
-                            <Field label="Middle Name" name="mid_name" value={state.mid_name ?? profile.personal_data?.mid_name} onChange={handleChange} />
-                            <Field label="Last Name" name="last_name" value={state.last_name ?? profile.personal_data?.last_name} onChange={handleChange} required error={errors.last_name} />
-                            <Field label="Suffix" name="suffix" value={state.suffix ?? profile.personal_data?.suffix} onChange={handleChange} />
-                            <Field label="Birth Date" name="birth_date" type="date" value={state.birth_date ?? profile.personal_data?.birth_date} onChange={handleChange} />
-                            <Field label="Gender" name="gender" value={state.gender ?? profile.personal_data?.gender} onChange={handleChange} />
-                            <Field label="Civil Status" name="civil_status" value={state.civil_status ?? profile.personal_data?.civil_status} onChange={handleChange} />
-                            <Field label="Birthplace" name="birthplace" value={state.birthplace ?? profile.personal_data?.birthplace} onChange={handleChange} />
-                            <Field label="Religion" name="religion" value={state.religion ?? profile.personal_data?.religion} onChange={handleChange} />
-                            <Field label="Education" name="education" value={state.education ?? profile.personal_data?.education} onChange={handleChange} />
+                            <Field label={t('First Name')} name="first_name" value={state.first_name ?? profile.personal_data?.first_name} onChange={handleChange} required error={errors.first_name} />
+                            <Field label={t('Middle Name')} name="mid_name" value={state.mid_name ?? profile.personal_data?.mid_name} onChange={handleChange} />
+                            <Field label={t('Last Name')} name="last_name" value={state.last_name ?? profile.personal_data?.last_name} onChange={handleChange} required error={errors.last_name} />
+                            <Field label={t('Suffix')} name="suffix" value={state.suffix ?? profile.personal_data?.suffix} onChange={handleChange} />
+                            <Field label={t('Birth Date')} name="birth_date" type="date" value={state.birth_date ?? profile.personal_data?.birth_date} onChange={handleChange} />
+                            <Field label={t('Gender')} name="gender" value={state.gender ?? profile.personal_data?.gender} onChange={handleChange} />
+                            <Field label={t('Civil Status')} name="civil_status" value={state.civil_status ?? profile.personal_data?.civil_status} onChange={handleChange} />
+                            <Field label={t('Birthplace')} name="birthplace" value={state.birthplace ?? profile.personal_data?.birthplace} onChange={handleChange} />
+                            <Field label={t('Religion')} name="religion" value={state.religion ?? profile.personal_data?.religion} onChange={handleChange} />
+                            <Field label={t('Education')} name="education" value={state.education ?? profile.personal_data?.education} onChange={handleChange} />
                         </div>
                     )}
                 </EditModal>
@@ -369,19 +366,19 @@ export default function ProfilePage() {
 
             {editModal === 'contact' && (
                 <EditModal
-                    title="Edit Contact Info"
+                    title={t('Edit Contact Info')}
                     onClose={() => setEditModal(null)}
                     onSave={(data) => updateMutation.mutate(createProfileFormData(profile, data))}
                     isSaving={updateMutation.isPending}
                 >
                     {(state, handleChange, errors) => (
                         <div className="space-y-4">
-                            <Field label="Phone Number" name="phone_no" value={state.phone_no ?? profile.contact?.phone_no} onChange={handleChange} required error={errors.phone_no} />
+                            <Field label={t('Phone Number')} name="phone_no" value={state.phone_no ?? profile.contact?.phone_no} onChange={handleChange} required error={errors.phone_no} />
                             <div>
-                                <Field label="Email Address" name="email" type="email" value={state.email ?? profile.user.email} onChange={handleChange} required error={errors.email} />
+                                <Field label={t('Email Address')} name="email" type="email" value={state.email ?? profile.user.email} onChange={handleChange} required error={errors.email} />
                                 <EmailChangeVerification originalEmail={profile.user.email} email={state.email ?? profile.user.email} />
                             </div>
-                            <Field label="Facebook Link" name="facebook" value={state.facebook ?? profile.contact?.facebook} onChange={handleChange} />
+                            <Field label={t('Facebook Link')} name="facebook" value={state.facebook ?? profile.contact?.facebook} onChange={handleChange} />
                         </div>
                     )}
                 </EditModal>
@@ -389,20 +386,20 @@ export default function ProfilePage() {
 
             {editModal === 'address' && (
                 <EditModal
-                    title="Edit Address"
+                    title={t('Edit Address')}
                     onClose={() => setEditModal(null)}
                     onSave={(data) => updateMutation.mutate(createProfileFormData(profile, data))}
                     isSaving={updateMutation.isPending}
                 >
                     {(state, handleChange, errors) => (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <Field label="Country" name="country" value={state.country ?? profile.address?.country} onChange={handleChange} />
-                            <Field label="Region" name="region" value={state.region ?? profile.address?.region} onChange={handleChange} />
-                            <Field label="Province" name="province" value={state.province ?? profile.address?.province} onChange={handleChange} />
-                            <Field label="City/Municipality" name="city_municipality" value={state.city_municipality ?? profile.address?.city_municipality} onChange={handleChange} required error={errors.city_municipality} />
-                            <Field label="Barangay" name="barangay" value={state.barangay ?? profile.address?.barangay} onChange={handleChange} />
-                            <Field label="Street" name="street" value={state.street ?? profile.address?.street} onChange={handleChange} required error={errors.street} />
-                            <Field label="ZIP Code" name="zip_code" value={state.zip_code ?? profile.address?.zip_code} onChange={handleChange} />
+                            <Field label={t('Country')} name="country" value={state.country ?? profile.address?.country} onChange={handleChange} />
+                            <Field label={t('Region')} name="region" value={state.region ?? profile.address?.region} onChange={handleChange} />
+                            <Field label={t('Province')} name="province" value={state.province ?? profile.address?.province} onChange={handleChange} />
+                            <Field label={t('City/Municipality')} name="city_municipality" value={state.city_municipality ?? profile.address?.city_municipality} onChange={handleChange} required error={errors.city_municipality} />
+                            <Field label={t('Barangay')} name="barangay" value={state.barangay ?? profile.address?.barangay} onChange={handleChange} />
+                            <Field label={t('Street')} name="street" value={state.street ?? profile.address?.street} onChange={handleChange} required error={errors.street} />
+                            <Field label={t('ZIP Code')} name="zip_code" value={state.zip_code ?? profile.address?.zip_code} onChange={handleChange} />
                         </div>
                     )}
                 </EditModal>
@@ -410,17 +407,17 @@ export default function ProfilePage() {
 
             {editModal === 'ids' && (
                 <EditModal
-                    title="Edit Government IDs"
+                    title={t('Edit Government IDs')}
                     onClose={() => setEditModal(null)}
                     onSave={(data) => updateMutation.mutate(createProfileFormData(profile, data))}
                     isSaving={updateMutation.isPending}
                 >
                     {(state, handleChange) => (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <Field label="National ID" name="national_id" value={state.national_id ?? profile.member_id?.national_id} onChange={handleChange} />
-                            <Field label="TIN" name="tin" value={state.tin ?? profile.member_id?.tin} onChange={handleChange} />
-                            <Field label="SSS" name="sss" value={state.sss ?? profile.member_id?.sss} onChange={handleChange} />
-                            <Field label="PhilHealth" name="philhealth" value={state.philhealth ?? profile.member_id?.philhealth} onChange={handleChange} />
+                            <Field label={t('National ID')} name="national_id" value={state.national_id ?? profile.member_id?.national_id} onChange={handleChange} />
+                            <Field label={t('TIN')} name="tin" value={state.tin ?? profile.member_id?.tin} onChange={handleChange} />
+                            <Field label={t('SSS')} name="sss" value={state.sss ?? profile.member_id?.sss} onChange={handleChange} />
+                            <Field label={t('PhilHealth')} name="philhealth" value={state.philhealth ?? profile.member_id?.philhealth} onChange={handleChange} />
                         </div>
                     )}
                 </EditModal>
@@ -428,17 +425,17 @@ export default function ProfilePage() {
 
             {editModal === 'employment' && (
                 <EditModal
-                    title="Edit Employment Info"
+                    title={t('Edit Employment Info')}
                     onClose={() => setEditModal(null)}
                     onSave={(data) => updateMutation.mutate(createProfileFormData(profile, data))}
                     isSaving={updateMutation.isPending}
                 >
                     {(state, handleChange) => (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <Field label="Employment Type" name="employment_type" value={state.employment_type ?? profile.employment?.employment_type} onChange={handleChange} />
-                            <Field label="Company/Employer" name="employer_name" value={state.employer_name ?? profile.employment?.company} onChange={handleChange} />
-                            <Field label="Position" name="position" value={state.position ?? profile.employment?.position} onChange={handleChange} />
-                            <Field label="Monthly Income" name="monthly_income" type="number" value={state.monthly_income ?? profile.employment?.monthly_income} onChange={handleChange} />
+                            <Field label={t('Employment Type')} name="employment_type" value={state.employment_type ?? profile.employment?.employment_type} onChange={handleChange} />
+                            <Field label={t('Company/Employer')} name="employer_name" value={state.employer_name ?? profile.employment?.company} onChange={handleChange} />
+                            <Field label={t('Position')} name="position" value={state.position ?? profile.employment?.position} onChange={handleChange} />
+                            <Field label={t('Monthly Income')} name="monthly_income" type="number" value={state.monthly_income ?? profile.employment?.monthly_income} onChange={handleChange} />
                         </div>
                     )}
                 </EditModal>
@@ -446,7 +443,7 @@ export default function ProfilePage() {
 
             {editModal === 'photo' && (
                 <EditModal
-                    title="Update Profile Photo"
+                    title={t('Update Profile Photo')}
                     onClose={() => setEditModal(null)}
                     onSave={(data) => {
                         const fd = createProfileFormData(profile, {});
@@ -491,6 +488,7 @@ function InfoCard({ label, value }: { label: string; value: string }) {
 }
 
 function Field({ label, name, required, type, value, onChange, error }: { label: string; name: string; required?: boolean; type?: string; value?: string; onChange: (name: string, v: string) => void; error?: string }) {
+    const { t } = useLanguage();
     return (
         <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700">{label}</label>
@@ -506,7 +504,7 @@ function Field({ label, name, required, type, value, onChange, error }: { label:
                     className={`w-full rounded-lg border bg-white px-3 py-2 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 ${error ? 'border-red-400' : 'border-gray-200'}`}
                 />
             )}
-            {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+            {error && <p className="mt-1 text-xs text-red-600">{t(error)}</p>}
         </div>
     );
 }
@@ -518,6 +516,7 @@ function EditModal({ title, children, onClose, onSave, isSaving }: {
     onSave: (data: any) => void;
     isSaving: boolean;
 }) {
+    const { t } = useLanguage();
     const [state, setState] = useState<any>({});
     const [errors, setErrors] = useState<FieldErrors>({});
     const { markDirty, requestClose, renderDialog } = useDiscardGuard();
@@ -550,7 +549,7 @@ function EditModal({ title, children, onClose, onSave, isSaving }: {
                 <div className="border-t border-gray-100 bg-gray-50 px-6 py-4 flex justify-end gap-3 shrink-0">
                     <button type="button" onClick={requestCloseGuard} className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
                     <button type="submit" form="edit-form" disabled={isSaving} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
-                        {isSaving ? 'Saving...' : 'Save Changes'}
+                        {isSaving ? t('Saving...') : 'Save Changes'}
                     </button>
                 </div>
             </div>
@@ -560,6 +559,7 @@ function EditModal({ title, children, onClose, onSave, isSaving }: {
 }
 
 function BeneficiariesEditModal({ profile, onClose, onSave, isSaving }: { profile: ProfileData, onClose: () => void, onSave: (b: any[]) => void, isSaving: boolean }) {
+    const { t } = useLanguage();
     const { markDirty, requestClose, renderDialog } = useDiscardGuard();
     const [bens, setBens] = useState<any[]>(
         profile.beneficiaries?.length > 0
@@ -584,38 +584,38 @@ function BeneficiariesEditModal({ profile, onClose, onSave, isSaving }: { profil
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={requestCloseGuard}>
             <div className="w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 shrink-0">
-                    <h2 className="text-lg font-bold text-gray-900">Manage Beneficiaries</h2>
+                    <h2 className="text-lg font-bold text-gray-900">{t('Manage Beneficiaries')} <HelpTip text="Ilagay ang pangalan at relasyon sa iyo ng bawat beneficiary. Puwede kang magdagdag o mag-alis bago i-save." /></h2>
                     <button onClick={requestCloseGuard} className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"><i className="fas fa-times"></i></button>
                 </div>
                 <div className="p-6 overflow-y-auto">
                     <form id="bens-form" onSubmit={handleSubmit} className="space-y-4">
-                        {errors && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-100">{errors}</div>}
+                        {errors && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-100">{t(errors)}</div>}
                         {bens.map((b, i) => (
                             <div key={i} className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end p-4 bg-gray-50 rounded-xl border border-gray-200">
                                 <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3">
                                     <div>
-                                        <label className="mb-1 block text-xs font-medium text-gray-500">First Name</label>
+                                        <label className="mb-1 block text-xs font-medium text-gray-500">{t('First Name')}</label>
                                         <input type="text" value={b.first_name} onChange={e => { markDirty(); const n = [...bens]; n[i].first_name = e.target.value; setBens(n); setErrors(''); }} className="w-full rounded-lg border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" required />
                                     </div>
                                     <div>
-                                        <label className="mb-1 block text-xs font-medium text-gray-500">Last Name</label>
+                                        <label className="mb-1 block text-xs font-medium text-gray-500">{t('Last Name')}</label>
                                         <input type="text" value={b.last_name} onChange={e => { markDirty(); const n = [...bens]; n[i].last_name = e.target.value; setBens(n); setErrors(''); }} className="w-full rounded-lg border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" required />
                                     </div>
                                     <div>
-                                        <label className="mb-1 block text-xs font-medium text-gray-500">Relationship</label>
+                                        <label className="mb-1 block text-xs font-medium text-gray-500">{t('Relationship')}</label>
                                         <input type="text" value={b.relationship} onChange={e => { markDirty(); const n = [...bens]; n[i].relationship = e.target.value; setBens(n); setErrors(''); }} className="w-full rounded-lg border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" required />
                                     </div>
                                 </div>
                                 <button type="button" onClick={() => { markDirty(); setBens(bens.filter((_, idx) => idx !== i)) }} className="h-[38px] px-3 self-end sm:self-auto text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100 flex items-center justify-center"><i className="fas fa-trash"></i></button>
                             </div>
                         ))}
-                        <button type="button" onClick={() => { markDirty(); setBens([...bens, { first_name: '', last_name: '', relationship: '' }]) }} className="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-sm font-medium text-emerald-600 hover:border-emerald-200 hover:bg-emerald-50 transition-colors"><i className="fas fa-plus mr-2"></i>Add Beneficiary</button>
+                        <button type="button" onClick={() => { markDirty(); setBens([...bens, { first_name: '', last_name: '', relationship: '' }]) }} className="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-sm font-medium text-emerald-600 hover:border-emerald-200 hover:bg-emerald-50 transition-colors"><i className="fas fa-plus mr-2"></i>{t('Add Beneficiary')}</button>
                     </form>
                 </div>
                 <div className="border-t border-gray-100 bg-gray-50 px-6 py-4 flex justify-end gap-3 shrink-0">
                     <button type="button" onClick={requestCloseGuard} className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
                     <button type="submit" form="bens-form" disabled={isSaving} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
-                        {isSaving ? 'Saving...' : 'Save Beneficiaries'}
+                        {isSaving ? t('Saving...') : t('Save Beneficiaries')}
                     </button>
                 </div>
             </div>

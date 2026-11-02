@@ -17,9 +17,6 @@ use App\Http\Controllers\Api\MemberController;
 use App\Http\Controllers\Api\OfficerPermissionController;
 use App\Http\Controllers\Api\OfficerVerificationController;
 use App\Http\Controllers\Api\OversightController;
-use App\Http\Controllers\Api\XenditPaymentController;
-use App\Http\Controllers\Api\XenditSettingsController;
-use App\Http\Controllers\Api\XenditWebhookController;
 use App\Http\Controllers\Api\PhoneVerificationController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\PublicContentController;
@@ -30,6 +27,9 @@ use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\TransactionReceiptController;
+use App\Http\Controllers\Api\XenditPaymentController;
+use App\Http\Controllers\Api\XenditSettingsController;
+use App\Http\Controllers\Api\XenditWebhookController;
 use App\Http\Controllers\NotificationController;
 use App\Jobs\SendEmailJob;
 use App\Mail\ContactMessageMail;
@@ -104,6 +104,7 @@ Route::post('/webhooks/xendit', [XenditWebhookController::class, 'handle'])->mid
 // surface the "verify your email" gate instead of a blank session failure)
 Route::middleware(['web', 'auth:web'])->group(function () {
     Route::get('/login-handoffs/status', [AuthController::class, 'loginHandoffStatus']);
+    Route::post('/login-handoffs/otp', [AuthController::class, 'requestLoginHandoffOtp'])->middleware('throttle:3,1');
     Route::post('/login-handoffs/complete', [AuthController::class, 'completeLoginHandoff']);
 });
 

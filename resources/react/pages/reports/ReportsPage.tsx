@@ -1,106 +1,222 @@
-import HelpTip from '../../components/ui/HelpTip';
-import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Bar, Doughnut } from 'react-chartjs-2';
-import { Chart as ChartJS, ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend } from 'chart.js';
-import { api } from '../../api/client';
-import { useAuth } from '../../contexts/AuthContext';
-import { useToast } from '../../contexts/ToastContext';
-import InterestDisbursementsReport from './InterestDisbursementsReport';
+import SortableHeader from "../../components/ui/SortableHeader";
+import DateRangeFilter from "../../components/ui/DateRangeFilter";
+import PageHeader from "../../components/ui/PageHeader";
+import {
+    cloneElement,
+    useEffect,
+    useId,
+    useState,
+    type ReactElement,
+} from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Bar } from "react-chartjs-2";
+import {
+    Chart as ChartJS,
+    BarElement,
+    CategoryScale,
+    LinearScale,
+    Tooltip,
+    Legend,
+} from "chart.js";
+import { api } from "../../api/client";
+import { useAuth } from "../../contexts/AuthContext";
+import { useToast } from "../../contexts/ToastContext";
+import Pagination from "../../components/ui/Pagination";
+import InterestDisbursementsReport from "./InterestDisbursementsReport";
 
-ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend);
+ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend);
 
-const RANGE_PRESETS: Record<string, string> = {
-    day: 'Daily',
-    week: 'Weekly',
-    month: 'Monthly',
-    year: 'Yearly',
-    custom: 'Custom Range',
+type Column = {
+    key: string;
+    label: string;
+    type?: "money" | "date" | "percent";
 };
-
-function txBadgeClass(type: string): string {
-    const c: Record<string, string> = { deposit: 'bg-blue-100 text-blue-800', withdrawal: 'bg-orange-100 text-orange-800', loan_payment: 'bg-green-100 text-green-800', loan_disbursement: 'bg-purple-100 text-purple-800', interest: 'bg-teal-100 text-teal-800', fee: 'bg-red-100 text-red-800' };
-    return c[type] || 'bg-gray-100 text-gray-800';
-}
-
-function txBadgeText(type: string): string {
-    const c: Record<string, string> = { deposit: 'Deposit', withdrawal: 'Withdrawal', loan_payment: 'Loan Payment', loan_disbursement: 'Loan Disbursement', interest: 'Interest Credit', fee: 'Fee' };
-    return c[type] || type?.replace(/_/g, ' ') || 'Unknown';
-}
-
-function activityTypeLabel(type: string): string {
-    const c: Record<string, string> = { deposit: 'Deposit', withdrawal: 'Withdrawal', loan_payment: 'Payment', loan_disbursement: 'Loan', interest: 'Interest Credit', fee: 'Fee' };
-    return c[type] || type?.replace(/_/g, ' ') || 'Unknown';
-}
-
-function loanStatusBadge(title: string): string {
-    const c: Record<string, string> = { Completed: 'bg-green-100 text-green-800', Overdue: 'bg-red-100 text-red-800', Active: 'bg-blue-100 text-blue-800' };
-    return c[title] || 'bg-gray-100 text-gray-800';
-}
-
-function formatCurrency(v: any): string {
-    return `₱${Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function formatDate(v?: string | null): string {
-    if (!v) return '—';
-    const parts = v.slice(0, 10).split('-');
-    if (parts.length !== 3) return v;
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const month = months[Number(parts[1]) - 1];
-    return month ? `${month} ${Number(parts[2])}, ${parts[0]}` : v;
-}
-
-function toISO(d: Date): string {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-}
-
-function reportWindow(preset: string, startDate: string, endDate: string): { from?: string; to?: string } {
-    const now = new Date();
-    switch (preset) {
-        case 'day':
-            return { from: toISO(now), to: toISO(now) };
-        case 'week': {
-            const start = new Date(now);
-            start.setDate(now.getDate() - now.getDay());
-            const end = new Date(start);
-            end.setDate(start.getDate() + 6);
-            return { from: toISO(start), to: toISO(end) };
-        }
-        case 'month':
-            return { from: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`, to: toISO(new Date(now.getFullYear(), now.getMonth() + 1, 0)) };
-        case 'year':
-            return { from: `${now.getFullYear()}-01-01`, to: `${now.getFullYear()}-12-31` };
-        default:
-            return { from: startDate || undefined, to: endDate || undefined };
-    }
-}
-
-function Pagination({ meta, page, setPage }: { meta: any; page: number; setPage: (n: number) => void }) {
-    if (!meta || meta.total === 0) return null;
-    const from = (page - 1) * meta.per_page + 1;
-    const to = Math.min(page * meta.per_page, meta.total);
-    const handlePage = (n: number) => {
-        setPage(n);
-        const main = document.querySelector('main');
-        if (main) main.scrollTo({ top: 0, behavior: 'smooth' });
-        else window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
+type Report = {
+    key: string;
+    title: string;
+    group: string;
+    icon: string;
+    endpoint: string;
+    exportType: string;
+    description: string;
+    note?: string;
+    permission?: string;
+    columns?: Column[];
+};
+const REPORTS: Report[] = [
+    {
+        key: "financial",
+        title: "Financial Summary",
+        group: "Overview",
+        icon: "fa-chart-line",
+        endpoint: "financial",
+        exportType: "financial_report",
+        description:
+            "A period summary of deposits, withdrawals, lending, fees and expenses.",
+        note: "Collected loan interest is estimated and shown separately from interest credits.",
+    },
+    {
+        key: "balance_sheet",
+        title: "Balance Sheet",
+        group: "Overview",
+        icon: "fa-scale-balanced",
+        endpoint: "balance-sheet",
+        exportType: "balance_sheet",
+        permission: "reports.financial",
+        description: "Management report - simplified financial position.",
+        note: "Management report using simplified ledger calculations. Cash is calculated through the selected end date; savings, share capital and loan balances are current. Retained earnings is a residual. This is not an audited or fully historical financial statement.",
+    },
+    {
+        key: "member_savings",
+        title: "Member Savings",
+        group: "Savings & Interest",
+        icon: "fa-piggy-bank",
+        endpoint: "member-savings",
+        exportType: "member_savings",
+        description:
+            "Deposits, withdrawals and interest credits by member, using transaction dates.",
+        note: "Activity uses the selected dates. Current savings balances are live balances, not historical closing balances.",
+        columns: [
+            { key: "member_name", label: "Member" },
+            { key: "total_deposits", label: "Deposits", type: "money" },
+            { key: "total_withdrawals", label: "Withdrawals", type: "money" },
+            {
+                key: "total_interest_credits",
+                label: "Interest credits",
+                type: "money",
+            },
+            { key: "current_balance", label: "Current savings", type: "money" },
+        ],
+    },
+    {
+        key: "interest",
+        title: "Interest Credits",
+        group: "Savings & Interest",
+        icon: "fa-coins",
+        endpoint: "interest-disbursements",
+        exportType: "interest_disbursements",
+        permission: "interest.view",
+        description:
+            "Interest credit batches by creation date, with member-level details.",
+    },
+    {
+        key: "loans",
+        title: "Loan Register",
+        group: "Loans & Collections",
+        icon: "fa-file-invoice-dollar",
+        endpoint: "loans",
+        exportType: "loans",
+        description:
+            "Loan applications in the selected period, with their current status and balances.",
+        note: "Dates filter application dates. Paid and remaining amounts reflect current balances.",
+        columns: [
+            { key: "loan_number", label: "Loan number" },
+            { key: "member_name", label: "Member" },
+            { key: "loan_amount", label: "Principal", type: "money" },
+            { key: "interest_rate", label: "Rate", type: "percent" },
+            { key: "loan_date", label: "Application date", type: "date" },
+            { key: "due_date", label: "Due date", type: "date" },
+            { key: "amount_paid", label: "Paid to date", type: "money" },
+            {
+                key: "remaining_balance",
+                label: "Current remaining",
+                type: "money",
+            },
+            { key: "status", label: "Status" },
+        ],
+    },
+    {
+        key: "payments",
+        title: "Loan Payment Collections",
+        group: "Loans & Collections",
+        icon: "fa-money-bill-wave",
+        endpoint: "payments",
+        exportType: "payments",
+        description:
+            "Completed loan payments by payment date, net of reversals.",
+        note: "Loan payments are externally funded. Loan balances shown are current.",
+        columns: [
+            { key: "member_name", label: "Member" },
+            { key: "loan_number", label: "Loan number" },
+            { key: "amount", label: "Net payment", type: "money" },
+            { key: "payment_date", label: "Payment date", type: "date" },
+            {
+                key: "remaining_balance",
+                label: "Current loan balance",
+                type: "money",
+            },
+        ],
+    },
+    {
+        key: "member_activity",
+        title: "Transaction History",
+        group: "Transactions & Expenses",
+        icon: "fa-list-check",
+        endpoint: "member-activity",
+        exportType: "member_activity",
+        description:
+            "Completed member transactions by transaction date, with reversals shown as negative amounts.",
+        columns: [
+            { key: "transaction_number", label: "Reference" },
+            { key: "member_name", label: "Member" },
+            { key: "transaction_type", label: "Type" },
+            { key: "amount", label: "Net amount", type: "money" },
+            {
+                key: "transaction_date",
+                label: "Transaction date",
+                type: "date",
+            },
+        ],
+    },
+    {
+        key: "expenses",
+        title: "Operating Expenses",
+        group: "Transactions & Expenses",
+        icon: "fa-receipt",
+        endpoint: "expenses",
+        exportType: "expenses",
+        description:
+            "Recorded operating expenses by expense date and category.",
+        columns: [
+            { key: "category", label: "Category" },
+            { key: "description", label: "Description" },
+            { key: "amount", label: "Amount", type: "money" },
+            { key: "expense_date", label: "Expense date", type: "date" },
+            { key: "recorded_by", label: "Recorded by" },
+        ],
+    },
+];
+const GROUPS = [...new Set(REPORTS.map((report) => report.group))];
+const selectCls =
+    "w-full rounded-lg border border-emerald-100 bg-white px-3 py-2 text-sm text-gray-700 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100";
+const money = (value: unknown) =>
+    new Intl.NumberFormat("en-PH", {
+        style: "currency",
+        currency: "PHP",
+    }).format(Number(value ?? 0));
+const date = (value: string) =>
+    value
+        ? new Date(value.slice(0, 10) + "T00:00:00").toLocaleDateString(
+              "en-PH",
+              { year: "numeric", month: "short", day: "numeric" },
+          )
+        : "\u2014";
+const label = (value: string) => value?.replace(/_/g, " ") ?? "\u2014";
+function Field({
+    title,
+    children,
+}: {
+    title: string;
+    children: ReactElement<{ id?: string }>;
+}) {
+    const id = useId();
     return (
-        <div className="p-4 bg-white border-t border-gray-200 flex items-center justify-center gap-2">
-            <button onClick={() => handlePage(Math.max(1, page - 1))} disabled={page === 1} className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50">Previous</button>
-            <span className="text-sm font-normal text-gray-500">Showing <span className="font-semibold text-gray-900">{from}-{to}</span> of <span className="font-semibold text-gray-900">{meta.total}</span></span>
-            <button onClick={() => handlePage(Math.min(meta.last_page, page + 1))} disabled={page === meta.last_page} className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50">Next</button>
+        <div className="flex min-w-32 flex-1 flex-col gap-1 text-xs font-medium text-gray-600">
+            <label htmlFor={id}>{title}</label>
+            {cloneElement(children, { id })}
         </div>
     );
 }
-
-const selectCls = 'bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2';
-const thCls = 'p-4 text-xs font-medium text-left text-gray-500 uppercase';
-
 function MemberSearch({
     members,
     value,
@@ -110,21 +226,24 @@ function MemberSearch({
     value: string;
     onChange: (memberId: string) => void;
 }) {
-    const [search, setSearch] = useState('');
+    const [search, setSearch] = useState("");
     const [isOpen, setIsOpen] = useState(false);
+    const [activeIndex, setActiveIndex] = useState(0);
 
     useEffect(() => {
-        const selected = members.find(member => String(member.id) === value);
+        const selected = members.find((member) => String(member.id) === value);
         if (selected) setSearch(selected.name);
     }, [members, value]);
 
     const normalizedSearch = search.trim().toLowerCase();
     const matches = members
-        .filter(member => {
+        .filter((member) => {
             if (!normalizedSearch) return true;
             return [member.name, member.email, member.user_number]
                 .filter(Boolean)
-                .some(field => String(field).toLowerCase().includes(normalizedSearch));
+                .some((field) =>
+                    String(field).toLowerCase().includes(normalizedSearch),
+                );
         })
         .slice(0, 10);
 
@@ -136,31 +255,77 @@ function MemberSearch({
 
     return (
         <div className="flex items-center gap-2">
-            <label htmlFor="report-member" className="text-xs font-medium text-gray-500">Member</label>
+            <label
+                htmlFor="report-member"
+                className="text-xs font-medium text-gray-500"
+            >
+                Member
+            </label>
             <div className="relative w-56">
                 <input
                     id="report-member"
                     type="search"
                     value={search}
-                    onChange={event => {
+                    onChange={(event) => {
                         setSearch(event.target.value);
+                        setActiveIndex(0);
                         setIsOpen(true);
-                        if (value) onChange('');
+                        if (value) onChange("");
                     }}
                     onFocus={() => setIsOpen(true)}
                     onBlur={() => setTimeout(() => setIsOpen(false), 150)}
+                    onKeyDown={(event) => {
+                        if (event.key === "Escape") setIsOpen(false);
+                        if (
+                            event.key === "ArrowDown" ||
+                            event.key === "ArrowUp"
+                        ) {
+                            event.preventDefault();
+                            setIsOpen(true);
+                            setActiveIndex((index) =>
+                                Math.max(
+                                    0,
+                                    Math.min(
+                                        matches.length - 1,
+                                        index +
+                                            (event.key === "ArrowDown"
+                                                ? 1
+                                                : -1),
+                                    ),
+                                ),
+                            );
+                        }
+                        if (
+                            event.key === "Enter" &&
+                            isOpen &&
+                            matches[activeIndex]
+                        ) {
+                            event.preventDefault();
+                            selectMember(matches[activeIndex]);
+                        }
+                    }}
                     placeholder="Search members..."
                     autoComplete="off"
                     className={`${selectCls} w-full pr-8`}
                     role="combobox"
                     aria-expanded={isOpen}
                     aria-controls="report-member-options"
+                    aria-autocomplete="list"
+                    aria-activedescendant={
+                        isOpen && matches[activeIndex]
+                            ? `report-member-option-${matches[activeIndex].id}`
+                            : undefined
+                    }
                 />
                 {search && (
                     <button
                         type="button"
-                        onMouseDown={event => event.preventDefault()}
-                        onClick={() => { setSearch(''); onChange(''); setIsOpen(false); }}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                            setSearch("");
+                            onChange("");
+                            setIsOpen(false);
+                        }}
                         className="absolute inset-y-0 right-0 px-2 text-gray-400 hover:text-gray-700"
                         aria-label="Clear member selection"
                     >
@@ -168,28 +333,52 @@ function MemberSearch({
                     </button>
                 )}
                 {isOpen && (
-                    <div id="report-member-options" className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-gray-300 bg-white py-1 shadow-lg">
-                        {matches.length > 0 ? matches.map(member => (
-                            <button
-                                type="button"
-                                key={member.id}
-                                onMouseDown={event => event.preventDefault()}
-                                onClick={() => selectMember(member)}
-                                className={`block w-full px-3 py-2 text-left text-sm hover:bg-blue-50 ${String(member.id) === value ? 'bg-blue-50 text-blue-700' : 'text-gray-700'}`}
-                            >
-                                <span className="block truncate">{member.name}</span>
-                                {(member.email || member.user_number) && (
-                                    <span className="block truncate text-xs text-gray-400">{member.email || member.user_number}</span>
-                                )}
-                            </button>
-                        )) : (
-                            <p className="px-3 py-2 text-sm text-gray-500">No members found.</p>
+                    <div
+                        id="report-member-options"
+                        role="listbox"
+                        aria-label="Members"
+                        className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-gray-300 bg-white py-1 shadow-lg"
+                    >
+                        {matches.length > 0 ? (
+                            matches.map((member, index) => (
+                                <button
+                                    type="button"
+                                    key={member.id}
+                                    id={`report-member-option-${member.id}`}
+                                    role="option"
+                                    tabIndex={-1}
+                                    aria-selected={index === activeIndex}
+                                    onMouseEnter={() => setActiveIndex(index)}
+                                    onMouseDown={(event) =>
+                                        event.preventDefault()
+                                    }
+                                    onClick={() => selectMember(member)}
+                                    className={`block w-full px-3 py-2 text-left text-sm hover:bg-blue-50 ${index === activeIndex ? "bg-blue-50 text-blue-700" : "text-gray-700"}`}
+                                >
+                                    <span className="block truncate">
+                                        {member.name}
+                                    </span>
+                                    {(member.email || member.user_number) && (
+                                        <span className="block truncate text-xs text-gray-400">
+                                            {member.email || member.user_number}
+                                        </span>
+                                    )}
+                                </button>
+                            ))
+                        ) : (
+                            <p className="px-3 py-2 text-sm text-gray-500">
+                                No members found.
+                            </p>
                         )}
                     </div>
                 )}
             </div>
             {!value && !search && (
-                <button type="button" onClick={() => setIsOpen(true)} className="text-xs text-gray-500 hover:text-blue-600">
+                <button
+                    type="button"
+                    onClick={() => setIsOpen(true)}
+                    className="text-xs text-gray-500 hover:text-blue-600"
+                >
                     All Members
                 </button>
             )}
@@ -200,870 +389,838 @@ function MemberSearch({
 export default function ReportsPage() {
     const { user } = useAuth();
     const { addToast } = useToast();
-    const perms = user?.permissions || [];
-    const canViewFinancial = perms.includes('reports.financial');
-    const canViewMembers = perms.includes('members.view');
-    const canViewOfficers = perms.includes('officers.view') || canViewMembers;
-    const canViewInterest = perms.includes('interest.view');
-
-    const now = new Date();
-    const [reportType, setReportType] = useState('financial');
-    const [rangePreset, setRangePreset] = useState('month');
-    const [startDate, setStartDate] = useState(() => `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`);
-    const [endDate, setEndDate] = useState(() => toISO(new Date(now.getFullYear(), now.getMonth() + 1, 0)));
-    const [memberId, setMemberId] = useState('');
-    const [branchId, setBranchId] = useState('');
-    const [loanFilter, setLoanFilter] = useState('all');
-    const [expenseCategory, setExpenseCategory] = useState('');
-    const [activityType, setActivityType] = useState('all');
-    const [activitySort, setActivitySort] = useState('date');
-    const [activitySortDirection, setActivitySortDirection] = useState('desc');
-    const [refreshKey, setRefreshKey] = useState(0);
-    const [reportPages, setReportPages] = useState<Record<string, number>>({});
-
-    const page = reportPages[reportType] || 1;
-    const setPage = (n: number) => setReportPages(p => ({ ...p, [reportType]: n }));
-    const changeReportType = (key: string) => {
-        setReportType(key);
-        setReportPages(p => ({ ...p, [key]: 1 }));
+    const permissions = user?.permissions ?? [];
+    const branchLocked = !permissions.includes("branches.bypass");
+    const reports = REPORTS.filter(
+        (report) =>
+            !report.permission || permissions.includes(report.permission),
+    );
+    const [reportKey, setReportKey] = useState("financial");
+    const report = reports.find((item) => item.key === reportKey) ?? reports[0];
+    const [dates, setDates] = useState({ from: "", to: "" });
+    const [branch, setBranch] = useState("");
+    const [member, setMember] = useState("");
+    const [loanStatus, setLoanStatus] = useState("all");
+    const [category, setCategory] = useState("");
+    const [activity, setActivity] = useState("all");
+    const [sort, setSort] = useState("date");
+    const sortableReportField = (key: string) => {
+        if (report.key === "member_activity") return ({ transaction_number: "reference", member_name: "member", transaction_type: "type", amount: "amount", transaction_date: "date" } as Record<string, string>)[key];
+        if (report.key === "expenses") return ({ expense_date: "date", category: "category", description: "description", amount: "amount" } as Record<string, string>)[key];
+        return undefined;
     };
-
+    const handleColumnSort = (field: string) => {
+        setDirection(sort === field && direction === "asc" ? "desc" : "asc");
+        setSort(field);
+        setPage(1);
+    };
+    const [direction, setDirection] = useState("desc");
+    const [accountType, setAccountType] = useState("");
+    const [page, setPage] = useState(1);
+    const [exporting, setExporting] = useState<"excel" | "pdf" | null>(null);
+    const [refresh, setRefresh] = useState(0);
+    const validDates = !dates.from || !dates.to || dates.from <= dates.to;
+    const hasMember = ["member_savings", "member_activity"].includes(
+        report.key,
+    );
+    const params = {
+        ...dates,
+        all_time: !dates.from ? 1 : undefined,
+        branch_id: branch || undefined,
+        ...(hasMember ? { member_id: member || undefined } : {}),
+        ...(report.key === "loans" ? { filter: loanStatus } : {}),
+        ...(report.key === "expenses"
+            ? { category: category || undefined }
+            : {}),
+        ...(report.key === "expenses" ? { sort_by: sort, sort_direction: direction } : {}),
+        ...(report.key === "member_activity"
+            ? {
+                  activity_type: activity,
+                  sort_by: sort,
+                  sort_direction: direction,
+              }
+            : {}),
+        ...(report.key === "interest"
+            ? { account_type: accountType || undefined }
+            : {}),
+    };
     useEffect(() => {
-        const main = document.querySelector('main');
-        if (main) main.scrollTop = 0;
-        else window.scrollTo({ top: 0, behavior: 'instant' });
-    }, [reportType]);
-
-    const { from, to } = reportWindow(rangePreset, startDate, endDate);
-    const rangeParams = { from, to, branch_id: branchId || undefined };
-
-    const reportTypes = [
-        { key: 'financial', label: 'Financial Summary', icon: 'fas fa-chart-line' },
-        { key: 'member_savings', label: 'Member Savings', icon: 'fas fa-users' },
-        { key: 'loans', label: 'Loan Report', icon: 'fas fa-file-invoice-dollar' },
-        { key: 'payments', label: 'Payment Collection', icon: 'fas fa-money-bill-wave' },
-        { key: 'expenses', label: 'Expense Report', icon: 'fas fa-receipt' },
-        { key: 'member_activity', label: 'Financial History', icon: 'fas fa-user-clock' },
-        ...(canViewFinancial ? [{ key: 'balance_sheet', label: 'Balance Sheet', icon: 'fas fa-balance-scale' }] : []),
-        ...(canViewMembers ? [{ key: 'members', label: 'Members Report', icon: 'fas fa-id-card' }] : []),
-        ...(canViewOfficers ? [{ key: 'officers', label: 'Officers Report', icon: 'fas fa-user-tie' }] : []),
-        ...(canViewInterest ? [{ key: 'interest', label: 'Interest Disbursements', icon: 'fas fa-coins' }] : []),
-    ];
-
-    const { data: financialData } = useQuery({
-        queryKey: ['reports-financial', from, to, branchId, refreshKey],
-        queryFn: () => api.get('/api/reports/financial', { params: rangeParams }),
-        enabled: reportType === 'financial',
+        setPage(1);
+    }, [
+        report.key,
+        dates.from,
+        dates.to,
+        branch,
+        member,
+        loanStatus,
+        category,
+        activity,
+        sort,
+        direction,
+        accountType,
+    ]);
+    const options = useQuery({
+        queryKey: ["reports-options", branch],
+        queryFn: () =>
+            api
+                .get("/api/reports/options", {
+                    params: { branch_id: branch || undefined },
+                })
+                .then((response) => response.data),
     });
-
-    const { data: optionsData } = useQuery({
-        queryKey: ['reports-options', branchId, refreshKey],
-        queryFn: () => api.get('/api/reports/options', { params: { branch_id: branchId || undefined } }),
-        enabled: true,
+    const query = useQuery({
+        queryKey: ["report-workspace", report.key, params, page, refresh],
+        queryFn: () =>
+            api
+                .get(`/api/reports/${report.endpoint}`, {
+                    params: { ...params, page },
+                })
+                .then((response) => response.data),
+        enabled: validDates && report.key !== "interest",
     });
-
-    const { data: dashboardData } = useQuery({
-        queryKey: ['reports-dashboard', branchId, refreshKey],
-        queryFn: () => api.get('/api/dashboard', { params: { branch_id: branchId || undefined } }),
-        enabled: reportType === 'loans' || reportType === 'payments',
-    });
-
-    const { data: memberSavingsData } = useQuery({
-        queryKey: ['reports-member-savings', from, to, branchId, memberId, page, refreshKey],
-        queryFn: () => api.get('/api/reports/member-savings', { params: { from, to, branch_id: branchId || undefined, member_id: memberId || undefined, page } }),
-        enabled: reportType === 'member_savings',
-    });
-
-    const { data: loansData } = useQuery({
-        queryKey: ['reports-loans', from, to, branchId, loanFilter, page, refreshKey],
-        queryFn: () => api.get('/api/reports/loans', { params: { from, to, branch_id: branchId || undefined, filter: loanFilter, page } }),
-        enabled: reportType === 'loans',
-    });
-
-    const { data: paymentsData } = useQuery({
-        queryKey: ['reports-payments', from, to, branchId, page, refreshKey],
-        queryFn: () => api.get('/api/reports/payments', { params: { from, to, branch_id: branchId || undefined, page } }),
-        enabled: reportType === 'payments',
-    });
-
-    const { data: expensesData } = useQuery({
-        queryKey: ['reports-expenses', from, to, branchId, expenseCategory, page, refreshKey],
-        queryFn: () => api.get('/api/reports/expenses', { params: { from, to, branch_id: branchId || undefined, category: expenseCategory || undefined, page } }),
-        enabled: reportType === 'expenses',
-    });
-
-    const { data: memberActivityData } = useQuery({
-        queryKey: ['reports-member-activity', from, to, branchId, memberId, activityType, activitySort, activitySortDirection, page, refreshKey],
-        queryFn: () => api.get('/api/reports/member-activity', { params: { from, to, branch_id: branchId || undefined, member_id: memberId || undefined, activity_type: activityType, sort_by: activitySort, sort_direction: activitySortDirection, page } }),
-        enabled: reportType === 'member_activity',
-    });
-
-    const { data: balanceSheetData } = useQuery({
-        queryKey: ['reports-balance-sheet', from, to, branchId, refreshKey],
-        queryFn: () => api.get('/api/reports/balance-sheet', { params: rangeParams }),
-        enabled: reportType === 'balance_sheet',
-    });
-
-    const { data: membersReportData } = useQuery({
-        queryKey: ['reports-members-list', from, to, branchId, page, refreshKey],
-        queryFn: () => api.get('/api/reports/members', { params: { from, to, branch_id: branchId || undefined, page } }),
-        enabled: reportType === 'members',
-    });
-
-    const { data: officersReportData } = useQuery({
-        queryKey: ['reports-officers-list', from, to, branchId, page, refreshKey],
-        queryFn: () => api.get('/api/reports/officers', { params: { from, to, branch_id: branchId || undefined, page } }),
-        enabled: reportType === 'officers',
-    });
-
-    const financial = financialData?.data || {};
-    const balanceSheet = balanceSheetData?.data || {};
-    const members = optionsData?.data?.members || [];
-    const expenseCategories = optionsData?.data?.expense_categories || [];
-
-    const memberSavingsRows = memberSavingsData?.data?.data ?? [];
-    const memberSavingsMeta = memberSavingsData?.data?.meta ?? null;
-    const loanRows = loansData?.data?.data ?? [];
-    const loanMeta = loansData?.data?.meta ?? null;
-    const paymentRows = paymentsData?.data?.data ?? [];
-    const paymentMeta = paymentsData?.data?.meta ?? null;
-    const expenseRows = expensesData?.data?.data ?? [];
-    const expenseMeta = expensesData?.data?.meta ?? null;
-    const memberActivityRows = memberActivityData?.data?.data ?? [];
-    const memberActivityMeta = memberActivityData?.data?.meta ?? null;
-    const membersReportRows = membersReportData?.data?.data ?? [];
-    const membersReportMeta = membersReportData?.data?.meta ?? null;
-    const officersReportRows = officersReportData?.data?.data ?? [];
-    const officersReportMeta = officersReportData?.data?.meta ?? null;
-
-    const monthlySeries = financial.monthly_series || [];
-    const loanStatusSeries = dashboardData?.data?.loan_status_series || [];
-    const pendingTransactions = dashboardData?.data?.pending_transactions_list || [];
-
-    const inflows = Number(financial.total_deposits || 0) + Number(financial.total_loan_repayments || 0) + Number(financial.total_interest_credits || 0) + Number(financial.total_fees || 0);
-    const outflows = Number(financial.total_withdrawals || 0) + Number(financial.total_loan_releases || 0) + Number(financial.total_expenses || 0);
-
-    const totalsByType = [
-        { label: 'Deposits', value: Number(financial.total_deposits || 0), color: '#059669' },
-        { label: 'Withdrawals', value: Number(financial.total_withdrawals || 0), color: '#ef4444' },
-        { label: 'Loan Releases', value: Number(financial.total_loan_releases || 0), color: '#9333ea' },
-        { label: 'Loan Repayments', value: Number(financial.total_loan_repayments || 0), color: '#2563eb' },
-        { label: 'Interest Credits', value: Number(financial.total_interest_credits || 0), color: '#0d9488' },
-        { label: 'Fees', value: Number(financial.total_fees || 0), color: '#f59e0b' },
-        { label: 'Expenses', value: Number(financial.total_expenses || 0), color: '#f97316' },
-    ];
-
-    const inflowOutflowData = {
-        labels: ['Inflows', 'Outflows'],
-        datasets: [{ label: 'Amount', data: [inflows, outflows], backgroundColor: ['#059669', '#dc2626'] }],
-    };
-    const inflowOutflowOptions = {
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { ticks: { callback: (v: any) => '₱' + Number(v).toLocaleString() } } },
-    };
-
-    const totalsByTypeData = {
-        labels: totalsByType.map(t => t.label),
-        datasets: [{ data: totalsByType.map(t => t.value), backgroundColor: totalsByType.map(t => t.color), borderWidth: 1 }],
-    };
-    const totalsByTypeOptions = { maintainAspectRatio: false, plugins: { legend: { position: 'right' } } };
-
-    const downloadReport = async (format: 'pdf' | 'excel') => {
-        const exportType = reportType === 'interest' ? 'interest_disbursements' : reportType;
-        const params: any = { from, to, report_type: exportType, format };
-        params.branch_id = branchId || undefined;
-        if (reportType === 'member_savings' || reportType === 'member_activity') params.member_id = memberId || undefined;
-        if (reportType === 'loans') params.filter = loanFilter === 'all' ? undefined : loanFilter;
-        if (reportType === 'expenses') params.category = expenseCategory || undefined;
-        if (reportType === 'member_activity') {
-            params.activity_type = activityType === 'all' ? undefined : activityType;
-            params.sort_by = activitySort;
-            params.sort_direction = activitySortDirection;
-        }
-
+    const data = query.data;
+    const download = async (format: "excel" | "pdf") => {
+        if (exporting || !validDates) return;
+        setExporting(format);
         try {
-            const res = await api.post('/api/reports/export', params, { responseType: 'blob' });
-            const disposition = res.headers['content-disposition'] || '';
-            const match = disposition.match(/filename="?([^";]+)"?/i);
-            const filename = match ? match[1] : `report-${Date.now()}.${format === 'pdf' ? 'pdf' : 'xls'}`;
-            const url = URL.createObjectURL(new Blob([res.data]));
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(url);
-            addToast('Report downloaded', 'success');
-        } catch (err: any) {
-            if (err.response?.data instanceof Blob) {
-                err.response.data.text().then((text: string) => {
-                    try {
-                        const parsed = JSON.parse(text);
-                        addToast(parsed.message || 'Export failed', 'error');
-                    } catch {
-                        addToast('Export failed', 'error');
-                    }
-                });
-            } else {
-                addToast(err.response?.data?.message || 'Export failed', 'error');
+            const response = await api.post(
+                "/api/reports/export",
+                { ...params, report_type: report.exportType, format },
+                { responseType: "blob" },
+            );
+            const disposition = response.headers["content-disposition"] ?? "";
+            const filename =
+                disposition.match(/filename="?([^";]+)"?/i)?.[1] ??
+                `${report.exportType}-${dates.to}.${format === "excel" ? "xlsx" : "pdf"}`;
+            const url = URL.createObjectURL(response.data);
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = filename;
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+            addToast("Report downloaded", "success");
+        } catch (error: any) {
+            let message =
+                error.response?.data?.message ??
+                "Could not export this report. Please try again.";
+            if (error.response?.data instanceof Blob) {
+                try {
+                    message =
+                        JSON.parse(await error.response.data.text()).message ??
+                        message;
+                } catch {
+                    /* Keep readable fallback. */
+                }
             }
+            addToast(message, "error");
+        } finally {
+            setExporting(null);
         }
     };
-
-    const financialCards = [
-        { label: 'Total Deposits', value: financial.total_deposits, key: 'deposits' },
-        { label: 'Total Withdrawals', value: financial.total_withdrawals, key: 'withdrawals' },
-        { label: 'Total Loan Releases', value: financial.total_loan_releases, key: 'releases' },
-        { label: 'Total Loan Repayments', value: financial.total_loan_repayments, key: 'repayments' },
-        { label: 'Interest Credits', value: financial.total_interest_credits, key: 'interest-credits' },
-        { label: 'Total Interest Earned (Collected)', value: financial.total_interest_earned, key: 'interest' },
-        { label: 'Total Fees', value: financial.total_fees, key: 'fees' },
-        { label: 'Total Expenses', value: financial.total_expenses, key: 'expenses' },
-        { label: 'Net Balance', value: financial.net, key: 'net' },
-    ];
-
+    const changeReport = (key: string) => {
+        setReportKey(key);
+        setPage(1);
+    };
+    const branchName =
+        options.data?.branches?.find((item: any) => String(item.id) === branch)
+            ?.name ??
+        (branchLocked && options.data?.branches?.length === 1
+            ? options.data.branches[0].name
+            : "All permitted branches");
     return (
-        <div className="p-4 bg-white border-b border-gray-200 lg:mt-1.5">
-            <div className="mb-4">
-                <h1 className="flex items-center gap-2 text-xl font-semibold text-gray-900 sm:text-2xl">Reports <HelpTip text="Select a report and date range to view matching records. Some reports offer additional member, loan, or category filters; exports use the selected criteria." /></h1>
-                <p className="text-sm text-gray-500">View financial summaries and activity reports</p>
-            </div>
-
-            <div className="mb-4 border-b border-gray-200">
-                <ul className="flex flex-wrap -mb-px text-sm font-medium text-center" role="tablist">
-                    {reportTypes.map(rt => (
-                        <li key={rt.key} className="mr-2" role="presentation">
-                            <button
-                                onClick={() => changeReportType(rt.key)}
-                                className={`inline-flex items-center gap-2 p-4 border-b-2 rounded-t-lg transition-colors ${reportType === rt.key ? 'text-blue-600 border-blue-600' : 'border-transparent hover:text-gray-600 hover:border-gray-300'}`}
-                                type="button"
-                                role="tab"
+        <div className="space-y-5 p-4 sm:p-6">
+            <PageHeader eyebrow="Finance & operations" title="Reports" description="Choose a report, review the figures, and download a copy." icon="fas fa-chart-column" />
+            <div className="grid items-start gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
+                <nav
+                    aria-label="Finance reports"
+                    className="rounded-xl border border-emerald-100 bg-white p-3 lg:sticky lg:top-4"
+                >
+                    <div className="lg:hidden">
+                        <Field title="Report">
+                            <select
+                                className={selectCls}
+                                value={report.key}
+                                onChange={(event) =>
+                                    changeReport(event.target.value)
+                                }
                             >
-                                <i className={rt.icon}></i> {rt.label}
-                            </button>
-                        </li>
-                    ))}
-                </ul>
-            </div>
-
-            <div className="sm:flex sm:items-center sm:justify-between gap-3">
-                <div className="flex items-center gap-2 flex-wrap">
-                    <label htmlFor="report-range" className="text-xs font-medium text-gray-500">Range</label>
-                    <select id="report-range" value={rangePreset} onChange={e => { setRangePreset(e.target.value); setPage(1); }} className={selectCls}>
-                        {Object.entries(RANGE_PRESETS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                    </select>
-
-                    {(optionsData?.data?.branches || []).length > 0 && (
-                        <div className="flex items-center gap-2">
-                            <label htmlFor="report-branch" className="text-xs font-medium text-gray-500">Branch</label>
-                            <select id="report-branch" value={branchId} onChange={e => { setBranchId(e.target.value); setPage(1); }} className={selectCls}>
-                                <option value="">All Branches</option>
-                                {(optionsData?.data?.branches || []).map((branch: any) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                                {GROUPS.map((group) => (
+                                    <optgroup key={group} label={group}>
+                                        {reports
+                                            .filter(
+                                                (item) => item.group === group,
+                                            )
+                                            .map((item) => (
+                                                <option
+                                                    key={item.key}
+                                                    value={item.key}
+                                                >
+                                                    {item.title}
+                                                </option>
+                                            ))}
+                                    </optgroup>
+                                ))}
                             </select>
-                        </div>
-                    )}
-
-                    {rangePreset === 'custom' && (
-                        <div className="flex items-center gap-2">
-                            <label className="text-xs font-medium text-gray-500">Start</label>
-                            <input type="date" value={startDate} onChange={e => { setStartDate(e.target.value); setPage(1); }} className={selectCls} />
-                            <label className="text-xs font-medium text-gray-500">End</label>
-                            <input type="date" value={endDate} onChange={e => { setEndDate(e.target.value); setPage(1); }} className={selectCls} />
-                        </div>
-                    )}
-
-                    {(reportType === 'member_savings' || reportType === 'member_activity') && (
-                        <MemberSearch
-                            members={members}
-                            value={memberId}
-                            onChange={(id) => { setMemberId(id); setPage(1); }}
-                        />
-                    )}
-
-                    {reportType === 'loans' && (
-                        <div className="flex items-center gap-2">
-                            <label htmlFor="loan-filter" className="text-xs font-medium text-gray-500">Loan Filter</label>
-                            <select id="loan-filter" value={loanFilter} onChange={e => { setLoanFilter(e.target.value); setPage(1); }} className={selectCls}>
-                                <option value="all">All</option>
-                                <option value="active">Active</option>
-                                <option value="completed">Completed</option>
-                                <option value="overdue">Overdue</option>
-                            </select>
-                        </div>
-                    )}
-
-                    {reportType === 'expenses' && (
-                        <div className="flex items-center gap-2">
-                            <label htmlFor="expense-category" className="text-xs font-medium text-gray-500">Category</label>
-                            <select id="expense-category" value={expenseCategory} onChange={e => { setExpenseCategory(e.target.value); setPage(1); }} className={selectCls}>
-                                <option value="">All</option>
-                                {expenseCategories.map((cat: string) => <option key={cat} value={cat}>{cat}</option>)}
-                            </select>
-                        </div>
-                    )}
-
-                    {reportType === 'member_activity' && (
-                        <div className="flex items-center gap-2">
-                            <label htmlFor="activity-type" className="text-xs font-medium text-gray-500">Type</label>
-                            <select id="activity-type" value={activityType} onChange={e => { setActivityType(e.target.value); setPage(1); }} className={selectCls}>
-                                <option value="all">All</option>
-                                <option value="deposit">Deposit</option>
-                                <option value="withdrawal">Withdrawal</option>
-                                <option value="loan_disbursement">Loan</option>
-                                <option value="loan_payment">Payment</option>
-                                <option value="interest">Interest Credit</option>
-                                <option value="fee">Fee</option>
-                            </select>
-                            <label htmlFor="activity-sort" className="text-xs font-medium text-gray-500">Sort</label>
-                            <select id="activity-sort" value={activitySort} onChange={e => { setActivitySort(e.target.value); setPage(1); }} className={selectCls}>
-                                <option value="member">Member</option>
-                                <option value="type">Transaction Type</option>
-                                <option value="date">Date</option>
-                                <option value="amount">Amount</option>
-                            </select>
-                            <button
-                                type="button"
-                                onClick={() => { setActivitySortDirection(value => value === 'asc' ? 'desc' : 'asc'); setPage(1); }}
-                                className="px-3 py-2 text-xs border border-gray-300 rounded-lg hover:bg-gray-50"
-                                aria-label={`Sort ${activitySortDirection === 'asc' ? 'descending' : 'ascending'}`}
-                            >
-                                {activitySortDirection === 'asc' ? 'Ascending' : 'Descending'}
-                            </button>
-                        </div>
-                    )}
-                </div>
-
-                <div className="flex items-center gap-2 ml-auto">
-                    {(reportType !== 'balance_sheet' || canViewFinancial) ? (
-                        <>
-                            <button onClick={() => downloadReport('pdf')} className="inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-center text-white bg-red-700 border border-red-700 rounded-lg hover:bg-red-800 focus:ring-4 focus:ring-red-300">
-                                <i className="fas fa-file-pdf mr-1"></i> PDF
-                            </button>
-                            <button onClick={() => downloadReport('excel')} className="inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-center text-white bg-green-700 border border-green-700 rounded-lg hover:bg-green-800 focus:ring-4 focus:ring-green-300">
-                                <i className="fas fa-file-excel mr-1"></i> Excel
-                            </button>
-                        </>
-                    ) : null}
-                    <button onClick={() => setRefreshKey(k => k + 1)} title="Refresh data" className="inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-center text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 focus:ring-4 focus:ring-blue-300">
-                        <i className="fas fa-sync-alt"></i>
-                    </button>
-                </div>
-            </div>
-
-            {reportType === 'financial' && (
-                <div className="p-4 bg-white border-b border-gray-200">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h2 className="text-sm font-semibold text-gray-900">Financial Summary</h2>
-                            <p className="text-xs text-gray-500">{formatDate(financial.start)} – {formatDate(financial.end)}</p>
-                        </div>
+                        </Field>
                     </div>
-
-                    <div className="grid grid-cols-1 gap-3 mt-3 sm:grid-cols-2 lg:grid-cols-4">
-                        {financialCards.map(card => (
-                            <div key={card.key} className="p-3 border border-gray-200 rounded-lg">
-                                <div className="text-xs font-medium text-gray-500">{card.label}</div>
-                                <div className="mt-1 text-lg font-semibold text-gray-900">{formatCurrency(card.value)}</div>
+                    <div className="hidden space-y-5 lg:block">
+                        {GROUPS.map((group) => (
+                            <div key={group}>
+                                <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                                    {group}
+                                </p>
+                                <div className="space-y-1">
+                                    {reports
+                                        .filter((item) => item.group === group)
+                                        .map((item) => (
+                                            <button
+                                                key={item.key}
+                                                type="button"
+                                                onClick={() =>
+                                                    changeReport(item.key)
+                                                }
+                                                aria-current={
+                                                    report.key === item.key
+                                                        ? "page"
+                                                        : undefined
+                                                }
+                                                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition ${report.key === item.key ? "bg-emerald-50 font-semibold text-emerald-800" : "text-gray-600 hover:bg-gray-50"}`}
+                                            >
+                                                <i
+                                                    aria-hidden="true"
+                                                    className={`fas ${item.icon} w-4 text-center`}
+                                                />
+                                                <span>{item.title}</span>
+                                            </button>
+                                        ))}
+                                </div>
                             </div>
                         ))}
                     </div>
-
-                    <div className="grid grid-cols-1 gap-4 mt-4 lg:grid-cols-2">
-                        <div className="p-4 border border-gray-200 rounded-lg">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-sm font-semibold text-gray-900">Inflows vs Outflows</h3>
-                                <span className="text-xs text-gray-500">Selected range</span>
+                </nav>
+                <section
+                    aria-label={report.title}
+                    className="min-w-0 space-y-4"
+                >
+                    <div className="rounded-xl border border-emerald-100 bg-white">
+                        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 p-5">
+                            <div>
+                                <p className="text-xs font-medium text-emerald-700">
+                                    {report.group}
+                                </p>
+                                <h2 className="mt-1 text-xl font-semibold text-gray-900">
+                                    {report.title}
+                                </h2>
+                                <p className="mt-1 max-w-xl text-sm text-gray-500">
+                                    {report.description}
+                                </p>
                             </div>
-                            <div className="relative mt-3 h-64">
-                                <Bar data={inflowOutflowData} options={inflowOutflowOptions} />
+                            <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setRefresh((value) => value + 1);
+                                    }}
+                                    aria-label="Refresh report"
+                                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+                                >
+                                    <i
+                                        aria-hidden="true"
+                                        className="fas fa-rotate-right"
+                                    />
+                                </button>
+                                {permissions.includes("reports.export") && (
+                                    <>
+                                        <button
+                                            type="button"
+                                            disabled={
+                                                !!exporting || !validDates
+                                            }
+                                            onClick={() => download("excel")}
+                                            className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50"
+                                        >
+                                            <i
+                                                aria-hidden="true"
+                                                className="fas fa-file-excel mr-2"
+                                            />
+                                            {exporting === "excel"
+                                                ? "Preparing..."
+                                                : "Excel .xlsx"}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            disabled={
+                                                !!exporting || !validDates
+                                            }
+                                            onClick={() => download("pdf")}
+                                            className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                                        >
+                                            <i
+                                                aria-hidden="true"
+                                                className="fas fa-file-pdf mr-2"
+                                            />
+                                            {exporting === "pdf"
+                                                ? "Preparing..."
+                                                : "PDF"}
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         </div>
-
-                        <div className="p-4 border border-gray-200 rounded-lg">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-sm font-semibold text-gray-900">Totals by Type</h3>
-                                <span className="text-xs text-gray-500">Selected range</span>
-                            </div>
-                            <div className="relative mt-3 h-64">
-                                <Doughnut data={totalsByTypeData} options={totalsByTypeOptions} />
-                            </div>
-                        </div>
-                    </div>
-
-                    {monthlySeries.length > 0 && (
-                        <div className="rounded-lg border border-gray-200 bg-white mt-4">
-                            <div className="border-b border-gray-100 px-4 py-3">
-                                <h3 className="text-sm font-semibold text-gray-700">Monthly Breakdown</h3>
-                            </div>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full divide-y divide-gray-100">
-                                    <thead className="bg-gray-50">
-                                        <tr>
-                                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Month</th>
-                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Deposits</th>
-                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Interest Credits</th>
-                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Loan Repayments</th>
-                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Loan Releases</th>
-                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Withdrawals</th>
-                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Fees</th>
-                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Expenses</th>
-                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Net</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-50">
-                                        {monthlySeries.map((m: any, i: number) => (
-                                            <tr key={i} className="hover:bg-gray-50">
-                                                <td className="px-4 py-2 text-sm font-medium text-gray-900">{m.label}</td>
-                                                <td className="px-4 py-2 text-sm text-right text-emerald-600">{formatCurrency(m.deposits)}</td>
-                                                <td className="px-4 py-2 text-sm text-right text-teal-600">{formatCurrency(m.interest_credits)}</td>
-                                                <td className="px-4 py-2 text-sm text-right text-blue-600">{formatCurrency(m.loan_repayments)}</td>
-                                                <td className="px-4 py-2 text-sm text-right text-purple-600">{formatCurrency(m.loan_releases)}</td>
-                                                <td className="px-4 py-2 text-sm text-right text-red-500">{formatCurrency(m.withdrawals)}</td>
-                                                <td className="px-4 py-2 text-sm text-right text-amber-700">{formatCurrency(m.fees)}</td>
-                                                <td className="px-4 py-2 text-sm text-right text-amber-600">{formatCurrency(m.expenses)}</td>
-                                                <td className={`px-4 py-2 text-sm text-right font-medium ${Number(m.net) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{formatCurrency(m.net)}</td>
-                                            </tr>
+                        <div className="flex flex-wrap items-end gap-3 p-5">
+                            <DateRangeFilter from={dates.from} to={dates.to}
+                                onFromChange={from => setDates(value => ({ ...value, from }))}
+                                onToChange={to => setDates(value => ({ ...value, to }))}
+                                onRangeChange={(from, to) => setDates({ from, to })} />
+                            <Field title="Branch">
+                                <select
+                                    className={selectCls}
+                                    value={branch}
+                                    disabled={options.isPending || branchLocked}
+                                    onChange={(event) => {
+                                        setBranch(event.target.value);
+                                        setMember("");
+                                        setCategory("");
+                                    }}
+                                >
+                                    <option value="">
+                                        {branchLocked &&
+                                        options.data?.branches?.length === 1
+                                            ? options.data.branches[0].name
+                                            : "All permitted branches"}
+                                    </option>
+                                    {(!branchLocked
+                                        ? (options.data?.branches ?? [])
+                                        : []
+                                    ).map((item: any) => (
+                                        <option key={item.id} value={item.id}>
+                                            {item.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </Field>
+                            {hasMember && (
+                                <MemberSearch
+                                    key={branch}
+                                    members={options.data?.members ?? []}
+                                    value={member}
+                                    onChange={setMember}
+                                />
+                            )}
+                            {report.key === "loans" && (
+                                <Field title="Loan status">
+                                    <select
+                                        className={selectCls}
+                                        value={loanStatus}
+                                        onChange={(event) =>
+                                            setLoanStatus(event.target.value)
+                                        }
+                                    >
+                                        {[
+                                            "all",
+                                            "active",
+                                            "completed",
+                                            "overdue",
+                                        ].map((value) => (
+                                            <option key={value} value={value}>
+                                                {label(value)}
+                                            </option>
                                         ))}
-                                    </tbody>
-                                </table>
-                            </div>
+                                    </select>
+                                </Field>
+                            )}
+                            {report.key === "expenses" && (
+                                <Field title="Category">
+                                    <select
+                                        className={selectCls}
+                                        value={category}
+                                        onChange={(event) =>
+                                            setCategory(event.target.value)
+                                        }
+                                    >
+                                        <option value="">All categories</option>
+                                        {(
+                                            options.data?.expense_categories ??
+                                            []
+                                        ).map((value: string) => (
+                                            <option key={value} value={value}>
+                                                {value}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </Field>
+                            )}
+                            {report.key === "interest" && (
+                                <Field title="Account">
+                                    <select
+                                        className={selectCls}
+                                        value={accountType}
+                                        onChange={(event) =>
+                                            setAccountType(event.target.value)
+                                        }
+                                    >
+                                        <option value="">All accounts</option>
+                                        <option value="savings">Savings</option>
+                                        <option value="share-capital">
+                                            Share capital
+                                        </option>
+                                    </select>
+                                </Field>
+                            )}
+                            {report.key === "member_activity" && (
+                                <>
+                                    <Field title="Transaction type">
+                                        <select
+                                            className={selectCls}
+                                            value={activity}
+                                            onChange={(event) =>
+                                                setActivity(event.target.value)
+                                            }
+                                        >
+                                            {[
+                                                "all",
+                                                "deposit",
+                                                "withdrawal",
+                                                "loan_disbursement",
+                                                "loan_payment",
+                                                "interest",
+                                                "fee",
+                                            ].map((value) => (
+                                                <option
+                                                    key={value}
+                                                    value={value}
+                                                >
+                                                    {label(value)}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </Field>
+                                </>
+                            )}
                         </div>
-                    )}
-                </div>
-            )}
-
-            {reportType === 'balance_sheet' && (
-                <div className="p-4 bg-white border-b border-gray-200">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h2 className="text-sm font-semibold text-gray-900">Balance Sheet</h2>
-                            <p className="text-xs text-gray-500">As of {formatDate(balanceSheet.as_of)}</p>
-                        </div>
-                        <div className="text-right">
-                            <div className="text-xs text-gray-500">Period Basis</div>
-                            <div className="text-sm text-gray-900">{formatDate(balanceSheet.start)} - {formatDate(balanceSheet.end)}</div>
+                        <div className="flex flex-wrap justify-between gap-2 border-t border-gray-100 px-5 py-3 text-xs text-gray-500">
+                            <span>
+                                {branchName} / {!dates.from && !dates.to ? "All time" : `${dates.from ? date(dates.from) : "Beginning"} - ${dates.to ? date(dates.to) : "Present"}`}
+                            </span>
+                            <span>Downloads include all matching records</span>
                         </div>
                     </div>
-
-                    <div className="grid grid-cols-1 gap-4 mt-4 lg:grid-cols-2">
-                        <div className="p-4 border border-gray-200 rounded-lg">
-                            <h3 className="text-sm font-semibold text-gray-900">Assets</h3>
-                            <div className="mt-3 space-y-2">
-                                {(balanceSheet.assets || []).map((line: any) => (
-                                    <div key={line.label} className="flex items-center justify-between text-sm">
-                                        <span className="text-gray-700">{line.label}</span>
-                                        <span className="font-medium text-gray-900">{formatCurrency(line.amount)}</span>
+                    {!validDates && (
+                        <p
+                            role="alert"
+                            className="rounded-xl bg-red-50 p-4 text-sm text-red-700"
+                        >
+                            Choose a valid start and end date. The end must be
+                            on or after the start.
+                        </p>
+                    )}
+                    {options.isError && (
+                        <p role="alert" className="text-sm text-red-700">
+                            Could not load filter choices.{" "}
+                            <button
+                                className="underline"
+                                onClick={() => options.refetch()}
+                            >
+                                Retry
+                            </button>
+                        </p>
+                    )}
+                    {report.note && (
+                        <p className="rounded-xl border border-amber-100 bg-amber-50/60 p-4 text-xs leading-relaxed text-amber-900">
+                            <i
+                                aria-hidden="true"
+                                className="fas fa-circle-info mr-2"
+                            />
+                            {report.note}
+                        </p>
+                    )}
+                    <div aria-live="polite" className="text-sm text-gray-500">
+                        {exporting ? "Preparing your download..." : ""}
+                    </div>
+                    {validDates && report.key === "interest" ? (
+                        <InterestDisbursementsReport
+                            branchId={branch}
+                            from={dates.from}
+                            to={dates.to}
+                            accountType={accountType}
+                            refreshKey={refresh}
+                        />
+                    ) : (
+                        validDates &&
+                        (query.isPending ? (
+                            <div
+                                role="status"
+                                className="rounded-xl border border-gray-100 bg-white p-10 text-center text-sm text-gray-500"
+                            >
+                                Loading report...
+                            </div>
+                        ) : query.isError ? (
+                            <div
+                                role="alert"
+                                className="rounded-xl border border-red-100 bg-red-50 p-5 text-sm text-red-700"
+                            >
+                                Could not load this report.{" "}
+                                <button
+                                    onClick={() => query.refetch()}
+                                    className="font-medium underline"
+                                >
+                                    Retry
+                                </button>
+                            </div>
+                        ) : report.key === "financial" ? (
+                            <FinancialSummary data={data} />
+                        ) : report.key === "balance_sheet" ? (
+                            <BalanceSheet data={data} />
+                        ) : (
+                            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-5 py-4">
+                                    <p className="text-sm text-gray-600">
+                                        <strong className="text-gray-900">
+                                            {data?.meta?.total ?? 0}
+                                        </strong>{" "}
+                                        matching records
+                                    </p>
+                                    {data?.total !== undefined && (
+                                        <p className="text-sm text-gray-600">
+                                            {report.key === "expenses"
+                                                ? "Total expenses"
+                                                : "Net transaction total"}
+                                            :{" "}
+                                            <strong className="text-gray-900">
+                                                {money(data.total)}
+                                            </strong>
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-sm">
+                                        <thead className="bg-gray-50 text-xs text-gray-500">
+                                            <tr>
+                                                {report.columns?.map(
+                                                    (column) => (
+                                                        sortableReportField(column.key) ? <SortableHeader
+                                                            key={column.key} field={sortableReportField(column.key)!} sort={sort} direction={direction} onSort={handleColumnSort}
+                                                            className={`whitespace-nowrap px-5 py-3 ${column.type === "money" ? "text-right" : ""}`}>
+                                                            {column.label}
+                                                        </SortableHeader> : <th
+                                                            key={column.key}
+                                                            scope="col"
+                                                            className={`whitespace-nowrap px-5 py-3 font-medium ${column.type === "money" || column.type === "percent" ? "text-right" : ""}`}
+                                                        >
+                                                            {column.label}
+                                                        </th>
+                                                    ),
+                                                )}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {!data?.data?.length ? (
+                                                <tr>
+                                                    <td
+                                                        colSpan={
+                                                            report.columns
+                                                                ?.length
+                                                        }
+                                                        className="p-10 text-center text-gray-500"
+                                                    >
+                                                        No records match these
+                                                        filters.
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                data.data.map(
+                                                    (
+                                                        row: any,
+                                                        index: number,
+                                                    ) => (
+                                                        <tr
+                                                            key={
+                                                                row.id ??
+                                                                row.loan_number ??
+                                                                index
+                                                            }
+                                                            className="hover:bg-gray-50/70"
+                                                        >
+                                                            {report.columns?.map(
+                                                                (column) => (
+                                                                    <td
+                                                                        key={
+                                                                            column.key
+                                                                        }
+                                                                        className={`px-5 py-3 ${column.type === "money" || column.type === "percent" ? "whitespace-nowrap text-right tabular-nums" : "min-w-32 text-gray-700"}`}
+                                                                    >
+                                                                        {column.type ===
+                                                                        "money"
+                                                                            ? money(
+                                                                                  row[
+                                                                                      column
+                                                                                          .key
+                                                                                  ],
+                                                                              )
+                                                                            : column.type ===
+                                                                                "date"
+                                                                              ? date(
+                                                                                    row[
+                                                                                        column
+                                                                                            .key
+                                                                                    ],
+                                                                                )
+                                                                              : column.type ===
+                                                                                  "percent"
+                                                                                ? `${Number(row[column.key]).toFixed(2)}%`
+                                                                                : column.key ===
+                                                                                    "transaction_type"
+                                                                                  ? label(
+                                                                                        row[
+                                                                                            column
+                                                                                                .key
+                                                                                        ],
+                                                                                    )
+                                                                                  : (row[
+                                                                                        column
+                                                                                            .key
+                                                                                    ] ??
+                                                                                    "\u2014")}
+                                                                    </td>
+                                                                ),
+                                                            )}
+                                                        </tr>
+                                                    ),
+                                                )
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {data?.meta && (
+                                    <div className="border-t border-gray-100 p-4">
+                                        <Pagination
+                                            currentPage={page}
+                                            lastPage={data.meta.last_page}
+                                            total={data.meta.total}
+                                            perPage={data.meta.per_page}
+                                            onPageChange={setPage}
+                                        />
                                     </div>
+                                )}
+                            </div>
+                        ))
+                    )}
+                </section>
+            </div>
+        </div>
+    );
+}
+const METRICS: [string, string][] = [
+    ["total_deposits", "Deposits"],
+    ["total_withdrawals", "Withdrawals"],
+    ["total_loan_releases", "Loan releases"],
+    ["total_loan_repayments", "Loan repayments"],
+    ["total_interest_credits", "Interest credits"],
+    ["total_interest_earned", "Estimated loan interest collected"],
+    ["projected_interest", "Projected loan interest"],
+    ["total_fees", "Fees"],
+    ["total_expenses", "Operating expenses"],
+    ["net", "Net movement"],
+];
+function FinancialSummary({ data }: { data: any }) {
+    const series = data?.monthly_series ?? [];
+    return (
+        <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {[
+                    ["net", "Net movement"],
+                    ["total_deposits", "Deposits"],
+                    ["total_loan_repayments", "Loan repayments"],
+                    ["total_expenses", "Operating expenses"],
+                ].map(([key, text]) => (
+                    <div
+                        key={key}
+                        className="rounded-xl border border-emerald-100 bg-white p-5"
+                    >
+                        <p className="text-xs font-medium text-gray-500">
+                            {text}
+                        </p>
+                        <p className="mt-2 text-xl font-semibold tabular-nums text-gray-900">
+                            {money(data?.[key])}
+                        </p>
+                    </div>
+                ))}
+            </div>
+            <div className="grid gap-4 xl:grid-cols-2">
+                <div className="rounded-xl border border-gray-200 bg-white p-5">
+                    <h3 className="mb-4 font-semibold text-gray-900">
+                        Period totals
+                    </h3>
+                    <dl className="divide-y divide-gray-100">
+                        {METRICS.map(([key, text]) => (
+                            <div
+                                key={key}
+                                className="flex justify-between gap-4 py-2.5 text-sm"
+                            >
+                                <dt className="text-gray-600">{text}</dt>
+                                <dd className="font-medium tabular-nums text-gray-900">
+                                    {money(data?.[key])}
+                                </dd>
+                            </div>
+                        ))}
+                    </dl>
+                </div>
+                <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-5">
+                    <h3 className="font-semibold text-gray-900">
+                        Monthly trend
+                    </h3>
+                    <p className="mt-1 text-xs text-gray-500">
+                        Trailing six months through the selected end month;
+                        separate from period totals.
+                    </p>
+                    <div className="mt-5 h-72">
+                        <Bar
+                            data={{
+                                labels: series.map((row: any) => row.label),
+                                datasets: [
+                                    {
+                                        label: "Deposits",
+                                        data: series.map(
+                                            (row: any) => row.deposits,
+                                        ),
+                                        backgroundColor: "#059669",
+                                    },
+                                    {
+                                        label: "Loan repayments",
+                                        data: series.map(
+                                            (row: any) => row.loan_repayments,
+                                        ),
+                                        backgroundColor: "#38bdf8",
+                                    },
+                                    {
+                                        label: "Expenses",
+                                        data: series.map(
+                                            (row: any) => row.expenses,
+                                        ),
+                                        backgroundColor: "#f59e0b",
+                                    },
+                                ],
+                            }}
+                            options={{
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { position: "bottom" } },
+                            }}
+                            role="img"
+                            aria-label="Monthly deposits, loan repayments and expenses; figures available in the monthly breakdown table below"
+                        />
+                    </div>
+                </div>
+            </div>
+            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+                <h3 className="p-5 font-semibold text-gray-900">
+                    Monthly breakdown / trailing six months
+                </h3>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead className="bg-gray-50 text-xs text-gray-500">
+                            <tr>
+                                {[
+                                    "Month",
+                                    "Deposits",
+                                    "Interest credits",
+                                    "Loan repayments",
+                                    "Loan releases",
+                                    "Withdrawals",
+                                    "Fees",
+                                    "Expenses",
+                                    "Net",
+                                ].map((text) => (
+                                    <th
+                                        key={text}
+                                        className="whitespace-nowrap px-4 py-3 text-right first:text-left"
+                                    >
+                                        {text}
+                                    </th>
                                 ))}
-                            </div>
-                            <div className="pt-2 mt-3 border-t border-gray-200 flex items-center justify-between">
-                                <span className="text-sm font-semibold text-gray-900">Total Assets</span>
-                                <span className="text-sm font-semibold text-gray-900">{formatCurrency(balanceSheet.totals?.assets)}</span>
-                            </div>
-                        </div>
-
-                        <div className="p-4 border border-gray-200 rounded-lg">
-                            <h3 className="text-sm font-semibold text-gray-900">Liabilities and Equity</h3>
-
-                            <div className="mt-3">
-                                <div className="text-xs font-semibold tracking-wide text-gray-500 uppercase">Liabilities</div>
-                                <div className="mt-2 space-y-2">
-                                    {(balanceSheet.liabilities || []).map((line: any) => (
-                                        <div key={line.label} className="flex items-center justify-between text-sm">
-                                            <span className="text-gray-700">{line.label}</span>
-                                            <span className="font-medium text-gray-900">{formatCurrency(line.amount)}</span>
-                                        </div>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {series.map((row: any) => (
+                                <tr key={row.label}>
+                                    <th
+                                        scope="row"
+                                        className="whitespace-nowrap px-4 py-3 text-left font-medium"
+                                    >
+                                        {row.label}
+                                    </th>
+                                    {[
+                                        "deposits",
+                                        "interest_credits",
+                                        "loan_repayments",
+                                        "loan_releases",
+                                        "withdrawals",
+                                        "fees",
+                                        "expenses",
+                                        "net",
+                                    ].map((key) => (
+                                        <td
+                                            key={key}
+                                            className="whitespace-nowrap px-4 py-3 text-right tabular-nums"
+                                        >
+                                            {money(row[key])}
+                                        </td>
                                     ))}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    );
+}
+function BalanceSheet({ data }: { data: any }) {
+    return (
+        <div className="space-y-4">
+            <p className="text-sm text-gray-500">
+                Cash through {date(data?.as_of)} / balance figures current at
+                generation
+            </p>
+            <div className="grid gap-4 xl:grid-cols-3">
+                {["assets", "liabilities", "equity"].map((section) => (
+                    <div
+                        key={section}
+                        className="rounded-xl border border-gray-200 bg-white p-5"
+                    >
+                        <h3 className="mb-3 font-semibold capitalize text-gray-900">
+                            {section}
+                        </h3>
+                        <dl className="space-y-3">
+                            {(data?.[section] ?? []).map((row: any) => (
+                                <div
+                                    key={row.label}
+                                    className="flex justify-between gap-3 text-sm"
+                                >
+                                    <dt className="text-gray-600">
+                                        {row.label}
+                                    </dt>
+                                    <dd className="whitespace-nowrap tabular-nums">
+                                        {money(row.amount)}
+                                    </dd>
                                 </div>
-                                <div className="pt-2 mt-3 border-t border-gray-200 flex items-center justify-between">
-                                    <span className="text-sm font-semibold text-gray-900">Total Liabilities</span>
-                                    <span className="text-sm font-semibold text-gray-900">{formatCurrency(balanceSheet.totals?.liabilities)}</span>
-                                </div>
+                            ))}
+                            <div className="flex justify-between gap-3 border-t border-gray-100 pt-3 text-sm font-semibold">
+                                <dt>Total {section}</dt>
+                                <dd className="whitespace-nowrap tabular-nums">
+                                    {money(data?.totals?.[section])}
+                                </dd>
                             </div>
-
-                            <div className="mt-4">
-                                <div className="text-xs font-semibold tracking-wide text-gray-500 uppercase">Equity</div>
-                                <div className="mt-2 space-y-2">
-                                    {(balanceSheet.equity || []).map((line: any) => (
-                                        <div key={line.label} className="flex items-center justify-between text-sm">
-                                            <span className="text-gray-700">{line.label}</span>
-                                            <span className="font-medium text-gray-900">{formatCurrency(line.amount)}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="pt-2 mt-3 border-t border-gray-200 flex items-center justify-between">
-                                    <span className="text-sm font-semibold text-gray-900">Total Equity</span>
-                                    <span className="text-sm font-semibold text-gray-900">{formatCurrency(balanceSheet.totals?.equity)}</span>
-                                </div>
-                            </div>
-
-                            <div className="pt-2 mt-4 border-t-2 border-gray-300 flex items-center justify-between">
-                                <span className="text-sm font-semibold text-gray-900">Total Liabilities and Equity</span>
-                                <span className="text-sm font-semibold text-gray-900">{formatCurrency(balanceSheet.totals?.liabilities_and_equity)}</span>
-                            </div>
-                        </div>
+                        </dl>
                     </div>
-                </div>
-            )}
-
-            {reportType === 'member_savings' && (
-                <div className="flex flex-col">
-                    <div className="overflow-x-auto">
-                        <div className="inline-block min-w-full align-middle">
-                            <div className="overflow-hidden shadow">
-                                <table className="min-w-[700px] w-full divide-y divide-gray-200 table-fixed">
-                                    <thead className="bg-gray-100">
-                                        <tr>
-                                            <th scope="col" className={thCls}>Member</th>
-                                            <th scope="col" className={thCls}>Total Deposits</th>
-                                            <th scope="col" className={thCls}>Interest Credits</th>
-                                            <th scope="col" className={thCls}>Total Withdrawals</th>
-                                            <th scope="col" className={thCls}>Current Savings Balance</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                        {memberSavingsRows.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={5} className="p-6 text-sm text-gray-500">No savings records found for the selected filters.</td>
-                                            </tr>
-                                        ) : memberSavingsRows.map((row: any, i: number) => (
-                                            <tr key={i} className="hover:bg-gray-50">
-                                                <td className="p-4 text-sm font-medium text-gray-900 whitespace-nowrap truncate" title={row.member_name}>{row.member_name}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{formatCurrency(row.total_deposits)}</td>
-                                                <td className="p-4 text-sm text-teal-700 whitespace-nowrap">{formatCurrency(row.total_interest_credits)}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{formatCurrency(row.total_withdrawals)}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{formatCurrency(row.current_balance)}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                    <Pagination meta={memberSavingsMeta} page={page} setPage={setPage} />
-                </div>
-            )}
-
-            {reportType === 'loans' && (
-                <div className="flex flex-col">
-                    <div className="overflow-x-auto">
-                        <div className="inline-block min-w-full align-middle">
-                            <div className="overflow-hidden shadow">
-                                <table className="min-w-[850px] w-full divide-y divide-gray-200 table-fixed">
-                                    <thead className="bg-gray-100">
-                                        <tr>
-                                            <th className={thCls}>Member</th>
-                                            <th className={thCls}>Loan</th>
-                                            <th className={thCls}>Interest</th>
-                                            <th className={thCls}>Loan Date</th>
-                                            <th className={thCls}>Due Date</th>
-                                            <th className={thCls}>Paid</th>
-                                            <th className={thCls}>Remaining</th>
-                                            <th className={thCls}>Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                        {loanRows.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={8} className="p-6 text-sm text-gray-500">No loans found for the selected filters.</td>
-                                            </tr>
-                                        ) : loanRows.map((row: any) => (
-                                            <tr key={row.loan_number || row.amount_paid} className="hover:bg-gray-50">
-                                                <td className="p-4 text-sm font-medium text-gray-900 whitespace-nowrap truncate" title={row.member_name}>{row.member_name}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{formatCurrency(row.loan_amount)}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{Number(row.interest_rate).toFixed(2)}%</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{formatDate(row.loan_date)}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{formatDate(row.due_date)}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{formatCurrency(row.amount_paid)}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{formatCurrency(row.remaining_balance)}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">
-                                                    <span className={`${loanStatusBadge(row.status)} text-xs font-medium mr-2 px-2.5 py-0.5 rounded`}>{row.status}</span>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                    <Pagination meta={loanMeta} page={page} setPage={setPage} />
-
-                    {loanStatusSeries.length > 0 && (
-                        <div className="rounded-lg border border-gray-200 bg-white">
-                            <div className="border-b border-gray-100 px-4 py-3">
-                                <h3 className="text-sm font-semibold text-gray-700">Loan Distribution by Status</h3>
-                            </div>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full divide-y divide-gray-100">
-                                    <thead className="bg-gray-50">
-                                        <tr>
-                                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Count</th>
-                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Percent</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-50">
-                                        {loanStatusSeries.map((s: any) => (
-                                            <tr key={s.status} className="hover:bg-gray-50">
-                                                <td className="px-4 py-2">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className={`inline-block h-2.5 w-2.5 rounded-full ${s.color}`}></span>
-                                                        <span className="text-sm text-gray-900">{s.label}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-2 text-sm text-right font-medium text-gray-900">{s.count}</td>
-                                                <td className="px-4 py-2 text-sm text-right text-gray-500">{s.percent}%</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {reportType === 'payments' && (
-                <div className="flex flex-col">
-                    <div className="overflow-x-auto">
-                        <div className="inline-block min-w-full align-middle">
-                            <div className="overflow-hidden shadow">
-                                <table className="min-w-[650px] w-full divide-y divide-gray-200 table-fixed">
-                                    <thead className="bg-gray-100">
-                                        <tr>
-                                            <th className={thCls}>Member</th>
-                                            <th className={thCls}>Loan ID</th>
-                                            <th className={thCls}>Payment</th>
-                                            <th className={thCls}>Payment Date</th>
-                                            <th className={thCls}>Remaining Balance</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                        {paymentRows.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={5} className="p-6 text-sm text-gray-500">No loan payments found for the selected range.</td>
-                                            </tr>
-                                        ) : paymentRows.map((row: any) => (
-                                            <tr key={row.payment_date + row.loan_number + row.amount} className="hover:bg-gray-50">
-                                                <td className="p-4 text-sm font-medium text-gray-900 whitespace-nowrap truncate" title={row.member_name}>{row.member_name}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{row.loan_number}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{formatCurrency(row.amount)}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{formatDate(row.payment_date)}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{formatCurrency(row.remaining_balance)}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                    <Pagination meta={paymentMeta} page={page} setPage={setPage} />
-
-                    {pendingTransactions.length > 0 && (
-                        <div className="rounded-lg border border-gray-200 bg-white">
-                            <div className="border-b border-gray-100 px-4 py-3">
-                                <h3 className="text-sm font-semibold text-gray-700">Pending Transactions</h3>
-                            </div>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-[650px] w-full divide-y divide-gray-100">
-                                    <thead className="bg-gray-50">
-                                        <tr>
-                                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Transaction #</th>
-                                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Member</th>
-                                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
-                                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-50">
-                                        {pendingTransactions.map((t: any) => (
-                                            <tr key={t.id} className="hover:bg-gray-50">
-                                                <td className="px-4 py-2 text-sm font-medium text-gray-900 truncate max-w-[180px]" title={t.transaction_number}>{t.transaction_number}</td>
-                                                <td className="px-4 py-2 text-sm text-gray-500 truncate max-w-[200px]" title={t.member_name}>{t.member_name}</td>
-                                                <td className="px-4 py-2 text-sm text-gray-500"><span className={`inline-flex rounded px-2 py-0.5 text-xs font-medium ${txBadgeClass(t.transaction_type)}`}>{txBadgeText(t.transaction_type)}</span></td>
-                                                <td className="px-4 py-2 text-sm text-right font-medium text-gray-900">{formatCurrency(t.amount)}</td>
-                                                <td className="px-4 py-2 text-sm text-gray-500">{formatDate(t.created_at)}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {reportType === 'expenses' && (
-                <div className="flex flex-col">
-                    <div className="overflow-x-auto">
-                        <div className="inline-block min-w-full align-middle">
-                            <div className="overflow-hidden shadow">
-                                <table className="min-w-full divide-y divide-gray-200 table-fixed">
-                                    <thead className="bg-gray-100">
-                                        <tr>
-                                            <th className={thCls}>Category</th>
-                                            <th className={thCls}>Description</th>
-                                            <th className={thCls}>Amount</th>
-                                            <th className={thCls}>Date</th>
-                                            <th className={thCls}>Recorded By</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                        {expenseRows.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={5} className="p-6 text-sm text-gray-500">No expenses found for the selected filters.</td>
-                                            </tr>
-                                        ) : expenseRows.map((e: any) => (
-                                            <tr key={e.id} className="hover:bg-gray-50">
-                                                <td className="p-4 text-sm font-medium text-gray-900 whitespace-nowrap truncate" title={e.category}>{e.category}</td>
-                                                <td className="p-4 text-sm text-gray-900">{e.description || '—'}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{formatCurrency(e.amount)}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{formatDate(e.expense_date)}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap truncate" title={e.recorded_by || '—'}>{e.recorded_by || '—'}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                    <Pagination meta={expenseMeta} page={page} setPage={setPage} />
-                </div>
-            )}
-
-            {reportType === 'member_activity' && (
-                <div className="flex flex-col">
-                    <div className="overflow-x-auto">
-                        <div className="inline-block min-w-full align-middle">
-                            <div className="overflow-hidden shadow">
-                                <table className="min-w-full divide-y divide-gray-200 table-fixed">
-                                    <thead className="bg-gray-100">
-                                        <tr>
-                                            <th className={thCls}>Member</th>
-                                            <th className={thCls}>Type</th>
-                                            <th className={thCls}>Amount</th>
-                                            <th className={thCls}>Date</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                        {memberActivityRows.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={4} className="p-6 text-sm text-gray-500">No financial history found for the selected filters.</td>
-                                            </tr>
-                                        ) : memberActivityRows.map((row: any) => (
-                                            <tr key={row.id} className="hover:bg-gray-50">
-                                                <td className="p-4 text-sm font-medium text-gray-900 whitespace-nowrap truncate" title={row.member_name}>{row.member_name}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">
-                                                    <span className={`${txBadgeClass(row.transaction_type)} text-xs font-medium mr-2 px-2.5 py-0.5 rounded`}>{activityTypeLabel(row.transaction_type)}</span>
-                                                </td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{formatCurrency(row.amount)}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{formatDate(row.transaction_date)}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                    <Pagination meta={memberActivityMeta} page={page} setPage={setPage} />
-                </div>
-            )}
-
-            {reportType === 'members' && (
-                <div className="flex flex-col">
-                    <div className="overflow-x-auto">
-                        <div className="inline-block min-w-full align-middle">
-                            <div className="overflow-hidden shadow">
-                                <table className="min-w-full divide-y divide-gray-200 table-fixed">
-                                    <thead className="bg-gray-100">
-                                        <tr>
-                                            <th className={thCls}>Member ID</th>
-                                            <th className={thCls}>Name</th>
-                                            <th className={thCls}>Email</th>
-                                            <th className={thCls}>Phone</th>
-                                            <th className={thCls}>Status</th>
-                                            <th className={thCls}>Branch</th>
-                                            <th className={thCls}>Join Date</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                        {membersReportRows.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={7} className="p-6 text-sm text-gray-500">No members found for the selected range.</td>
-                                            </tr>
-                                        ) : membersReportRows.map((row: any, i: number) => (
-                                            <tr key={row.member_id + i} className="hover:bg-gray-50">
-                                                <td className="p-4 text-sm font-medium text-gray-900 whitespace-nowrap">{row.member_id}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap truncate" title={row.name}>{row.name}</td>
-                                                <td className="p-4 text-sm text-gray-500 whitespace-nowrap truncate" title={row.email}>{row.email}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{row.phone || '—'}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">
-                                                    <span className={`text-xs font-medium px-2.5 py-0.5 rounded ${row.status === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>{row.status}</span>
-                                                </td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap truncate" title={row.branch || '—'}>{row.branch || '—'}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{formatDate(row.joined_at)}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                    <Pagination meta={membersReportMeta} page={page} setPage={setPage} />
-                </div>
-            )}
-
-            {reportType === 'officers' && (
-                <div className="flex flex-col">
-                    <div className="overflow-x-auto">
-                        <div className="inline-block min-w-full align-middle">
-                            <div className="overflow-hidden shadow">
-                                <table className="min-w-full divide-y divide-gray-200 table-fixed">
-                                    <thead className="bg-gray-100">
-                                        <tr>
-                                            <th className={thCls}>Officer ID</th>
-                                            <th className={thCls}>Name</th>
-                                            <th className={thCls}>Email</th>
-                                            <th className={thCls}>Role</th>
-                                            <th className={thCls}>Title</th>
-                                            <th className={thCls}>Branch</th>
-                                            <th className={thCls}>Status</th>
-                                            <th className={thCls}>Join Date</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                        {officersReportRows.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={8} className="p-6 text-sm text-gray-500">No officers found for the selected range.</td>
-                                            </tr>
-                                        ) : officersReportRows.map((row: any, i: number) => (
-                                            <tr key={row.officer_id + i} className="hover:bg-gray-50">
-                                                <td className="p-4 text-sm font-medium text-gray-900 whitespace-nowrap">{row.officer_id}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap truncate" title={row.name}>{row.name}</td>
-                                                <td className="p-4 text-sm text-gray-500 whitespace-nowrap truncate" title={row.email}>{row.email}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">
-                                                    <span className="px-2.5 py-0.5 text-xs font-medium bg-purple-100 text-purple-800 rounded capitalize">{row.role}</span>
-                                                </td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap truncate" title={row.title || '—'}>{row.title || '—'}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap truncate" title={row.branch || '—'}>{row.branch || '—'}</td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">
-                                                    <span className={`text-xs font-medium px-2.5 py-0.5 rounded ${row.status === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>{row.status}</span>
-                                                </td>
-                                                <td className="p-4 text-sm text-gray-900 whitespace-nowrap">{formatDate(row.joined_at)}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                    <Pagination meta={officersReportMeta} page={page} setPage={setPage} />
-                </div>
-            )}
-
-            {reportType === 'interest' && <InterestDisbursementsReport branchId={branchId} />}
+                ))}
+            </div>
+            <p className="text-right text-sm font-semibold text-gray-700">
+                Total liabilities and equity:{" "}
+                {money(data?.totals?.liabilities_and_equity)}
+            </p>
         </div>
     );
 }

@@ -1,3 +1,4 @@
+import SortableHeader from '../../components/ui/SortableHeader';
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
@@ -10,11 +11,17 @@ import { useDiscardGuard } from '../../hooks/useDiscardGuard';
 import { validate, expenseSchema, type FieldErrors } from '../../lib/validation';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Pagination from '../../components/ui/Pagination';
+import DateRangeFilter from '../../components/ui/DateRangeFilter';
+import PageHeader from '../../components/ui/PageHeader';
 
 export default function ExpensesPage() {
     const [search, setSearch] = useState('');
     const [category, setCategory] = useState('all');
     const [branchFilter, setBranchFilter] = useState<number | ''>('');
+    const [from, setFrom] = useState('');
+    const [to, setTo] = useState('');
+    const [sort, setSort] = useState('expense_date');
+    const [direction, setDirection] = useState<'asc' | 'desc'>('desc');
     const [page, setPage] = useState(1);
     const [showModal, setShowModal] = useState(false);
     const [editing, setEditing] = useState<any>(null);
@@ -35,8 +42,8 @@ export default function ExpensesPage() {
     const canAssignBranch = !!user?.permissions?.includes('branches.view');
 
     const { data, isLoading } = useQuery({
-        queryKey: ['expenses', search, category, page, branchFilter],
-        queryFn: () => api.get('/api/expenses', { params: { search: search || undefined, category: category === 'all' ? undefined : category, branch_id: branchFilter || undefined, page, per_page: 15 } }),
+        queryKey: ['expenses', search, category, page, branchFilter, from, to, sort, direction],
+        queryFn: () => api.get('/api/expenses', { params: { search: search || undefined, category: category === 'all' ? undefined : category, branch_id: branchFilter || undefined, from: from || undefined, to: to || undefined, sort, direction, page, per_page: 15 } }),
     });
 
     const expenses = data?.data?.data ?? [];
@@ -89,15 +96,20 @@ export default function ExpensesPage() {
         saveMutation.mutate({ category: form.category, description: form.description, amount: Number(form.amount), expense_date: form.expense_date, branch_id: form.branch_id || undefined });
     };
 
+    const handleColumnSort = (field: string) => {
+        setDirection(sort === field && direction === 'asc' ? 'desc' : 'asc');
+        setSort(field);
+        setPage(1);
+    };
+
     return (
         <>
-            <div className="p-4 bg-white block sm:flex items-center justify-between border-b border-gray-200 lg:mt-1.5">
+            <div className="p-4">
                 <div className="w-full mb-1">
                     <div className="mb-4">
-                        <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl">Expenses</h1>
-                        <p className="text-sm text-gray-500">Track cooperative operating expenses · Changing or deleting an expense requires chairman countersign approval</p>
+                        <PageHeader title="Expenses" description="Track cooperative operating expenses · Changing or deleting an expense requires chairman countersign approval" icon="fas fa-receipt" />
                     </div>
-                    <div className="flex flex-wrap items-center gap-3">
+                    <div className="table-toolbar">
                         <div className="relative mt-1 w-full sm:w-64">
                             <input type="text" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 block w-full p-2.5 transition-all" placeholder="Search expenses..." />
                         </div>
@@ -110,6 +122,7 @@ export default function ExpensesPage() {
                                 <BranchSelect label="" value={branchFilter} onChange={v => { setBranchFilter(v); setPage(1); }} allLabel="All branches" />
                             </div>
                         )}
+                        <DateRangeFilter from={from} to={to} onFromChange={value => { setFrom(value); setPage(1); }} onToChange={value => { setTo(value); setPage(1); }} />
                         {canManage && (
                             <button onClick={openAdd} className="inline-flex items-center justify-center px-3.5 py-2 text-sm font-medium text-center text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 shadow-xs focus:ring-2 focus:ring-emerald-500/20 transition-colors cursor-pointer">
                                 <i className="fas fa-plus mr-1.5"></i> Add Expense
@@ -151,12 +164,12 @@ export default function ExpensesPage() {
                         <table className="min-w-[700px] w-full divide-y divide-gray-200">
                             <thead className="bg-gray-100">
                                 <tr>
-                                    <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Date</th>
-                                    <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Category</th>
-                                    <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Description</th>
-                                    <th className="p-4 text-xs font-medium text-right text-gray-500 uppercase">Amount</th>
-                                    <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Recorded By</th>
-                                    {canAssignBranch && <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Branch</th>}
+                                    <SortableHeader field="expense_date" sort={sort} direction={direction} onSort={handleColumnSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Date</SortableHeader>
+                                    <SortableHeader field="category" sort={sort} direction={direction} onSort={handleColumnSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Category</SortableHeader>
+                                    <SortableHeader field="description" sort={sort} direction={direction} onSort={handleColumnSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Description</SortableHeader>
+                                    <SortableHeader field="amount" sort={sort} direction={direction} onSort={handleColumnSort} className="p-4 text-xs font-medium text-right text-gray-500 uppercase">Amount</SortableHeader>
+                                    <SortableHeader field="recorded_by" sort={sort} direction={direction} onSort={handleColumnSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Recorded By</SortableHeader>
+                                    {canAssignBranch && <SortableHeader field="branch" sort={sort} direction={direction} onSort={handleColumnSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Branch</SortableHeader>}
                                     {canManage && <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Actions</th>}
                                 </tr>
                             </thead>

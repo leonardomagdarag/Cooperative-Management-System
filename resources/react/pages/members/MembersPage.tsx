@@ -1,3 +1,4 @@
+import SortableHeader from '../../components/ui/SortableHeader';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -10,8 +11,10 @@ import MemberWizardForm from './MemberWizardForm';
 import MemberProfileModal from './MemberProfileModal';
 import MemberExportModal from './MemberExportModal';
 import DeclineApplicationModal from './DeclineApplicationModal';
+import PageHeader from '../../components/ui/PageHeader';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Pagination from '../../components/ui/Pagination';
+import DateRangeFilter from '../../components/ui/DateRangeFilter';
 
 const STATUS_FILTERS = [
     { value: 'all', label: 'All Members' },
@@ -40,6 +43,10 @@ export default function MembersPage() {
     const [status, setStatus] = useState(searchParams.get('status') && STATUS_FILTERS.some(f => f.value === searchParams.get('status')) ? searchParams.get('status')! : 'all');
     const [search, setSearch] = useState('');
     const [branchFilter, setBranchFilter] = useState<number | ''>('');
+    const [from, setFrom] = useState('');
+    const [to, setTo] = useState('');
+    const [sort, setSort] = useState('created_at');
+    const [direction, setDirection] = useState<'asc' | 'desc'>('desc');
     const [page, setPage] = useState(1);
     const [showWizard, setShowWizard] = useState(false);
     const [editing, setEditing] = useState<any>(null);
@@ -58,8 +65,8 @@ export default function MembersPage() {
     const { addToast } = useToast();
 
     const { data, isLoading, refetch } = useQuery({
-        queryKey: ['members', search, page, status, branchFilter],
-        queryFn: () => api.get('/api/members', { params: { search: search || undefined, page, per_page: 15, status, branch_id: branchFilter || undefined } }),
+        queryKey: ['members', search, page, status, branchFilter, from, to, sort, direction],
+        queryFn: () => api.get('/api/members', { params: { search: search || undefined, page, per_page: 15, status, branch_id: branchFilter || undefined, from: from || undefined, to: to || undefined, sort, direction } }),
     });
 
     const deleteMutation = useMutation({
@@ -121,13 +128,18 @@ export default function MembersPage() {
         }
     };
 
+    const handleColumnSort = (field: string) => {
+        setDirection(sort === field && direction === 'asc' ? 'desc' : 'asc');
+        setSort(field);
+        setPage(1);
+    };
+
     return (
         <div>
-            <div className="p-4 bg-white block sm:flex items-center justify-between border-b border-gray-200 lg:mt-1.5">
+            <div className="p-4">
                 <div className="w-full mb-1">
                     <div className="mb-4">
-                        <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl">Members</h1>
-                        <p className="text-sm text-gray-500">Manage member profiles, applications and information</p>
+                        <PageHeader title="Members" description="Manage member profiles, applications and information" icon="fas fa-users" />
                     </div>
 
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -164,22 +176,25 @@ export default function MembersPage() {
                         </div>
                     </div>
 
-                    <div className="mt-4 flex flex-wrap items-center gap-2">
-                        {STATUS_FILTERS.map(f => (
-                            <button
-                                key={f.value}
-                                onClick={() => selectStatus(f.value)}
-                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors ${status === f.value ? 'bg-emerald-600 border-emerald-600 text-white shadow-xs' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+                    <div className="table-toolbar mt-4">
+                        <DateRangeFilter from={from} to={to} onFromChange={value => { setFrom(value); setPage(1); }} onToChange={value => { setTo(value); setPage(1); }} />
+                        <label className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-800">
+                            Member status
+                            <select
+                                value={status}
+                                onChange={event => selectStatus(event.target.value)}
+                                className="min-w-40 rounded-lg border border-emerald-100 bg-white px-3 py-2 text-sm text-gray-700 shadow-xs transition hover:border-emerald-300"
                             >
-                                {f.label}
-                                {f.value === 'pending' && pendingCount > 0 && (
-                                    <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${status === f.value ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-700'}`}>{pendingCount}</span>
-                                )}
-                            </button>
-                        ))}
+                                {STATUS_FILTERS.map(filter => (
+                                    <option key={filter.value} value={filter.value}>
+                                        {filter.label}{filter.value === 'pending' && pendingCount > 0 ? ` (${pendingCount})` : ''}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
                         {canAssignBranch && (
-                            <div className="sm:ml-auto w-full sm:w-64 mt-2 sm:mt-0">
-                                <BranchSelect label="Filter by Branch" value={branchFilter} onChange={v => { setBranchFilter(v); setPage(1); }} allLabel="All branches" />
+                            <div className="w-full sm:w-56">
+                                <BranchSelect label="Branch" value={branchFilter} onChange={v => { setBranchFilter(v); setPage(1); }} allLabel="All branches" className="!border-emerald-100 !py-2 shadow-xs hover:!border-emerald-300" />
                             </div>
                         )}
                     </div>
@@ -201,12 +216,12 @@ export default function MembersPage() {
                                 <table className="min-w-[800px] w-full divide-y divide-gray-200 table-fixed">
                                     <thead className="bg-gray-100">
                                         <tr>
-                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-[24%]">Name</th>
-                                            {canViewIds && <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-32">Member ID</th>}
-                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-32">Status</th>
-                                            {canAssignBranch && <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-28">Branch</th>}
-                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-28">Join Date</th>
-                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-[30%]">Email</th>
+                                            <SortableHeader field="name" sort={sort} direction={direction} onSort={handleColumnSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-[24%]">Name</SortableHeader>
+                                            {canViewIds && <SortableHeader field="user_number" sort={sort} direction={direction} onSort={handleColumnSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-32">Member ID</SortableHeader>}
+                                            <SortableHeader field="account_status" sort={sort} direction={direction} onSort={handleColumnSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-32">Status</SortableHeader>
+                                            {canAssignBranch && <SortableHeader field="branch" sort={sort} direction={direction} onSort={handleColumnSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-28">Branch</SortableHeader>}
+                                            <SortableHeader field="created_at" sort={sort} direction={direction} onSort={handleColumnSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-28">Join Date</SortableHeader>
+                                            <SortableHeader field="email" sort={sort} direction={direction} onSort={handleColumnSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-[30%]">Email</SortableHeader>
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase w-28">Actions</th>
                                         </tr>
                                     </thead>

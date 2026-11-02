@@ -28,9 +28,7 @@ class NotificationController extends Controller
     {
         $query = Auth::user()
             ->notifications()
-            ->active()
-            ->orderByDesc('created_at')
-            ->orderByDesc('id');
+            ->active();
 
         $priorityTotals = Auth::user()
             ->notifications()
@@ -64,6 +62,25 @@ class NotificationController extends Controller
         } elseif ($category === 'announcements') {
             $query->where('type', 'announcement');
         }
+
+        if ($search = trim($request->string('search')->toString())) {
+            $query->where(function ($builder) use ($search) {
+                $builder->where('title', 'like', "%{$search}%")
+                    ->orWhere('message', 'like', "%{$search}%")
+                    ->orWhere('type', 'like', "%{$search}%");
+            });
+        }
+        if ($from = $request->string('from')->toString()) {
+            $query->whereDate('created_at', '>=', $from);
+        }
+        if ($to = $request->string('to')->toString()) {
+            $query->whereDate('created_at', '<=', $to);
+        }
+
+        $sort = $request->string('sort', 'created_at')->toString();
+        $direction = $request->string('direction', 'desc')->toString() === 'asc' ? 'asc' : 'desc';
+        $query->orderBy(in_array($sort, ['created_at', 'title', 'priority', 'type'], true) ? $sort : 'created_at', $direction)
+            ->orderByDesc('id');
 
         $perPage = max(5, min((int) $request->integer('per_page', 20), 50));
         $paginate = $request->boolean('paginate') || $request->has('page');

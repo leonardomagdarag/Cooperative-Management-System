@@ -67,12 +67,16 @@ test('admin with backups.view can read backup index and recent runs', function (
         ->getJson('/api/backups')
         ->assertOk()
         ->assertJsonPath('data.settings.daily_time', '03:00')
-        ->assertJsonPath('data.settings.tiers.daily.retention.days', 30)
+        ->assertJsonPath('data.settings.tiers.daily.retention.days', 14)
+        ->assertJsonPath('data.settings.tiers.daily.retention.gfs.daily_days', 14)
+        ->assertJsonPath('data.settings.tiers.daily.retention.gfs.weekly_weeks', 5)
+        ->assertJsonPath('data.settings.tiers.daily.retention.gfs.monthly_months', 12)
         ->assertJsonPath('data.settings.offsite.configured', false)
+        ->assertJsonPath('data.settings.offsite.object_lock.enabled', false)
         ->assertJsonStructure([
             'data' => [
-                    'settings' => ['tiers' => ['daily', 'offsite']],
-                    'tiers' => ['daily', 'offsite'],
+                'settings' => ['tiers' => ['daily', 'offsite']],
+                'tiers' => ['daily', 'offsite'],
             ],
         ])
         ->assertJsonCount(1, 'data.recent_runs')
@@ -221,4 +225,31 @@ test('off-site reports as connected when configured and reachable', function () 
         ->assertOk()
         ->assertJsonPath('data.configured', true)
         ->assertJsonPath('data.reachable', true);
+});
+
+test('cleanup prunes local archives according to GFS retention', function () {
+    Storage::fake('local_backups');
+    $base = (string) config('backup.backup.name');
+
+    // Create a series of archives:
+    // Today: 2 archives (one older)
+    Storage::disk('local_backups')->put("{$base}/backup-daily-2026-11-01-03-00-00.zip", 'newest');
+    Storage::disk('local_backups')->put("{$base}/backup-daily-2026-11-01-01-00-00.zip", 'older-today');
+    // 3 years ago (expired)
+    Storage::disk('local_backups')->put("{$base}/backup-daily-2023-01-01-03-00-00.zip", 'expired');
+    // Uploaded restore file (must NOT be deleted)
+    Storage::disk('local_backups')->put("{$base}/backup-daily-uploaded-20261101-uuid.zip", 'uploaded');
+
+    $admin = backupAdminWith('backups.manage');
+
+    $this->actingAs($admin)
+        ->postJson('/api/backups/daily/cleanup')
+        ->assertOk()
+        ->assertJsonPath('message', 'Cleanup completed.');
+
+    // The older today run and expired run should be deleted
+    expect(Storage::disk('local_backups')->exists("{$base}/backup-daily-2026-11-01-03-00-00.zip"))->toBeTrue()
+        ->and(Storage::disk('local_backups')->exists("{$base}/backup-daily-2026-11-01-01-00-00.zip"))->toBeFalse()
+        ->and(Storage::disk('local_backups')->exists("{$base}/backup-daily-2023-01-01-03-00-00.zip"))->toBeFalse()
+        ->and(Storage::disk('local_backups')->exists("{$base}/backup-daily-uploaded-20261101-uuid.zip"))->toBeTrue();
 });

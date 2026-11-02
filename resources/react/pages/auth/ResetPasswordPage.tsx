@@ -39,7 +39,7 @@ export default function ResetPasswordPage() {
         <div className="public-card max-w-xl w-full p-6 md:p-8">
             <div className="text-center mb-6">
                 <div className="inline-flex items-center justify-center w-14 h-14 bg-emerald-50 rounded-2xl mb-3"><i className="fas fa-lock text-2xl text-emerald-700" /></div>
-                <h1 className="text-2xl font-bold text-slate-800">{done ? 'Password Reset' : 'Choose a New Password'}</h1>
+                <h1 className="text-2xl font-medium text-slate-800">{done ? 'Password Reset' : 'Choose a New Password'}</h1>
                 <p className="text-sm text-slate-600 mt-2">{done ? 'Your password has been updated.' : 'Reset links expire after 30 minutes.'}</p>
             </div>
             {done ? <Link to="/login" className="public-btn public-btn-primary w-full flex justify-center">Go to Login</Link>

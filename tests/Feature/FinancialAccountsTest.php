@@ -288,6 +288,9 @@ test('interest disbursements can be exported as a report', function () {
     SystemSetting::set('financial_savings_interest_rate', 12);
     app(InterestService::class)->disburse('savings');
 
+    // Viewing interest batches alone no longer grants permission to download reports.
+    $this->admin->givePermissionTo(['reports.view', 'reports.export']);
+
     actingAs($this->admin)
         ->postJson('/api/reports/export', [
             'report_type' => 'interest_disbursements',

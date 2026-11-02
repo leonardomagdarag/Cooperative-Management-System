@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 export default function ContactPage() {
+    const { t } = useLanguage();
     const { data } = useQuery({ queryKey: ['public-content'], queryFn: () => api.get('/api/public-content') });
     const contact = data?.data?.form?.contact || {};
     const [form, setForm] = useState({ name: '', email: '', message: '' });
@@ -12,7 +14,7 @@ export default function ContactPage() {
     const submitMutation = useMutation({
         mutationFn: () => api.post('/api/contact', form),
         onSuccess: () => setSubmitted(true),
-        onError: (err: any) => setError(err?.response?.data?.message || 'Failed to send message. Please try again.'),
+        onError: (err: any) => setError(err?.response?.data?.message || t('Failed to send message. Please try again.')),
     });
 
     return (
@@ -20,36 +22,36 @@ export default function ContactPage() {
             <section className="public-section bg-white">
                 <div className="public-shell">
                     <div className="text-center mb-12">
-                        <span className="public-eyebrow mb-4"><i className="fas fa-envelope"></i> Contact</span>
-                        <h2 className="public-heading mb-4 text-3xl md:text-5xl">Get In Touch</h2>
-                        <p className="public-copy text-lg">We're here to help you achieve your financial goals</p>
+                        <span className="public-eyebrow mb-4"><i className="fas fa-envelope"></i> {t('Contact')}</span>
+                        <h1 className="public-heading mb-4 text-3xl md:text-5xl">{t('Get In Touch')}</h1>
+                        <p className="public-copy text-lg">{t("We're here to help you achieve your financial goals")}</p>
                     </div>
 
                     <div className="grid md:grid-cols-2 gap-12">
                         <div className="public-card p-8">
-                            <h3 className="text-2xl text-center font-bold text-gray-900 mb-8">Send us a Message</h3>
+                            <h3 className="text-2xl text-center font-bold text-gray-900 mb-8">{t('Send us a Message')}</h3>
                             {submitted ? (
                                 <div className="rounded-xl bg-emerald-50 p-6 text-center">
                                     <i className="fas fa-check-circle text-4xl text-emerald-500"></i>
-                                    <p className="mt-3 font-medium text-emerald-700">Message sent! We'll get back to you soon.</p>
+                                    <p className="mt-3 font-medium text-emerald-700">{t("Message sent! We'll get back to you soon.")}</p>
                                 </div>
                             ) : (
                                 <form onSubmit={e => { e.preventDefault(); setError(null); submitMutation.mutate(); }} className="space-y-6">
                                     {error && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>}
                                     <div>
-                                        <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">Your Name</label>
+                                        <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">{t('Your Name')}</label>
                                         <input type="text" id="name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required className="public-input" />
                                     </div>
                                     <div>
-                                        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">Your Email</label>
+                                        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">{t('Your Email')}</label>
                                         <input type="email" id="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required className="public-input" />
                                     </div>
                                     <div>
-                                        <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-2">Your Message</label>
+                                        <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-2">{t('Your Message')}</label>
                                         <textarea id="message" rows={4} value={form.message} onChange={e => setForm(f => ({ ...f, message: e.target.value }))} required className="public-input resize-none" />
                                     </div>
                                     <button type="submit" disabled={submitMutation.isPending} className="public-btn public-btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed">
-                                        {submitMutation.isPending ? 'Sending...' : 'Send Message'}
+                                        {t(submitMutation.isPending ? 'Sending...' : 'Send Message')}
                                         <i className="fas fa-paper-plane ml-2"></i>
                                     </button>
                                 </form>
@@ -58,7 +60,7 @@ export default function ContactPage() {
 
                         <div>
                             <div className="public-card p-8 mb-3">
-                                <h3 className="text-2xl font-bold text-center text-gray-900 mb-6">Contact Information</h3>
+                                <h3 className="text-2xl font-bold text-center text-gray-900 mb-6">{t('Contact Information')}</h3>
                                 <div className="space-y-8">
                                     <div className="flex items-center gap-4">
                                         <div className="w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center shrink-0">
@@ -76,7 +78,7 @@ export default function ContactPage() {
                                             <i className="fas fa-phone text-white"></i>
                                         </div>
                                         <div>
-                                            <h4 className="font-semibold text-gray-900 mb-1">Phone Numbers</h4>
+                                            <h4 className="font-semibold text-gray-900 mb-1">{t('Phone Numbers')}</h4>
                                             <p className="text-gray-600">{contact.phone || '+63 XXX XXX XXXX'}</p>
                                         </div>
                                     </div>
@@ -96,7 +98,7 @@ export default function ContactPage() {
                                             <i className="fas fa-clock text-white"></i>
                                         </div>
                                         <div>
-                                            <h4 className="font-semibold text-gray-900 mb-1">Office Hours</h4>
+                                            <h4 className="font-semibold text-gray-900 mb-1">{t('Office Hours')}</h4>
                                             <p className="text-gray-600">{contact.office_hours || 'Mon-Fri 8:00 AM - 5:00 PM'}</p>
                                         </div>
                                     </div>
@@ -109,7 +111,7 @@ export default function ContactPage() {
                                 </div>
                             ) : (
                                 <div className="bg-gray-200 rounded-3xl h-64 flex items-center justify-center">
-                                    <p className="text-gray-500">Map Location</p>
+                                    <p className="text-gray-500">{t('Map Location')}</p>
                                 </div>
                             )}
                         </div>

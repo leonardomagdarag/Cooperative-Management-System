@@ -6,6 +6,7 @@ import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import EmptyState from '../../components/ui/EmptyState';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import PageHeader from '../../components/ui/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface BranchForm {
@@ -106,12 +107,7 @@ export default function BranchesPage() {
 
     return (
         <div className="max-w-7xl mx-auto p-4 sm:p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-                <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Branches</h1>
-                    <p className="text-sm text-gray-500">Manage cooperative offices and branch affiliations</p>
-                </div>
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+            <PageHeader className="mb-6" title="Branches" description="Manage cooperative offices and branch affiliations" icon="fas fa-building" action={<div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                     <input
                         value={search}
                         onChange={e => setSearch(e.target.value)}
@@ -119,8 +115,7 @@ export default function BranchesPage() {
                         className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 outline-none transition-colors"
                     />
                     {canCreate && <Button onClick={openCreate} icon={<i className="fas fa-plus" />}>New Branch</Button>}
-                </div>
-            </div>
+                </div>} />
 
             {isLoading ? (
                 <div className="space-y-3">
@@ -279,7 +274,7 @@ export default function BranchesPage() {
 
                             <div className="flex justify-end gap-3 pt-2">
                                 <Button variant="secondary" type="button" onClick={() => setShowModal(false)}>Cancel</Button>
-                                <Button type="submit" disabled={saveMutation.isPending}>
+                                <Button type="submit" disableOnClick isLoading={saveMutation.isPending}>
                                     {saveMutation.isPending ? 'Saving…' : editing ? 'Save Changes' : 'Create Branch'}
                                 </Button>
                             </div>

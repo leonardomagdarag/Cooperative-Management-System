@@ -37,7 +37,7 @@ export default function NewsPage() {
                     <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-1.5 text-sm font-semibold text-emerald-300">
                         <i className="fas fa-newspaper text-xs"></i> Cooperative updates
                     </span>
-                    <h1 className="text-4xl md:text-6xl font-extrabold text-white mb-6">News & Events</h1>
+                    <h1 className="mb-6 text-4xl font-medium text-white md:text-6xl">News & Events</h1>
                     <p className="text-xl text-slate-300 leading-relaxed">
                         {newsContent.hero_description || 'Stay updated with our latest news and events'}
                     </p>
@@ -237,3 +237,5 @@ export default function NewsPage() {
     );
 }
 import FallbackImage from '../../components/FallbackImage';
+
+import Button from '../../components/ui/Button';

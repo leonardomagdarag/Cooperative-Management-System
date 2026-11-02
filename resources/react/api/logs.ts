@@ -19,6 +19,8 @@ export async function getLogs(params?: {
     event?: string;
     user_id?: number;
     date_range?: string;
+    from?: string;
+    to?: string;
     sort?: string;
     direction?: string;
     page?: number;
@@ -33,6 +35,8 @@ export async function exportLogs(params?: {
     event?: string;
     user_id?: number;
     date_range?: string;
+    from?: string;
+    to?: string;
 }) {
     return api.get('/api/logs/export', { params, responseType: 'blob' });
 }

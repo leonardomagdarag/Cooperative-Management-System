@@ -52,6 +52,14 @@ return [
             'lock_path' => storage_path('framework/cache/data'),
         ],
 
+        // Restoring the database or clearing the default cache must not release
+        // the lock held by a backup or restore worker.
+        'backup_operations' => [
+            'driver' => 'file',
+            'path' => storage_path('app/backup-operation-cache'),
+            'lock_path' => storage_path('app/backup-operation-cache'),
+        ],
+
         'memcached' => [
             'driver' => 'memcached',
             'persistent_id' => env('MEMCACHED_PERSISTENT_ID'),

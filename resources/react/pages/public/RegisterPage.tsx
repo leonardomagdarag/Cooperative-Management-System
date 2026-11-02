@@ -7,6 +7,8 @@ import AddressSelector, { type AddressValues } from '../../components/AddressSel
 import TurnstileWidget, { type TurnstileWidgetRef } from '../../components/TurnstileWidget';
 import PolicyModal from '../../components/PolicyModal';
 import { validate, registerStepSchemas, passwordStrength, type FieldErrors } from '../../lib/validation';
+import { useLanguage } from '../../contexts/LanguageContext';
+import HelpTip from '../../components/ui/HelpTip';
 
 const steps = [
     { title: 'Personal Information', icon: 'fas fa-user', subtitle: 'Please provide your basic personal details' },
@@ -16,6 +18,7 @@ const steps = [
 ];
 
 export default function RegisterPage() {
+    const { t } = useLanguage();
     const [step, setStep] = useState(0);
     const [form, setForm] = useState({
         first_name: '', middle_name: '', last_name: '', gender: '', birthdate: '', age: '',
@@ -76,10 +79,10 @@ export default function RegisterPage() {
                                 <i className="fas fa-check text-3xl text-emerald-600"></i>
                             </div>
                         </div>
-                        <h2 className="mb-2 text-2xl font-bold text-slate-900">Application Submitted!</h2>
-                        <p className="mb-6 text-slate-500">Your registration is pending approval. You'll be notified once approved.</p>
+                        <h2 className="mb-2 text-2xl font-bold text-slate-900">{t('Application Submitted!')}</h2>
+                        <p className="mb-6 text-slate-500">{t("Your registration is pending approval. You'll be notified once approved.")}</p>
                         <Link to="/login" className="public-btn public-btn-primary">
-                            <i className="fas fa-sign-in-alt mr-2"></i>Go to Login
+                            <i className="fas fa-sign-in-alt mr-2"></i>{t('Go to Login')}
                         </Link>
                     </div>
                 </section>
@@ -94,14 +97,14 @@ export default function RegisterPage() {
                     <div className="text-center mb-8">
                         <Link to="/" className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors mb-6">
                             <i className="fas fa-arrow-left"></i>
-                            <span className="font-medium">Back to Home</span>
+                            <span className="font-medium">{t('Back to Home')}</span>
                         </Link>
                         <div className="mb-4 flex justify-center">
                             <img src="/images/Logo.png" alt="Settlers Logo" className="h-16 w-16 rounded-full object-cover shadow-sm" />
                         </div>
-                        <h1 className="text-3xl md:text-5xl font-extrabold text-slate-900 mb-2">Membership Application</h1>
+                        <h1 className="mb-2 text-3xl font-medium text-slate-900 md:text-5xl">{t('Membership Application')}</h1>
                         <p className="text-base text-slate-600">
-                            Join Settlers Credit Cooperative and become part of our growing community
+                            {t('Join Settlers Credit Cooperative and become part of our growing community')}
                         </p>
                     </div>
 
@@ -111,11 +114,11 @@ export default function RegisterPage() {
                                 <i className="fas fa-info-circle text-emerald-700 text-lg"></i>
                             </div>
                             <div>
-                                <h3 className="text-lg font-semibold text-slate-800 mb-2">Membership Requirements</h3>
+                                <h3 className="text-lg font-semibold text-slate-800 mb-2">{t('Membership Requirements')} <HelpTip text="Para maging member, kailangan ng minimum share capital, processing fee, at initial savings. Makikita ang halaga ng bawat isa sa ibaba." /></h3>
                                 <div className="grid md:grid-cols-3 gap-4 text-sm text-slate-600">
-                                    <div className="flex items-center gap-2"><i className="fas fa-check-circle text-emerald-600"></i><span>Minimum Share Capital: <strong>₱500</strong></span></div>
-                                    <div className="flex items-center gap-2"><i className="fas fa-check-circle text-emerald-600"></i><span>Processing Fee: <strong>₱100</strong></span></div>
-                                    <div className="flex items-center gap-2"><i className="fas fa-check-circle text-emerald-600"></i><span>Initial Savings: <strong>₱500</strong></span></div>
+                                    <div className="flex items-center gap-2"><i className="fas fa-check-circle text-emerald-600"></i><span>{t('Minimum Share Capital:')} <strong>₱500</strong></span></div>
+                                    <div className="flex items-center gap-2"><i className="fas fa-check-circle text-emerald-600"></i><span>{t('Processing Fee:')} <strong>₱100</strong></span></div>
+                                    <div className="flex items-center gap-2"><i className="fas fa-check-circle text-emerald-600"></i><span>{t('Initial Savings:')} <strong>₱500</strong></span></div>
                                 </div>
                             </div>
                         </div>
@@ -128,7 +131,7 @@ export default function RegisterPage() {
                                     <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${i <= step ? 'bg-emerald-700 text-white' : 'bg-gray-200 text-gray-500'}`}>
                                         {i < step ? <i className="fas fa-check text-xs"></i> : i + 1}
                                     </div>
-                                    <span className={`hidden text-xs font-medium sm:block ${i <= step ? 'text-emerald-700' : 'text-gray-500'}`}>{s.title}</span>
+                                    <span className={`hidden text-xs font-medium sm:block ${i <= step ? 'text-emerald-700' : 'text-gray-500'}`}>{t(s.title)}</span>
                                     {i < steps.length - 1 && <div className={`hidden h-0.5 flex-1 sm:block ${i < step ? 'bg-emerald-700' : 'bg-gray-200'}`}></div>}
                                 </div>
                             ))}
@@ -137,49 +140,49 @@ export default function RegisterPage() {
                         <div className="mb-10">
                             <h2 className="text-xl font-bold text-slate-800 mb-1 flex items-center gap-2">
                                 <i className={`${steps[step].icon} text-emerald-700`}></i>
-                                {steps[step].title}
+                                {t(steps[step].title)}
                             </h2>
-                            <p className="text-sm text-slate-500 mb-6">{steps[step].subtitle}</p>
+                            <p className="text-sm text-slate-500 mb-6">{t(steps[step].subtitle)}</p>
 
                             <div className="space-y-5">
                                 {step === 0 && (
                                     <>
                                         <div className="grid md:grid-cols-3 gap-4">
                                             <div>
-                                                <label className="block text-sm font-medium text-slate-700 mb-2">First Name <span className="text-red-500">*</span></label>
+                                                <label className="block text-sm font-medium text-slate-700 mb-2">{t('First Name')} <span className="text-red-500">*</span></label>
                                                 <input value={form.first_name} onChange={e => set('first_name', e.target.value)} required className={`public-input py-2.5 text-sm ${errors.first_name ? 'border-red-400' : ''}`} placeholder="Juan" />
-                                                {errors.first_name && <p className="mt-1 text-xs text-red-500">{errors.first_name}</p>}
+                                                {errors.first_name && <p className="mt-1 text-xs text-red-500">{t(errors.first_name)}</p>}
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-slate-700 mb-2">Middle Name</label>
+                                                <label className="block text-sm font-medium text-slate-700 mb-2">{t('Middle Name')}</label>
                                                 <input value={form.middle_name} onChange={e => set('middle_name', e.target.value)} className="public-input py-2.5 text-sm" placeholder="Santos" />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-slate-700 mb-2">Last Name <span className="text-red-500">*</span></label>
+                                                <label className="block text-sm font-medium text-slate-700 mb-2">{t('Last Name')} <span className="text-red-500">*</span></label>
                                                 <input value={form.last_name} onChange={e => set('last_name', e.target.value)} required className={`public-input py-2.5 text-sm ${errors.last_name ? 'border-red-400' : ''}`} placeholder="Dela Cruz" />
-                                                {errors.last_name && <p className="mt-1 text-xs text-red-500">{errors.last_name}</p>}
+                                                {errors.last_name && <p className="mt-1 text-xs text-red-500">{t(errors.last_name)}</p>}
                                             </div>
                                         </div>
                                         <div className="grid md:grid-cols-3 gap-4">
                                             <div>
-                                                <label className="block text-sm font-medium text-slate-700 mb-2">Gender <span className="text-red-500">*</span></label>
+                                                <label className="block text-sm font-medium text-slate-700 mb-2">{t('Gender')} <span className="text-red-500">*</span></label>
                                                 <select value={form.gender} onChange={e => set('gender', e.target.value)} required className={`public-input py-2.5 text-sm ${errors.gender ? 'border-red-400' : ''}`}>
-                                                    <option value="">Select Gender</option>
+                                                    <option value="">{t('Select Gender')}</option>
                                                     <option value="Male">Male</option>
                                                     <option value="Female">Female</option>
-                                                    <option value="Other">Prefer not to say</option>
+                                                    <option value="Other">{t('Prefer not to say')}</option>
                                                 </select>
-                                                {errors.gender && <p className="mt-1 text-xs text-red-500">{errors.gender}</p>}
+                                                {errors.gender && <p className="mt-1 text-xs text-red-500">{t(errors.gender)}</p>}
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-slate-700 mb-2">Birthday <span className="text-red-500">*</span></label>
+                                                <label className="block text-sm font-medium text-slate-700 mb-2">{t('Birthday')} <span className="text-red-500">*</span></label>
                                                 <DatePicker value={form.birthdate} onChange={v => { set('birthdate', v); set('age', calcAge(v)); }} clearable={false} fromYear={new Date().getFullYear() - 100} toYear={new Date().getFullYear()} className={`public-input py-2.5 text-sm ${errors.birthdate ? 'border-red-400' : ''}`} />
-                                                {errors.birthdate && <p className="mt-1 text-xs text-red-500">{errors.birthdate}</p>}
+                                                {errors.birthdate && <p className="mt-1 text-xs text-red-500">{t(errors.birthdate)}</p>}
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-slate-700 mb-2">Age <span className="text-red-500">*</span></label>
-                                                <input value={form.age} readOnly className="public-input py-2.5 bg-slate-100 text-sm cursor-not-allowed" placeholder="Auto-calculated" />
-                                                {errors.age && <p className="mt-1 text-xs text-red-500">{errors.age}</p>}
+                                                <label className="block text-sm font-medium text-slate-700 mb-2">{t('Age')} <span className="text-red-500">*</span></label>
+                                                <input value={form.age} readOnly className="public-input py-2.5 bg-slate-100 text-sm cursor-not-allowed" placeholder={t("Auto-calculated")} />
+                                                {errors.age && <p className="mt-1 text-xs text-red-500">{t(errors.age)}</p>}
                                             </div>
                                         </div>
                                     </>
@@ -189,18 +192,18 @@ export default function RegisterPage() {
                                     <>
                                         <div className="grid md:grid-cols-2 gap-4">
                                             <div>
-                                                <label className="block text-sm font-medium text-slate-700 mb-2">Phone Number <span className="text-red-500">*</span></label>
+                                                <label className="block text-sm font-medium text-slate-700 mb-2">{t('Phone Number')} <span className="text-red-500">*</span></label>
                                                 <input value={form.phone} onChange={e => set('phone', e.target.value)} required className={`public-input py-2.5 text-sm ${errors.phone ? 'border-red-400' : ''}`} placeholder="09171234567" />
-                                                {errors.phone && <p className="mt-1 text-xs text-red-500">{errors.phone}</p>}
+                                                {errors.phone && <p className="mt-1 text-xs text-red-500">{t(errors.phone)}</p>}
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-slate-700 mb-2">Email Address <span className="text-red-500">*</span></label>
+                                                <label className="block text-sm font-medium text-slate-700 mb-2">{t('Email Address')} <span className="text-red-500">*</span></label>
                                                 <input type="email" value={form.email} autoComplete="email" onChange={e => set('email', e.target.value)} required className={`public-input py-2.5 text-sm ${errors.email ? 'border-red-400' : ''}`} placeholder="juan.delacruz@email.com" />
-                                                {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email}</p>}
+                                                {errors.email && <p className="mt-1 text-xs text-red-500">{t(errors.email)}</p>}
                                             </div>
                                         </div>
                                         <div>
-                                            <p className="block text-sm font-medium text-slate-700 mb-2">Complete Address <span className="text-red-500">*</span></p>
+                                            <p className="block text-sm font-medium text-slate-700 mb-2">{t('Complete Address')} <span className="text-red-500">*</span></p>
                                             <AddressSelector
                                                 value={{ region: form.region, province: form.province, city: form.city, barangay: form.barangay, street: form.street, zip_code: form.zip_code }}
                                                 onChange={(v: AddressValues) => {
@@ -219,14 +222,14 @@ export default function RegisterPage() {
                                     <>
                                         <div className="grid md:grid-cols-2 gap-4">
                                             <div>
-                                                <label className="block text-sm font-medium text-slate-700 mb-2">Occupation <span className="text-red-500">*</span></label>
-                                                <input value={form.occupation} onChange={e => set('occupation', e.target.value)} required className={`public-input py-2.5 text-sm ${errors.occupation ? 'border-red-400' : ''}`} placeholder="e.g., Teacher, Engineer, Business Owner" />
-                                                {errors.occupation && <p className="mt-1 text-xs text-red-500">{errors.occupation}</p>}
+                                                <label className="block text-sm font-medium text-slate-700 mb-2">{t('Occupation')} <span className="text-red-500">*</span></label>
+                                                <input value={form.occupation} onChange={e => set('occupation', e.target.value)} required className={`public-input py-2.5 text-sm ${errors.occupation ? 'border-red-400' : ''}`} placeholder={t("e.g., Teacher, Engineer, Business Owner")} />
+                                                {errors.occupation && <p className="mt-1 text-xs text-red-500">{t(errors.occupation)}</p>}
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-slate-700 mb-2">Monthly Income <span className="text-red-500">*</span></label>
+                                                <label className="block text-sm font-medium text-slate-700 mb-2">{t('Monthly Income')} <span className="text-red-500">*</span></label>
                                                 <select value={form.monthly_income} onChange={e => set('monthly_income', e.target.value)} required className={`public-input py-2.5 text-sm ${errors.monthly_income ? 'border-red-400' : ''}`}>
-                                                    <option value="">Select Income Range</option>
+                                                    <option value="">{t('Select Income Range')}</option>
                                                     <option value="Below 10000">Below ₱10,000</option>
                                                     <option value="10000-20000">₱10,000 - ₱20,000</option>
                                                     <option value="20001-30000">₱20,001 - ₱30,000</option>
@@ -234,21 +237,21 @@ export default function RegisterPage() {
                                                     <option value="50001-75000">₱50,001 - ₱75,000</option>
                                                     <option value="Above 75000">Above ₱75,000</option>
                                                 </select>
-                                                {errors.monthly_income && <p className="mt-1 text-xs text-red-500">{errors.monthly_income}</p>}
+                                                {errors.monthly_income && <p className="mt-1 text-xs text-red-500">{t(errors.monthly_income)}</p>}
                                             </div>
                                         </div>
                                         <div className="grid md:grid-cols-2 gap-4">
                                             <div>
-                                                <label className="block text-sm font-medium text-slate-700 mb-2">Membership Type <span className="text-red-500">*</span></label>
+                                                <label className="block text-sm font-medium text-slate-700 mb-2">{t('Membership Type')} <span className="text-red-500">*</span></label>
                                                 <select value={form.membership_type} onChange={e => set('membership_type', e.target.value)} required className={`public-input py-2.5 text-sm ${errors.membership_type ? 'border-red-400' : ''}`}>
-                                                    <option value="Regular">Regular Member</option>
-                                                    <option value="Associate">Associate Member</option>
+                                                    <option value="Regular">{t('Regular Member')}</option>
+                                                    <option value="Associate">{t('Associate Member')}</option>
                                                 </select>
-                                                {errors.membership_type && <p className="mt-1 text-xs text-red-500">{errors.membership_type}</p>}
+                                                {errors.membership_type && <p className="mt-1 text-xs text-red-500">{t(errors.membership_type)}</p>}
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-slate-700 mb-2">Referred By (Optional)</label>
-                                                <input value={form.referred_by} onChange={e => set('referred_by', e.target.value)} className="public-input py-2.5 text-sm" placeholder="Name of referring member" />
+                                                <label className="block text-sm font-medium text-slate-700 mb-2">{t('Referred By (Optional)')}</label>
+                                                <input value={form.referred_by} onChange={e => set('referred_by', e.target.value)} className="public-input py-2.5 text-sm" placeholder={t("Name of referring member")} />
                                             </div>
                                         </div>
                                     </>
@@ -257,50 +260,50 @@ export default function RegisterPage() {
                                 {step === 3 && (
                                     <div className="grid md:grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-2">Password <span className="text-red-500">*</span></label>
+                                            <label className="block text-sm font-medium text-slate-700 mb-2">{t('Password')} <span className="text-red-500">*</span></label>
                                             <div className="relative">
-                                                <input type={showPassword ? 'text' : 'password'} value={form.password} autoComplete="new-password" onChange={e => set('password', e.target.value)} required minLength={8} className={`public-input py-2.5 pr-12 text-sm ${errors.password ? 'border-red-400' : ''}`} placeholder="Minimum 8 characters" />
+                                                <input type={showPassword ? 'text' : 'password'} value={form.password} autoComplete="new-password" onChange={e => set('password', e.target.value)} required minLength={8} className={`public-input py-2.5 pr-12 text-sm ${errors.password ? 'border-red-400' : ''}`} placeholder={t("Minimum 8 characters")} />
                                                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors">
                                                     <i className={`fas fa-eye${showPassword ? '-slash' : ''}`}></i>
                                                 </button>
                                             </div>
-                                            {errors.password && <p className="mt-1 text-xs text-red-500">{errors.password}</p>}
+                                            {errors.password && <p className="mt-1 text-xs text-red-500">{t(errors.password)}</p>}
                                             {form.password && (
                                                 <div className="mt-2 space-y-1">
                                                     {pwd.checks.map(c => (
-                                                        <p key={c.label} className={`text-xs ${c.ok ? 'text-emerald-600' : 'text-slate-400'}`}>
-                                                            <i className={`fas fa-${c.ok ? 'check-circle' : 'circle'} mr-1`}></i>{c.label}
+                                                        <p key={t(c.label)} className={`text-xs ${c.ok ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                                            <i className={`fas fa-${c.ok ? 'check-circle' : 'circle'} mr-1`}></i>{t(c.label)}
                                                         </p>
                                                     ))}
                                                 </div>
                                             )}
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-2">Confirm Password <span className="text-red-500">*</span></label>
+                                            <label className="block text-sm font-medium text-slate-700 mb-2">{t('Confirm Password')} <span className="text-red-500">*</span></label>
                                             <div className="relative">
-                                                <input type={showConfirm ? 'text' : 'password'} value={form.password_confirmation} autoComplete="new-password" onChange={e => set('password_confirmation', e.target.value)} required className={`public-input py-2.5 pr-12 text-sm ${errors.password_confirmation ? 'border-red-400' : ''}`} placeholder="Re-enter password" />
+                                                <input type={showConfirm ? 'text' : 'password'} value={form.password_confirmation} autoComplete="new-password" onChange={e => set('password_confirmation', e.target.value)} required className={`public-input py-2.5 pr-12 text-sm ${errors.password_confirmation ? 'border-red-400' : ''}`} placeholder={t("Re-enter password")} />
                                                 <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors">
                                                     <i className={`fas fa-eye${showConfirm ? '-slash' : ''}`}></i>
                                                 </button>
                                             </div>
-                                            {errors.password_confirmation && <p className="mt-1 text-xs text-red-500">{errors.password_confirmation}</p>}
-{!pwdConfirmOk && form.password_confirmation && <p className="mt-1 text-xs text-red-500">Passwords do not match</p>}
+                                            {errors.password_confirmation && <p className="mt-1 text-xs text-red-500">{t(errors.password_confirmation)}</p>}
+{!pwdConfirmOk && form.password_confirmation && <p className="mt-1 text-xs text-red-500">{t('Passwords do not match')}</p>}
                                          </div>
                                          <div className="md:col-span-2">
                                              <div className="mb-3 flex flex-wrap gap-2">
-                                                 <button type="button" onClick={() => setPolicyToView('terms_and_conditions')} className="rounded border border-slate-200 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50">View Terms and Conditions</button>
-                                                 <button type="button" onClick={() => setPolicyToView('privacy_policy')} className="rounded border border-slate-200 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50">View Data Privacy Policy</button>
+                                                 <button type="button" onClick={() => setPolicyToView('terms_and_conditions')} className="rounded border border-slate-200 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50">{t('View Terms and Conditions')}</button>
+                                                 <button type="button" onClick={() => setPolicyToView('privacy_policy')} className="rounded border border-slate-200 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50">{t('View Data Privacy Policy')}</button>
                                              </div>
                                              <label className="mb-3 flex items-start gap-2 cursor-pointer">
                                                  <input type="checkbox" checked={Boolean(form.terms)} onChange={e => set('terms', e.target.checked)} required className="mt-1 h-4 w-4 cursor-pointer rounded border-slate-300 text-emerald-600 focus:ring-2 focus:ring-emerald-500" />
-                                                 <span className="text-sm text-slate-700">I agree to the Terms and Conditions. <span className="text-red-500">*</span></span>
+                                                 <span className="text-sm text-slate-700">{t('I agree to the Terms and Conditions.')} <span className="text-red-500">*</span></span>
                                              </label>
-                                             {errors.terms && <p className="mt-1 text-xs text-red-500">{errors.terms}</p>}
+                                             {errors.terms && <p className="mt-1 text-xs text-red-500">{t(errors.terms)}</p>}
                                              <label className="flex items-start gap-2 cursor-pointer">
                                                  <input type="checkbox" checked={Boolean(form.privacy_acknowledged)} onChange={e => set('privacy_acknowledged', e.target.checked)} required className="mt-1 h-4 w-4 cursor-pointer rounded border-slate-300 text-emerald-600 focus:ring-2 focus:ring-emerald-500" />
-                                                 <span className="text-sm text-slate-700">I have read the Data Privacy Policy and acknowledge how the Cooperative will process my personal information as described in it. <span className="text-red-500">*</span></span>
+                                                 <span className="text-sm text-slate-700">{t('I have read the Data Privacy Policy and acknowledge how the Cooperative will process my personal information as described in it.')} <span className="text-red-500">*</span> <HelpTip text="Gagamitin ng cooperative ang personal information mo ayon sa Data Privacy Policy. Basahin muna ito bago ka mag-check ng box." /></span>
                                              </label>
-                                             {errors.privacy_acknowledged && <p className="mt-1 text-xs text-red-500">{errors.privacy_acknowledged}</p>}
+                                             {errors.privacy_acknowledged && <p className="mt-1 text-xs text-red-500">{t(errors.privacy_acknowledged)}</p>}
                                          </div>
                                      </div>
                                 )}
@@ -313,7 +316,7 @@ export default function RegisterPage() {
                                     <TurnstileWidget ref={turnstileRef} />
                                     {(errors.turnstile || errors['cf-turnstile-response']) && (
                                         <p className="mt-2 text-center text-xs text-red-500">
-                                            {errors.turnstile || errors['cf-turnstile-response']}
+                                            {t(errors.turnstile || errors['cf-turnstile-response'])}
                                         </p>
                                     )}
                                 </div>
@@ -322,11 +325,11 @@ export default function RegisterPage() {
 
                         <div className="flex flex-col sm:flex-row gap-4">
                             <button onClick={() => step > 0 ? setStep(step - 1) : window.history.back()} className="flex-1 sm:flex-initial bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-3.5 px-6 rounded-lg transition-all text-center">
-                                {step === 0 ? 'Cancel' : 'Back'}
+                                {step === 0 ? 'Cancel' : t('Back')}
                             </button>
                             {step < steps.length - 1 ? (
                                 <button onClick={goNext} className="public-btn public-btn-primary flex-1">
-                                    Next <i className="fas fa-arrow-right ml-2"></i>
+                                    {t('Next')} <i className="fas fa-arrow-right ml-2"></i>
                                 </button>
                             ) : (
                                 <button onClick={() => {
@@ -334,13 +337,13 @@ export default function RegisterPage() {
                                     if (Object.keys(errs).length) { setErrors(errs); return; }
                                     const token = turnstileRef.current?.getToken() ?? '';
                                     if (!token) {
-                                        setErrors({ turnstile: 'Please complete the captcha verification' });
+                                        setErrors({ turnstile: t('Please complete the captcha verification') });
                                         return;
                                     }
                                     setErrors({});
                                     registerMutation.mutate({ ...form, 'cf-turnstile-response': token });
                                 }} disabled={registerMutation.isPending} className="public-btn public-btn-primary flex-1">
-                                    {registerMutation.isPending ? 'Submitting...' : 'Submit Application'}
+                                    {registerMutation.isPending ? t('Submitting...') : t('Submit Application')}
                                     <i className="fas fa-user-plus ml-2"></i>
                                 </button>
                             )}

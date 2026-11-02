@@ -12,7 +12,9 @@ use App\Services\AuditLogService;
 use App\Services\CollectionRunService;
 use App\Services\CountersignService;
 use App\Support\BranchScope;
+use App\Support\SearchFilter;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -40,9 +42,38 @@ class CollectionRunController extends Controller
             $query->where('status', $status);
         }
 
-        $runs = $query->latest('collection_date')->paginate($request->integer('per_page', 15));
+        $this->applyTableFilters($query, $request);
+
+        $runs = $query->paginate(max(5, min($request->integer('per_page', 15), 50)));
 
         return response()->json($runs);
+    }
+
+    private function applyTableFilters(Builder $query, Request $request, string $defaultSort = 'collection_date'): void
+    {
+        if ($search = SearchFilter::escapeLike($request->string('search')->toString())) {
+            $query->where(function ($builder) use ($search) {
+                $builder->where('run_number', 'like', "%{$search}%")
+                    ->orWhereHas('loanOfficer.personalData', fn ($person) => $person->where('first_name', 'like', "%{$search}%")->orWhere('last_name', 'like', "%{$search}%"));
+            });
+        }
+        if ($from = $request->string('from')->toString()) {
+            $query->whereDate('collection_date', '>=', $from);
+        }
+        if ($to = $request->string('to')->toString()) {
+            $query->whereDate('collection_date', '<=', $to);
+        }
+
+        $sort = $request->string('sort', $defaultSort)->toString();
+        $direction = $request->string('direction', 'desc')->toString() === 'asc' ? 'asc' : 'desc';
+        if ($sort === 'officer') {
+            $query->orderBy(User::select('personal_data.first_name')->join('personal_data', 'personal_data.id', '=', 'users.personal_data_id')
+                ->whereColumn('users.id', 'collection_runs.loan_officer_id')->limit(1), $direction);
+        } else {
+            $query->orderBy(in_array($sort, ['collection_date', 'run_number', 'status', 'created_at', 'submitted_at', 'current_stage', 'item_count', 'total_amount'], true) ? $sort : $defaultSort, $direction);
+        }
+        $query->orderBy('collection_runs.id');
+
     }
 
     public function store(Request $request): JsonResponse
@@ -282,7 +313,8 @@ class CollectionRunController extends Controller
             $query->where('branch_id', $user->branch_id);
         }
 
-        $runs = $query->latest('submitted_at')->paginate($request->integer('per_page', 15));
+        $this->applyTableFilters($query, $request, 'submitted_at');
+        $runs = $query->paginate(max(5, min($request->integer('per_page', 15), 50)));
 
         $stalled = collect();
         if ($user->can('oversight.approve')) {

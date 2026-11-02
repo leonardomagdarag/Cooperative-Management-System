@@ -3,6 +3,8 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
 import ServiceModal from './ServiceModal';
+import HelpTip from '../../components/ui/HelpTip';
+import { useLanguage } from '../../contexts/LanguageContext';
 import StepCircles from './StepCircles';
 import ReceiptQR from '../../components/ReceiptQR';
 import {
@@ -86,6 +88,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
     onDirtyChange?: (dirty: boolean) => void;
     availability?: AvailabilityFlags;
 }) {
+    const { t } = useLanguage();
     const [step, setStep] = useState(1);
     const [form, setForm] = useState({ loan_id: '', transaction_mode: '', note: '' });
     const [selectedPeriods, setSelectedPeriods] = useState<number[]>([]);
@@ -172,15 +175,15 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
 
     const validateStepOne = () => {
         const next: Record<string, string> = {};
-        if (!form.loan_id) next.loan_id = 'Please select a loan.';
-        if (selectedPeriods.length === 0) next.installments = 'Select at least one overdue installment.';
-        else if (selectedSchedules.length !== selectedPeriods.length) next.installments = 'The loan schedule changed. Review the overdue installments and select them again.';
+        if (!form.loan_id) next.loan_id = t('Please select a loan.');
+        if (selectedPeriods.length === 0) next.installments = t('Select at least one overdue installment.');
+        else if (selectedSchedules.length !== selectedPeriods.length) next.installments = t('The loan schedule changed. Review the overdue installments and select them again.');
         if (!next.installments && selectedSchedules.some(schedule => {
             const amount = Number(allocationAmounts[schedule.period]);
             return !Number.isFinite(amount) || amount <= 0 || amount > schedule.amount_due;
-        })) next.amount = 'Enter a positive amount no greater than the unpaid amount for each selected installment.';
+        })) next.amount = t('Enter a positive amount no greater than the unpaid amount for each selected installment.');
         if (!next.installments && !next.amount && totalAmount > Number(selectedLoan?.remaining_balance ?? 0)) {
-            next.amount = `Payment exceeds remaining loan balance (${peso(selectedLoan?.remaining_balance ?? 0)})`;
+            next.amount = t('Payment exceeds remaining loan balance ({amount})').replace('{amount}', peso(selectedLoan?.remaining_balance ?? 0));
         }
         setErrors(next);
         if (Object.keys(next).length > 0) {
@@ -192,7 +195,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
 
     const validateStepTwo = () => {
         if (!form.transaction_mode) {
-            setErrors({ transaction_mode: 'Please choose a payment method.' });
+            setErrors({ transaction_mode: t('Please choose a payment method.') });
             return;
         }
         setErrors({});
@@ -227,7 +230,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
             }
         },
         onError: (err: any) => {
-            addToast(err.response?.data?.message || 'Failed to initialize Xendit checkout.', 'error');
+            addToast(t(err.response?.data?.message || 'Failed to initialize Xendit checkout.'), 'error');
         },
     });
 
@@ -235,15 +238,15 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
         mutationFn: (txnNumber: string) => verifyXenditPayment(txnNumber),
         onSuccess: (res) => {
             if (res.is_paid || res.status === 'completed') {
-                addToast('Payment verified successfully!', 'success');
+                addToast(t('Payment verified successfully!'), 'success');
                 setReceipt(res.transaction);
                 setStep(5);
             } else {
-                addToast(res.message || 'Payment has not been completed yet.', 'warning');
+                addToast(t(res.message || 'Payment has not been completed yet.'), 'warning');
             }
         },
         onError: (err: any) => {
-            addToast(err.response?.data?.message || 'Failed to verify payment status.', 'error');
+            addToast(t(err.response?.data?.message || 'Failed to verify payment status.'), 'error');
         },
     });
 
@@ -272,13 +275,13 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
         },
         onSuccess: (res: any) => {
             requestIdRef.current = null;
-            addToast(res.data?.data?.status === 'completed' ? 'Counter loan payment recorded' : 'Loan payment submitted for manager or chairman approval', 'success');
+            addToast(t(res.data?.data?.status === 'completed' ? 'Counter loan payment recorded' : 'Loan payment submitted for manager or chairman approval'), 'success');
             setReceipt(res.data?.data || { message: res.data?.message });
             setStep(form.transaction_mode === 'counter' ? 99 : form.transaction_mode === 'bank_transfer' ? 5 : 4);
         },
         onError: (err: any) => {
             requestIdRef.current = null;
-            addToast(err.response?.data?.message || 'Failed', 'error');
+            addToast(t(err.response?.data?.message || 'Failed'), 'error');
         },
     });
 
@@ -288,8 +291,8 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
             return;
         }
         if (form.transaction_mode === 'bank_transfer' && !proof) {
-            setErrors({ proof: 'Payment proof is required for bank transfer.' });
-            addToast('Payment proof is required for bank transfer.', 'error');
+            setErrors({ proof: t('Payment proof is required for bank transfer.') });
+            addToast(t('Payment proof is required for bank transfer.'), 'error');
             return;
         }
         requestIdRef.current = requestIdRef.current ?? crypto.randomUUID();
@@ -316,13 +319,13 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
             ) : activeLoans.length === 0 ? (
                 <div className="p-6 text-center">
                     <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <i className="fas fa-file-invoice-dollar text-gray-400 text-2xl"></i>
+                        <i className="fas fa-file-invoice-dollar text-gray-600 text-2xl"></i>
                     </div>
-                    <h4 className="text-lg font-bold text-gray-900 mb-2">No Active Loans</h4>
+                    <h4 className="text-lg font-bold text-gray-900 mb-2">{t('No Active Loans')}</h4>
                     <p className="text-gray-600 mb-6">
                         {selectedMember
-                            ? "This member doesn't have any active loans to make payments for."
-                            : "You don't have any active loans to make payments for."}
+                            ? t("This member doesn't have any active loans to make payments for.")
+                            : t("You don't have any active loans to make payments for.")}
                     </p>
                     <button type="button" onClick={onComplete} className="px-6 py-3 bg-gray-600 text-white rounded-lg font-medium hover:bg-gray-700">
                         Close
@@ -330,16 +333,16 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                 </div>
             ) : step === 1 ? (
                 <div className="p-6 space-y-4">
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Enter Payment Details</h4>
+                    <h4 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900">{t('Enter Payment Details')} <HelpTip text="Ang loan payment ay bayad na galing sa labas ng savings account mo. Hindi ito ibabawas sa savings balance mo." /></h4>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Select Loan *</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">{t('Select Loan')} *</label>
                         <select
                             value={form.loan_id}
                             onChange={e => selectLoan(e.target.value)}
                             className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.loan_id ? 'border-red-400' : 'border-gray-300'}`}
                         >
-                            <option value="">-- Choose a loan --</option>
+                            <option value="">-- {t('Choose a loan')} --</option>
                             {activeLoans.map(l => (
                                 <option key={l.id} value={l.id}>
                                     {l.loan_number} - {capitalize(l.loan_type)} (Balance: {peso(l.remaining_balance)})
@@ -351,14 +354,14 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
 
                     {selectedLoan && (
                         <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
-                            <h5 className="font-bold text-gray-900 mb-2">Loan Details</h5>
+                            <h5 className="font-bold text-gray-900 mb-2">{t('Loan Details')}</h5>
                             <div className="space-y-1 text-sm">
                                 <div className="flex justify-between">
-                                    <span className="text-gray-600">Original Amount:</span>
+                                    <span className="text-gray-600">{t('Original Amount:')}</span>
                                     <span className="font-semibold">{peso(selectedLoan.loan_amount)}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span className="text-gray-600">Remaining Balance:</span>
+                                    <span className="text-gray-600">{t('Remaining Balance:')}</span>
                                     <span className="font-semibold text-blue-700">{peso(selectedLoan.remaining_balance)}</span>
                                 </div>
                             </div>
@@ -367,12 +370,12 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
 
                     <div>
                         <div className="mb-2 flex items-center justify-between gap-3">
-                            <label className="block text-sm font-medium text-gray-700">Overdue installments *</label>
-                            {availableSchedules.length > 0 && <span className="text-xs text-gray-500">Select one or more</span>}
+                            <div className="flex items-center gap-1.5"><label className="text-sm font-medium text-gray-700">{t('Overdue installments *')}</label><HelpTip text="Ito ang mga hulog na lampas na sa due date. Piliin ang babayaran at tingnan kung may penalty bago mag-confirm." /></div>
+                            {availableSchedules.length > 0 && <span className="text-xs text-gray-700">{t('Select one or more')}</span>}
                         </div>
                         {availableSchedules.length === 0 ? (
                             <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                                {form.loan_id ? 'No unpaid installments are due today or overdue for this loan.' : 'Select a loan to see overdue installments.'}
+                                {t(form.loan_id ? 'No unpaid installments are due today or overdue for this loan.' : 'Select a loan to see overdue installments.')}
                             </p>
                         ) : (
                             <div className="space-y-3">
@@ -393,13 +396,13 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                                                         <span className="font-semibold text-gray-900">Installment {schedule.period}</span>
                                                         <span className="text-red-700">Due {schedule.due_date}</span>
                                                     </span>
-                                                    <span className="mt-1 block text-xs text-gray-600">Unpaid installment: {peso(schedule.amount_due)}</span>
-                                                    {schedule.penalty_amount > 0 && <span className="mt-1 block text-xs font-medium text-amber-700">Accrued penalty: {peso(schedule.penalty_amount)}</span>}
+                                                    <span className="mt-1 block text-xs text-gray-600">{t('Unpaid installment:')} {peso(schedule.amount_due)}</span>
+                                                    {schedule.penalty_amount > 0 && <span className="mt-1 block text-xs font-medium text-amber-700">{t('Accrued penalty:')} {peso(schedule.penalty_amount)}</span>}
                                                 </span>
                                             </label>
                                             {checked && (
                                                 <div className="mt-3 pl-7">
-                                                    <label htmlFor={`installment-amount-${schedule.period}`} className="mb-1 block text-xs font-medium text-gray-700">Amount to pay on this installment</label>
+                                                    <label htmlFor={`installment-amount-${schedule.period}`} className="mb-1 block text-xs font-medium text-gray-700">{t('Amount to pay on this installment')}</label>
                                                     <input
                                                         id={`installment-amount-${schedule.period}`}
                                                         type="number"
@@ -411,7 +414,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                                                         onChange={event => updateAllocationAmount(schedule.period, event.target.value, schedule.amount_due)}
                                                         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                                                     />
-                                                    <p className="mt-1 text-xs text-gray-500">Partial payments are allowed, up to {peso(schedule.amount_due)}.</p>
+                                                    <p className="mt-1 text-xs text-gray-700">{t('Partial payments are allowed, up to {amount}.').replace('{amount}', peso(schedule.amount_due))}</p>
                                                 </div>
                                             )}
                                         </div>
@@ -425,9 +428,9 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
 
                     {selectedSchedules.length > 0 && (
                         <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm space-y-2">
-                            <div className="flex justify-between"><span className="text-gray-600">Selected installment amounts:</span><span className="font-semibold text-gray-900">{peso(installmentAmount)}</span></div>
-                            <div className="flex justify-between"><span className="text-gray-600">Selected accrued penalties:</span><span className="font-semibold text-amber-700">{peso(penaltyAmount)}</span></div>
-                            <div className="flex justify-between border-t border-gray-200 pt-2"><span className="font-medium text-gray-700">Total payment:</span><span className="font-bold text-blue-700">{peso(totalAmount)}</span></div>
+                            <div className="flex justify-between"><span className="text-gray-600">{t('Selected installment amounts:')}</span><span className="font-semibold text-gray-900">{peso(installmentAmount)}</span></div>
+                            <div className="flex justify-between"><span className="text-gray-600">{t('Selected accrued penalties:')}</span><span className="font-semibold text-amber-700">{peso(penaltyAmount)}</span></div>
+                            <div className="flex justify-between border-t border-gray-200 pt-2"><span className="font-medium text-gray-700">{t('Total payment:')}</span><span className="font-bold text-blue-700">{peso(totalAmount)}</span></div>
                         </div>
                     )}
 
@@ -437,7 +440,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                             rows={2}
                             value={form.note}
                             onChange={e => setField('note', e.target.value)}
-                            placeholder="Any additional notes..."
+                            placeholder={t('Any additional notes...')}
                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                     </div>
@@ -453,7 +456,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                 </div>
             ) : step === 2 ? (
                 <div className="p-6 space-y-4">
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Choose Payment Method</h4>
+                    <h4 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900">{t('Choose Payment Method')} <HelpTip text="Piliin kung cash sa cooperative, online checkout, o bank transfer ang pambayad. Kailangan pa ng verification at approval ang online at bank transfer payments." /></h4>
 
                     <div className="space-y-3">
                         {/* Option 1: Xendit Secure Gateway (only when online payment is enabled) */}
@@ -472,7 +475,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                                             <p className="font-semibold text-gray-900">Xendit Online Payment</p>
                                             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-blue-100 text-blue-800">Automated</span>
                                         </div>
-                                <p className="text-sm text-gray-600 truncate">GCash, Maya, GrabPay, Cards, QR Ph & Direct Online Banking; approval required after verification</p>
+                                <p className="text-sm text-gray-600">{t('GCash, Maya, GrabPay, Cards, QR Ph & Direct Online Banking; approval required after verification')}</p>
                                     </div>
                                     {form.transaction_mode === 'xendit' && <i className="fas fa-check-circle text-blue-600 text-xl"></i>}
                                 </div>
@@ -497,8 +500,8 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                                             <i className={`fas ${ml.icon} text-xl`}></i>
                                         </div>
                                         <div className="flex-1">
-                                            <p className="font-semibold text-gray-900">{ml.title}</p>
-                                            <p className="text-sm text-gray-600">{ml.sub}</p>
+                                            <p className="font-semibold text-gray-900">{t(ml.title)}</p>
+                                            <p className="text-sm text-gray-600">{t(ml.sub)}</p>
                                         </div>
                                         {!available && <p className="text-xs text-amber-600"><i className="fas fa-tools mr-1"></i>Under maintenance</p>}
                                         {available && selected && <i className="fas fa-check-circle text-blue-500 text-xl"></i>}
@@ -521,7 +524,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                 </div>
             ) : step === 3 ? (
                 <div className="p-6 space-y-4">
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Confirm Your Payment</h4>
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">{t('Confirm Your Payment')}</h4>
 
                     <div className="bg-gray-50 rounded-lg p-4 space-y-3">
                         {selectedLoan && (
@@ -538,17 +541,17 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                         ))}
                         {penaltyAmount > 0 && <div className="flex justify-between"><span className="text-gray-600">Penalties:</span><span className="font-semibold text-amber-700">{peso(penaltyAmount)}</span></div>}
                         <div className="flex justify-between">
-                            <span className="text-gray-600">Payment Amount:</span>
+                            <span className="text-gray-600">{t('Payment Amount:')}</span>
                             <span className="font-semibold text-gray-900">{peso(totalAmount)}</span>
                         </div>
                         <div className="flex justify-between">
-                            <span className="text-gray-600">Payment Method:</span>
+                            <span className="text-gray-600">{t('Payment Method:')}</span>
                             <span className="font-semibold text-gray-900">
                                 {form.transaction_mode === 'xendit'
                                     ? 'Xendit Online Payment'
                                     : form.transaction_mode === 'counter'
                                         ? 'Over the Counter'
-                                        : 'Bank Transfer (Requires Proof)'}
+                                        : t('Bank Transfer (Requires Proof)')}
                             </span>
                         </div>
                         {form.note && (
@@ -563,28 +566,28 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                         <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
                             <p className="text-sm text-blue-700">
                                 <i className="fas fa-info-circle mr-2"></i>
-                                You will be redirected to Xendit's secure payment portal to complete your payment.
+                                {t("You will be redirected to Xendit's secure payment portal to complete your payment.")}
                             </p>
                         </div>
                     ) : form.transaction_mode === 'counter' ? (
                         <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
                             <p className="text-sm text-blue-700">
                                 <i className="fas fa-info-circle mr-2"></i>
-                                Bring your payment to the office. A staff member will record the cash; member-submitted counter requests stay pending for manager or chairman approval.
+                                {t('Bring your payment to the office. A staff member will record the cash; member-submitted counter requests stay pending for manager or chairman approval.')}
                             </p>
                         </div>
                     ) : (
                         <div className="space-y-2">
-                            <label className="block text-sm font-medium text-gray-700">Proof of Payment</label>
+                            <label className="block text-sm font-medium text-gray-700">{t('Proof of Payment')}</label>
                             <input
                                 type="file"
                                 accept=".jpg,.jpeg,.png,.webp,.pdf"
                                 onChange={e => setProof(e.target.files?.[0] || null)}
                                 className={`block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 ${errors.proof ? 'border-red-400' : ''}`}
                             />
-                            <p className="text-xs text-gray-500">Upload a screenshot, receipt, or PDF proof of your bank transfer before submitting.</p>
-                            <p className="text-xs text-amber-700">Online and bank-transfer payments stay pending until a manager or chairman approves them. Xendit payments also wait for approval after provider verification.</p>
-                            {proof && <p className="text-xs font-medium text-gray-700">Selected: {proof.name}</p>}
+                            <p className="text-xs text-gray-700">{t('Upload a screenshot, receipt, or PDF proof of your bank transfer before submitting.')}</p>
+                            <p className="text-xs text-amber-700">{t('Online and bank-transfer payments stay pending until a manager or chairman approves them. Xendit payments also wait for approval after provider verification.')}</p>
+                            {proof && <p className="text-xs font-medium text-gray-700">{t('Selected:')} {proof.name}</p>}
                             {errors.proof && <span className="text-red-500 text-xs">{errors.proof}</span>}
                         </div>
                     )}
@@ -611,7 +614,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
 
                     <div>
                         <h4 className="text-xl font-bold text-gray-900">Xendit Checkout Session</h4>
-                        <p className="text-sm text-gray-600 mt-1">Complete your payment in Xendit's secure payment portal</p>
+                        <p className="text-sm text-gray-600 mt-1">{t("Complete your payment in Xendit's secure payment portal")}</p>
                     </div>
 
                     <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 text-left space-y-2 text-sm">
@@ -653,9 +656,9 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                         </button>
                     </div>
 
-                    <p className="text-xs text-gray-500 pt-2">
+                    <p className="text-xs text-gray-700 pt-2">
                         <i className="fas fa-info-circle mr-1"></i>
-                        After finishing the transaction on Xendit, click <strong>"I've Paid / Check Status"</strong> above to verify your payment.
+                        {t('After finishing the transaction on Xendit, click "I\'ve Paid / Check Status" above to verify your payment.')}
                     </p>
                 </div>
             ) : step === 4 ? (
@@ -665,10 +668,10 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                             <i className="fas fa-credit-card text-blue-600 text-3xl"></i>
                         </div>
                         <h4 className="text-lg font-semibold text-gray-900 mb-2">Online Payment Portal</h4>
-                        <p className="text-gray-600 mb-6">Complete your external payment through online checkout or bank transfer.</p>
+                        <p className="text-gray-600 mb-6">{t('Complete your external payment through online checkout or bank transfer.')}</p>
 
                         <div className="bg-gray-50 rounded-lg p-6 mb-6">
-                            <p className="text-sm text-gray-600 mb-4">Payment integration coming soon!</p>
+                            <p className="text-sm text-gray-600 mb-4">{t('Payment integration coming soon!')}</p>
                             <p className="text-2xl font-bold text-gray-900">{peso(totalAmount)}</p>
                         </div>
                     </div>
@@ -683,8 +686,8 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                         <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                             <i className="fas fa-receipt text-green-600 text-3xl"></i>
                         </div>
-                        <h4 className="text-xl font-bold text-gray-900 mb-2">{receipt.status === 'completed' ? 'Payment Completed' : 'Payment Submitted'}</h4>
-                        <p className="text-gray-600">{receipt.status === 'completed' ? 'Your payment was approved and applied to your loan.' : 'Your payment is pending manager or chairman approval.'}</p>
+                        <h4 className="text-xl font-bold text-gray-900 mb-2">{t(receipt.status === 'completed' ? 'Payment Completed' : 'Payment Submitted')}</h4>
+                        <p className="text-gray-600">{t(receipt.status === 'completed' ? 'Your payment was approved and applied to your loan.' : 'Your payment is pending manager or chairman approval.')}</p>
                     </div>
 
                     <div className="bg-gray-50 rounded-lg p-6 mb-4 space-y-3 border-2 border-dashed border-gray-300">
@@ -706,8 +709,8 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                             <span className="font-semibold text-gray-900">LOAN PAYMENT</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                            <span className="text-gray-600">Account:</span>
-                            <span className="font-semibold text-gray-900">Savings</span>
+                            <span className="text-gray-600">Loan:</span>
+                            <span className="font-semibold text-gray-900">{selectedLoan?.loan_number ?? '—'}</span>
                         </div>
                         <div className="flex justify-between text-sm pt-3 border-t border-gray-300">
                             <span className="text-gray-600">Amount:</span>
@@ -749,7 +752,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                                 <div className="h-24 flex items-center justify-center border-2 border-dashed border-gray-300 rounded mb-2">
                                     <ReceiptQR value={JSON.stringify({ type: 'loan_payment', ref: receipt.transaction_number ?? receipt.id ?? '', amount: totalAmount, date: receipt.transaction_date ?? new Date().toISOString() })} />
                                 </div>
-                                <p className="text-xs text-gray-500">Scan for verification</p>
+                                <p className="text-xs text-gray-700">{t('Scan for verification')}</p>
                             </div>
                         </div>
                     </div>
@@ -757,7 +760,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                     <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4">
                         <p className="text-sm text-blue-700">
                             <i className="fas fa-info-circle mr-2"></i>
-                            Please save or print this receipt for your records.
+                            {t('Please save or print this receipt for your records.')}
                         </p>
                     </div>
 
@@ -772,11 +775,11 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                     <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <i className="fas fa-check text-blue-600 text-4xl"></i>
                     </div>
-                    <h4 className="text-xl font-bold text-gray-900 mb-2">Payment Submitted!</h4>
+                    <h4 className="text-xl font-bold text-gray-900 mb-2">{t('Payment Submitted!')}</h4>
                     <p className="text-gray-600 mb-6">
                         {selectedMember && form.transaction_mode === 'counter'
-                            ? 'The loan payment has been processed successfully.'
-                            : 'Please visit our office to complete your loan payment.'}
+                            ? t('The loan payment has been processed successfully.')
+                            : t('Please visit our office to complete your loan payment.')}
                     </p>
 
                     {receipt?.transaction_number && (

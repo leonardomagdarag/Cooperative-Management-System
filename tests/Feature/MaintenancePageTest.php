@@ -129,6 +129,21 @@ test('maintenance mode serves the restore copy on every route', function () {
     $this->get('/')->assertOk();
 });
 
+test('a failed restore stays offline with recovery instructions', function () {
+    MaintenanceState::enter(MaintenanceState::REASON_RESTORE_FAILED, ['retry_after' => 60]);
+    Artisan::call('down');
+
+    // The failed state is durable, unlike the temporary in-progress notice.
+    $this->travel(2)->days();
+
+    $this->get('/')
+        ->assertStatus(503)
+        ->assertSee('Restore interrupted — system offline')
+        ->assertSee('system administrator');
+
+    expect(MaintenanceState::describe()['stale'])->toBeFalse();
+});
+
 test('the restore copy never claims submitted data is safe', function () {
     // "Nothing you submitted has been lost" cannot be promised: an interrupted
     // restore can discard writes made after the archive was taken.

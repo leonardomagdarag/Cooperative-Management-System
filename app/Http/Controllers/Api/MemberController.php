@@ -51,7 +51,7 @@ class MemberController extends Controller
         }
 
         $query = User::query()
-            ->with(['branch', 'personalData.address', 'personalData.contact', 'accounts', 'memberApplication']);
+            ->with(['roles', 'branch', 'personalData.address', 'personalData.contact', 'accounts', 'memberApplication']);
 
         if ($request->boolean('is_officer')) {
             $query->officerUsers();
@@ -108,21 +108,57 @@ class MemberController extends Controller
             });
         }
 
-        // Sort
+        // The first assigned role matches User::primaryRole; legacy users fall back to users.role.
+        $primaryRole = DB::table('roles')
+            ->join('model_has_roles', 'roles.id', '=', 'model_has_roles.role_id')
+            ->whereColumn('model_has_roles.model_id', 'users.id')
+            ->where('model_has_roles.model_type', (new User)->getMorphClass())
+            ->orderBy('roles.id')
+            ->select('roles.name')->limit(1);
+
+        if ($from = $request->string('from')->toString()) {
+            $query->whereDate('users.created_at', '>=', $from);
+        }
+        if ($to = $request->string('to')->toString()) {
+            $query->whereDate('users.created_at', '<=', $to);
+        }
+
+        $sortRoles = [];
+        if ($request->boolean('is_officer')) {
+            $roleNames = (clone $query)->withoutEagerLoads()->select('users.role')
+                ->selectSub(clone $primaryRole, 'assigned_role');
+            $sortRoles = DB::query()->fromSub($roleNames, 'officer_roles')
+                ->selectRaw('COALESCE(assigned_role, role) as name')->distinct()->orderBy('name')->pluck('name');
+        }
+
         $sortField = $request->string('sort', 'created_at')->toString();
-        $sortDirection = $request->string('direction', 'desc')->toString();
+        $sortDirection = $request->input('direction') === 'asc' ? 'asc' : 'desc';
         $allowedSorts = ['created_at', 'user_number', 'email', 'account_status'];
         if (in_array($sortField, $allowedSorts, true)) {
-            $query->orderBy($sortField, $sortDirection === 'asc' ? 'asc' : 'desc');
+            $query->orderBy('users.'.$sortField, $sortDirection);
+        } elseif ($sortField === 'role' && $request->boolean('is_officer')) {
+            $query->select('users.*')->selectSub(clone $primaryRole, 'assigned_role');
+            $roleFirst = $request->string('role_first')->toString();
+            $query->orderByRaw('CASE WHEN COALESCE(assigned_role, users.role) = ? THEN 0 ELSE 1 END', [$roleFirst])
+                ->orderByRaw('COALESCE(assigned_role, users.role) '.$sortDirection);
+        } elseif ($sortField === 'branch') {
+            $query->orderBy(Branch::select('name')->whereColumn('branches.id', 'users.branch_id')->limit(1), $sortDirection);
+        } elseif (in_array($sortField, ['name', 'title'], true)) {
+            $query->orderBy(PersonalData::select($sortField === 'title' ? 'title' : 'first_name')
+                ->whereColumn('personal_data.id', 'users.personal_data_id')->limit(1), $sortDirection);
+            if ($sortField === 'name') {
+                $query->orderBy(PersonalData::select('last_name')->whereColumn('personal_data.id', 'users.personal_data_id')->limit(1), $sortDirection);
+            }
         } else {
-            $query->leftJoin('personal_data', 'users.personal_data_id', '=', 'personal_data.id')
-                ->orderBy('personal_data.first_name', $sortDirection === 'asc' ? 'asc' : 'desc');
+            $query->orderByDesc('users.created_at');
         }
+        $query->orderBy('users.id');
 
         $perPage = max(5, min((int) $request->integer('per_page', 10), 50));
         $paginator = $query->paginate($perPage);
 
         return response()->json([
+            'sort_roles' => $sortRoles,
             'data' => $paginator->getCollection()->map(fn ($u) => [
                 'id' => $u->id,
                 'user_number' => $u->user_number,

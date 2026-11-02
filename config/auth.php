@@ -4,9 +4,9 @@ use App\Models\User;
 
 return [
 
-    // When enabled, skip only the new-device login OTP challenge. Other OTP
-    // protected actions remain enforced.
-    'login_otp_bypass' => filter_var(env('LOGIN_OTP_BYPASS') ?: false, FILTER_VALIDATE_BOOLEAN),
+    // Defaults on for local development only; explicitly set false to exercise
+    // login OTP locally. Other OTP-protected actions remain enforced.
+    'login_otp_bypass' => filter_var(env('LOGIN_OTP_BYPASS') ?: app()->environment('local'), FILTER_VALIDATE_BOOLEAN),
 
     /*
     |--------------------------------------------------------------------------

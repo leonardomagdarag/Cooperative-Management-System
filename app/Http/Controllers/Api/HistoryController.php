@@ -50,6 +50,13 @@ class HistoryController extends Controller
                 break;
         }
 
+        if ($from = $request->string('from')->toString()) {
+            $query->whereDate('transaction_date', '>=', $from);
+        }
+        if ($to = $request->string('to')->toString()) {
+            $query->whereDate('transaction_date', '<=', $to);
+        }
+
         // Search
         if ($search = SearchFilter::escapeLike($request->string('search')->toString())) {
             $query->where(function ($q) use ($search) {

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import FallbackImage from '../../components/FallbackImage';
+import LoadingIndicator from '../../components/ui/LoadingIndicator';
 
 const TABS = [
     { key: 'overview', label: 'Overview' },
@@ -39,15 +40,7 @@ export default function OfficerProfileModal({ officer, onClose, onEdit, onManage
         queryFn: () => api.get(`/api/members/${officer.id}`),
     });
 
-    if (isLoading) {
-        return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4">
-                <div className="w-full max-w-6xl rounded-lg bg-white p-10 shadow">
-                    <div className="space-y-3">{[...Array(6)].map((_, i) => <div key={i} className="h-10 animate-pulse rounded bg-gray-100" />)}</div>
-                </div>
-            </div>
-        );
-    }
+    if (isLoading) return <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4"><LoadingIndicator message="Loading officer details..." className="min-h-64 w-full max-w-6xl rounded-lg bg-white p-10 shadow" /></div>;
 
     const m = data?.data;
     if (!m) {

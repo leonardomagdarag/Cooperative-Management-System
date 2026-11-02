@@ -2,8 +2,11 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { useLanguage } from '../contexts/LanguageContext';
+import LanguageSwitcher from '../components/LanguageSwitcher';
 
 export default function PublicLayout() {
+    const { t } = useLanguage();
     const [isShrunk, setIsShrunk] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
     const [isHovering, setIsHovering] = useState(false);
@@ -125,19 +128,20 @@ export default function PublicLayout() {
 
                         <div className="hidden lg:flex items-center ml-auto">
                             <div className="flex items-center gap-1 mr-6">
-                                <Link to="/" className={navLinkClass('/')}><i className="fas fa-home mr-2"></i>Home</Link>
-                                <Link to="/about" className={navLinkClass('/about')}><i className="fas fa-info-circle mr-2"></i>About Us</Link>
-                                <Link to="/news" className={navLinkClass('/news')}><i className="fas fa-newspaper mr-2"></i>News</Link>
+                                <Link to="/" className={navLinkClass('/')}><i className="fas fa-home mr-2"></i>{t('Home')}</Link>
+                                <Link to="/about" className={navLinkClass('/about')}><i className="fas fa-info-circle mr-2"></i>{t('About Us')}</Link>
+                                <Link to="/news" className={navLinkClass('/news')}><i className="fas fa-newspaper mr-2"></i>{t('News')}</Link>
                                 <a
                                     href={isHome ? '#Contact' : '/#Contact'}
                                     onClick={scrollToContact}
                                     className="relative px-4 py-2 font-semibold text-gray-700 transition-all duration-200 hover:text-emerald-700 after:absolute after:left-4 after:right-4 after:-bottom-1 after:h-0.5 after:rounded-full after:bg-emerald-500 after:scale-x-0 after:origin-center after:transition-transform after:duration-200 hover:after:scale-x-100"
                                 >
-                                    <i className="fas fa-envelope mr-2"></i>Contact
+                                    <i className="fas fa-envelope mr-2"></i>{t('Contact')}
                                 </a>
                             </div>
-                            {loginEnabled && <Link to="/login" className="public-btn public-btn-primary px-5 py-2.5">
-                                <i className="fas fa-sign-in-alt mr-2"></i>Login
+                            <LanguageSwitcher compact />
+                            {loginEnabled && <Link to="/login" className="public-btn public-btn-primary px-5 py-2.5 ml-3">
+                                <i className="fas fa-sign-in-alt mr-2"></i>{t('Login')}
                             </Link>}
                         </div>
 
@@ -162,18 +166,19 @@ export default function PublicLayout() {
                 {mobileOpen && (
                     <div className="lg:hidden border-t border-emerald-900/10 bg-white/95 shadow-lg backdrop-blur-xl">
                         <div className="px-4 py-4 space-y-2">
-                            <Link to="/" className={mobileLinkClass('/')}><i className="fas fa-home mr-3"></i>Home</Link>
-                            <Link to="/about" className={mobileLinkClass('/about')}><i className="fas fa-info-circle mr-3"></i>About Us</Link>
-                            <Link to="/news" className={mobileLinkClass('/news')}><i className="fas fa-newspaper mr-3"></i>News</Link>
+                            <LanguageSwitcher />
+                            <Link to="/" className={mobileLinkClass('/')}><i className="fas fa-home mr-3"></i>{t('Home')}</Link>
+                            <Link to="/about" className={mobileLinkClass('/about')}><i className="fas fa-info-circle mr-3"></i>{t('About Us')}</Link>
+                            <Link to="/news" className={mobileLinkClass('/news')}><i className="fas fa-newspaper mr-3"></i>{t('News')}</Link>
                             <a
                                 href={isHome ? '#Contact' : '/#Contact'}
                                 onClick={(e) => { scrollToContact(e); setMobileOpen(false); }}
                                 className="block rounded-xl border-l-4 border-transparent px-4 py-3 font-semibold text-gray-700 transition-all hover:border-emerald-500 hover:bg-emerald-50/70 hover:text-emerald-700"
                             >
-                                <i className="fas fa-envelope mr-3"></i>Contact
+                                <i className="fas fa-envelope mr-3"></i>{t('Contact')}
                             </a>
                             {loginEnabled && <Link to="/login" className="public-btn public-btn-primary w-full">
-                                <i className="fas fa-sign-in-alt mr-2"></i>Login
+                                <i className="fas fa-sign-in-alt mr-2"></i>{t('Login')}
                             </Link>}
                         </div>
                     </div>
@@ -196,23 +201,23 @@ export default function PublicLayout() {
                                 </div>
                             </div>
                             <p className="max-w-sm text-sm leading-relaxed text-slate-400">
-                                Member-focused financial services for savings, loans, and community growth.
+                                {t('Member-focused financial services for savings, loans, and community growth.')}
                             </p>
                         </div>
 
                         <div>
-                            <h4 className="font-semibold mb-6 text-slate-200 text-lg">Quick Links</h4>
+                            <h4 className="font-semibold mb-6 text-slate-200 text-lg">{t('Quick Links')}</h4>
                             <ul className="space-y-3 text-slate-400">
-                                <li><Link to="/" className="hover:text-white transition-colors inline-flex items-center gap-2"><i className="fas fa-chevron-right text-xs"></i>Home</Link></li>
-                                <li><Link to="/about" className="hover:text-white transition-colors inline-flex items-center gap-2"><i className="fas fa-chevron-right text-xs"></i>About Us</Link></li>
-                                <li><Link to="/news" className="hover:text-white transition-colors inline-flex items-center gap-2"><i className="fas fa-chevron-right text-xs"></i>News</Link></li>
-                                <li><a href={isHome ? '#Contact' : '/#Contact'} onClick={scrollToContact} className="hover:text-white transition-colors inline-flex items-center gap-2"><i className="fas fa-chevron-right text-xs"></i>Contact</a></li>
-                                {loginEnabled && <li><Link to="/login" className="hover:text-white transition-colors inline-flex items-center gap-2"><i className="fas fa-chevron-right text-xs"></i>Login</Link></li>}
+                                <li><Link to="/" className="hover:text-white transition-colors inline-flex items-center gap-2"><i className="fas fa-chevron-right text-xs"></i>{t('Home')}</Link></li>
+                                <li><Link to="/about" className="hover:text-white transition-colors inline-flex items-center gap-2"><i className="fas fa-chevron-right text-xs"></i>{t('About Us')}</Link></li>
+                                <li><Link to="/news" className="hover:text-white transition-colors inline-flex items-center gap-2"><i className="fas fa-chevron-right text-xs"></i>{t('News')}</Link></li>
+                                <li><a href={isHome ? '#Contact' : '/#Contact'} onClick={scrollToContact} className="hover:text-white transition-colors inline-flex items-center gap-2"><i className="fas fa-chevron-right text-xs"></i>{t('Contact')}</a></li>
+                                {loginEnabled && <li><Link to="/login" className="hover:text-white transition-colors inline-flex items-center gap-2"><i className="fas fa-chevron-right text-xs"></i>{t('Login')}</Link></li>}
                             </ul>
                         </div>
 
                         <div>
-                            <h4 className="font-semibold mb-6 text-slate-200 text-lg">Connect With Us</h4>
+                            <h4 className="font-semibold mb-6 text-slate-200 text-lg">{t('Connect With Us')}</h4>
                             <div className="flex gap-3 mb-6">
                                 <a href="#facebook_link" aria-label="Facebook" className="w-11 h-11 rounded-full border border-white/10 bg-white/5 flex items-center justify-center transition-all hover:-translate-y-0.5 hover:bg-emerald-600"><i className="fab fa-facebook text-lg"></i></a>
                                 <a href="#gmail" aria-label="Gmail" className="w-11 h-11 rounded-full border border-white/10 bg-white/5 flex items-center justify-center transition-all hover:-translate-y-0.5 hover:bg-emerald-600"><i className="fas fa-envelope text-lg"></i></a>
@@ -220,7 +225,7 @@ export default function PublicLayout() {
                             </div>
                             <a href="#gmail_link" className="text-sm text-slate-400 hover:text-white">
                                 <i className="fas fa-envelope mr-2"></i>
-                                Contact us
+                                {t('Contact us')}
                             </a>
                         </div>
                     </div>
@@ -228,10 +233,10 @@ export default function PublicLayout() {
                     <div className="border-t border-white/10 pt-8">
                         <div className="mb-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-sm text-slate-400">
                             <button type="button" onClick={() => setPolicyModal('terms')} className="inline-flex items-center gap-2 transition hover:text-white">
-                                <i className="fas fa-file-contract text-xs"></i>Terms and Agreement
+                                <i className="fas fa-file-contract text-xs"></i>{t('Terms and Agreement')}
                             </button>
                             <button type="button" onClick={() => setPolicyModal('privacy')} className="inline-flex items-center gap-2 transition hover:text-white">
-                                <i className="fas fa-shield-halved text-xs"></i>Privacy Policy
+                                <i className="fas fa-shield-halved text-xs"></i>{t('Privacy Policy')}
                             </button>
                         </div>
                         <p className="text-center text-slate-500 text-sm">&copy; {new Date().getFullYear()} Settlers Credit Cooperative. All rights reserved.</p>

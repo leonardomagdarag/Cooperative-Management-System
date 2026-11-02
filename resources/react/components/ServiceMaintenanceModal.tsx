@@ -1,5 +1,6 @@
 import { ReactNode } from 'react';
 
+import Button from './ui/Button';
 interface ServiceMaintenanceModalProps {
     isOpen: boolean;
     onClose: () => void;

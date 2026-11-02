@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\BackupRun;
+use App\Services\BackupNotificationService;
 use App\Services\BackupService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -28,7 +29,7 @@ class RunBackupJob implements ShouldQueue
     public function handle(BackupService $backups): void
     {
         $run = BackupRun::findOrFail($this->runId);
-        $lock = Cache::lock('backup-operation', 7200);
+        $lock = Cache::store('backup_operations')->lock('backup-operation', 7200);
         $lockAcquired = false;
 
         try {
@@ -40,11 +41,18 @@ class RunBackupJob implements ShouldQueue
             $run->update(['status' => 'running', 'started_at' => now()]);
             $backups->executeRun($run, $run->trigger);
         } catch (Throwable $e) {
-            $run->update([
-                'status' => 'failed',
-                'message' => $backups->operatorMessage($e),
-                'finished_at' => now(),
-            ]);
+            // executeRun() records and notifies its own failures. Only notify
+            // here when the job failed before executeRun() could do that (for
+            // example, when the operation lock could not be acquired).
+            $run->refresh();
+            if ($run->status !== 'failed') {
+                $run->update([
+                    'status' => 'failed',
+                    'message' => $backups->operatorMessage($e),
+                    'finished_at' => now(),
+                ]);
+                app(BackupNotificationService::class)->notifyFailure($run->refresh());
+            }
             throw $e;
         } finally {
             if ($lockAcquired) {
@@ -66,5 +74,6 @@ class RunBackupJob implements ShouldQueue
             'message' => app(BackupService::class)->operatorMessage($exception),
             'finished_at' => now(),
         ]);
+        app(BackupNotificationService::class)->notifyFailure($run->refresh());
     }
 }

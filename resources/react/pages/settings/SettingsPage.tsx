@@ -14,6 +14,7 @@ import EmailChangeVerification from '../../components/EmailChangeVerification';
 import HelpSupportTab from './HelpSupportTab';
 import SettingsTabHeader from './SettingsTabHeader';
 import OtpVerifyField from '../../components/OtpVerifyField';
+import PageHeader from '../../components/ui/PageHeader';
 
 interface SettingsTab {
     key: string;
@@ -113,10 +114,7 @@ export default function SettingsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="bg-gradient-to-r from-emerald-600 to-cyan-600 rounded-2xl p-6 text-white shadow-lg">
-                <h1 className="text-2xl font-bold">Settings</h1>
-                <p className="mt-1 text-sm text-white/80">Manage your account and support requests</p>
-            </div>
+            <PageHeader title="Settings" description="Manage your account and support requests" icon="fas fa-gear" />
 
             <div className="flex min-w-0 gap-2 overflow-x-auto overflow-y-hidden border-b border-gray-200">
                 {visibleTabs.map(t => (

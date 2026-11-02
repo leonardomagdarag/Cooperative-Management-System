@@ -8,6 +8,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { SidebarProvider } from './contexts/SidebarContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './contexts/ToastContext';
+import { LanguageProvider } from './contexts/LanguageContext';
 
 const queryClient = new QueryClient({
     defaultOptions: {
@@ -26,6 +27,7 @@ if (root) {
             <ErrorBoundary>
                 <BrowserRouter>
                     <QueryClientProvider client={queryClient}>
+                        <LanguageProvider>
                         <AuthProvider>
                             <ThemeProvider>
                                 <SidebarProvider>
@@ -35,6 +37,7 @@ if (root) {
                                 </SidebarProvider>
                             </ThemeProvider>
                         </AuthProvider>
+                        </LanguageProvider>
                     </QueryClientProvider>
                 </BrowserRouter>
             </ErrorBoundary>

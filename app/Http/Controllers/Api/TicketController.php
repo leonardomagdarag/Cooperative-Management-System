@@ -89,6 +89,27 @@ class TicketController extends Controller
             });
         }
 
+        if ($from = $request->string('from')->toString()) {
+            $query->whereDate('created_at', '>=', $from);
+        }
+        if ($to = $request->string('to')->toString()) {
+            $query->whereDate('created_at', '<=', $to);
+        }
+
+        $sort = $request->string('sort', 'last_reply_at')->toString();
+        $direction = $request->string('direction', 'desc')->toString() === 'asc' ? 'asc' : 'desc';
+        if (in_array($sort, ['requester', 'assignee'], true)) {
+            $column = $sort === 'requester' ? 'user_id' : 'assigned_to';
+            $query->orderBy(User::select('personal_data.first_name')->join('personal_data', 'personal_data.id', '=', 'users.personal_data_id')
+                ->whereColumn('users.id', 'tickets.'.$column)->limit(1), $direction);
+        } elseif (in_array($sort, ['ticket_number', 'subject', 'status', 'priority', 'category', 'created_at', 'last_reply_at'], true)) {
+            $query->orderBy($sort, $direction);
+        } else {
+            $query->latest('last_reply_at');
+        }
+
+        $query->orderBy('tickets.id');
+
         $perPage = max(5, min((int) $request->integer('per_page', 10), 50));
         $paginator = $query->with([
             'user.personalData',
@@ -96,8 +117,6 @@ class TicketController extends Controller
             'assignee.personalData',
             'messages' => fn ($q) => $q->latest()->limit(1),
         ])
-            ->latest('last_reply_at')
-            ->latest('created_at')
             ->paginate($perPage);
 
         return response()->json([

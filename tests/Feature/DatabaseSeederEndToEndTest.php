@@ -41,11 +41,11 @@ test('the whole seeder runs on an empty database and produces a coherent coopera
     $this->seed(DatabaseSeeder::class);
 
     // Nothing should be missing.
-    expect(User::count())->toBe(16)
+    expect(User::count())->toBe(26)
         ->and(Branch::count())->toBe(2)
         ->and(LoanProduct::count())->toBe(3)
-        ->and(Account::count())->toBe(20)
-        ->and(Loan::count())->toBe(10)
+        ->and(Account::count())->toBe(40)
+        ->and(Loan::count())->toBe(15)
         ->and(Beneficiary::count())->toBeGreaterThan(0)
         ->and(BoardMember::count())->toBeGreaterThan(0)
         ->and(Expense::count())->toBeGreaterThan(0)
@@ -96,7 +96,9 @@ test('the whole seeder runs on an empty database and produces a coherent coopera
 
         // Only a released loan may carry a disbursement or payments.
         if (in_array($loan->loan_status, ['active', 'paid_off'], true)) {
-            expect($loan->approved_at)->not->toBeNull();
+            expect($loan->approved_at)->not->toBeNull()
+                ->and($loan->disbursed_at)->not->toBeNull()
+                ->and($loan->paymentSchedule())->not->toBeNull();
         } else {
             expect(Transaction::where('loan_id', $loan->id)->where('transaction_type', 'loan_disbursement')->count())->toBe(0)
                 ->and(Transaction::where('loan_id', $loan->id)->where('transaction_type', 'loan_payment')->count())->toBe(0);

@@ -2,19 +2,37 @@ import { api } from './client';
 
 export type BackupTier = 'daily' | 'offsite';
 export type BackupScope = 'db' | 'files' | 'both';
+export type GfsCategory = 'daily' | 'weekly' | 'monthly';
 
 export interface BackupItem {
     path: string;
     name: string;
     size: number | null;
     created_at: string | null;
+    gfs_tier?: GfsCategory;
+}
+
+export interface GfsRetentionConfig {
+    daily_days: number;
+    weekly_weeks: number;
+    monthly_months: number;
+}
+
+export interface ObjectLockConfig {
+    enabled: boolean;
+    mode: string;
+    retention_days: number;
 }
 
 export interface BackupTierInfo {
     disk: string;
     schedule: string;
     scope: BackupScope;
-    retention: { keep?: number; days?: number };
+    retention: {
+        keep?: number;
+        days?: number;
+        gfs?: GfsRetentionConfig;
+    };
     last_auto_run: string | null;
 }
 
@@ -22,6 +40,7 @@ export interface OffsiteStatus {
     configured: boolean;
     reachable: boolean | null;
     checked_at: string | null;
+    object_lock?: ObjectLockConfig;
 }
 
 export interface BackupSettings {

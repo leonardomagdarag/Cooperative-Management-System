@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatBytes } from '../../lib/format';
+import LoadingIndicator from '../../components/ui/LoadingIndicator';
 
 interface SystemHealthData {
     greeting?: string;
@@ -121,7 +122,7 @@ export default function AdminOverview() {
     const d: SystemHealthData = data?.data || {};
 
     if (isLoading) {
-        return <OverviewSkeleton />;
+        return <LoadingIndicator message="Loading system overview..." />;
     }
 
     if (isError) {
@@ -167,10 +168,10 @@ export default function AdminOverview() {
                         <p className="text-emerald-200 text-sm font-medium uppercase tracking-widest mb-1">
                             System Administrator
                         </p>
-                        <h1 className="text-3xl font-extrabold leading-tight">
+                        <h1 className="text-2xl font-medium leading-tight">
                             {d.greeting || 'Good day'}, {user?.first_name || 'Admin'}
                         </h1>
-                        <p className="mt-1 text-emerald-200">
+                        <p className="mt-1 text-sm text-emerald-200">
                             Overall system health, member service status, and data safety
                         </p>
                     </div>
@@ -634,23 +635,6 @@ function ServiceRow({ name, description, active, icon }: { name: string; descrip
             }`}>
                 {active ? 'Available' : 'Paused'}
             </span>
-        </div>
-    );
-}
-
-function OverviewSkeleton() {
-    return (
-        <div className="space-y-6 animate-pulse">
-            <div className="h-44 rounded-2xl bg-slate-200" />
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {[...Array(4)].map((_, i) => (
-                    <div key={i} className="h-28 rounded-2xl bg-slate-100" />
-                ))}
-            </div>
-            <div className="grid gap-6 lg:grid-cols-2">
-                <div className="h-80 rounded-2xl bg-slate-100" />
-                <div className="h-80 rounded-2xl bg-slate-100" />
-            </div>
         </div>
     );
 }

@@ -19,7 +19,7 @@ class LoginHandoffService
                 return null;
             }
 
-            LoginHandoff::query()->where('user_id', $lockedUser->id)->whereIn('status', ['pending', 'approved'])
+            LoginHandoff::query()->where('user_id', $lockedUser->id)->whereIn('status', ['pending', 'approved', 'otp_pending', 'otp_bypassed'])
                 ->update(['status' => 'expired', 'decided_at' => now()]);
 
             return LoginHandoff::query()->create([

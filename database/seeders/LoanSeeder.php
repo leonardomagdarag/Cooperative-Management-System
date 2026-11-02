@@ -165,6 +165,9 @@ class LoanSeeder extends Seeder
         $reviewStatus = $plan['review_status'] ?? null;
         $isApproved = ! empty($plan['approved_ago_months']) || ! empty($plan['approved_ago_days']);
         $isDisbursed = ! empty($plan['disbursed_ago_months']);
+        $disbursedAt = $isDisbursed
+            ? Carbon::now()->subMonths((int) $plan['disbursed_ago_months'])->setTime(15, 0)
+            : null;
 
         $approvedAt = null;
         if ($isApproved) {
@@ -178,8 +181,8 @@ class LoanSeeder extends Seeder
 
         // LoanController sets the due date when the money is actually released,
         // so an approved loan still waiting at the counter has no due date yet.
-        $dueDate = $isDisbursed
-            ? $approvedAt->copy()->addMonths($termMonths)->toDateString()
+        $dueDate = $disbursedAt
+            ? $disbursedAt->copy()->addMonths($termMonths)->toDateString()
             : null;
 
         $attributes = [
@@ -201,6 +204,7 @@ class LoanSeeder extends Seeder
             'review_notes' => $plan['review_notes'] ?? null,
             'approved_by' => $isApproved ? $ledger->officer(self::APPROVER)?->id : null,
             'approved_at' => $approvedAt,
+            'disbursed_at' => $disbursedAt,
             'due_date' => $dueDate,
         ];
 

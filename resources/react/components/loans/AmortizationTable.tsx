@@ -1,3 +1,5 @@
+import Pagination from '../ui/Pagination';
+import usePaginatedRows from '../../hooks/usePaginatedRows';
 import Badge from '../ui/Badge';
 import { formatPeso } from '../../lib/format';
 import { deriveInstallments, INSTALLMENT_STATUS, type InstallmentStatus, type ScheduleRow } from '../../lib/loanSchedule';
@@ -17,6 +19,7 @@ interface AmortizationTableProps {
  */
 export default function AmortizationTable({ schedule, totalPaid, compact = false, showLegend = true }: AmortizationTableProps) {
     const rows = deriveInstallments(schedule, totalPaid);
+    const pagination = usePaginatedRows(rows);
     const pad = compact ? 'px-3 py-1.5 text-xs' : 'px-4 py-2';
     const head = compact ? 'px-3 py-2' : 'px-4 py-2';
 
@@ -42,7 +45,7 @@ export default function AmortizationTable({ schedule, totalPaid, compact = false
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                        {rows.map((row) => {
+                        {pagination.rows.map((row) => {
                             const style = INSTALLMENT_STATUS[row.status];
                             const isNext = row.status === 'due';
                             const isInterestExtension = Number(row.interest_extension) > 0;
@@ -70,6 +73,7 @@ export default function AmortizationTable({ schedule, totalPaid, compact = false
                     </tbody>
                 </table>
             </div>
+            <Pagination page={pagination.page} lastPage={pagination.lastPage} total={pagination.total} perPage={pagination.perPage} onChange={pagination.setPage} scrollToTop={false} />
         </div>
     );
 }

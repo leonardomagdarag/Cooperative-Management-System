@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
+import LoadingIndicator from '../../components/ui/LoadingIndicator';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
 import { validate, roleSchema, type FieldErrors } from '../../lib/validation';
 import { formatPermissionLabel } from '../../lib/permissions';
@@ -285,7 +286,7 @@ export default function RolePermissionsPage() {
     const groupGrantedCount = (permissions: string[]) => permissions.filter(p => currentPermissions.includes(p)).length;
 
     if (isLoading) {
-        return <Skeleton />;
+        return <LoadingIndicator message="Loading roles and permissions..." />;
     }
 
     return (
@@ -789,20 +790,4 @@ export default function RolePermissionsPage() {
 
 function normalize(list: string[]): string[] {
     return [...new Set((list || []).filter(Boolean))].sort();
-}
-
-function Skeleton() {
-    return (
-        <div className="space-y-5">
-            <div className="h-20 animate-pulse rounded-xl bg-gray-100" />
-            <div className="grid gap-5 xl:grid-cols-[240px_minmax(0,1fr)]">
-                <div className="space-y-2">
-                    <div className="h-24 animate-pulse rounded-xl bg-gray-100" />
-                    <div className="h-24 animate-pulse rounded-xl bg-gray-100" />
-                    <div className="h-24 animate-pulse rounded-xl bg-gray-100" />
-                </div>
-                <div className="h-96 animate-pulse rounded-xl bg-gray-100" />
-            </div>
-        </div>
-    );
 }

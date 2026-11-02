@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * Creates the fixed demo logins and the ten rostered members.
+ * Creates the fixed demo logins and the twenty rostered members.
  *
  * Member identity is not invented here — it comes from MemberRoster so the
  * seeders that run afterwards (accounts, loans, transactions) see the same

@@ -1,3 +1,4 @@
+import SortableHeader from '../../components/ui/SortableHeader';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getTickets, type TicketSummary, type TicketQueryParams } from '../../api/tickets';
@@ -5,6 +6,8 @@ import NewTicketModal from '../../components/tickets/NewTicketModal';
 import TicketDetailModal from '../../components/tickets/TicketDetailModal';
 import Button from '../../components/ui/Button';
 import Pagination from '../../components/ui/Pagination';
+import DateRangeFilter from '../../components/ui/DateRangeFilter';
+import PageHeader from '../../components/ui/PageHeader';
 
 const CATEGORIES = [
     { value: '', label: 'All Categories' },
@@ -24,6 +27,10 @@ export default function TicketsPage() {
     const [statusFilter, setStatusFilter] = useState('');
     const [priorityFilter, setPriorityFilter] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('');
+    const [from, setFrom] = useState('');
+    const [to, setTo] = useState('');
+    const [sort, setSort] = useState('last_reply_at');
+    const [direction, setDirection] = useState<'asc' | 'desc'>('desc');
     const [page, setPage] = useState(1);
 
     const [isNewTicketOpen, setIsNewTicketOpen] = useState(false);
@@ -35,6 +42,10 @@ export default function TicketsPage() {
         status: statusFilter || undefined,
         priority: priorityFilter || undefined,
         category: categoryFilter || undefined,
+        from: from || undefined,
+        to: to || undefined,
+        sort,
+        direction,
         page,
         per_page: 10,
     };
@@ -76,27 +87,24 @@ export default function TicketsPage() {
         }
     };
 
+    const handleColumnSort = (field: string) => {
+        setDirection(sort === field && direction === 'asc' ? 'desc' : 'asc');
+        setSort(field);
+        setPage(1);
+    };
+
     return (
         <div className="space-y-6">
-            {/* Header Banner */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-linear-to-r from-emerald-600 to-cyan-600 rounded-2xl p-6 text-white shadow-lg">
-                <div>
-                    <h1 className="text-2xl font-bold">Support Desk & Tickets</h1>
-                    <p className="mt-1 text-sm text-white/80">
-                        Manage member inquiries, resolve technical issues, and provide cooperative support.
-                    </p>
-                </div>
-                <Button
+            <PageHeader title="Support Desk & Tickets" description="Manage member inquiries, resolve technical issues, and provide cooperative support." icon="fas fa-headset" action={<Button
                     type="button"
                     variant="outline"
                     size="md"
                     onClick={() => setIsNewTicketOpen(true)}
-                    className="bg-white/10 hover:bg-white/20 text-white border-white/30 shrink-0"
+                    className="shrink-0"
                 >
                     <i className="fas fa-plus mr-1.5"></i>
                     New Ticket
-                </Button>
-            </div>
+                </Button>} />
 
             {/* Metric KPI Cards */}
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -194,7 +202,7 @@ export default function TicketsPage() {
                 </div>
 
                 {/* Filter Controls */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+                <div className="table-toolbar grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
                     {/* Search */}
                     <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -251,6 +259,10 @@ export default function TicketsPage() {
                             ))}
                         </select>
                     </div>
+                    <DateRangeFilter from={from} to={to} onFromChange={value => { setFrom(value); setPage(1); }} onToChange={value => { setTo(value); setPage(1); }} />
+                    <select value={`${sort}:${direction}`} onChange={e => { const [field, order] = e.target.value.split(':'); setSort(field); setDirection(order as 'asc' | 'desc'); setPage(1); }} aria-label="Sort tickets" className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-xs text-gray-800">
+                        <option value="last_reply_at:desc">Recently active</option><option value="last_reply_at:asc">Least recently active</option><option value="created_at:desc">Newest tickets</option><option value="created_at:asc">Oldest tickets</option><option value="priority:desc">Priority Z–A</option><option value="status:asc">Status A–Z</option>
+                    </select>
                 </div>
             </div>
 
@@ -278,13 +290,13 @@ export default function TicketsPage() {
                         <table className="w-full min-w-[700px] text-left border-collapse text-xs">
                             <thead>
                                 <tr className="border-b border-gray-200 bg-gray-50/75 text-gray-600 font-semibold uppercase tracking-wider">
-                                    <th className="py-3 px-4">Ticket</th>
-                                    <th className="py-3 px-4">Requester</th>
-                                    <th className="py-3 px-4">Topic / Subject</th>
-                                    <th className="py-3 px-4">Priority</th>
-                                    <th className="py-3 px-4">Status</th>
-                                    <th className="py-3 px-4">Assignee</th>
-                                    <th className="py-3 px-4 text-right">Last Activity</th>
+                                    <SortableHeader field="ticket_number" sort={sort} direction={direction} onSort={handleColumnSort} className="py-3 px-4">Ticket</SortableHeader>
+                                    <SortableHeader field="requester" sort={sort} direction={direction} onSort={handleColumnSort} className="py-3 px-4">Requester</SortableHeader>
+                                    <SortableHeader field="subject" sort={sort} direction={direction} onSort={handleColumnSort} className="py-3 px-4">Topic / Subject</SortableHeader>
+                                    <SortableHeader field="priority" sort={sort} direction={direction} onSort={handleColumnSort} className="py-3 px-4">Priority</SortableHeader>
+                                    <SortableHeader field="status" sort={sort} direction={direction} onSort={handleColumnSort} className="py-3 px-4">Status</SortableHeader>
+                                    <SortableHeader field="assignee" sort={sort} direction={direction} onSort={handleColumnSort} className="py-3 px-4">Assignee</SortableHeader>
+                                    <SortableHeader field="last_reply_at" sort={sort} direction={direction} onSort={handleColumnSort} className="py-3 px-4 text-right">Last Activity</SortableHeader>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">

@@ -52,6 +52,7 @@ import EmptyState from './components/ui/EmptyState';
 import ToastContainer from './components/ui/ToastContainer';
 import ScrollToTop from './components/ScrollToTop';
 import ErrorBoundary from './components/ErrorBoundary';
+import { useLanguage } from './contexts/LanguageContext';
 
 function IsolatedPage({ children }: { children: React.ReactNode }) {
     const location = useLocation();
@@ -126,11 +127,12 @@ function SettingsPageRoute() {
 }
 
 function UnauthorizedPlaceholder({ permission }: { permission?: string }) {
+    const { t } = useLanguage();
     return (
-        <EmptyState icon="fa-lock" title="Access restricted" description={
-                permission === 'admin' ? 'This section requires administrator access.' :
-                 permission ? `You need the "${permission}" permission to access this section.` :
-                 'You do not have permission to access this section.'} />
+        <EmptyState icon="fa-lock" title={t('Access restricted')} description={
+                permission === 'admin' ? t('This section requires administrator access.') :
+                 permission ? t('You need the "{permission}" permission to access this section.').replace('{permission}', permission) :
+                 t('You do not have permission to access this section.')} />
     );
 }
 
@@ -275,7 +277,7 @@ export default function App() {
                         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-600">
                             <i className="fas fa-right-from-bracket text-xl" aria-hidden="true"></i>
                         </div>
-                        <h1 className="mt-5 text-xl font-bold text-slate-900">This session has ended</h1>
+                        <h1 className="mt-5 text-xl font-medium text-slate-900">This session has ended</h1>
                         <p className="mt-2 text-sm leading-6 text-slate-600">
                             Your account was signed in on another device, so this session has ended. If you did not approve that sign-in, reset your password now.
                         </p>

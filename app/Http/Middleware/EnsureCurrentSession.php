@@ -2,8 +2,8 @@
 
 namespace App\Http\Middleware;
 
-use App\Models\TrustedDevice;
 use App\Models\LoginHandoff;
+use App\Models\TrustedDevice;
 use App\Models\User;
 use App\Services\SecurityOtpService;
 use Closure;
@@ -23,10 +23,10 @@ class EnsureCurrentSession
         $sessionId = $request->session()->getId();
 
         $pendingForSession = LoginHandoff::query()->where('user_id', $user->id)
-            ->where('pending_session_id', $sessionId)->whereIn('status', ['pending', 'approved', 'rejected', 'expired'])
+            ->where('pending_session_id', $sessionId)->whereIn('status', ['pending', 'approved', 'otp_pending', 'otp_bypassed', 'rejected', 'expired'])
             ->where('expires_at', '>', now())->exists();
         if ($pendingForSession) {
-            if (in_array($request->path(), ['api/login-handoffs/status', 'api/login-handoffs/complete'], true)) {
+            if (in_array($request->path(), ['api/login-handoffs/status', 'api/login-handoffs/otp', 'api/login-handoffs/complete'], true)) {
                 return $next($request);
             }
 

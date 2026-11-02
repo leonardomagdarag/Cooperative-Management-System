@@ -4,6 +4,7 @@ import ModalTabs from '../../components/ui/ModalTabs';
 import MyRouteTab from './MyRouteTab';
 import ApprovalsQueueTab from './ApprovalsQueueTab';
 import RunHistoryTab from './RunHistoryTab';
+import PageHeader from '../../components/ui/PageHeader';
 
 export default function CollectionsPage() {
     const { user } = useAuth();
@@ -36,9 +37,7 @@ export default function CollectionsPage() {
 
     return (
         <div className="p-6 max-w-6xl mx-auto">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold text-slate-800">Field Collections</h1>
-            </div>
+            <PageHeader className="mb-6" title="Field Collections" description="Manage collection routes, review submissions, and track completed runs." icon="fas fa-route" />
 
             <ModalTabs
                 tabs={tabs}

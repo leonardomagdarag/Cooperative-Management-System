@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+import Button from './Button';
 interface ModalHeaderProps {
     title: ReactNode;
     subtitle?: ReactNode;

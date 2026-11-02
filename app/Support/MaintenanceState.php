@@ -23,6 +23,10 @@ final class MaintenanceState
 {
     public const REASON_RESTORE = 'restore';
 
+    public const REASON_RESTORE_ROLLBACK = 'restore_rollback';
+
+    public const REASON_RESTORE_FAILED = 'restore_failed';
+
     public const REASON_LOGIN = 'login_disabled';
 
     public const REASON_SCHEDULED = 'scheduled';
@@ -76,7 +80,11 @@ final class MaintenanceState
     {
         $current = self::current();
 
-        if ($current !== null && $current['reason'] === self::REASON_RESTORE) {
+        if ($current !== null && in_array($current['reason'], [self::REASON_RESTORE, self::REASON_RESTORE_ROLLBACK, self::REASON_RESTORE_FAILED], true)) {
+            if ($current['reason'] === self::REASON_RESTORE_FAILED) {
+                return;
+            }
+
             if (! self::isStale($current['started_at'])) {
                 return;
             }
@@ -206,7 +214,9 @@ final class MaintenanceState
 
         // Debris from a process that died mid-restore should read as a plain
         // outage: "restoring since Tuesday" is worse copy than no claim at all.
-        if ($startedAt !== null && self::isStale($startedAt)) {
+        if ($startedAt !== null
+            && $reason !== self::REASON_RESTORE_FAILED
+            && self::isStale($startedAt)) {
             $stale = true;
             $reason = self::REASON_SCHEDULED;
             $audience = null;
@@ -217,6 +227,16 @@ final class MaintenanceState
                 'headline' => 'We are restoring your data',
                 'message' => 'A backup restore is underway and the entire cooperative management system is offline while it runs. Nobody can sign in or transact until it finishes, so this will stay up for the whole duration rather than only for members.',
                 'detail' => 'The system is being returned to a recent verified archive, so transactions and balances may change once it finishes. If a restore is interrupted it can stay offline until it is resolved.',
+            ],
+            self::REASON_RESTORE_ROLLBACK => [
+                'headline' => 'Recovering the previous system data',
+                'message' => 'The requested restore did not complete. The system is offline while its pre-restore checkpoint is being recovered.',
+                'detail' => 'Please wait while the cooperative restores the data that was in place before this operation.',
+            ],
+            self::REASON_RESTORE_FAILED => [
+                'headline' => 'Restore interrupted — system offline',
+                'message' => 'A backup restore did not finish successfully. The system is staying offline while the restored data is checked and recovered.',
+                'detail' => 'Please contact the system administrator. The system will remain unavailable until recovery is complete.',
             ],
             self::REASON_LOGIN => self::loginCopy($audience),
             default => [

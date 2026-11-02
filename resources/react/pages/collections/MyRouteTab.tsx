@@ -266,7 +266,7 @@ export default function MyRouteTab() {
                         </div>
                         <h3 className="font-semibold text-slate-800 mb-2">No Active Run</h3>
                         <p className="text-sm text-slate-500 mb-4">Start a new collection run envelope to record payments today.</p>
-                        <Button variant="primary" onClick={startRun}>Start Run</Button>
+                        <Button variant="primary" disableOnClick onClick={startRun}>Start Run</Button>
                     </div>
                 ) : (
                     <div className="flex-1 flex flex-col h-full">
@@ -381,7 +381,7 @@ export default function MyRouteTab() {
 
                         <div className="mt-6 flex justify-end space-x-3">
                             <Button variant="secondary" onClick={handleCloseModal}>Cancel</Button>
-                            <Button variant="primary" type="submit" disabled={isSubmitting}>
+                            <Button variant="primary" type="submit" disableOnClick isLoading={isSubmitting}>
                                 {isSubmitting ? 'Saving...' : editingItem ? 'Save Changes' : 'Save Record'}
                             </Button>
                         </div>

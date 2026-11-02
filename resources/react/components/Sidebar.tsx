@@ -2,7 +2,9 @@ import { NavLink, useLocation } from 'react-router';
 import { Fragment } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSidebar } from '../contexts/SidebarContext';
+import { useLanguage } from '../contexts/LanguageContext';
 
+import Button from './ui/Button';
 interface NavItem {
     label: string;
     path: string;
@@ -15,23 +17,23 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
     { label: 'Dashboard', path: '/dashboard', icon: 'fas fa-tachometer-alt' },
-    { label: 'Members', path: '/dashboard/members', icon: 'fas fa-users', permission: 'members.view' },
-    { label: 'Approvals', path: '/dashboard/approvals', icon: 'fas fa-clipboard-check', permission: 'oversight.approve' },
-    { label: 'Officers', path: '/dashboard/officers', icon: 'fas fa-user-tie', permission: 'officers.view' },
-    { label: 'Branches', path: '/dashboard/branches', icon: 'fas fa-building', permission: 'branches.view' },
-    { label: 'Services', path: '/dashboard/services', icon: 'fas fa-briefcase', permission: 'services.view' },
-    { label: 'My Loans', path: '/dashboard/member-loans', icon: 'fas fa-hand-holding-usd', roles: ['member'] },
-    { label: 'Loans', path: '/dashboard/loans', icon: 'fas fa-hand-holding-usd', permission: 'loans.view' },
-    { label: 'Collections', path: '/dashboard/collections', icon: 'fas fa-wallet', multiPermission: ['collections.view-all', 'collections.view-own', 'collections.review', 'collections.approve'] },
-    { label: 'Ledger', path: '/dashboard/ledger', icon: 'fas fa-book', permission: 'transactions.view' },
-    { label: 'Expenses', path: '/dashboard/expenses', icon: 'fas fa-receipt', permission: 'transactions.view' },
-    { label: 'History', path: '/dashboard/history', icon: 'fas fa-history', roles: ['member'] },
-    { label: 'Announcements', path: '/dashboard/announcements', icon: 'fas fa-bullhorn', permission: 'announcements.view' },
-    { label: 'Notifications', path: '/dashboard/notifications', icon: 'fas fa-bell' },
-    { label: 'Tickets', path: '/dashboard/tickets', icon: 'fas fa-ticket-alt', permission: 'tickets.view' },
-    { label: 'Reports', path: '/dashboard/reports', icon: 'fas fa-chart-bar', permission: 'reports.view' },
-    { label: 'Logs', path: '/dashboard/logs', icon: 'fas fa-clipboard-list', permission: 'logs.view' },
-    { label: 'Settings', path: '/dashboard/settings', icon: 'fas fa-cog' },
+    { label: 'Members', path: '/dashboard/members', icon: 'fas fa-users', permission: 'members.view', group: 'People & Governance' },
+    { label: 'Approvals', path: '/dashboard/approvals', icon: 'fas fa-clipboard-check', permission: 'oversight.approve', group: 'People & Governance' },
+    { label: 'Officers', path: '/dashboard/officers', icon: 'fas fa-user-tie', permission: 'officers.view', group: 'People & Governance' },
+    { label: 'Branches', path: '/dashboard/branches', icon: 'fas fa-building', permission: 'branches.view', group: 'People & Governance' },
+    { label: 'Services', path: '/dashboard/services', icon: 'fas fa-briefcase', permission: 'services.view', group: 'Financial Services' },
+    { label: 'My Loans', path: '/dashboard/member-loans', icon: 'fas fa-hand-holding-usd', roles: ['member'], group: 'Financial Services' },
+    { label: 'Loans', path: '/dashboard/loans', icon: 'fas fa-hand-holding-usd', permission: 'loans.view', group: 'Financial Services' },
+    { label: 'Collections', path: '/dashboard/collections', icon: 'fas fa-wallet', multiPermission: ['collections.view-all', 'collections.view-own', 'collections.review', 'collections.approve'], group: 'Financial Services' },
+    { label: 'Ledger', path: '/dashboard/ledger', icon: 'fas fa-book', permission: 'transactions.view', group: 'Financial Services' },
+    { label: 'Expenses', path: '/dashboard/expenses', icon: 'fas fa-receipt', permission: 'transactions.view', group: 'Financial Services' },
+    { label: 'History', path: '/dashboard/history', icon: 'fas fa-history', roles: ['member'], group: 'Financial Services' },
+    { label: 'Announcements', path: '/dashboard/announcements', icon: 'fas fa-bullhorn', permission: 'announcements.view', group: 'Communication' },
+    { label: 'Notifications', path: '/dashboard/notifications', icon: 'fas fa-bell', group: 'Communication' },
+    { label: 'Tickets', path: '/dashboard/tickets', icon: 'fas fa-ticket-alt', permission: 'tickets.view', group: 'Communication' },
+    { label: 'Reports', path: '/dashboard/reports', icon: 'fas fa-chart-bar', permission: 'reports.view', group: 'Reports & Logs' },
+    { label: 'Logs', path: '/dashboard/logs', icon: 'fas fa-clipboard-list', permission: 'logs.view', group: 'Reports & Logs' },
+    { label: 'Settings', path: '/dashboard/settings', icon: 'fas fa-cog', group: 'Account' },
     { label: 'Public Page', path: '/dashboard/public-content', icon: 'fas fa-globe', permission: 'settings.update', group: 'System Settings' },
     { label: 'Loan Products', path: '/dashboard/loan-products', icon: 'fas fa-hand-holding-usd', permission: 'settings.update', group: 'System Settings' },
     { label: 'Roles & Permissions', path: '/dashboard/role-permissions', icon: 'fas fa-user-shield', permission: 'officers.manage-permissions', group: 'System Settings' },
@@ -58,7 +60,22 @@ const ADMIN_NAV_PATHS = new Set([
     '/dashboard/backups',
 ]);
 
+const CHAIRMAN_NAV_PATHS = new Set([
+    '/dashboard',
+    '/dashboard/approvals',
+    '/dashboard/members',
+    '/dashboard/officers',
+    '/dashboard/branches',
+    '/dashboard/ledger',
+    '/dashboard/expenses',
+    '/dashboard/collections',
+    '/dashboard/tickets',
+    '/dashboard/reports',
+    '/dashboard/logs',
+]);
+
 export default function Sidebar() {
+    const { t } = useLanguage();
     const { user, logout } = useAuth();
     const { isOpen, isMobileOpen, closeMobile } = useSidebar();
     const location = useLocation();
@@ -69,6 +86,9 @@ export default function Sidebar() {
 
     const filteredItems = NAV_ITEMS.filter(item => {
         if (user?.primary_role === 'admin' && !ADMIN_NAV_PATHS.has(item.path)) {
+            return false;
+        }
+        if (user?.primary_role === 'chairman' && !CHAIRMAN_NAV_PATHS.has(item.path)) {
             return false;
         }
         if (item.roles && user && item.roles.includes(user.primary_role)) return true;
@@ -104,7 +124,7 @@ export default function Sidebar() {
                         <Fragment key={item.path}>
                         {item.group && filteredItems[index - 1]?.group !== item.group && (
                             <li className={`overflow-hidden whitespace-nowrap px-3.5 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-gray-400 transition-all duration-300 ${labelClass}`}>
-                                {item.group}
+                                {t(item.group)}
                             </li>
                         )}
                         <li>
@@ -118,7 +138,7 @@ export default function Sidebar() {
                                         window.scrollTo({ top: 0, behavior: 'smooth' });
                                     }
                                 }}
-                                title={item.label}
+                                title={t(item.label)}
                                 className={({ isActive }) =>
                                     `flex items-center gap-3 rounded-lg px-3.5 py-3 transition-all duration-200 ${
                                         isActive
@@ -129,7 +149,7 @@ export default function Sidebar() {
                             >
                                 <i className={`${item.icon} text-lg shrink-0 w-5 text-center`}></i>
                                 <span className={`flex flex-1 min-w-0 overflow-hidden whitespace-nowrap transition-all duration-300 ${labelClass}`}>
-                                    <span className="flex-1 text-left font-medium whitespace-nowrap truncate">{item.label}</span>
+                                    <span className="flex-1 text-left font-medium whitespace-nowrap truncate">{t(item.label)}</span>
                                 </span>
                             </NavLink>
                         </li>
@@ -141,12 +161,12 @@ export default function Sidebar() {
             <div className="border-t border-gray-200 p-3">
                 <button
                     onClick={logout}
-                    title="Logout"
+                    title={t('Logout')}
                     className="w-full flex items-center gap-3 px-3.5 py-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
                 >
                     <i className="fas fa-sign-out-alt text-lg shrink-0 w-5 text-center"></i>
                     <span className={`flex flex-1 min-w-0 overflow-hidden whitespace-nowrap transition-all duration-300 ${labelClass}`}>
-                        <span className="flex-1 text-left font-medium whitespace-nowrap">Logout</span>
+                        <span className="flex-1 text-left font-medium whitespace-nowrap">{t('Logout')}</span>
                     </span>
                 </button>
             </div>

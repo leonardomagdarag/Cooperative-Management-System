@@ -132,6 +132,14 @@ class SystemSettingSeeder extends Seeder
                 'label' => 'Daily Backup Time',
                 'description' => 'Time of day when daily and off-site backups are scheduled',
             ],
+            [
+                'key' => 'backup_storage_warning_percent',
+                'value' => '85',
+                'type' => 'number',
+                'group' => 'backup',
+                'label' => 'Backup Storage Warning Threshold',
+                'description' => 'Notify administrators when local backup storage usage reaches this percentage',
+            ],
 
             // ── Collections ───────────────────────────────────────────────
             [

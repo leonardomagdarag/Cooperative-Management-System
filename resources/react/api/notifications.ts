@@ -14,7 +14,7 @@ export interface Notification {
     created_at: string;
 }
 
-export async function getNotifications(params?: { status?: string; category?: string; page?: number; per_page?: number }) {
+export async function getNotifications(params?: { status?: string; category?: string; search?: string; from?: string; to?: string; sort?: string; direction?: string; page?: number; per_page?: number }) {
     return api.get('/api/notifications', { params });
 }
 

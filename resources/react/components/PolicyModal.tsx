@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 
+import Button from './ui/Button';
 export default function PolicyModal({ title, content, onClose }: { title: string; content?: string; onClose: () => void }) {
     const dialogRef = useRef<HTMLElement>(null);
 

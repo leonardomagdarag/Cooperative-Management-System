@@ -111,6 +111,10 @@ export interface TicketQueryParams {
     search?: string;
     page?: number;
     per_page?: number;
+    from?: string;
+    to?: string;
+    sort?: string;
+    direction?: string;
 }
 
 export async function getTickets(params: TicketQueryParams = {}): Promise<TicketListResponse> {

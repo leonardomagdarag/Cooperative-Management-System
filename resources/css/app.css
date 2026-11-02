@@ -34,6 +34,15 @@
 }
 
 @layer components {
+    .services-page input::placeholder, .services-page textarea::placeholder { color: rgb(71 85 105); opacity: 1; }
+    .table-toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .75rem; border: 1px solid rgb(226 232 240); border-radius: .875rem; background: rgb(248 250 252); padding: .75rem; box-shadow: 0 1px 3px rgb(15 23 42 / .05); }
+    .table-toolbar > label { display: flex; flex-direction: column; align-items: flex-start; gap: .25rem; color: rgb(6 95 70); font-size: .75rem; font-weight: 400; }
+    .table-toolbar > select, .table-toolbar > input:not([type='checkbox']):not([type='radio']), .table-toolbar > div > select, .table-toolbar > div > input:not([type='checkbox']):not([type='radio']) { border-color: rgb(167 243 208); background-color: white; box-shadow: 0 1px 2px rgb(15 23 42 / .04); }
+    .table-toolbar label, .table-toolbar select, .table-toolbar input, .table-toolbar button { font-weight: 400; }
+    .table-sort-button { display: inline-flex; align-items: center; gap: .5rem; background: transparent; color: inherit; font: inherit; cursor: pointer; text-align: inherit; }
+    .table-sort-button:hover { color: rgb(4 120 87); }
+    .table-toolbar button { border-radius: .625rem; }
+    .table-toolbar .ui-btn { border-radius: .625rem; }
     .ui-btn { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; border: 1px solid transparent; border-radius: .625rem; font-weight: 600; line-height: 1.25; transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 160ms ease; }
     .ui-btn:hover:not(:disabled) { transform: translateY(-1px); }
     .ui-btn:disabled { cursor: not-allowed; opacity: .55; }
@@ -83,15 +92,31 @@
         font-size: .875rem;
         transition: border-color 160ms ease, box-shadow 160ms ease;
     }
+    .dashboard-shell select {
+        appearance: none;
+        cursor: pointer;
+        padding-right: 2.25rem;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='m6 8 4 4 4-4' stroke='%23647569' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+        background-position: right .75rem center;
+        background-repeat: no-repeat;
+        background-size: 1rem;
+        box-shadow: 0 1px 2px rgb(15 23 42 / .04);
+    }
+    .dashboard-shell select:hover { border-color: rgb(148 163 184) !important; }
     .dashboard-shell input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='hidden']):not(.public-input):focus,
     .dashboard-shell select:focus,
     .dashboard-shell textarea:focus { border-color: rgb(16 185 129) !important; box-shadow: 0 0 0 3px rgb(16 185 129 / .12); outline: none; }
     .dashboard-shell textarea { min-height: 6rem; }
     .dashboard-shell input[type='checkbox'], .dashboard-shell input[type='radio'] { accent-color: rgb(4 120 87); }
-    .dashboard-shell table { width: 100%; border-collapse: separate; border-spacing: 0; }
-    .dashboard-shell thead th { background: rgb(248 250 252); color: rgb(100 116 139); font-size: .6875rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
-    .dashboard-shell tbody tr { transition: background-color 120ms ease; }
-    .dashboard-shell tbody tr:hover { background: rgb(248 250 252); }
+    .dashboard-shell table { width: 100%; border: 1px solid rgb(226 232 240); border-collapse: separate; border-spacing: 0; border-radius: .875rem; background: white; box-shadow: 0 1px 3px rgb(15 23 42 / .05); }
+    .dashboard-shell thead th { padding: .875rem 1rem; border-bottom: 1px solid rgb(226 232 240); background: linear-gradient(180deg, rgb(248 250 252), rgb(241 245 249)); color: rgb(71 85 105); font-size: .75rem; font-weight: 400; white-space: nowrap; }
+    .dashboard-shell tbody td { border-bottom: 1px solid rgb(241 245 249); }
+    .dashboard-shell tbody tr:nth-child(even) { background: rgb(250 252 251); }
+    .dashboard-shell tbody tr { transition: background-color 140ms ease; }
+    .dashboard-shell tbody tr:hover { background: rgb(236 253 245); }
+    .dashboard-shell tbody tr:last-child td { border-bottom: 0; }
+    .dashboard-shell thead th.cursor-pointer { color: rgb(71 85 105); cursor: pointer; transition: color 140ms ease, background-color 140ms ease; }
+    .dashboard-shell thead th.cursor-pointer:hover { color: rgb(4 120 87); background: rgb(220 252 231); }
 }
 
 @layer utilities {
@@ -177,7 +202,7 @@ html {
 
 .public-heading {
     color: var(--public-ink);
-    font-weight: 800;
+    font-weight: 500;
     line-height: 1.05;
     letter-spacing: 0;
 }
@@ -251,6 +276,10 @@ html {
     transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
 }
 
+.public-input-with-icon {
+    padding-left: 3rem;
+}
+
 .public-input:focus {
     border-color: rgba(4, 120, 87, 0.58);
     box-shadow: 0 0 0 4px rgba(4, 120, 87, 0.12);
@@ -315,3 +344,9 @@ html {
         display: none !important;
     }
 }
+
+.dashboard-shell thead th, .table-toolbar label, .table-toolbar select, .table-toolbar button { font-weight: 400; }
+
+/* Reserve the chevron gutter even when legacy selects use px-* utilities. */
+.dashboard-shell select:not([multiple]):not([size]) { padding-right: 2.5rem; }
+.dashboard-shell select[multiple], .dashboard-shell select[size] { background-image: none; }

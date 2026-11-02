@@ -319,7 +319,10 @@ class PermissionCatalog
                 'collections.review',
                 'collections.approve',
                 'receipts.reissue',
+                'financial_settings.view',
+                'financial_settings.update',
                 'interest.view',
+                'interest.run',
             ],
             'accountant' => [
                 'dashboard.view',

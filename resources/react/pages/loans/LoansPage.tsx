@@ -1,4 +1,6 @@
+import SortableHeader from '../../components/ui/SortableHeader';
 import HelpTip from '../../components/ui/HelpTip';
+import PageHeader from '../../components/ui/PageHeader';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
@@ -12,6 +14,7 @@ import Pagination from '../../components/ui/Pagination';
 import AmortizationTable from '../../components/loans/AmortizationTable';
 import PaymentHistoryTable from '../../components/loans/PaymentHistoryTable';
 import { formatPeso } from '../../lib/format';
+import DateRangeFilter from '../../components/ui/DateRangeFilter';
 
 export default function LoansPage() {
     const { user } = useAuth();
@@ -20,6 +23,9 @@ export default function LoansPage() {
     const [page, setPage] = useState(1);
     const [sort, setSort] = useState('created_at');
     const [direction, setDirection] = useState<'asc' | 'desc'>('desc');
+    const [from, setFrom] = useState('');
+    const [to, setTo] = useState('');
+    const [loanStatus, setLoanStatus] = useState('');
     const [selectedLoanId, setSelectedLoanId] = useState<number | null>(null);
     const [disbursementLoan, setDisbursementLoan] = useState<any>(null);
     const [disbursementDestination, setDisbursementDestination] = useState<'cash' | 'savings'>('cash');
@@ -46,8 +52,8 @@ export default function LoansPage() {
     const canAssignBranch = !!user?.permissions?.includes('branches.view');
 
     const { data, isLoading } = useQuery({
-        queryKey: ['loans', search, page, sort, direction, branchFilter],
-        queryFn: () => api.get('/api/loans', { params: { search: search || undefined, branch_id: branchFilter || undefined, page, per_page: 10, sort, direction } }),
+        queryKey: ['loans', search, page, sort, direction, branchFilter, from, to, loanStatus],
+        queryFn: () => api.get('/api/loans', { params: { search: search || undefined, branch_id: branchFilter || undefined, page, per_page: 10, sort, direction, from: from || undefined, to: to || undefined, loan_status: loanStatus || undefined } }),
     });
 
     const { data: loanDetail } = useQuery({
@@ -173,6 +179,7 @@ export default function LoansPage() {
     };
 
     const toggleSort = (field: string) => {
+        setPage(1);
         if (sort === field) {
             setDirection(d => (d === 'desc' ? 'asc' : 'desc'));
         } else {
@@ -182,9 +189,7 @@ export default function LoansPage() {
     };
 
     const sortableTh = (label: string, field: string) => (
-        <th onClick={() => toggleSort(field)} className={`p-4 text-xs font-medium text-left text-gray-500 uppercase cursor-pointer hover:bg-gray-200 ${sort === field ? 'text-blue-700' : ''}`}>
-            {label} {sort === field && <span className="ml-1">{direction === 'asc' ? '↑' : '↓'}</span>}
-        </th>
+        <SortableHeader field={field} sort={sort} direction={direction} onSort={toggleSort} className="p-4 text-left">{label}</SortableHeader>
     );
 
     const detail = loanDetail?.data;
@@ -198,16 +203,12 @@ export default function LoansPage() {
 
     return (
         <>
-            <div className="p-4 bg-white block sm:flex items-center justify-between border-b border-gray-200 lg:mt-1.5">
-                <div>
-                    <h1 className="flex items-center gap-2 text-xl font-semibold text-gray-900 sm:text-2xl">Loans <HelpTip text="Loan records move through review, approval, disbursement, and repayment. Encoding a loan records an application; it does not itself disburse funds." /></h1>
-                    <p className="text-sm text-gray-500">Manage loan applications and records</p>
-                </div>
-                {canEncode && (
+            <div className="p-4">
+                <PageHeader title={<>Loans <HelpTip text="Loan records move through review, approval, disbursement, and repayment. Encoding a loan records an application; it does not itself disburse funds." /></>} description="Manage loan applications and records" icon="fas fa-file-invoice-dollar" action={canEncode && (
                     <button onClick={() => setShowEncodeModal(true)} className="mt-3 sm:mt-0 bg-emerald-600 hover:bg-emerald-700 rounded-lg focus:ring-2 focus:ring-emerald-500/20 text-white px-4 py-2 text-sm font-medium shadow-xs transition-colors cursor-pointer">
                         <i className="fas fa-plus mr-1.5"></i> Encode Loan
                     </button>
-                )}
+                )} />
             </div>
 
             <div className="p-4">
@@ -219,11 +220,15 @@ export default function LoansPage() {
                     className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 block w-full p-2.5 mb-4 transition-all"
                 />
 
-                {canAssignBranch && (
-                    <div className="mb-4 w-full sm:w-64">
-                        <BranchSelect label="" value={branchFilter} onChange={v => { setBranchFilter(v); setPage(1); }} allLabel="All branches" />
-                    </div>
-                )}
+                <div className="table-toolbar mb-4">
+                    <DateRangeFilter from={from} to={to} onFromChange={value => { setFrom(value); setPage(1); }} onToChange={value => { setTo(value); setPage(1); }} />
+                    <label className="flex items-center gap-2 text-sm text-gray-600">Status
+                        <select value={loanStatus} onChange={event => { setLoanStatus(event.target.value); setPage(1); }} className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm">
+                            <option value="">All statuses</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="active">Active</option><option value="paid_off">Paid off</option><option value="rejected">Rejected</option>
+                        </select>
+                    </label>
+                    {canAssignBranch && <div className="w-full sm:w-64"><BranchSelect label="" value={branchFilter} onChange={v => { setBranchFilter(v); setPage(1); }} allLabel="All branches" /></div>}
+                </div>
 
                 {isLoading ? (
                     <div className="space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-14 animate-pulse rounded-lg bg-gray-100" />)}</div>
@@ -237,12 +242,12 @@ export default function LoansPage() {
                         <table className="min-w-[800px] w-full divide-y divide-gray-200 table-fixed">
                             <thead className="bg-gray-100">
                                 <tr>
-                                    <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Loan #</th>
-                                    <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Member</th>
+                                    {sortableTh('Loan #', 'loan_number')}
+                                    <SortableHeader field="member" sort={sort} direction={direction} onSort={toggleSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Member</SortableHeader>
                                     {sortableTh('Amount', 'loan_amount')}
                                     {sortableTh('Type', 'loan_type')}
                                     {sortableTh('Status', 'loan_status')}
-                                    {canAssignBranch && <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Branch</th>}
+                                    {canAssignBranch && <SortableHeader field="branch" sort={sort} direction={direction} onSort={toggleSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Branch</SortableHeader>}
                                     {sortableTh('Date', 'created_at')}
                                     <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Actions</th>
                                 </tr>
@@ -595,7 +600,7 @@ export default function LoansPage() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm" role="presentation" onClick={() => !disburseMutation.isPending && setDisbursementLoan(null)}>
                     <section className="w-full max-w-lg rounded-2xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="loan-disbursement-title" onClick={e => e.stopPropagation()}>
                         <div className="border-b border-gray-200 px-6 py-5">
-                            <h2 id="loan-disbursement-title" className="text-lg font-bold text-gray-900">Confirm Loan Disbursement</h2>
+                            <h2 id="loan-disbursement-title" className="flex items-center gap-2 text-lg font-bold text-gray-900">Confirm Loan Disbursement <HelpTip text="Karaniwang cash ang loan proceeds. Piliin lang ang Credit to savings kung iyon talaga ang napagkasunduan at na-confirm ng borrower. Mare-record ang piniling paraan sa transaction." /></h2>
                             <p className="mt-1 text-sm text-gray-600">{disbursementLoan.loan_number} · ₱{Number(disbursementLoan.loan_amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                         </div>
                         <div className="space-y-3 p-6">

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router';
 import { api } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLanguage } from '../../contexts/LanguageContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
 import { getServiceStatus, type ServiceAvailabilityData } from '../../api/settings';
 import DepositWizard from './DepositWizard';
@@ -13,6 +14,7 @@ import LoanPaymentWizard from './LoanPaymentWizard';
 import TransactionApproval from './TransactionApproval';
 import LoanReviewModal from './LoanReviewModal';
 import ServiceMaintenanceModal from '../../components/ServiceMaintenanceModal';
+import PageHeader from '../../components/ui/PageHeader';
 
 type ServiceType = 'deposit' | 'withdraw' | 'loan' | 'payment' | 'approve' | 'loan-review' | null;
 
@@ -30,6 +32,7 @@ const formatPendingDate = (iso: string): string => {
 };
 
 export default function ServicesPage() {
+    const { t } = useLanguage();
     const queryClient = useQueryClient();
     const { user } = useAuth();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -153,10 +156,8 @@ export default function ServicesPage() {
         ? (selectedMemberDetail?.loans?.filter((l: any) => ['approved', 'active'].includes(l.loan_status)) ?? []).length
         : (isOfficer ? 0 : (dashboardData?.data?.active_loans_count ?? 0));
 
-    const pendingRequests = canApprove ? pendingCount : (isOfficer ? 0 : myPendingCount);
-
     const hideFinancials = isLoanFocused;
-    const gridCols = hideFinancials ? 'md:grid-cols-2' : 'md:grid-cols-4';
+    const gridCols = hideFinancials ? 'sm:grid-cols-2' : isOfficer ? 'sm:grid-cols-2 xl:grid-cols-3' : 'sm:grid-cols-2 xl:grid-cols-4';
 
     const handleSelectMember = (m: any) => {
         setSelectedMember(m);
@@ -249,23 +250,48 @@ export default function ServicesPage() {
         }
     };
 
-    const selectorTitle = canApprove
-        ? 'Approval Mode - Select Member'
-        : (canReviewLoans ? 'Service Officer Mode - Select Member' : 'Select Member');
-
     return (
-        <div className="space-y-6">
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900">Services <HelpTip text="Choose a service to start a deposit, withdrawal, loan application, or loan payment. Officers may first need to select the member whose account they are serving." /></h1>
-                <p className="mt-1 text-sm text-gray-500">Select a service to get started</p>
-            </div>
+        <div className="services-page space-y-6">
+            <PageHeader  title={<>{t(isOfficer ? 'Services & approvals' : 'How can we help you?')} <HelpTip text="Choose a service to start a deposit, withdrawal, loan application, or loan payment. Officers can review pending requests without selecting a member." /></>} description={t(isOfficer ? 'Review pending work or select a member to process a service.' : 'Choose a service to get started. You can check your account and request status below.')} icon="fas fa-hand-holding-heart" />
+
+            {isOfficer && (canApprove || canReviewLoans) && (
+                <section aria-labelledby="services-review-title" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                    <h2 id="services-review-title" className="text-xl font-bold text-slate-900">Needs your review</h2>
+                    <p className="mt-1 mb-5 text-sm text-slate-600">Open a queue to review requests across members. No member selection is needed.</p>
+                    <div className={`grid grid-cols-1 ${canApprove && canReviewLoans ? 'md:grid-cols-2' : ''} gap-3`}>
+                        {canApprove && (
+                            <button type="button" onClick={() => openService('approve')} className="group relative rounded-xl border border-amber-200 bg-amber-50 p-4 text-left transition-colors hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600">
+                                {pendingCount > 0 && (
+                                    <span className="absolute top-3 right-3 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">{pendingCount}</span>
+                                )}
+                                <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500" aria-hidden="true"><i className="fas fa-clipboard-check text-white text-xl"></i></span>
+                                <span className="block text-base font-bold text-gray-900">Approve Transactions</span>
+                                <span className="mt-1 block text-sm text-gray-600">Review and approve pending member requests</span>
+                            </button>
+                        )}
+                        {canReviewLoans && (
+                            <button type="button" onClick={() => openService('loan-review')} className="group relative rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-left transition-colors hover:bg-indigo-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+                                {pendingLoanReviews > 0 && (
+                                    <span className="absolute top-3 right-3 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">{pendingLoanReviews}</span>
+                                )}
+                                <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600" aria-hidden="true"><i className="fas fa-file-alt text-white text-xl"></i></span>
+                                <span className="block text-base font-bold text-gray-900">Loan Applications</span>
+                                <span className="mt-1 block text-sm text-gray-600">Review and endorse pending loan applications</span>
+                            </button>
+                        )}
+                    </div>
+                </section>
+            )}
 
             {isOfficer && (
-                <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-cyan-500">
-                    <h3 className="text-lg font-bold text-gray-900 mb-4">
-                        <i className="fas fa-user-tie text-cyan-600 mr-2"></i>
-                        {selectorTitle}
-                    </h3>
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                    <div className="mb-4 flex items-center gap-3">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-50 text-cyan-700"><i className="fas fa-user-tie" aria-hidden="true"></i></span>
+                        <div>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Step 1</p>
+                            <h2 className="text-lg font-semibold text-slate-900">Select a member</h2>
+                        </div>
+                    </div>
 
                     {selectedMember ? (
                         <div className="flex items-center justify-between p-4 bg-cyan-50 rounded-lg border border-cyan-200">
@@ -278,8 +304,8 @@ export default function ServicesPage() {
                                     <p className="text-sm text-gray-600">{selectedMember.user_number}</p>
                                 </div>
                             </div>
-                            <button onClick={() => setSelectedMember(null)} className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                                <i className="fas fa-times mr-2"></i>Change Member
+                            <button onClick={() => setSelectedMember(null)} className="shrink-0 rounded-lg px-3 py-2 text-sm font-semibold text-cyan-800 transition-colors hover:bg-cyan-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-600">
+                                Change member
                             </button>
                         </div>
                     ) : (
@@ -288,6 +314,7 @@ export default function ServicesPage() {
                                 <div className="relative">
                                     <input
                                         type="text"
+                                        aria-label="Search members by name"
                                         value={memberSearch}
                                         onChange={e => { setMemberSearch(e.target.value); setSearchOpen(true); setActiveIndex(-1); }}
                                         onKeyDown={handleSearchKeyDown}
@@ -295,7 +322,7 @@ export default function ServicesPage() {
                                         placeholder="Search member by name..."
                                         className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
                                     />
-                                    <i className="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                                    <i className="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-600"></i>
                                     {searchLoading && (
                                         <span className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-cyan-500" />
                                     )}
@@ -305,14 +332,14 @@ export default function ServicesPage() {
                                     <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 max-h-72 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
                                         <div className="max-h-72 overflow-y-auto p-2">
                                             {memberSearch.trim().length < 2 ? (
-                                                <p className="px-3 py-4 text-center text-sm text-gray-500">Start typing to search for a member</p>
+                                                <p className="px-3 py-4 text-center text-sm text-gray-700">Start typing to search for a member</p>
                                             ) : searchLoading && members.length === 0 ? (
-                                                <div className="flex items-center gap-2 px-3 py-3 text-sm text-gray-500">
+                                                <div className="flex items-center gap-2 px-3 py-3 text-sm text-gray-700">
                                                     <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-cyan-500" />
                                                     Searching...
                                                 </div>
                                             ) : members.length === 0 ? (
-                                                <p className="px-3 py-4 text-center text-sm text-gray-500">No members found</p>
+                                                <p className="px-3 py-4 text-center text-sm text-gray-700">No members found</p>
                                             ) : (
                                                 members.map((m: any, idx: number) => (
                                                     <button
@@ -328,9 +355,9 @@ export default function ServicesPage() {
                                                         </div>
                                                         <div className="min-w-0 flex-1">
                                                             <p className="truncate font-medium text-gray-900">{m.name}</p>
-                                                            <p className="truncate text-sm text-gray-500">{m.user_number}</p>
+                                                            <p className="truncate text-sm text-gray-700">{m.user_number}</p>
                                                         </div>
-                                                        <i className="fas fa-chevron-right shrink-0 text-gray-400"></i>
+                                                        <i className="fas fa-chevron-right shrink-0 text-gray-600"></i>
                                                     </button>
                                                 ))
                                             )}
@@ -343,119 +370,26 @@ export default function ServicesPage() {
                 </div>
             )}
 
-            <div className={`grid grid-cols-1 ${gridCols} gap-4`}>
-                {!hideFinancials && (
-                    <>
-                        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-5 border-l-4 border-green-500">
-                            <p className="text-sm font-medium text-green-700 mb-1">Savings Balance</p>
-                            <p className="text-2xl font-bold text-green-900">{hasSelectedMember ? (selectedMemberDetail ? `₱${Number(savingsBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—') : !isOfficer && !dashboardData ? '—' : `₱${Number(savingsBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}</p>
-                        </div>
-                        <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-5 border-l-4 border-blue-500">
-                            <p className="text-sm font-medium text-blue-700 mb-1">Share Capital</p>
-                            <p className="text-2xl font-bold text-blue-900">{hasSelectedMember ? (selectedMemberDetail ? `₱${Number(shareCapitalBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—') : !isOfficer && !dashboardData ? '—' : `₱${Number(shareCapitalBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}</p>
-                        </div>
-                    </>
-                )}
-                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-5 border-l-4 border-purple-500">
-                    <p className="text-sm font-medium text-purple-700 mb-1">Active Loans</p>
-                    <p className="text-2xl font-bold text-purple-900">{hasSelectedMember ? (selectedMemberDetail ? activeLoanCount : '—') : !isOfficer && !dashboardData ? '—' : activeLoanCount}</p>
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                <div className="mb-5">
+                    {isOfficer && <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Step 2</p>}
+                    <h2 className="text-xl font-bold text-slate-900 sm:text-2xl">{t('Choose a service')}</h2>
+                    <p className="mt-1 text-sm text-slate-600">{t(isOfficer ? 'Process a service for the selected member.' : 'Start a request with the cooperative.')}</p>
                 </div>
-                <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-5 border-l-4 border-orange-500">
-                    <p className="text-sm font-medium text-orange-700 mb-1">Pending Requests</p>
-                    <p className="text-2xl font-bold text-orange-900">{pendingRequests}</p>
-                </div>
-            </div>
-
-            {!isOfficer && myPendingRequests.length > 0 && (
-                <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-orange-500">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold text-gray-900">
-                            <i className="fas fa-clock text-orange-600 mr-2"></i>
-                            Pending Requests
-                        </h3>
-                        <span className="px-3 py-1 bg-orange-100 text-orange-800 text-sm font-semibold rounded-full">
-                            {myPendingRequests.length} {myPendingRequests.length === 1 ? 'Request' : 'Requests'}
-                        </span>
-                    </div>
-
-                    <div className="space-y-3">
-                        {myPendingRequests.map((t: any) => (
-                            <div key={t.id} className="flex items-center justify-between p-4 bg-orange-50 rounded-lg border border-orange-200">
-                                <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <span className="font-semibold text-gray-900">₱{Number(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                                        <span className="px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs font-medium rounded">Awaiting Approval</span>
-                                    </div>
-                                    <p className="text-sm text-gray-600 capitalize">
-                                        {pendingTypeLabel(t.transaction_type)} · <span className="normal-case">{formatPendingDate(t.created_at)}</span>
-                                    </p>
-                                    {t.note && <p className="text-xs text-gray-500 mt-1">{t.note}</p>}
-                                </div>
-                                <div className="text-right">
-                                    <span className="text-sm text-gray-500 capitalize">
-                                        {t.account?.account_type ? pendingTypeLabel(t.account.account_type) : 'Transaction'}
-                                    </span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <div className="flex items-start gap-2">
-                            <i className="fas fa-info-circle text-blue-600 mt-0.5"></i>
-                            <p className="text-sm text-blue-800">
-                                Your request is being reviewed. You will receive a notification once it has been approved or if additional information is needed.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            <div className="bg-white rounded-xl shadow-sm p-6">
-                <h2 className="text-2xl font-bold text-gray-900 mb-6">Available Services</h2>
 
                 {isOfficer && (
                     <>
-                        {(canApprove || canReviewLoans) && (
-                            <div className={`grid grid-cols-1 ${canApprove && canReviewLoans ? 'md:grid-cols-2' : 'md:grid-cols-1'} gap-4 mb-4`}>
-                                {canApprove && (
-                                    <button onClick={() => openService('approve')} className="group bg-gradient-to-br from-yellow-50 to-amber-100 hover:from-yellow-100 hover:to-amber-200 rounded-xl p-5 text-left transition-all hover:shadow-lg relative">
-                                        {pendingCount > 0 && (
-                                            <span className="absolute top-3 right-3 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">{pendingCount}</span>
-                                        )}
-                                        <div className="w-12 h-12 bg-yellow-500 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                                            <i className="fas fa-clipboard-check text-white text-xl"></i>
-                                        </div>
-                                        <h3 className="text-base font-bold text-gray-900 mb-1">Approve Transactions</h3>
-                                        <p className="text-xs text-gray-600">Review and approve pending member requests</p>
-                                    </button>
-                                )}
-                                {canReviewLoans && (
-                                    <button onClick={() => openService('loan-review')} className="group bg-gradient-to-br from-indigo-50 to-violet-100 hover:from-indigo-100 hover:to-violet-200 rounded-xl p-5 text-left transition-all hover:shadow-lg relative">
-                                        {pendingLoanReviews > 0 && (
-                                            <span className="absolute top-3 right-3 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">{pendingLoanReviews}</span>
-                                        )}
-                                        <div className="w-12 h-12 bg-indigo-600 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                                            <i className="fas fa-file-alt text-white text-xl"></i>
-                                        </div>
-                                        <h3 className="text-base font-bold text-gray-900 mb-1">Loan Applications</h3>
-                                        <p className="text-xs text-gray-600">Review and endorse pending loan applications</p>
-                                    </button>
-                                )}
-                            </div>
-                        )}
-
-                        <div className="border-t border-gray-100 mb-4 pt-2">
-                            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">
+                        <div className="mb-4">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
                                 <i className="fas fa-user-circle mr-1"></i>Member Services
-                                {!hasSelectedMember && <span className="ml-2 text-amber-500 normal-case font-normal">— select a member above to enable</span>}
+                                {!hasSelectedMember && <span className="ml-2 normal-case font-normal text-amber-700">Select a member above to enable these services</span>}
                             </p>
                         </div>
                     </>
                 )}
 
                 {isOfficer ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <ServiceCard
                             icon={
                                 <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -511,7 +445,7 @@ export default function ServicesPage() {
                         />
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <ServiceCard
                             icon={
                                 <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -575,7 +509,81 @@ export default function ServicesPage() {
                         />
                     </div>
                 )}
-            </div>
+            </section>
+
+            {(!isOfficer || hasSelectedMember) && <section aria-labelledby="services-overview-title" className="space-y-4">
+                <div>
+                    <h2 id="services-overview-title" className="text-lg font-bold text-slate-900">{isOfficer ? `${selectedMember.name}'s overview` : t('Your accounts at a glance')}</h2>
+                    <p className="text-sm text-slate-600">{t(isOfficer ? 'Balances and activity for the selected member.' : 'Your current balances and request activity.')}</p>
+                </div>
+                <div className={`grid grid-cols-1 ${gridCols} gap-4`}>
+                {!hideFinancials && (
+                    <>
+                        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-5 border-l-4 border-green-500">
+                            <p className="text-sm font-medium text-green-700 mb-1">{t('Savings Balance')}</p>
+                            <p className="text-2xl font-bold text-green-900">{hasSelectedMember ? (selectedMemberDetail ? `₱${Number(savingsBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—') : !isOfficer && !dashboardData ? '—' : `₱${Number(savingsBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}</p>
+                        </div>
+                        <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-5 border-l-4 border-blue-500">
+                            <p className="text-sm font-medium text-blue-700 mb-1">{t('Share Capital')}</p>
+                            <p className="text-2xl font-bold text-blue-900">{hasSelectedMember ? (selectedMemberDetail ? `₱${Number(shareCapitalBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—') : !isOfficer && !dashboardData ? '—' : `₱${Number(shareCapitalBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}</p>
+                        </div>
+                    </>
+                )}
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-5 border-l-4 border-purple-500">
+                    <p className="text-sm font-medium text-purple-700 mb-1">{t('Active Loans')}</p>
+                    <p className="text-2xl font-bold text-purple-900">{hasSelectedMember ? (selectedMemberDetail ? activeLoanCount : '—') : !isOfficer && !dashboardData ? '—' : activeLoanCount}</p>
+                </div>
+                {!isOfficer && <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-5 border-l-4 border-orange-500">
+                    <p className="text-sm font-medium text-orange-700 mb-1">{t('Pending Requests')}</p>
+                    <p className="text-2xl font-bold text-orange-900">{myPendingCount}</p>
+                </div>}
+                </div>
+            </section>}
+
+            {!isOfficer && myPendingRequests.length > 0 && (
+                <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-orange-500">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-bold text-gray-900">
+                            <i className="fas fa-clock text-orange-600 mr-2"></i>
+                            {t('Pending Requests')}
+                        </h3>
+                        <span className="px-3 py-1 bg-orange-100 text-orange-800 text-sm font-semibold rounded-full">
+                            {myPendingRequests.length} {myPendingRequests.length === 1 ? 'Request' : 'Requests'}
+                        </span>
+                    </div>
+
+                    <div className="space-y-3">
+                        {myPendingRequests.map((t: any) => (
+                            <div key={t.id} className="flex items-center justify-between p-4 bg-orange-50 rounded-lg border border-orange-200">
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="font-semibold text-gray-900">₱{Number(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                        <span className="px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs font-medium rounded">{t('Awaiting Approval')}</span>
+                                    </div>
+                                    <p className="text-sm text-gray-600 capitalize">
+                                        {pendingTypeLabel(t.transaction_type)} · <span className="normal-case">{formatPendingDate(t.created_at)}</span>
+                                    </p>
+                                    {t.note && <p className="text-xs text-gray-700 mt-1">{t.note}</p>}
+                                </div>
+                                <div className="text-right">
+                                    <span className="text-sm text-gray-700 capitalize">
+                                        {t.account?.account_type ? pendingTypeLabel(t.account.account_type) : 'Transaction'}
+                                    </span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-start gap-2">
+                            <i className="fas fa-info-circle text-blue-600 mt-0.5"></i>
+                            <p className="text-sm text-blue-800">
+                                {t('Your request is being reviewed. You will receive a notification once it has been approved or if additional information is needed.')}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {activeService && renderWizard()}
 
@@ -593,45 +601,42 @@ export default function ServicesPage() {
 }
 
 function ServiceCard({ icon, color, label, desc, locked, maintenance, onClick }: { icon: React.ReactNode; color: string; label: string; desc: string; locked?: boolean; maintenance?: boolean; onClick: () => void }) {
-    const bgMap: Record<string, string> = {
-        green: 'bg-green-500', orange: 'bg-orange-500', purple: 'bg-purple-500', blue: 'bg-blue-500',
+    const { t } = useLanguage();
+    const styleMap: Record<string, { icon: string; surface: string }> = {
+        green: { icon: 'bg-emerald-600', surface: 'bg-emerald-50 text-emerald-800' },
+        orange: { icon: 'bg-orange-600', surface: 'bg-orange-50 text-orange-800' },
+        purple: { icon: 'bg-violet-600', surface: 'bg-violet-50 text-violet-800' },
+        blue: { icon: 'bg-blue-600', surface: 'bg-blue-50 text-blue-800' },
     };
-    const gradMap: Record<string, string> = {
-        green: 'from-green-50 to-emerald-100 hover:from-green-100 hover:to-emerald-200',
-        orange: 'from-orange-50 to-red-100 hover:from-orange-100 hover:to-red-200',
-        purple: 'from-purple-50 to-pink-100 hover:from-purple-100 hover:to-pink-200',
-        blue: 'from-blue-50 to-cyan-100 hover:from-blue-100 hover:to-cyan-200',
-    };
-
+    const style = styleMap[color] || styleMap.blue;
     const isDisabled = locked || maintenance;
 
     return (
-        <div className="relative group/card">
-            <button
-                onClick={isDisabled ? undefined : onClick}
-                className={`group w-full bg-gradient-to-br ${gradMap[color] || ''} rounded-xl p-5 text-left transition-all hover:shadow-lg ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-                disabled={isDisabled}
-            >
-                <div className={`w-12 h-12 ${bgMap[color] || 'bg-gray-500'} rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
+        <button
+            type="button"
+            onClick={onClick}
+            disabled={isDisabled}
+            className={`group flex min-h-36 w-full flex-col justify-between rounded-xl border p-5 text-left transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-700 ${isDisabled ? 'cursor-not-allowed border-slate-200 bg-slate-50' : 'border-slate-200 bg-white hover:-translate-y-0.5 hover:border-cyan-300 hover:shadow-md'}`}
+        >
+            <div className="flex w-full items-start gap-4">
+                <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${style.icon}`} aria-hidden="true">
                     {icon}
-                </div>
-                <h3 className="text-base font-bold text-gray-900 mb-1">{label}</h3>
-                <p className="text-xs text-gray-600">{desc}</p>
-            </button>
-            {locked && (
-                <div className="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none">
-                    <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200">
-                        <i className="fas fa-lock text-amber-500 mr-1 text-xs"></i>Select member
-                    </span>
-                </div>
+                </span>
+                <span className="min-w-0 flex-1">
+                    <span className="block text-base font-bold text-slate-900">{t(label)}</span>
+                    <span className="mt-1 block text-sm leading-relaxed text-slate-600">{t(desc)}</span>
+                </span>
+                {!isDisabled && <i className="fas fa-arrow-right mt-1 text-sm text-slate-600 transition-transform group-hover:translate-x-1" aria-hidden="true"></i>}
+            </div>
+            {isDisabled ? (
+                <span className="mt-4 inline-flex self-start rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
+                    {t(maintenance ? 'Under maintenance' : 'Select a member to continue')}
+                </span>
+            ) : (
+                <span className={`mt-4 inline-flex self-start rounded-full px-2.5 py-1 text-xs font-semibold ${style.surface}`}>
+                    {t('Get started')}
+                </span>
             )}
-            {maintenance && !locked && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none rounded-xl">
-                    <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200">
-                        <i className="fas fa-tools text-amber-500 mr-1 text-xs"></i>Under Maintenance
-                    </span>
-                </div>
-            )}
-        </div>
+        </button>
     );
 }

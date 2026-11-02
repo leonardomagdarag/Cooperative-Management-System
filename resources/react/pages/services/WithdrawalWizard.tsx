@@ -4,6 +4,8 @@ import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
 import { validate, withdrawalSchema, withdrawalBaseSchema, type FieldErrors } from '../../lib/validation';
 import ServiceModal from './ServiceModal';
+import HelpTip from '../../components/ui/HelpTip';
+import { useLanguage } from '../../contexts/LanguageContext';
 import StepCircles from './StepCircles';
 import ReceiptQR from '../../components/ReceiptQR';
 
@@ -31,6 +33,7 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
     onDirtyChange?: (dirty: boolean) => void;
     availability?: AvailabilityFlags;
 }) {
+    const { t } = useLanguage();
     const [step, setStep] = useState(1);
     const [form, setForm] = useState({
         amount: '', account_id: '', reason: '', transaction_mode: '',
@@ -131,13 +134,13 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
         },
         onSuccess: (res) => {
             requestIdRef.current = null;
-            addToast(res.data.data?.status === 'completed' ? 'Counter withdrawal recorded' : 'Withdrawal submitted for manager or chairman approval', 'success');
+            addToast(t(res.data.data?.status === 'completed' ? 'Counter withdrawal recorded' : 'Withdrawal submitted for manager or chairman approval'), 'success');
             setReceipt(res.data.data || { message: res.data.message });
             setStep(form.transaction_mode === 'counter' ? 99 : 4);
         },
         onError: (err: any) => {
             requestIdRef.current = null;
-            addToast(err.response?.data?.message || 'Failed', 'error');
+            addToast(t(err.response?.data?.message || 'Failed'), 'error');
         },
     });
 
@@ -161,11 +164,11 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
         >
             {step === 1 && (
                 <div className="p-6 space-y-4">
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Enter Withdrawal Details</h4>
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">{t('Enter Withdrawal Details')}</h4>
 
                     <div className="bg-green-50 border-l-4 border-green-400 p-4">
                         <p className="text-sm text-green-700">
-                            <strong>Current Balance:</strong> {peso(balance)}
+                            <strong>Current Balance:</strong> {peso(balance)} <HelpTip text="Ang available balance ang puwede mong i-withdraw ngayon. Hindi kasama rito ang amount ng pending withdrawals." />
                         </p>
                         {availableBalance < balance && (
                             <p className="text-sm text-orange-600 mt-1">
@@ -178,7 +181,7 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Amount</label>
                         <div className="relative">
-                            <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500">₱</span>
+                            <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-700">₱</span>
                             <input
                                 type="number"
                                 step="0.01"
@@ -218,7 +221,7 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
 
             {step === 2 && (
                 <div className="p-6 space-y-4">
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Choose Collection Method</h4>
+                    <h4 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900">{t('Choose Collection Method')} <HelpTip text="Piliin kung paano mo kukunin ang withdrawal: cash sa cooperative office o transfer sa account na ilalagay mo." /></h4>
 
                     <div className="space-y-3">
                         {(['counter', 'online', 'bank_transfer'] as const).map(mode => {
@@ -259,7 +262,7 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
                                 {errors.bank_name && <p className="mt-1 text-xs text-red-500">{errors.bank_name}</p>}
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Account Number</label>
+                                <div className="mb-2 flex items-center gap-1.5"><label className="text-sm font-medium text-gray-700">Account Number</label><HelpTip text="I-double check ang account number. Dito ipapadala ang withdrawal kapag na-approve ang request." /></div>
                                 <input type="text" value={form.account_number} onChange={e => setField('account_number', e.target.value)} placeholder="Bank account number" className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent ${errors.account_number ? 'border-red-400' : 'border-gray-300'}`} />
                                 {errors.account_number && <p className="mt-1 text-xs text-red-500">{errors.account_number}</p>}
                             </div>
@@ -284,7 +287,7 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
 
             {step === 3 && (
                 <div className="p-6 space-y-4">
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Confirm Your Withdrawal</h4>
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">{t('Confirm Your Withdrawal')}</h4>
 
                     <div className="bg-gray-50 rounded-lg p-4 space-y-3">
                         <div className="flex justify-between">
@@ -304,8 +307,8 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
                     <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
                         <p className="text-sm text-blue-700">
                             <i className="fas fa-info-circle mr-2"></i>
-                            Your withdrawal request will be reviewed and approved by authorized personnel.
-                            {form.transaction_mode === 'counter' ? ' You will receive a notification once approved.' : ' Bank transfers may take 1-2 business days after approval.'}
+                            {t('Your withdrawal request will be reviewed and approved by authorized personnel.')}
+                            {' '}{t(form.transaction_mode === 'counter' ? 'You will receive a notification once approved.' : 'Bank transfers may take 1-2 business days after approval.')}
                         </p>
                     </div>
 
@@ -329,13 +332,13 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
                         <h4 className="text-lg font-semibold text-gray-900 mb-2">
                             {form.transaction_mode === 'bank_transfer' ? 'Processing Bank Transfer' : 'Processing Online Transfer'}
                         </h4>
-                        <p className="text-gray-600 mb-6">Online and bank-transfer withdrawals remain pending until a manager or chairman approves them. A manager is limited to their branch when branch bypass is off; with bypass enabled, only the chairman can approve.</p>
+                        <p className="text-gray-600 mb-6">{t('Online and bank-transfer withdrawals remain pending until a manager or chairman approves them. A manager is limited to their branch when branch bypass is off; with bypass enabled, only the chairman can approve.')}</p>
 
                         <div className="bg-gray-50 rounded-lg p-6 mb-6">
                             <p className="text-sm text-gray-600 mb-4">
                                 {form.transaction_mode === 'bank_transfer'
-                                    ? 'Funds will be transferred to your registered bank account'
-                                    : 'Funds will be sent through your registered external payment method'}
+                                    ? t('Funds will be transferred to your registered bank account')
+                                    : t('Funds will be sent through your registered external payment method')}
                             </p>
                             <p className="text-2xl font-bold text-gray-900">{peso(form.amount)}</p>
                         </div>
@@ -353,8 +356,8 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
                         <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                             <i className="fas fa-receipt text-green-600 text-3xl"></i>
                         </div>
-                        <h4 className="text-xl font-bold text-gray-900 mb-2">{receipt.status === 'completed' ? 'Withdrawal Processed' : 'Withdrawal Request Submitted'}</h4>
-                        <p className="text-gray-600">{receipt.status === 'completed' ? 'The counter payout was recorded and your balance was debited.' : 'Your withdrawal is pending manager or chairman approval.'}</p>
+                        <h4 className="text-xl font-bold text-gray-900 mb-2">{t(receipt.status === 'completed' ? 'Withdrawal Processed' : 'Withdrawal Request Submitted')}</h4>
+                        <p className="text-gray-600">{t(receipt.status === 'completed' ? 'The counter payout was recorded and your balance was debited.' : 'Your withdrawal is pending manager or chairman approval.')}</p>
                     </div>
 
                     <div className="bg-gray-50 rounded-lg p-6 mb-4 space-y-3 border-2 border-dashed border-gray-300">
@@ -405,7 +408,7 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
                                 <div className="h-24 flex items-center justify-center border-2 border-dashed border-gray-300 rounded mb-2">
                                     <ReceiptQR value={JSON.stringify({ type: 'withdrawal', ref: receipt.transaction_number ?? receipt.id ?? '', amount: form.amount, date: receipt.transaction_date ?? new Date().toISOString() })} />
                                 </div>
-                                <p className="text-xs text-gray-500">Scan for verification</p>
+                                <p className="text-xs text-gray-700">{t('Scan for verification')}</p>
                             </div>
                         </div>
                     </div>
@@ -413,7 +416,7 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
                     <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4">
                         <p className="text-sm text-blue-700">
                             <i className="fas fa-info-circle mr-2"></i>
-                            Please save or print this receipt for your records.
+                            {t('Please save or print this receipt for your records.')}
                         </p>
                     </div>
 
@@ -428,9 +431,9 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
                     <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <i className="fas fa-clock text-orange-600 text-4xl"></i>
                     </div>
-                    <h4 className="text-xl font-bold text-gray-900 mb-2">Withdrawal Request Submitted!</h4>
+                    <h4 className="text-xl font-bold text-gray-900 mb-2">{t('Withdrawal Request Submitted!')}</h4>
                     <p className="text-gray-600 mb-6">
-                        Your withdrawal request has been submitted for approval. You will receive a notification once it has been reviewed by authorized personnel.
+                        {t('Your withdrawal request has been submitted for approval. You will receive a notification once it has been reviewed by authorized personnel.')}
                     </p>
 
                     {receipt?.transaction_number && (
@@ -444,8 +447,8 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
                         <p className="text-sm text-blue-700">
                             <i className="fas fa-info-circle mr-2"></i>
                             {form.transaction_mode === 'counter'
-                                ? 'Once approved, you can visit our office with valid ID to collect your withdrawal.'
-                                : 'Once approved, funds will be transferred to your registered bank account within 1-2 business days.'}
+                                ? t('Once approved, you can visit our office with valid ID to collect your withdrawal.')
+                                : t('Once approved, funds will be transferred to your registered bank account within 1-2 business days.')}
                         </p>
                     </div>
 

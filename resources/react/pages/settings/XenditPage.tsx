@@ -10,6 +10,7 @@ import {
 } from '../../api/xendit';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
+import LoadingIndicator from '../../components/ui/LoadingIndicator';
 
 const credentialFields = [
     ['test_secret_key', 'Test Secret API Key'],
@@ -55,7 +56,7 @@ export default function XenditPage() {
     });
 
     if (!canManageSettings) return <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">You need the settings.update permission to configure the Xendit payment gateway.</p>;
-    if (isLoading) return <div className="h-64 animate-pulse rounded-xl bg-gray-100" />;
+    if (isLoading) return <LoadingIndicator message="Loading payment settings..." />;
 
     const webhookUrl = `${window.location.origin}/api/webhooks/xendit`;
 

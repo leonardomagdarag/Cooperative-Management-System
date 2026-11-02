@@ -11,6 +11,7 @@ import Badge from '../../components/ui/Badge';
 import EmptyState from '../../components/ui/EmptyState';
 import Pagination from '../../components/ui/Pagination';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import PageHeader from '../../components/ui/PageHeader';
 
 export default function AnnouncementsPage() {
     const [page, setPage] = useState(1);
@@ -54,15 +55,9 @@ export default function AnnouncementsPage() {
 
     return (
         <div className="max-w-7xl mx-auto p-6">
-            <div className="flex items-center justify-between mb-6">
-                <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Announcements</h1>
-                    <p className="text-sm text-gray-500">Stay updated with the latest news and events</p>
-                </div>
-                {permissions?.can_create && (
+            <PageHeader className="mb-6" title="Announcements" description="Stay updated with the latest news and events" icon="fas fa-bullhorn" action={permissions?.can_create && (
                     <Button onClick={() => { setEditing(null); setShowModal(true); }} icon={<i className="fas fa-plus" />}>New Announcement</Button>
-                )}
-            </div>
+                )} />
 
             {isLoading ? (
                 <div className="space-y-3">

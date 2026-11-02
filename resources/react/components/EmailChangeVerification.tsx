@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { sendEmailChangeOtp } from '../api/profile';
 import { useToast } from '../contexts/ToastContext';
 
+import Button from './ui/Button';
 interface EmailChangeVerificationProps {
     originalEmail: string;
     email: string;

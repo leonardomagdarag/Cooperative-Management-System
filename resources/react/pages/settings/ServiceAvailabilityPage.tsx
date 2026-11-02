@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '../../contexts/ToastContext';
 import { getServiceAvailability, updateServiceAvailability, type SettingsServiceAvailabilityData, type ServiceAvailabilityFlags } from '../../api/settings';
 import SettingsTabHeader from './SettingsTabHeader';
+import LoadingIndicator from '../../components/ui/LoadingIndicator';
 
 type ServiceKey = keyof SettingsServiceAvailabilityData;
 type AvailabilityFlag = keyof ServiceAvailabilityFlags;
@@ -101,7 +102,7 @@ export default function ServiceAvailabilityPage() {
     const cancelChanges = () => { setEditedFlags(originalFlags); setNotifyAffected(false); };
     const confirmSave = () => { if (changes.length > 0) saveMutation.mutate({ services: editedFlags as SettingsServiceAvailabilityData, notify_affected: notifyAffected }); };
 
-    if (isLoading) return <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-24 animate-pulse rounded-xl bg-gray-100" />)}</div>;
+    if (isLoading) return <LoadingIndicator message="Loading service settings..." />;
     if (isError) return <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700">Failed to load service availability: {(error as any)?.message || 'Unknown error'}</div>;
 
     return <div className={`space-y-4 ${changes.length > 0 ? 'pb-20' : ''}`}>

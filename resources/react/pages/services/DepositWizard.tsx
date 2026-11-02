@@ -4,6 +4,8 @@ import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
 import { validate, depositSchema, type FieldErrors } from '../../lib/validation';
 import ServiceModal from './ServiceModal';
+import HelpTip from '../../components/ui/HelpTip';
+import { useLanguage } from '../../contexts/LanguageContext';
 import StepCircles from './StepCircles';
 import {
     getXenditStatus,
@@ -30,6 +32,7 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
     onDirtyChange?: (dirty: boolean) => void;
     availability?: AvailabilityFlags;
 }) {
+    const { t } = useLanguage();
     const [step, setStep] = useState(1);
     const [form, setForm] = useState({ amount: '', account_type: 'savings', transaction_mode: '', note: '' });
     const [proof, setProof] = useState<File | null>(null);
@@ -73,7 +76,7 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
 
     const goNextFromMethod = () => {
         if (!form.transaction_mode) {
-            setErrors({ transaction_mode: 'Please select a payment method.' });
+            setErrors({ transaction_mode: t('Please select a payment method.') });
             return;
         }
         setErrors({});
@@ -101,7 +104,7 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
             }
         },
         onError: (err: any) => {
-            addToast(err.response?.data?.message || 'Failed to initialize Xendit checkout.', 'error');
+            addToast(t(err.response?.data?.message || 'Failed to initialize Xendit checkout.'), 'error');
         },
     });
 
@@ -109,27 +112,27 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
         mutationFn: (txnNumber: string) => verifyXenditPayment(txnNumber),
         onSuccess: (res) => {
             if (res.is_paid || res.status === 'completed') {
-                addToast('Payment verified successfully!', 'success');
+                addToast(t('Payment verified successfully!'), 'success');
                 setReceipt(res.transaction);
                 setStep(99);
             } else {
-                addToast(res.message || 'Payment has not been completed yet.', 'warning');
+                addToast(t(res.message || 'Payment has not been completed yet.'), 'warning');
             }
         },
         onError: (err: any) => {
-            addToast(err.response?.data?.message || 'Failed to verify payment status.', 'error');
+            addToast(t(err.response?.data?.message || 'Failed to verify payment status.'), 'error');
         },
     });
 
     const handleSubmitManual = () => {
         const errs = validate(depositSchema, form);
         if ((form.transaction_mode === 'online' || form.transaction_mode === 'bank_transfer') && !proof) {
-            errs.proof = 'Payment proof is required for this deposit';
+            errs.proof = t('Payment proof is required for this deposit');
         }
-        if (proof && proof.size > 10240 * 1024) errs.proof = 'Proof must be 10MB or smaller';
+        if (proof && proof.size > 10240 * 1024) errs.proof = t('Proof must be 10MB or smaller');
         setErrors(errs);
         if (Object.keys(errs).length > 0) {
-            addToast(Object.values(errs)[0], 'error');
+            addToast(t(Object.values(errs)[0]), 'error');
             return;
         }
         requestIdRef.current = requestIdRef.current ?? crypto.randomUUID();
@@ -150,13 +153,13 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
         },
         onSuccess: (res) => {
             requestIdRef.current = null;
-            addToast(res.data.data?.status === 'completed' ? 'Counter deposit recorded and credited' : 'Deposit submitted for manager or chairman approval', 'success');
+            addToast(t(res.data.data?.status === 'completed' ? 'Counter deposit recorded and credited' : 'Deposit submitted for manager or chairman approval'), 'success');
             setReceipt(res.data.data || { message: res.data.message });
             setStep(99);
         },
         onError: (err: any) => {
             requestIdRef.current = null;
-            addToast(err.response?.data?.message || 'Failed', 'error');
+            addToast(t(err.response?.data?.message || 'Failed'), 'error');
         },
     });
 
@@ -173,10 +176,10 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
         >
             {step === 1 && (
                 <div className="p-6 space-y-4">
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Enter Deposit Details</h4>
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">{t('Enter Deposit Details')}</h4>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Account Type</label>
+                        <div className="mb-2 flex items-center gap-1.5"><label className="text-sm font-medium text-gray-700">{t('Account Type')}</label><HelpTip text="Piliin kung sa Savings o Share Capital ledger mapupunta ang deposit. Hindi ito wallet balance." /></div>
                         <select
                             value={form.account_type}
                             onChange={e => setField('account_type', e.target.value)}
@@ -190,7 +193,7 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Amount</label>
                         <div className="relative">
-                            <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500">₱</span>
+                            <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-700">₱</span>
                             <input
                                 type="number"
                                 step="0.01"
@@ -210,7 +213,7 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
                             rows={2}
                             value={form.note}
                             onChange={e => setField('note', e.target.value)}
-                            placeholder="Add any notes..."
+                            placeholder={t('Add any notes...')}
                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                         />
                     </div>
@@ -228,7 +231,7 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
 
             {step === 2 && (
                 <div className="p-6 space-y-4">
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Choose Payment Method</h4>
+                    <h4 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900">{t('Choose Payment Method')} <HelpTip text="Sa Counter, cash ang ibibigay sa cooperative. Ang online at bank transfer deposit ay kailangan munang ma-verify at ma-approve bago ma-credit sa account." /></h4>
 
                     <div className="space-y-3">
                         {/* Option 1: Xendit Secure Gateway (only when online payment is enabled) */}
@@ -267,7 +270,7 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
                                 </div>
                                 <div className="flex-1">
                                     <p className="font-semibold text-gray-900">Over the Counter</p>
-                                    <p className="text-sm text-gray-600">Visit our cooperative office to make payment in cash</p>
+                                    <p className="text-sm text-gray-600">{t('Visit our cooperative office to make payment in cash')}</p>
                                 </div>
                                 {!isModeAvailable('counter') && <p className="text-xs text-amber-600"><i className="fas fa-tools mr-1"></i>Under maintenance</p>}
                                 {isModeAvailable('counter') && form.transaction_mode === 'counter' && <i className="fas fa-check-circle text-green-500 text-xl"></i>}
@@ -287,7 +290,7 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
                                 </div>
                                 <div className="flex-1">
                                     <p className="font-semibold text-gray-900">Bank Transfer (Requires Proof)</p>
-                                    <p className="text-sm text-gray-600">Offline bank transfer &mdash; upload deposit slip or transfer screenshot for officer verification</p>
+                                    <p className="text-sm text-gray-600">{t('Offline bank transfer — upload deposit slip or transfer screenshot for officer verification')}</p>
                                 </div>
                                 {!isModeAvailable('bank_transfer') && <p className="text-xs text-amber-600"><i className="fas fa-tools mr-1"></i>Under maintenance</p>}
                                 {isModeAvailable('bank_transfer') && form.transaction_mode === 'bank_transfer' && <i className="fas fa-check-circle text-green-500 text-xl"></i>}
@@ -310,7 +313,7 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
 
             {step === 3 && (
                 <div className="p-6 space-y-4">
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Confirm Your Deposit</h4>
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">{t('Confirm Your Deposit')}</h4>
 
                     <div className="bg-gray-50 rounded-lg p-4 space-y-3">
                         <div className="flex justify-between">
@@ -340,27 +343,27 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
                         <div className="bg-emerald-50 border-l-4 border-emerald-500 p-4">
                             <p className="text-sm text-emerald-800">
                                 <i className="fas fa-shield-alt mr-2"></i>
-                                You will be redirected to Xendit's secure hosted payment portal. After Xendit verifies payment, a manager or chairman must approve the deposit before your balance changes.
+                                {t("You will be redirected to Xendit's secure hosted payment portal. After Xendit verifies payment, a manager or chairman must approve the deposit before your balance changes.")}
                             </p>
                         </div>
                     ) : form.transaction_mode === 'counter' ? (
                         <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
                             <p className="text-sm text-blue-700">
                                 <i className="fas fa-info-circle mr-2"></i>
-                                Bring your payment to the office. A staff member will record the cash; member-submitted counter requests stay pending for manager or chairman approval.
+                                {t('Bring your payment to the office. A staff member will record the cash; member-submitted counter requests stay pending for manager or chairman approval.')}
                             </p>
                         </div>
                     ) : (
                         <div className="space-y-2">
-                            <label className="block text-sm font-medium text-gray-700">Proof of Payment</label>
+                                <div className="flex items-center gap-1.5"><label className="text-sm font-medium text-gray-700">Proof of Payment</label><HelpTip text="Mag-upload ng malinaw na resibo o screenshot ng bayad. Iche-check muna ito ng officer bago i-approve ang deposit." /></div>
                             <input
                                 type="file"
                                 accept=".jpg,.jpeg,.png,.webp,.pdf"
                                 onChange={e => setProof(e.target.files?.[0] || null)}
                                 className={`block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/30 ${errors.proof ? 'border-red-400' : ''}`}
                             />
-                            <p className="text-xs text-gray-500">Upload a screenshot, receipt, or PDF proof before submitting.</p>
-                            <p className="text-xs text-amber-700">Online and bank-transfer deposits stay pending until a manager or chairman approves them. Xendit payments also wait for approval after provider verification.</p>
+                            <p className="text-xs text-gray-700">{t('Upload a screenshot, receipt, or PDF proof before submitting.')}</p>
+                            <p className="text-xs text-amber-700">{t('Online and bank-transfer deposits stay pending until a manager or chairman approves them. Xendit payments also wait for approval after provider verification.')}</p>
                             {proof && <p className="text-xs font-medium text-gray-700">Selected: {proof.name}</p>}
                             {errors.proof && <span className="text-red-500 text-xs">{errors.proof}</span>}
                         </div>
@@ -402,7 +405,7 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
 
                     <div>
                         <h4 className="text-xl font-bold text-gray-900">Xendit Checkout Session</h4>
-                        <p className="text-sm text-gray-600 mt-1">Complete your payment in Xendit's secure payment portal</p>
+                        <p className="text-sm text-gray-600 mt-1">{t("Complete your payment in Xendit's secure payment portal")}</p>
                     </div>
 
                     <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 text-left space-y-2 text-sm">
@@ -438,9 +441,9 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
                         </button>
                     </div>
 
-                    <p className="text-xs text-gray-500 pt-2">
+                    <p className="text-xs text-gray-700 pt-2">
                         <i className="fas fa-info-circle mr-1"></i>
-                        After finishing the transaction on Xendit, click <strong>"I've Paid / Check Status"</strong> above to verify your payment.
+                        {t('After finishing the transaction on Xendit, click "I\'ve Paid / Check Status" above to verify your payment.')}
                     </p>
                 </div>
             )}
@@ -450,13 +453,13 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
                     <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <i className="fas fa-check text-green-600 text-4xl"></i>
                     </div>
-                    <h4 className="text-xl font-bold text-gray-900 mb-2">{receipt?.status === 'completed' ? 'Deposit Completed' : 'Deposit Request Submitted'}</h4>
+                    <h4 className="text-xl font-bold text-gray-900 mb-2">{t(receipt?.status === 'completed' ? 'Deposit Completed' : 'Deposit Request Submitted')}</h4>
                     <p className="text-gray-600 mb-6">
-                        {receipt?.status === 'completed'
+                        {t(receipt?.status === 'completed'
                                 ? 'Your deposit was approved and your account balance has been updated.'
                             : form.transaction_mode === 'bank_transfer' || form.transaction_mode === 'online'
                                 ? 'Your online or bank transfer is pending manager or chairman approval.'
-                                : 'Your counter request is pending manager or chairman approval. Staff-recorded counter deposits post immediately.'}
+                                : 'Your counter request is pending manager or chairman approval. Staff-recorded counter deposits post immediately.')}
                     </p>
 
                     {receipt?.transaction_number && (

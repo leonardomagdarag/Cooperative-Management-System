@@ -1,3 +1,5 @@
+import Pagination from '../ui/Pagination';
+import usePaginatedRows from '../../hooks/usePaginatedRows';
 import Badge from '../ui/Badge';
 import { formatPeso } from '../../lib/format';
 
@@ -27,6 +29,7 @@ interface PaymentHistoryTableProps {
 /** Recorded payments with a status-aware badge and a net completed total. */
 export default function PaymentHistoryTable({ payments, compact = false }: PaymentHistoryTableProps) {
     const rows = payments ?? [];
+    const pagination = usePaginatedRows(rows);
     const pad = compact ? 'px-3 py-1.5 text-xs' : 'px-4 py-2';
     const head = compact ? 'px-3 py-2' : 'px-4 py-2';
 
@@ -54,14 +57,14 @@ export default function PaymentHistoryTable({ payments, compact = false }: Payme
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                        {rows.map((payment, index) => {
+                        {pagination.rows.map((payment, index) => {
                             const reversal = !!payment.is_reversal;
                             const meta = reversal
                                 ? { label: 'Reversal', variant: 'neutral' as const }
                                 : STATUS_META[payment.status ?? 'completed'] ?? { label: String(payment.status ?? 'Recorded'), variant: 'neutral' as const };
                             return (
                                 <tr key={payment.id} className={`hover:bg-gray-50 ${reversal ? 'text-gray-400' : ''}`}>
-                                    <td className={pad}>{payment.payment_number ?? index + 1}</td>
+                                    <td className={pad}>{payment.payment_number ?? (pagination.page - 1) * pagination.perPage + index + 1}</td>
                                     <td className={`${pad} max-w-[220px] truncate font-mono text-xs`} title={payment.transaction_number ?? undefined}>{payment.transaction_number || '—'}</td>
                                     <td className={`${pad} text-right font-medium ${reversal ? 'text-red-500' : 'text-gray-900'}`}>{reversal ? `−${formatPeso(payment.amount)}` : formatPeso(payment.amount)}</td>
                                     <td className={`${pad} text-gray-500`}>{payment.payment_date || '—'}</td>
@@ -72,6 +75,7 @@ export default function PaymentHistoryTable({ payments, compact = false }: Payme
                     </tbody>
                 </table>
             </div>
+            <Pagination page={pagination.page} lastPage={pagination.lastPage} total={pagination.total} perPage={pagination.perPage} onChange={pagination.setPage} scrollToTop={false} />
             <p className="text-xs text-gray-500">
                 Total completed payments: <span className="font-semibold text-gray-700">{formatPeso(totalPaid)}</span>
             </p>

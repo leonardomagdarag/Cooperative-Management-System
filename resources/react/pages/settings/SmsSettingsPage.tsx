@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
 import SettingsTabHeader from './SettingsTabHeader';
+import LoadingIndicator from '../../components/ui/LoadingIndicator';
 
 interface SmsSettings {
     sms_service_enabled: boolean;
@@ -58,7 +59,7 @@ export default function SmsSettingsPage() {
     });
 
     if (isLoading) {
-        return <div className="animate-pulse h-32 rounded-xl bg-gray-100" />;
+        return <LoadingIndicator message="Loading SMS settings..." />;
     }
 
     const settings = settingsData || {

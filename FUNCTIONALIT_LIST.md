@@ -15,7 +15,7 @@
 | Guest (unauthenticated) | — | No | Public website visitor |
 | Member | `member` | No | Regular cooperative member, self-service only |
 | Administrator | `admin` | Yes | Full system access, all permissions |
-| Chairman | `chairman` | Yes | Operational oversight and countersign approval authority |
+| Chairman | `chairman` | Yes | Countersign approval, officer and branch management, ledger, logs, reports, expenses, collections, and tickets |
 | Manager | `manager` | Yes | Broad operational oversight |
 | Accountant (Treasurer) | `accountant` | Yes | Transactions, services, financial reporting |
 | Loan Officer | `loan` | Yes | Loan processing and member loan support |
@@ -197,7 +197,7 @@ The admin preset is limited to system configuration, backups, security logs, tro
 - **Admin-owned system actions:** officer management, logs, backups, role/permission configuration, service availability, and system integrations. Operational member, branch, transaction, loan, and financial account work belongs to the manager and other assigned officers.
 
 ### 5.1.1 Chairman (`chairman`)
-Preset: operational member, service, loan, transaction, deposit, withdrawal, branch, announcement, and report permissions; `oversight.approve`; collections review/approval; and receipt reissue. The chairman is the countersign approver for privileged actions and is subject to the same server-side branch, OTP, separation-of-duty, and workflow checks as every other user.
+Preset: oversight approval, officer and branch management, ledger and expense access, logs, reports, collections review/approval, and tickets. The chairman is the countersign approver for privileged actions and is subject to the same server-side branch, OTP, separation-of-duty, and workflow checks as every other user.
 
 `oversight.approve` is chairman-only. Role and officer permission editors omit it, server authorization rejects it for non-chairman accounts (including the developer testing role), and pending permission changes cannot grant it. Ledger transaction changes remain in the chairman countersign workflow.
 
@@ -297,8 +297,12 @@ do not treat old secretary-specific behavior as a separate role contract.
 
 ### 6.7 Reports (`ReportsPage`, `reports.*`)
 - Types (`GET /api/reports/*`): `financial`, `expenses`, `member-activity`, `member-savings`, `loans`, `payments`, `balance-sheet` (+ `download`), `interest-disbursements` (+ `{id}` drill-down), `options` (filter metadata).
-- Interest Disbursements (`interest.view`): paginated batch list (date, account, period, rate, members, skipped, total, trigger, status) with a drill-down modal showing each member's credited amount, balance before/after, and skip reason. Exportable as `interest_disbursements`.
-- Controls: report-type switcher, range presets (day/week/month/year/custom), date pickers, member/loan/category/activity filters, per-report pagination, charts (Chart.js Bar/Doughnut), currency/date formatting, export (`reports.export`, `reports.financial`, `reports.audit`).
+- Finance workspace: persistent grouped sidebar on desktop and grouped report selector on mobile. Overview contains Financial Summary and Balance Sheet (management report); Savings & Interest contains Member Savings and Interest Credits; Loans & Collections contains Loan Register and Loan Payment Collections; Transactions & Expenses contains Transaction History and Operating Expenses. Member/officer registers are no longer listed here; their existing APIs remain available.
+- Interest Credits (`interest.view`): paginated batches with member-level drill-down. Preview and export share date/account filters; counts, skipped counts and credited amounts are restricted to the effective branch, including shared batches. Export type remains `interest_disbursements`.
+- Controls: period presets (day/week/month/year/custom), date inputs, branch/member/loan/category/activity/account filters, sorting for transaction history, pagination, loading/error/retry states, and download progress. Filters reset pagination. Charts appear only in Financial Summary; its trailing six-month breakdown is separate from the selected period totals.
+- Downloads: `POST /api/reports/export` accepts `format: excel|pdf`; Excel is a genuine `.xlsx` workbook with numeric currency/date cells, safe text identifiers, frozen headers, filters and totals. PDF includes report/filter metadata, repeating headers and page numbers. Both include all matching records, using the same rows as previews. Financial Summary uses `report_type: financial_report`.
+- Export authorization requires both effective `reports.view` and `reports.export`, plus `reports.financial` for Balance Sheet or `interest.view` for Interest Credits. The standalone balance-sheet download uses the same checks. Member/officer API exports also require their respective view permission. Branch isolation applies to previews and downloads.
+- Date semantics are explicit: transactions use transaction dates (creation date fallback), expenses use expense dates, loans use application dates (creation date fallback), and interest uses batch creation dates. Savings/loan balances are current. The simplified balance sheet combines cash through the end date with current account/loan balances and residual retained earnings; it is labeled as a management report, not an audited or fully historical statement. Existing posting and financial calculation rules are unchanged; reversal rows are displayed and exported as negative amounts.
 
 ### 6.8 Announcements (`AnnouncementsPage`, `announcements.*`)
 - Authenticated: `GET/POST /api/announcements`, `GET/PUT/DELETE /api/announcements/{announcement}` (visibility: public/cooperative/everyone, type, image via `storage` link, creator).
@@ -362,7 +366,7 @@ do not treat old secretary-specific behavior as a separate role contract.
 | Loan Products | `loan-products` | Non-members with `settings.view` or `loans.view` | CRUD + enable/disable loan products |
 | Roles & Permissions | `role-permissions` | Non-members, admin or `officers.manage-permissions` | Manage roles + permission sets + restore presets |
 | Service Availability | `service-availability` | Admin | Toggle services/channels/audiences through a countersigned request (see §8) |
-| Financial Accounts | `financial-accounts` | Non-members with `financial_settings.update` (admin) | Interest rates/intervals/min balance, withdrawal limits and account toggles, manual interest run; all countersigned (see §8.1) |
+| Financial Accounts | `financial-accounts` | Non-members with `financial_settings.update` (admin, manager) | Interest rates/intervals/min balance, withdrawal limits and account toggles, manual interest run; all countersigned (see §8.1) |
 | SMS Service | `sms` | Admin | Configure and test SMS settings |
 | Email Service | `email` | Non-members with `settings.update` | Configure and test email settings |
 | Payment Gateway | `xendit` | Admin | Configure Xendit test/live credentials, connection test, and webhook guidance |
@@ -390,7 +394,7 @@ Disabled services block the corresponding wizard/API (`service.availability` mid
 
 ### 8.1 Financial Accounts (`FinancialAccountsPage`, `SettingsController`, `InterestService`)
 
-High-security settings owned by the admin and applied only after **chairman countersign** approval. Endpoints: `GET/PUT /api/settings/financial`, `POST /api/settings/financial/interest/run` (gated by `financial_settings.view` / `financial_settings.update` / `interest.run`).
+High-security settings available to admins and managers and applied only after **chairman countersign** approval. Endpoints: `GET/PUT /api/settings/financial`, `POST /api/settings/financial/interest/run` (gated by `financial_settings.view` / `financial_settings.update` / `interest.run`).
 
 | Setting | Keys |
 |---|---|

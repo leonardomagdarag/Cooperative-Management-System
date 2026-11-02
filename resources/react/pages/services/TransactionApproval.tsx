@@ -1,3 +1,4 @@
+import DateRangeFilter from '../../components/ui/DateRangeFilter';
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router';
@@ -160,7 +161,7 @@ export default function TransactionApproval({ onComplete, onRequestClose }: { on
             <div className="flex flex-col md:flex-row h-[70vh]">
                 {/* Sidebar Filters */}
                 <div className="w-full md:w-64 bg-white border-r border-slate-200 p-6 shrink-0 overflow-y-auto">
-                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Filters</h3>
+                    <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-4">Filters</h3>
                     
                     <div className="space-y-6">
                         <div>
@@ -191,23 +192,15 @@ export default function TransactionApproval({ onComplete, onRequestClose }: { on
                             </div>
                         </div>
 
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Date Range</label>
-                            <div className="space-y-2">
-                                <input 
-                                    type="date"
-                                    value={dateFrom}
-                                    onChange={e => updateFilter('date_from', e.target.value)}
-                                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm text-slate-700 focus:ring-brand-500 focus:border-brand-500"
-                                />
-                                <input 
-                                    type="date"
-                                    value={dateTo}
-                                    onChange={e => updateFilter('date_to', e.target.value)}
-                                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm text-slate-700 focus:ring-brand-500 focus:border-brand-500"
-                                />
-                            </div>
-                        </div>
+                        <DateRangeFilter from={dateFrom} to={dateTo}
+                            onFromChange={value => updateFilter('date_from', value)}
+                            onToChange={value => updateFilter('date_to', value)}
+                            onRangeChange={(from, to) => setSearchParams(prev => {
+                                const next = new URLSearchParams(prev);
+                                if (from) next.set('date_from', from); else next.delete('date_from');
+                                if (to) next.set('date_to', to); else next.delete('date_to');
+                                return next;
+                            }, { replace: true })} />
 
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-2">Branch</label>
@@ -243,7 +236,7 @@ export default function TransactionApproval({ onComplete, onRequestClose }: { on
                                 />
                                 <span>Exclude my recorded</span>
                             </label>
-                            <p className="text-xs text-slate-500 mt-1 ml-6">
+                            <p className="text-xs text-slate-700 mt-1 ml-6">
                                 Hide transactions you recorded (you cannot approve them).
                             </p>
                         </div>
@@ -268,10 +261,10 @@ export default function TransactionApproval({ onComplete, onRequestClose }: { on
                     ) : transactions.length === 0 ? (
                         <div className="text-center py-16">
                             <div className="w-16 h-16 bg-slate-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <i className="fas fa-inbox text-slate-400 text-3xl"></i>
+                                <i className="fas fa-inbox text-slate-600 text-3xl"></i>
                             </div>
                             <h4 className="text-lg font-bold text-slate-900 mb-1">No transactions found</h4>
-                            <p className="text-slate-500 mb-6 text-sm">Try adjusting your filters, or you are all caught up.</p>
+                            <p className="text-slate-700 mb-6 text-sm">Try adjusting your filters, or you are all caught up.</p>
                             <button type="button" onClick={onComplete} className="ui-btn ui-btn-secondary">
                                 Close Modal
                             </button>
@@ -323,38 +316,38 @@ export default function TransactionApproval({ onComplete, onRequestClose }: { on
                                             </div>
                                             <div className="text-right">
                                                 <p className="text-xl font-bold text-slate-900">{peso(t.amount)}</p>
-                                                <p className="text-xs text-slate-500 mt-1">{fmtDate(t.created_at)}</p>
+                                                <p className="text-xs text-slate-700 mt-1">{fmtDate(t.created_at)}</p>
                                             </div>
                                         </div>
 
                                         <div className="grid grid-cols-2 gap-y-2 gap-x-4 mb-5 text-sm">
                                             <div>
-                                                <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Account Type</span>
+                                                <span className="text-slate-700 text-xs uppercase tracking-wider font-semibold">Account Type</span>
                                                 <p className="font-medium text-slate-900 mt-0.5">
                                                     {t.account_type ? String(t.account_type).replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase()) : 'N/A'}
                                                 </p>
                                             </div>
                                             <div>
-                                                <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Transaction ID</span>
+                                                <span className="text-slate-700 text-xs uppercase tracking-wider font-semibold">Transaction ID</span>
                                                 <p className="font-mono text-slate-900 mt-0.5">{padId(t.id)}</p>
                                             </div>
                                             <div>
-                                                <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Recorded By</span>
+                                                <span className="text-slate-700 text-xs uppercase tracking-wider font-semibold">Recorded By</span>
                                                 <p className="font-medium text-slate-900 mt-0.5">{t.recorded_by || 'Member request'}</p>
                                             </div>
                                             <div>
-                                                <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Next Approver</span>
+                                                <span className="text-slate-700 text-xs uppercase tracking-wider font-semibold">Next Approver</span>
                                                 <p className="font-medium text-slate-900 mt-0.5">{t.next_approver || 'Authorized officer'}</p>
                                             </div>
                                             {t.loan_number && (
                                                 <div className="col-span-2">
-                                                    <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Loan Number</span>
+                                                    <span className="text-slate-700 text-xs uppercase tracking-wider font-semibold">Loan Number</span>
                                                     <p className="font-medium text-slate-900 mt-0.5">{t.loan_number}</p>
                                                 </div>
                                             )}
                                             {t.transaction_type === 'deposit' && t.proof_of_payment_api_url && (
                                                 <div className="col-span-2">
-                                                    <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Proof of Payment</span>
+                                                    <span className="text-slate-700 text-xs uppercase tracking-wider font-semibold">Proof of Payment</span>
                                                     <p className="mt-0.5">
                                                         <a href={t.proof_of_payment_api_url} target="_blank" rel="noreferrer"
                                                             className="inline-flex items-center text-sm font-medium text-brand-600 hover:text-brand-700 hover:underline">
@@ -365,7 +358,7 @@ export default function TransactionApproval({ onComplete, onRequestClose }: { on
                                             )}
                                             {t.note && (
                                                 <div className="col-span-2">
-                                                    <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Note</span>
+                                                    <span className="text-slate-700 text-xs uppercase tracking-wider font-semibold">Note</span>
                                                     <p className="text-slate-900 mt-0.5 whitespace-pre-line bg-slate-50 p-2 rounded border border-slate-100">{t.note}</p>
                                                 </div>
                                             )}

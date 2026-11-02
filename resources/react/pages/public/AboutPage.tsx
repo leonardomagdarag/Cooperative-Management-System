@@ -1,8 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { api } from '../../api/client';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 export default function AboutPage() {
+    const { t } = useLanguage();
     const { data } = useQuery({ queryKey: ['public-content'], queryFn: () => api.get('/api/public-content') });
     const about = data?.data?.form?.about || {};
     const aboutImage = about.about_image || '/images/hero_banner.jpg';
@@ -38,10 +40,10 @@ export default function AboutPage() {
                     <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-1.5 text-sm font-semibold text-emerald-300">
                         <i className="fas fa-leaf text-xs"></i> Settlers Credit Cooperative
                     </span>
-                    <h1 className="text-4xl md:text-6xl font-extrabold text-white mb-6 leading-tight tracking-tight">About Us</h1>
+                    <h1 className="mb-6 text-4xl font-medium leading-tight tracking-tight text-white md:text-6xl">{t('About Us')}</h1>
                     <div className="w-16 h-1 bg-emerald-400 mx-auto rounded-full mb-8"></div>
                     <p className="text-lg md:text-xl text-gray-300 leading-relaxed max-w-3xl mx-auto">
-                        {about.about1 || 'Settlers Credit Cooperative is dedicated to serving our community.'}
+                        {t(about.about1 || 'Settlers Credit Cooperative is dedicated to serving our community.')}
                     </p>
                 </div>
             </section>
@@ -51,13 +53,13 @@ export default function AboutPage() {
                     <div className="grid md:grid-cols-2 gap-14 items-center">
                         <div>
                             <span className="mb-4 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                                <i className="fas fa-history text-xs"></i> Our Journey
+                                <i className="fas fa-history text-xs"></i> {t('Our Journey')}
                             </span>
-                            <h2 className="public-heading text-3xl md:text-5xl mb-4">Our History</h2>
+                            <h2 className="public-heading text-3xl md:text-5xl mb-4">{t('Our History')}</h2>
                             <div className="w-12 h-1 bg-emerald-600 rounded-full mb-6"></div>
                             <div className="space-y-5 text-base text-gray-600 leading-relaxed">
-                                <p>{about.about2 || ''}</p>
-                                <div>{about.history || ''}</div>
+                                <p>{t(about.about2 || '')}</p>
+                                <div>{t(about.history || '')}</div>
                             </div>
                         </div>
                         <div className="relative">
@@ -72,11 +74,11 @@ export default function AboutPage() {
                 <div className="public-shell">
                     <div className="mx-auto mb-12 max-w-3xl text-center">
                         <span className="mb-4 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                            <i className="fas fa-map-marker-alt text-xs"></i> Southville 7 Community Background
+                            <i className="fas fa-map-marker-alt text-xs"></i> {t('Southville 7 Community Background')}
                         </span>
-                        <h2 className="public-heading mb-4 text-3xl md:text-4xl">A community shaped by resilience</h2>
+                        <h2 className="public-heading mb-4 text-3xl md:text-4xl">{t('A community shaped by resilience')}</h2>
                         <p className="text-base leading-relaxed text-gray-600">
-                            The timeline below summarizes the history of Southville 7 as a resettlement community, based on an Asian Development Bank publication. It describes the community and its development partners; it is not a timeline of Settlers Credit Cooperative.
+                            {t('The timeline below summarizes the history of Southville 7 as a resettlement community, based on an Asian Development Bank publication. It describes the community and its development partners; it is not a timeline of Settlers Credit Cooperative.')}
                         </p>
                     </div>
                     <ol className="relative mx-auto max-w-4xl border-s border-emerald-200">
@@ -86,14 +88,14 @@ export default function AboutPage() {
                                     <i className={`fas ${index === communityMilestones.length - 1 ? 'fa-seedling' : 'fa-check'} text-[9px] text-white`} aria-hidden="true"></i>
                                 </span>
                                 <p className="mb-1 text-sm font-bold uppercase tracking-wider text-emerald-700">{milestone.year}</p>
-                                <h3 className="mb-2 text-lg font-bold text-gray-900">{milestone.title}</h3>
-                                <p className="leading-relaxed text-gray-600">{milestone.description}</p>
+                                <h3 className="mb-2 text-lg font-bold text-gray-900">{t(milestone.title)}</h3>
+                                <p className="leading-relaxed text-gray-600">{t(milestone.description)}</p>
                             </li>
                         ))}
                     </ol>
                     <p className="mx-auto mt-10 max-w-4xl text-sm leading-relaxed text-gray-500">
-                        The cooperative has rebranded from Southville 7 Credit Cooperative to Settlers Credit Cooperative, as provided by the cooperative. The ADB report does not document the cooperative’s history or rebranding. Its milestones below refer to Southville 7 as a community.{' '}
-                        <a className="font-semibold text-emerald-700 underline underline-offset-2 hover:text-emerald-800" href="https://www.adb.org/sites/default/files/publication/220531/transforming-southville-7.pdf" target="_blank" rel="noreferrer">Read the ADB publication, “Southville 7: Making Resettlement Work”</a>.
+                        {t('The cooperative has rebranded from Southville 7 Credit Cooperative to Settlers Credit Cooperative, as provided by the cooperative. The ADB report does not document the cooperative’s history or rebranding. Its milestones below refer to Southville 7 as a community.')}{' '}
+                        <a className="font-semibold text-emerald-700 underline underline-offset-2 hover:text-emerald-800" href="https://www.adb.org/sites/default/files/publication/220531/transforming-southville-7.pdf" target="_blank" rel="noreferrer">{t('Read the ADB publication, “Southville 7: Making Resettlement Work”')}</a>.
                     </p>
                 </div>
             </section>
@@ -102,9 +104,9 @@ export default function AboutPage() {
                 <div className="public-shell">
                     <div className="text-center mb-14">
                         <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
-                            <i className="fas fa-compass text-xs"></i> Our Foundation
+                            <i className="fas fa-compass text-xs"></i> {t('Our Foundation')}
                         </span>
-                        <h2 className="text-3xl md:text-4xl font-bold text-white mt-2">What Guides Us</h2>
+                        <h2 className="text-3xl md:text-4xl font-bold text-white mt-2">{t('What Guides Us')}</h2>
                     </div>
 
                     <div className="grid md:grid-cols-3 gap-6">
@@ -116,7 +118,7 @@ export default function AboutPage() {
                                 </div>
                                 <h3 className="text-xl font-bold text-white">Mission</h3>
                             </div>
-                            <p className="text-gray-300 leading-relaxed">{about.mission || 'To provide accessible financial services.'}</p>
+                            <p className="text-gray-300 leading-relaxed">{t(about.mission || 'To provide accessible financial services.')}</p>
                         </div>
 
                         <div className="group relative overflow-hidden rounded-2xl bg-white/5 border border-white/10 p-8 backdrop-blur-sm transition-all hover:bg-white/10">
@@ -127,7 +129,7 @@ export default function AboutPage() {
                                 </div>
                                 <h3 className="text-xl font-bold text-white">Vision</h3>
                             </div>
-                            <p className="text-gray-300 leading-relaxed">{about.vision || 'To be the leading cooperative institution.'}</p>
+                            <p className="text-gray-300 leading-relaxed">{t(about.vision || 'To be the leading cooperative institution.')}</p>
                         </div>
 
                         <div className="group relative overflow-hidden rounded-2xl bg-white/5 border border-white/10 p-8 backdrop-blur-sm transition-all hover:bg-white/10">
@@ -143,7 +145,7 @@ export default function AboutPage() {
                                     <li key={i} className="flex items-start gap-2">
                                         <i className="fas fa-check-circle mt-0.5 shrink-0 text-emerald-400 text-xs"></i>
                                         <span className="text-sm">
-                                            <strong className="text-white">{v.title || ''}</strong>{v.description ? `: ${v.description}` : ''}
+                                            <strong className="text-white">{t(v.title || '')}</strong>{v.description ? `: ${t(v.description)}` : ''}
                                         </span>
                                     </li>
                                 ))}
@@ -158,10 +160,10 @@ export default function AboutPage() {
                     <div className="public-shell">
                         <div className="text-center mb-14">
                             <span className="mb-4 inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                                <i className="fas fa-chess-king text-xs"></i> Leadership
+                                <i className="fas fa-chess-king text-xs"></i> {t('Leadership')}
                             </span>
-                            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mt-2 mb-4">Board of Directors</h2>
-                            <p className="text-base text-gray-500 max-w-xl mx-auto">Meet the dedicated leaders guiding our cooperative towards growth and service.</p>
+                            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mt-2 mb-4">{t('Board of Directors')}</h2>
+                            <p className="text-base text-gray-500 max-w-xl mx-auto">{t('Meet the dedicated leaders guiding our cooperative towards growth and service.')}</p>
                         </div>
 
                         <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-6">
@@ -197,10 +199,10 @@ export default function AboutPage() {
                     <div className="public-shell">
                         <div className="text-center mb-14">
                             <span className="mb-4 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                                <i className="fas fa-users text-xs"></i> Management
+                                <i className="fas fa-users text-xs"></i> {t('Management')}
                             </span>
-                            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mt-2 mb-4">Our Officers</h2>
-                            <p className="text-base text-gray-500 max-w-xl mx-auto">The dedicated professionals managing our daily operations and member services.</p>
+                            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mt-2 mb-4">{t('Our Officers')}</h2>
+                            <p className="text-base text-gray-500 max-w-xl mx-auto">{t('The dedicated professionals managing our daily operations and member services.')}</p>
                         </div>
 
                         <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-6">
@@ -235,10 +237,10 @@ export default function AboutPage() {
                 <div className="public-shell">
                     <div className="text-center mb-14">
                         <span className="mb-4 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                            <i className="fas fa-quote-right text-xs"></i> Testimonials
+                            <i className="fas fa-quote-right text-xs"></i> {t('Testimonials')}
                         </span>
-                        <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mt-2 mb-4">Member Stories</h2>
-                        <p className="text-base text-gray-500 max-w-xl mx-auto">Hear from our members about their experience with our cooperative.</p>
+                        <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mt-2 mb-4">{t('Member Stories')}</h2>
+                        <p className="text-base text-gray-500 max-w-xl mx-auto">{t('Hear from our members about their experience with our cooperative.')}</p>
                     </div>
 
                     <div className="grid md:grid-cols-3 gap-6">
@@ -247,14 +249,14 @@ export default function AboutPage() {
                             return (
                                 <div key={i} className="public-card public-card-hover relative overflow-hidden p-8">
                                     <div className="absolute -top-3 -left-3 text-[7rem] leading-none font-serif font-bold text-emerald-100 select-none pointer-events-none">&ldquo;</div>
-                                    <p className="relative text-gray-700 text-sm leading-relaxed mb-8">{stmt.statement || ''}</p>
+                                    <p className="relative text-gray-700 text-sm leading-relaxed mb-8">{t(stmt.statement || '')}</p>
                                     <div className="flex items-center gap-4 border-t border-gray-200 pt-6">
                                         <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${s.avatarClass} shadow-sm`}>
                                             <i className="fas fa-user text-sm text-white"></i>
                                         </div>
                                         <div>
                                             <p className="text-sm font-bold text-gray-900">{stmt.name || ''}</p>
-                                            <p className="text-xs text-gray-500">Member since {stmt.member_since || ''}</p>
+                                            <p className="text-xs text-gray-500">{t('Member since')} {stmt.member_since || ''}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -267,14 +269,14 @@ export default function AboutPage() {
             <section className="public-section px-4 bg-emerald-800 relative overflow-hidden">
                 <div className="pointer-events-none absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.05%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')]"></div>
                 <div className="relative max-w-3xl mx-auto text-center text-white">
-                    <h2 className="text-3xl md:text-4xl font-bold mb-4 leading-tight">Ready to Join Our Community?</h2>
-                    <p className="text-lg text-white/90 mb-10 max-w-xl mx-auto">Become part of a cooperative that puts your financial well-being and community growth first.</p>
+                    <h2 className="text-3xl md:text-4xl font-bold mb-4 leading-tight">{t('Ready to Join Our Community?')}</h2>
+                    <p className="text-lg text-white/90 mb-10 max-w-xl mx-auto">{t('Become part of a cooperative that puts your financial well-being and community growth first.')}</p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         <Link to="/#Contact" className="public-btn bg-white text-emerald-700 shadow-md hover:bg-emerald-50">
-                            <i className="fas fa-envelope text-sm"></i> Contact Us
+                            <i className="fas fa-envelope text-sm"></i> {t('Contact Us')}
                         </Link>
                         <Link to="/login" className="public-btn public-btn-secondary">
-                            <i className="fas fa-sign-in-alt text-sm"></i> Member Login
+                            <i className="fas fa-sign-in-alt text-sm"></i> {t('Member Login')}
                         </Link>
                     </div>
                 </div>

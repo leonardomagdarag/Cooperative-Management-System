@@ -26,7 +26,7 @@ export default function OfficerOverview() {
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div className="bg-linear-to-r from-slate-900 via-cyan-800 to-emerald-700 px-6 py-7 text-white">
                     <p className="text-sm font-medium text-cyan-100">{d.greeting || 'Good day'}</p>
-                    <h2 className="mt-1 text-2xl font-semibold">Officer dashboard</h2>
+                    <h1 className="mt-1 text-2xl font-medium">Officer dashboard</h1>
                     <p className="mt-2 max-w-2xl text-sm text-cyan-50/90">
                         Your role is served by the shared permission-driven dashboard path. The cards below reflect the sections
                         granted to this account — use the navigation to manage the rest.

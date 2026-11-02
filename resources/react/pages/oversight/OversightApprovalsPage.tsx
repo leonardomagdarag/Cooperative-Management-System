@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import Button from '../../components/ui/Button';
+import PageHeader from '../../components/ui/PageHeader';
 import { useToast } from '../../contexts/ToastContext';
 
 type Decision = 'approve' | 'reject' | 'reconcile_executed' | 'reconcile_failed';
@@ -236,19 +237,10 @@ export default function OversightApprovalsPage() {
     const inDoubtCount = requests.data?.filter(item => item.status === 'executing').length ?? 0;
 
     return <div className="space-y-6">
-        <header className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-700 via-green-700 to-cyan-800 p-6 text-white shadow-sm sm:p-8">
-            <div className="relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                    <p className="text-sm font-semibold uppercase tracking-wider text-emerald-100">Chairman oversight</p>
-                    <h1 className="mt-1 text-2xl font-bold sm:text-3xl">Approval requests</h1>
-                    <p className="mt-2 max-w-2xl text-sm text-emerald-50">Review privileged changes and confirm them with your one-time verification code.</p>
-                </div>
-                {!requests.isLoading && !requests.isError && <div className="flex gap-3">
-                    <div className="min-w-28 rounded-xl border border-white/20 bg-white/10 px-4 py-3"><p className="text-xs font-medium text-emerald-100">Awaiting review</p><p className="mt-1 text-2xl font-bold">{pendingCount}</p></div>
-                    <div className="min-w-28 rounded-xl border border-amber-200/30 bg-amber-300/15 px-4 py-3"><p className="text-xs font-medium text-amber-100">Needs checking</p><p className="mt-1 text-2xl font-bold">{inDoubtCount}</p></div>
-                </div>}
-            </div>
-        </header>
+        <PageHeader eyebrow="Chairman oversight" title="Approval requests" description="Review privileged changes and confirm them with your one-time verification code." icon="fas fa-clipboard-check" action={!requests.isLoading && !requests.isError && <div className="flex gap-3">
+            <div className="min-w-28 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3"><p className="text-xs font-medium text-emerald-700">Awaiting review</p><p className="mt-1 text-2xl font-bold text-emerald-900">{pendingCount}</p></div>
+            <div className="min-w-28 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3"><p className="text-xs font-medium text-amber-700">Needs checking</p><p className="mt-1 text-2xl font-bold text-amber-900">{inDoubtCount}</p></div>
+        </div>} />
 
         {restoreGraceCountdown > 0 && <div role="status" className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
             <p className="font-semibold">System restore begins in {restoreGraceCountdown} seconds.</p>

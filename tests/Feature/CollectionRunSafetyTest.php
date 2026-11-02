@@ -3,6 +3,7 @@
 use App\Models\Branch;
 use App\Models\CollectionRun;
 use App\Models\Notification;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\CollectionRunService;
 use Database\Seeders\SpatieRolePermissionSeeder;
@@ -154,4 +155,32 @@ test('manager can reassign an orphaned draft to an active loan officer', functio
 
     expect($reassigned->loan_officer_id)->toBe($newOfficer->id)
         ->and($reassigned->orphaned_at)->toBeNull();
+});
+
+test('approval queue pages remain reachable and filters and sorts apply before pagination', function () {
+    SystemSetting::updateOrCreate(['key' => 'collections.approval_stages'], [
+        'label' => 'Collection approval stages',
+        'value' => json_encode([['key' => 'approve', 'label' => 'Approve', 'permission' => 'collections.approve']]),
+    ]);
+    $runs = collect(range(1, 18))->map(fn ($number) => CollectionRun::create([
+        'run_number' => sprintf('CR-PAGE-%03d', $number),
+        'loan_officer_id' => $this->manager->id,
+        'collection_date' => today()->subDays(18 - $number),
+        'branch_id' => $this->manager->branch_id,
+        'status' => 'submitted',
+        'current_stage' => 0,
+        'submitted_at' => now()->subMinutes(18 - $number),
+        'total_amount' => $number * 10,
+    ]));
+    $first = $this->actingAs($this->manager)->getJson('/api/collections/queues?sort=run_number&direction=asc');
+    $first->assertOk()->assertJsonPath('total', 18)->assertJsonPath('last_page', 2)->assertJsonCount(15, 'data');
+    $second = $this->getJson('/api/collections/queues?page=2&sort=run_number&direction=asc');
+    $second->assertOk()->assertJsonCount(3, 'data')->assertJsonPath('data.0.run_number', 'CR-PAGE-016');
+    expect(array_intersect(array_column($first->json('data'), 'id'), array_column($second->json('data'), 'id')))->toBe([]);
+    $this->getJson('/api/collections/queues?search=CR-PAGE-018')
+        ->assertOk()->assertJsonPath('total', 1)->assertJsonPath('data.0.id', $runs->last()->id);
+    $this->getJson('/api/collections/queues?sort=total_amount&direction=desc')
+        ->assertOk()->assertJsonPath('data.0.id', $runs->last()->id);
+    $this->getJson('/api/collections/queues?from='.today()->toDateString().'&to='.today()->toDateString())
+        ->assertOk()->assertJsonPath('total', 1)->assertJsonPath('data.0.id', $runs->last()->id);
 });

@@ -4,6 +4,7 @@ import { api } from '../../api/client';
 import FallbackImage from '../../components/FallbackImage';
 import { useToast } from '../../contexts/ToastContext';
 import SettingsTabHeader from '../settings/SettingsTabHeader';
+import LoadingIndicator from '../../components/ui/LoadingIndicator';
 
 function getByPath(obj: any, path: string): any {
     return path.split('.').reduce((acc, key) => (acc == null ? undefined : acc[key]), obj);
@@ -150,9 +151,7 @@ export default function PublicContentPage() {
         setSectionValue('cards', cards);
     };
 
-    if (isLoading) {
-        return <div className="space-y-4">{[...Array(3)].map((_, i) => <div key={i} className="h-32 animate-pulse rounded-xl bg-gray-100" />)}</div>;
-    }
+    if (isLoading) return <LoadingIndicator message="Loading public content..." />;
 
     const fields = (meta.groups || []).flatMap((g: any) => g.fields || []).filter((f: any) => !f.hidden);
 

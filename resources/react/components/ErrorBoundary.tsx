@@ -1,5 +1,6 @@
 import { Component, ReactNode } from 'react';
 
+import Button from './ui/Button';
 interface Props {
     children: ReactNode;
     fallback?: ReactNode;

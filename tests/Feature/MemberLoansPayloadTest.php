@@ -87,6 +87,40 @@ test('member loans payload nets out reversed payments and flags them', function 
         ->and(collect($payload['payments'])->where('is_reversal', true))->toHaveCount(1);
 });
 
+test('member loan modal payload lists only the borrowers own documents', function () {
+    $loan = makeMemberLoan($this->member);
+    $document = $loan->documents()->create([
+        'original_name' => 'Signed Loan Agreement.pdf',
+        'storage_path' => 'loan-documents/'.$loan->id.'/agreement.pdf',
+        'mime_type' => 'application/pdf',
+        'file_size' => 2048,
+        'uploaded_by' => $this->member->id,
+    ]);
+
+    $otherMember = User::where('email', 'leo.baluyot039+crisdavid.jarabejo@gmail.com')->firstOrFail();
+    $otherLoan = makeMemberLoan($otherMember);
+    $otherLoan->documents()->create([
+        'original_name' => 'Other Member Agreement.pdf',
+        'storage_path' => 'loan-documents/'.$otherLoan->id.'/agreement.pdf',
+        'mime_type' => 'application/pdf',
+        'file_size' => 1024,
+        'uploaded_by' => $otherMember->id,
+    ]);
+
+    $loans = collect($this->getJson('/api/member-loans')->assertOk()->json('data'));
+    $documents = $loans->firstWhere('id', $loan->id)['documents'];
+
+    expect($loans->pluck('id'))->not->toContain($otherLoan->id)
+        ->and($documents)->toHaveCount(1)
+        ->and($documents[0])->toMatchArray([
+            'id' => $document->id,
+            'original_name' => 'Signed Loan Agreement.pdf',
+            'mime_type' => 'application/pdf',
+            'file_size' => 2048,
+        ])
+        ->and($documents[0]['url'])->toContain("/api/loans/{$loan->id}/documents/{$document->id}");
+});
+
 test('officer loan detail returns totals and payment references', function () {
     $loan = makeMemberLoan($this->member);
 

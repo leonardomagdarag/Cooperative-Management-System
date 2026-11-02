@@ -1,3 +1,4 @@
+import SortableHeader from '../../components/ui/SortableHeader';
 import { useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { api } from '../../api/client';
@@ -8,8 +9,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import OfficerFormModal from './OfficerFormModal';
 import OfficerPermissionModal from './OfficerPermissionModal';
 import OfficerProfileModal from './OfficerProfileModal';
+import PageHeader from '../../components/ui/PageHeader';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Pagination from '../../components/ui/Pagination';
+import DateRangeFilter from '../../components/ui/DateRangeFilter';
 
 export default function OfficersPage() {
     const { user } = useAuth();
@@ -22,6 +25,11 @@ export default function OfficersPage() {
     const hasActions = canEdit || canDelete || canManagePermissions;
     const [search, setSearch] = useState('');
     const [branchFilter, setBranchFilter] = useState<number | ''>('');
+    const [from, setFrom] = useState('');
+    const [to, setTo] = useState('');
+    const [roleFirst, setRoleFirst] = useState('');
+    const [sort, setSort] = useState('created_at');
+    const [direction, setDirection] = useState<'asc' | 'desc'>('desc');
     const [page, setPage] = useState(1);
     const [viewing, setViewing] = useState<any>(null);
     const [showForm, setShowForm] = useState(false);
@@ -39,8 +47,8 @@ export default function OfficersPage() {
     const { addToast } = useToast();
 
     const { data, isLoading, refetch } = useQuery({
-        queryKey: ['officers', search, page, branchFilter],
-        queryFn: () => api.get('/api/members', { params: { is_officer: true, search: search || undefined, branch_id: branchFilter || undefined, page, per_page: 15 } }),
+        queryKey: ['officers', search, page, branchFilter, from, to, sort, direction, roleFirst],
+        queryFn: () => api.get('/api/members', { params: { is_officer: true, search: search || undefined, branch_id: branchFilter || undefined, page, per_page: 15, from: from || undefined, to: to || undefined, sort, direction, role_first: roleFirst || undefined } }),
     });
 
     const deleteMutation = useMutation({
@@ -57,13 +65,27 @@ export default function OfficersPage() {
     const officers = data?.data?.data ?? [];
     const pagination = data?.data?.pagination ?? {};
 
+    const handleColumnSort = (field: string) => {
+        if (field === 'role') {
+            const roles: string[] = data?.data?.sort_roles ?? [];
+            const next = sort === 'role' ? (roles.indexOf(roleFirst) + 1) % (roles.length + 1) : 0;
+            setRoleFirst(roles[next] ?? '');
+            setSort(next === roles.length ? 'created_at' : 'role');
+            setDirection(next === roles.length ? 'desc' : 'asc');
+            setPage(1);
+            return;
+        }
+        setDirection(sort === field && direction === 'asc' ? 'desc' : 'asc');
+        setSort(field);
+        setPage(1);
+    };
+
     return (
         <div>
-            <div className="p-4 bg-white block sm:flex items-center justify-between border-b border-gray-200 lg:mt-1.5">
+            <div className="p-4">
                 <div className="w-full mb-1">
                     <div className="mb-4">
-                        <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl">Officers</h1>
-                        <p className="text-sm text-gray-500">Manage cooperative officers and their permissions</p>
+                        <PageHeader title="Officers" description="Manage cooperative officers and their permissions" icon="fas fa-user-tie" />
                     </div>
 
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -98,6 +120,10 @@ export default function OfficersPage() {
                             )}
                         </div>
                     </div>
+                    <div className="table-toolbar mt-3">
+                        <DateRangeFilter from={from} to={to} onFromChange={value => { setFrom(value); setPage(1); }} onToChange={value => { setTo(value); setPage(1); }} />
+                        {sort === 'role' && roleFirst && <span role="status" className="py-2 text-sm font-normal text-gray-600">Showing <span className="capitalize">{roleFirst}</span> first. Click Role for the next role.</span>}
+                    </div>
                 </div>
             </div>
 
@@ -116,13 +142,13 @@ export default function OfficersPage() {
                                 <table className="min-w-[800px] w-full divide-y divide-gray-200 table-fixed">
                                     <thead className="bg-gray-100">
                                         <tr>
-                                            {canEdit && <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Officer ID</th>}
-                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Name</th>
-                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Title</th>
-                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Role</th>
-                                            {canAssignBranch && <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Branch</th>}
-                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Status</th>
-                                            <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Email</th>
+                                            {canEdit && <SortableHeader field="user_number" sort={sort} direction={direction} onSort={handleColumnSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Officer ID</SortableHeader>}
+                                            <SortableHeader field="name" sort={sort} direction={direction} onSort={handleColumnSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Name</SortableHeader>
+                                            <SortableHeader field="title" sort={sort} direction={direction} onSort={handleColumnSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Title</SortableHeader>
+                                            <SortableHeader field="role" sort={sort} direction={direction} onSort={handleColumnSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase" categorical hint={roleFirst ? `Showing ${roleFirst} first. Click for next role` : "Cycle roles to the top"}>Role</SortableHeader>
+                                            {canAssignBranch && <SortableHeader field="branch" sort={sort} direction={direction} onSort={handleColumnSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Branch</SortableHeader>}
+                                            <SortableHeader field="account_status" sort={sort} direction={direction} onSort={handleColumnSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Status</SortableHeader>
+                                            <SortableHeader field="email" sort={sort} direction={direction} onSort={handleColumnSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Email</SortableHeader>
                                             <th scope="col" className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Actions</th>
                                         </tr>
                                     </thead>

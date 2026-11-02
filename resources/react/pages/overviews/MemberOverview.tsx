@@ -1,8 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
+import LoadingIndicator from '../../components/ui/LoadingIndicator';
+import HelpTip from '../../components/ui/HelpTip';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 export default function MemberOverview() {
+    const { t } = useLanguage();
     const { user } = useAuth();
     const { data, isLoading } = useQuery({
         queryKey: ['overview-member', user?.id],
@@ -12,15 +16,7 @@ export default function MemberOverview() {
     const d = data?.data || {};
     const displayName = user?.first_name ? `${user.first_name}${user.last_name ? ` ${user.last_name}` : ''}` : user?.name || d.user_name || 'Member';
 
-    if (isLoading) {
-        return (
-            <div className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-3">
-                    {[...Array(3)].map((_, i) => <div key={i} className="h-44 animate-pulse rounded-xl bg-slate-100" />)}
-                </div>
-            </div>
-        );
-    }
+    if (isLoading) return <LoadingIndicator message={t('Loading overview...')} />;
 
     const activeLoans = (d.loans || []).filter((l: any) => ['approved', 'active'].includes(l.loan_status));
 
@@ -29,11 +25,11 @@ export default function MemberOverview() {
             <div className="bg-gradient-to-r from-emerald-600 to-cyan-600 rounded-2xl shadow-xl p-5 sm:p-8 text-white">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl sm:text-3xl font-bold mb-2">{d.greeting || 'Welcome back'}, {displayName}!</h1>
-                        <p className="text-emerald-50 text-base sm:text-lg">Here's your financial overview for today</p>
+                        <h1 className="mb-2 text-2xl font-medium">{t('Welcome back')}, {displayName}!</h1>
+                        <p className="text-sm text-emerald-50">{t("Here's your financial overview for today")}</p>
                     </div>
                     <div className="text-left sm:text-right">
-                        <p className="text-emerald-100 text-sm">Member ID</p>
+                        <p className="text-emerald-100 text-sm">{t('Member ID')}</p>
                         <p className="text-xl sm:text-2xl font-bold font-mono">{d.user_number || user?.user_number || '—'}</p>
                     </div>
                 </div>
@@ -49,23 +45,23 @@ export default function MemberOverview() {
                                     <path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd" />
                                 </svg>
                             </div>
-                            <span className="text-white/80 text-sm font-medium">SAVINGS</span>
+                            <span className="text-white/80 text-sm font-medium">{t('SAVINGS')}</span>
                         </div>
                         <div>
-                            <p className="text-white/90 text-sm mb-1">Available Balance</p>
+                            <p className="mb-1 flex items-center gap-1.5 text-sm text-white/90">{t('Available Balance')} <HelpTip inverted text="Ito ang savings balance na naka-record sa account mo. Hindi ito wallet na puwedeng gamitin para direktang pambayad ng loan." /></p>
                             <p className="text-3xl font-bold text-white">₱{Number(d.total_savings || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
                         </div>
                     </div>
                     {d.savings_account ? (
                         <div className="p-4 bg-gray-50">
                             <div className="flex items-center justify-between text-sm">
-                                <span className="text-gray-600">Account No.</span>
+                                <span className="text-gray-600">{t('Account No.')}</span>
                                 <span className="font-mono font-semibold text-gray-900">{d.savings_account.account_number}</span>
                             </div>
                         </div>
                     ) : (
                         <div className="p-4 bg-gray-50">
-                            <p className="text-sm text-gray-500 text-center">No savings account yet</p>
+                            <p className="text-sm text-gray-500 text-center">{t('No savings account yet')}</p>
                         </div>
                     )}
                 </div>
@@ -78,23 +74,23 @@ export default function MemberOverview() {
                                     <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
                                 </svg>
                             </div>
-                            <span className="text-white/80 text-sm font-medium">SHARE CAPITAL</span>
+                            <span className="text-white/80 text-sm font-medium">{t('SHARE CAPITAL')}</span>
                         </div>
                         <div>
-                            <p className="text-white/90 text-sm mb-1">Total Investment</p>
+                            <p className="mb-1 flex items-center gap-1.5 text-sm text-white/90">{t('Total Investment')} <HelpTip inverted text="Ito ang total na share capital na naka-record sa membership mo. Iba ito sa withdrawable savings." /></p>
                             <p className="text-3xl font-bold text-white">₱{Number(d.total_share_capital || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
                         </div>
                     </div>
                     {d.share_capital_account ? (
                         <div className="p-4 bg-gray-50">
                             <div className="flex items-center justify-between text-sm">
-                                <span className="text-gray-600">Account No.</span>
+                                <span className="text-gray-600">{t('Account No.')}</span>
                                 <span className="font-mono font-semibold text-gray-900">{d.share_capital_account.account_number}</span>
                             </div>
                         </div>
                     ) : (
                         <div className="p-4 bg-gray-50">
-                            <p className="text-sm text-gray-500 text-center">No share capital yet</p>
+                            <p className="text-sm text-gray-500 text-center">{t('No share capital yet')}</p>
                         </div>
                     )}
                 </div>
@@ -108,16 +104,16 @@ export default function MemberOverview() {
                                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clipRule="evenodd" />
                                 </svg>
                             </div>
-                            <span className="text-white/80 text-sm font-medium">TOTAL LOANS</span>
+                            <span className="text-white/80 text-sm font-medium">{t('TOTAL LOANS')}</span>
                         </div>
                         <div>
-                            <p className="text-white/90 text-sm mb-1">Outstanding Balance</p>
+                            <p className="mb-1 flex items-center gap-1.5 text-sm text-white/90">{t('Outstanding Balance')} <HelpTip inverted text="Ito ang natitira mong babayaran sa mga active loan. Completed payments lang ang nakakabawas dito." /></p>
                             <p className="text-3xl font-bold text-white">₱{Number(d.total_loan_balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
                         </div>
                     </div>
                     <div className="p-4 bg-gray-50">
                         <div className="flex items-center justify-between text-sm">
-                            <span className="text-gray-600">Active Loans</span>
+                            <span className="text-gray-600">{t('Active Loans')}</span>
                             <span className="font-semibold text-gray-900">{activeLoans.length}</span>
                         </div>
                     </div>
@@ -131,7 +127,7 @@ export default function MemberOverview() {
                             <svg className="w-6 h-6 text-cyan-600" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
                             </svg>
-                            Active Loans
+                            {t('Active Loans')}
                         </h2>
                     </div>
                     <div className="p-6">
@@ -142,34 +138,34 @@ export default function MemberOverview() {
                                         <div className="flex items-start justify-between mb-3">
                                             <div className="flex-1">
                                                 <h3 className="text-lg font-bold text-gray-900">{l.loan_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Loan</h3>
-                                                <p className="text-sm text-gray-500">Loan No: <span className="font-mono">{l.loan_number}</span></p>
+                                                <p className="text-sm text-gray-500">{t('Loan No:')} <span className="font-mono">{l.loan_number}</span></p>
                                             </div>
                                             <span className={`px-3 py-1 text-xs font-semibold rounded-full ${['approved', 'active'].includes(l.loan_status) ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
                                                 {l.loan_status.charAt(0).toUpperCase() + l.loan_status.slice(1)}
                                             </span>
                                             {l.is_overdue && (
                                                 <span className="px-3 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
-                                                    Overdue{l.days_overdue > 0 ? ` · ${l.days_overdue} days` : ''}
+                                                    {t('Overdue')}{l.days_overdue > 0 ? ` · ${l.days_overdue} days` : ''}
                                                 </span>
                                             )}
                                         </div>
                                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                             <div>
-                                                <p className="text-xs text-gray-600 mb-1">Principal Amount</p>
+                                                <p className="text-xs text-gray-600 mb-1">{t('Principal Amount')}</p>
                                                 <p className="text-lg font-bold text-gray-900">₱{Number(l.loan_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
                                             </div>
                                             <div>
-                                                <p className="text-xs text-gray-600 mb-1">Remaining Balance</p>
+                                                <p className="text-xs text-gray-600 mb-1">{t('Remaining Balance')}</p>
                                                 <p className="text-lg font-bold text-red-600">₱{Number(l.remaining_balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
                                             </div>
                                             <div>
-                                                <p className="text-xs text-gray-600 mb-1">Maturity Date</p>
+                                                <p className="text-xs text-gray-600 mb-1">{t('Maturity Date')}</p>
                                                 <p className="text-sm font-semibold text-gray-900">{l.due_date || 'N/A'}</p>
                                             </div>
                                         </div>
                                         <div className="mt-4">
                                             <div className="flex justify-between text-xs text-gray-600 mb-1">
-                                                <span>Payment Progress</span>
+                                                <span>{t('Payment Progress')}</span>
                                                 <span>{Number(l.progress || 0).toFixed(1)}%</span>
                                             </div>
                                             <div className="w-full bg-gray-200 rounded-full h-2">
@@ -184,8 +180,8 @@ export default function MemberOverview() {
                                 <svg className="w-20 h-20 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
-                                <h3 className="text-lg font-semibold text-gray-600 mb-2">No Active Loans</h3>
-                                <p className="text-gray-500">You currently have no active loans</p>
+                                <h3 className="text-lg font-semibold text-gray-600 mb-2">{t('No Active Loans')}</h3>
+                                <p className="text-gray-500">{t('You currently have no active loans')}</p>
                             </div>
                         )}
                     </div>
@@ -197,7 +193,7 @@ export default function MemberOverview() {
                             <svg className="w-6 h-6 text-cyan-600" fill="currentColor" viewBox="0 0 20 20">
                                 <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" />
                             </svg>
-                            Announcements
+                            {t('Announcements')}
                         </h2>
                     </div>
                     <div className="p-4 max-h-96 overflow-y-auto">
@@ -226,7 +222,7 @@ export default function MemberOverview() {
                                 <svg className="w-16 h-16 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                                 </svg>
-                                <p className="text-sm text-gray-500">No announcements</p>
+                                <p className="text-sm text-gray-500">{t('No announcements')}</p>
                             </div>
                         )}
                     </div>

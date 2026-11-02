@@ -1,3 +1,5 @@
+import usePaginatedRows from '../../hooks/usePaginatedRows';
+import SortableHeader from '../../components/ui/SortableHeader';
 import React, { useState, useEffect } from 'react';
 import { api } from '../../api/client';
 import Button from '../../components/ui/Button';
@@ -6,6 +8,7 @@ import { useToast } from '../../contexts/ToastContext';
 import Modal from '../../components/ui/Modal';
 import ModalHeader from '../../components/ui/ModalHeader';
 import Pagination from '../../components/ui/Pagination';
+import DateRangeFilter from '../../components/ui/DateRangeFilter';
 
 export default function RunHistoryTab({ canViewAll }: { canViewAll: boolean }) {
     const { addToast } = useToast();
@@ -13,7 +16,13 @@ export default function RunHistoryTab({ canViewAll }: { canViewAll: boolean }) {
     const [loading, setLoading] = useState(true);
     const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 });
     const [statusFilter, setStatusFilter] = useState('');
+    const [search, setSearch] = useState('');
+    const [from, setFrom] = useState('');
+    const [to, setTo] = useState('');
+    const [sort, setSort] = useState('collection_date');
+    const [direction, setDirection] = useState<'asc' | 'desc'>('desc');
     const [selectedRun, setSelectedRun] = useState<any>(null);
+    const itemPagination = usePaginatedRows<any>(selectedRun?.items ?? []);
     const [availableOfficers, setAvailableOfficers] = useState<any[]>([]);
     const [replacementOfficerId, setReplacementOfficerId] = useState('');
     const [actionReason, setActionReason] = useState('');
@@ -21,15 +30,17 @@ export default function RunHistoryTab({ canViewAll }: { canViewAll: boolean }) {
 
     useEffect(() => {
         fetchHistory(1);
-    }, [statusFilter]);
+    }, [statusFilter, search, from, to, sort, direction]);
 
     const fetchHistory = async (page: number) => {
         setLoading(true);
         try {
-            let url = `/api/collections?page=${page}`;
-            if (statusFilter) url += `&status=${statusFilter}`;
-            
-            const res = await api.get(url);
+            const params = new URLSearchParams({ page: String(page), per_page: '15', sort, direction });
+            if (statusFilter) params.set('status', statusFilter);
+            if (search.trim()) params.set('search', search.trim());
+            if (from) params.set('from', from);
+            if (to) params.set('to', to);
+            const res = await api.get(`/api/collections?${params.toString()}`);
             setRuns(res.data.data);
             setPagination({
                 current_page: res.data.current_page,
@@ -47,6 +58,7 @@ export default function RunHistoryTab({ canViewAll }: { canViewAll: boolean }) {
         try {
             const res = await api.get(`/api/collections/${runId}`);
             setSelectedRun(res.data.data);
+            itemPagination.setPage(1);
             setActionReason('');
             setReplacementOfficerId('');
             if (canManageRuns) {
@@ -88,11 +100,22 @@ export default function RunHistoryTab({ canViewAll }: { canViewAll: boolean }) {
         }
     };
 
+    const handleColumnSort = (field: string) => {
+        setDirection(sort === field && direction === 'asc' ? 'desc' : 'asc');
+        setSort(field);
+    };
+
     return (
         <div className="p-6">
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-lg font-bold text-slate-800">Run History</h2>
                 
+                <div className="table-toolbar">
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search run number or officer..." aria-label="Search collection runs" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                <DateRangeFilter from={from} to={to} onFromChange={setFrom} onToChange={setTo} />
+                <select value={`${sort}:${direction}`} onChange={e => { const [field, order] = e.target.value.split(':'); setSort(field); setDirection(order as 'asc' | 'desc'); }} aria-label="Sort collection runs" className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    <option value="collection_date:desc">Newest date</option><option value="collection_date:asc">Oldest date</option><option value="run_number:asc">Run number A–Z</option><option value="run_number:desc">Run number Z–A</option><option value="status:asc">Status A–Z</option><option value="status:desc">Status Z–A</option>
+                </select>
                 <select 
                     className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                     value={statusFilter}
@@ -107,6 +130,7 @@ export default function RunHistoryTab({ canViewAll }: { canViewAll: boolean }) {
                     <option value="partially_applied">Partially Applied</option>
                     <option value="voided">Voided</option>
                 </select>
+                </div>
             </div>
 
             {loading ? (
@@ -121,12 +145,12 @@ export default function RunHistoryTab({ canViewAll }: { canViewAll: boolean }) {
                         <table className="w-full min-w-[700px] text-left text-sm">
                             <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
                                 <tr>
-                                    <th className="p-3 font-semibold">Run Number</th>
-                                    {canViewAll && <th className="p-3 font-semibold">Officer</th>}
-                                    <th className="p-3 font-semibold">Date</th>
-                                    <th className="p-3 font-semibold">Items</th>
-                                    <th className="p-3 font-semibold">Total Amount</th>
-                                    <th className="p-3 font-semibold">Status</th>
+                                    <SortableHeader field="run_number" sort={sort} direction={direction} onSort={handleColumnSort} className="p-3 font-semibold">Run Number</SortableHeader>
+                                    {canViewAll && <SortableHeader field="officer" sort={sort} direction={direction} onSort={handleColumnSort} className="p-3 font-semibold">Officer</SortableHeader>}
+                                    <SortableHeader field="collection_date" sort={sort} direction={direction} onSort={handleColumnSort} className="p-3 font-semibold">Date</SortableHeader>
+                                    <SortableHeader field="item_count" sort={sort} direction={direction} onSort={handleColumnSort} className="p-3 font-semibold">Items</SortableHeader>
+                                    <SortableHeader field="total_amount" sort={sort} direction={direction} onSort={handleColumnSort} className="p-3 font-semibold">Total Amount</SortableHeader>
+                                    <SortableHeader field="status" sort={sort} direction={direction} onSort={handleColumnSort} className="p-3 font-semibold">Status</SortableHeader>
                                     <th className="p-3 font-semibold">Actions</th>
                                 </tr>
                             </thead>
@@ -208,7 +232,7 @@ export default function RunHistoryTab({ canViewAll }: { canViewAll: boolean }) {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {selectedRun?.items?.map((item: any) => (
+                                {itemPagination.rows.map((item: any) => (
                                     <tr key={item.id}>
                                         <td className="p-2">
                                             <div>{item.member?.personal_data?.first_name} {item.member?.personal_data?.last_name}</div>
@@ -229,6 +253,7 @@ export default function RunHistoryTab({ canViewAll }: { canViewAll: boolean }) {
                             </tbody>
                         </table>
                     </div>
+                    <Pagination page={itemPagination.page} lastPage={itemPagination.lastPage} total={itemPagination.total} perPage={itemPagination.perPage} onChange={itemPagination.setPage} scrollToTop={false} />
 
                     {canManageRuns && (selectedRun?.status === 'rejected' || (selectedRun?.status === 'draft' && selectedRun?.orphaned_at)) && (
                         <section className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
@@ -248,11 +273,11 @@ export default function RunHistoryTab({ canViewAll }: { canViewAll: boolean }) {
                             )}
                             <div className="mt-3 flex justify-end gap-2">
                                 {selectedRun?.status === 'rejected' ? (
-                                    <Button variant="primary" disabled={!replacementOfficerId} onClick={() => manageRun('replacement')}>Create replacement</Button>
+                                    <Button variant="primary" disableOnClick disabled={!replacementOfficerId} onClick={() => manageRun('replacement')}>Create replacement</Button>
                                 ) : (
                                     <>
-                                        <Button variant="danger" disabled={actionReason.trim().length < 5} onClick={() => manageRun('void')}>Void run</Button>
-                                        <Button variant="primary" disabled={!replacementOfficerId || actionReason.trim().length < 5} onClick={() => manageRun('reassign')}>Reassign run</Button>
+                                        <Button variant="danger" disableOnClick disabled={actionReason.trim().length < 5} onClick={() => manageRun('void')}>Void run</Button>
+                                        <Button variant="primary" disableOnClick disabled={!replacementOfficerId || actionReason.trim().length < 5} onClick={() => manageRun('reassign')}>Reassign run</Button>
                                     </>
                                 )}
                             </div>
@@ -266,7 +291,7 @@ export default function RunHistoryTab({ canViewAll }: { canViewAll: boolean }) {
                             <label className="mt-3 block text-sm font-medium text-slate-700">Reason</label>
                             <textarea value={actionReason} onChange={e => setActionReason(e.target.value)} rows={2} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
                             <div className="mt-3 flex justify-end">
-                                <Button variant="primary" disabled={actionReason.trim().length < 5} onClick={() => manageRun('retry')}>Retry failed items</Button>
+                                <Button variant="primary" disableOnClick disabled={actionReason.trim().length < 5} onClick={() => manageRun('retry')}>Retry failed items</Button>
                             </div>
                         </section>
                     )}

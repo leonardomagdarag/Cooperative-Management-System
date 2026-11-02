@@ -38,6 +38,11 @@ class LedgerController extends Controller
             $query->whereNotNull('reversal_of_id');
         }
 
+        $status = $request->string('status')->toString();
+        if ($status !== '' && $status !== 'all') {
+            $query->where('status', $status);
+        }
+
         // Search
         if ($search = SearchFilter::escapeLike($request->string('search')->toString())) {
             $query->where(function ($q) use ($search) {
@@ -53,13 +58,27 @@ class LedgerController extends Controller
             });
         }
 
+        if ($from = $request->string('from')->toString()) {
+            $query->whereDate('transaction_date', '>=', $from);
+        }
+        if ($to = $request->string('to')->toString()) {
+            $query->whereDate('transaction_date', '<=', $to);
+        }
+
         // Sort
         $sortField = $request->string('sort', 'created_at')->toString();
         $sortDirection = $request->string('direction', 'desc')->toString();
-        $allowedSorts = ['created_at', 'transaction_number', 'amount', 'status', 'transaction_type'];
-        if (in_array($sortField, $allowedSorts, true)) {
+        $allowedSorts = ['created_at', 'transaction_date', 'transaction_number', 'amount', 'status', 'transaction_type'];
+        if ($sortField === 'member') {
+            $query->orderByRaw('COALESCE(
+                (SELECT pd.first_name FROM accounts a JOIN users u ON u.id = a.user_id JOIN personal_data pd ON pd.id = u.personal_data_id WHERE a.id = transactions.account_id),
+                (SELECT pd.first_name FROM loans l JOIN users u ON u.id = l.user_id JOIN personal_data pd ON pd.id = u.personal_data_id WHERE l.id = transactions.loan_id)
+            ) '.($sortDirection === 'asc' ? 'ASC' : 'DESC'));
+        } elseif (in_array($sortField, $allowedSorts, true)) {
             $query->orderBy($sortField, $sortDirection === 'asc' ? 'asc' : 'desc');
         }
+
+        $query->orderBy('transactions.id');
 
         $perPage = max(5, min((int) $request->integer('per_page', 10), 50));
         $paginator = $query->paginate($perPage);

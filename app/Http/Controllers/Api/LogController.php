@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Spatie\Activitylog\Models\Activity;
 
@@ -25,26 +26,7 @@ class LogController extends Controller
         $paginator = $query->paginate($perPage);
 
         return response()->json([
-            'data' => $paginator->getCollection()->map(fn ($log) => [
-                'id' => $log->id,
-                'log_name' => $log->log_name,
-                'description' => $log->description,
-                'event' => $log->event,
-                'subject_type' => class_basename($log->subject_type),
-                'subject_id' => $log->subject_id,
-                'subject_name' => $log->subject ? (
-                    $log->subject instanceof User
-                        ? trim(($log->subject->personalData->first_name ?? '').' '.($log->subject->personalData->last_name ?? '')) ?: $log->subject->email
-                        : (method_exists($log->subject, 'getName') ? $log->subject->getName() : ($log->subject->name ?? $log->subject->title ?? $log->subject->email ?? null))
-                ) : null,
-                'causer' => $log->causer ? [
-                    'id' => $log->causer->id,
-                    'name' => trim(($log->causer->personalData->first_name ?? '').' '.($log->causer->personalData->last_name ?? '')) ?: $log->causer->email,
-                    'email' => $log->causer->email,
-                ] : null,
-                'properties' => $log->properties,
-                'created_at' => $log->created_at->toISOString(),
-            ]),
+            'data' => $paginator->getCollection()->map(fn ($log) => $this->logPayload($log)),
             'pagination' => [
                 'current_page' => $paginator->currentPage(),
                 'last_page' => $paginator->lastPage(),
@@ -73,6 +55,100 @@ class LogController extends Controller
         ]);
     }
 
+    private function logPayload(Activity $log): array
+    {
+        $properties = $log->properties;
+        $description = $log->description;
+
+        if ($log->log_name === 'email' && $log->event === 'email.failed') {
+            $properties = collect([
+                'to' => $log->properties?->get('to'),
+                'reason' => $this->failureSummary((string) ($log->properties?->get('error') ?? $description)),
+            ])->filter(fn ($value) => filled($value));
+            $description = 'The email could not be sent. '.$properties->get('reason');
+        } elseif ($log->log_name === 'backup' && $log->event === 'backup.restore_failed') {
+            $properties = collect([
+                'source' => $log->properties?->get('source'),
+                'storage_tier' => $log->properties?->get('storage_tier'),
+                'scope' => $log->properties?->get('scope'),
+                'reason' => $this->failureSummary((string) ($log->properties?->get('error') ?? $description)),
+            ])->filter(fn ($value) => filled($value));
+            $description = 'The backup could not be restored. '.$properties->get('reason');
+        } elseif ($log->log_name === 'backup' && $log->event === 'backup.restored') {
+            $properties = collect([
+                'source' => $log->properties?->get('source'),
+                'storage_tier' => $log->properties?->get('storage_tier'),
+                'scope' => $log->properties?->get('scope'),
+                'file' => $log->properties?->get('file'),
+                'files_restored' => $log->properties?->get('files_restored'),
+            ])->filter(fn ($value) => filled($value));
+            $description = 'The selected backup was restored successfully.';
+        } elseif ($log->log_name === 'financial' && $log->event === 'financial.interest.failed') {
+            $accountType = (string) $log->properties?->get('account_type', 'cooperative');
+            $error = str_contains($description, ':') ? trim(substr($description, strpos($description, ':') + 1)) : $description;
+            $properties = collect([
+                'account_type' => $accountType,
+                'reason' => $this->failureSummary($error),
+            ]);
+            $description = 'Interest could not be processed for the '.str_replace('_', ' ', $accountType).' account. '.$properties->get('reason');
+        } elseif (filled($log->properties?->get('error')) && is_scalar($log->properties->get('error'))) {
+            $rawError = (string) $log->properties->get('error');
+            $reason = $this->failureSummary($rawError);
+            $properties = $log->properties->except('error')->put('reason', $reason);
+            if (str_contains($description, $rawError)) {
+                $description = str_replace($rawError, $reason, $description);
+            }
+        }
+
+        return [
+            'id' => $log->id,
+            'log_name' => $log->log_name,
+            'description' => $description,
+            'event' => $log->event,
+            'subject_type' => class_basename($log->subject_type),
+            'subject_id' => $log->subject_id,
+            'subject_name' => $log->subject ? (
+                $log->subject instanceof User
+                    ? trim(($log->subject->personalData->first_name ?? '').' '.($log->subject->personalData->last_name ?? '')) ?: $log->subject->email
+                    : (method_exists($log->subject, 'getName') ? $log->subject->getName() : ($log->subject->name ?? $log->subject->title ?? $log->subject->email ?? null))
+            ) : null,
+            'causer' => $log->causer ? [
+                'id' => $log->causer->id,
+                'name' => trim(($log->causer->personalData->first_name ?? '').' '.($log->causer->personalData->last_name ?? '')) ?: $log->causer->email,
+                'email' => $log->causer->email,
+            ] : null,
+            'properties' => $properties,
+            'created_at' => $log->created_at->toISOString(),
+        ];
+    }
+
+    private function failureSummary(string $error): string
+    {
+        $message = strtolower($error);
+
+        if (str_contains($message, 'htmlspecialchars') || str_contains($message, 'illuminate\\mail\\message')) {
+            return 'The email template could not display one of the message details. Ask technical support to review the email template.';
+        }
+
+        if (preg_match('/\b(535|authentication failed|invalid credentials|username and password)\b/', $message)) {
+            return 'The email provider rejected its sign-in details. Check the email account settings.';
+        }
+
+        if (preg_match('/\b(connection refused|could not connect|connection timed out|network is unreachable)\b/', $message)) {
+            return 'The system could not connect to the required service. Check the connection or ask technical support to review the server logs.';
+        }
+
+        if (str_contains($message, 'sqlstate') || str_contains($message, 'database')) {
+            return 'The system could not save or read the required information. Ask technical support to review the server logs.';
+        }
+
+        if (str_contains($message, 'class') && str_contains($message, 'not found')) {
+            return 'A required system component could not be found. Ask technical support to review the server logs.';
+        }
+
+        return 'An unexpected system problem occurred. Ask technical support to review the server logs.';
+    }
+
     public function export(Request $request)
     {
         $user = Auth::user();
@@ -88,6 +164,7 @@ class LogController extends Controller
             fputcsv($out, ['Date and Time', 'Area', 'Action', 'Description', 'Related Record Type', 'Related Record ID', 'Related Record', 'Performed By', 'Actor Email', 'Details']);
 
             foreach ($logs as $log) {
+                $payload = $this->logPayload($log);
                 $subject = $log->subject;
                 $subjectName = $subject ? (
                     $subject instanceof User
@@ -98,13 +175,15 @@ class LogController extends Controller
                 $causerName = $causer
                     ? trim(($causer->personalData->first_name ?? '').' '.($causer->personalData->last_name ?? '')) ?: $causer->email
                     : 'System';
-                $properties = $log->properties?->toArray() ?? [];
+                $properties = $payload['properties'] instanceof Collection
+                    ? $payload['properties']->toArray()
+                    : ($payload['properties']?->toArray() ?? []);
 
                 fputcsv($out, array_map($this->csvSafe(...), [
                     $log->created_at?->toISOString(),
                     $log->log_name,
                     $log->event,
-                    $log->description,
+                    $payload['description'],
                     class_basename($log->subject_type),
                     $log->subject_id,
                     $subjectName,
@@ -164,6 +243,13 @@ class LogController extends Controller
             $query->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()]);
         } elseif ($dateRange === 'month') {
             $query->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()]);
+        }
+
+        if ($from = $request->string('from')->toString()) {
+            $query->whereDate('created_at', '>=', $from);
+        }
+        if ($to = $request->string('to')->toString()) {
+            $query->whereDate('created_at', '<=', $to);
         }
 
         $sortField = $request->string('sort', 'created_at')->toString();

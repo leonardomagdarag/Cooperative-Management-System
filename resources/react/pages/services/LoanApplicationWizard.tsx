@@ -5,6 +5,8 @@ import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { validate, loanApplicationSchema, loanApplicationStep2Schema, type FieldErrors } from '../../lib/validation';
 import ServiceModal from './ServiceModal';
+import HelpTip from '../../components/ui/HelpTip';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface CoMaker { id: number; name: string; user_number: string }
 
@@ -34,6 +36,7 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
     selectedMember?: any;
     onDirtyChange?: (dirty: boolean) => void;
 }) {
+    const { t } = useLanguage();
     const { user } = useAuth();
     const [step, setStep] = useState(1);
     const [form, setForm] = useState({
@@ -82,12 +85,12 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
     const eligibilityWarnings = (p: any): string[] => {
         const out: string[] = [];
         if (!p) return out;
-        if (p.requires_no_existing_loan) out.push('Requires no existing active loan');
-        if (Number(p.minimum_share_capital) > 0) out.push(`Minimum share capital: ${peso(p.minimum_share_capital)}`);
-        if (Number(p.minimum_membership_years) > 0) out.push(`Minimum ${p.minimum_membership_years} year(s) membership required`);
-        if (Number(p.required_co_makers) > 0) out.push(`Requires ${p.required_co_makers} co-maker(s)`);
-        if (p.requires_interview) out.push('Requires an interview');
-        if (p.requires_special_eligibility) out.push('Has special eligibility requirements');
+        if (p.requires_no_existing_loan) out.push(t('Requires no existing active loan'));
+        if (Number(p.minimum_share_capital) > 0) out.push(t('Minimum share capital: {amount}').replace('{amount}', peso(p.minimum_share_capital)));
+        if (Number(p.minimum_membership_years) > 0) out.push(t('Minimum {count} year(s) membership required').replace('{count}', String(p.minimum_membership_years)));
+        if (Number(p.required_co_makers) > 0) out.push(t('Requires {count} co-maker(s)').replace('{count}', String(p.required_co_makers)));
+        if (p.requires_interview) out.push(t('Requires an interview'));
+        if (p.requires_special_eligibility) out.push(t('Has special eligibility requirements'));
         return out;
     };
 
@@ -95,20 +98,20 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
         // Only validate step-2 fields — purpose is entered on step 3
         const errs = validate(loanApplicationStep2Schema, form);
         if (selectedProduct && Number(form.amount ?? 0) > Number(selectedProduct.max_amount)) {
-            errs.amount = `Amount exceeds the maximum limit of ${peso(selectedProduct.max_amount)}`;
+            errs.amount = t('Amount exceeds the maximum limit of {amount}').replace('{amount}', peso(selectedProduct.max_amount));
         }
         if (selectedProduct && Number(form.term_months ?? 0) > Number(selectedProduct.max_term)) {
-            errs.term_months = `Term cannot exceed ${selectedProduct.max_term} months`;
+            errs.term_months = t('Term cannot exceed {count} months').replace('{count}', String(selectedProduct.max_term));
         }
         if (selectedProduct && Number(selectedProduct.required_co_makers) > 0 && coMakers.length !== Number(selectedProduct.required_co_makers)) {
-            errs.co_makers = `Add exactly ${selectedProduct.required_co_makers} co-members`;
+            errs.co_makers = t('Add exactly {count} co-members').replace('{count}', String(selectedProduct.required_co_makers));
         }
         if (selectedProduct?.requires_interview && !form.interview_schedule) {
-            errs.interview_schedule = 'An interview schedule is required for this loan product';
+            errs.interview_schedule = t('An interview schedule is required for this loan product');
         }
         setErrors(errs);
         if (Object.keys(errs).length > 0) {
-            addToast(Object.values(errs)[0], 'error');
+            addToast(t(Object.values(errs)[0]), 'error');
             return;
         }
         setStep(3);
@@ -118,9 +121,9 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
         // Only validate purpose on step 3
         const errs: FieldErrors = {};
         if (!form.purpose?.trim()) {
-            errs.purpose = 'Purpose is required';
+            errs.purpose = t('Purpose is required');
         } else if (form.purpose.trim().length < 10) {
-            errs.purpose = 'Purpose must be at least 10 characters';
+            errs.purpose = t('Purpose must be at least 10 characters');
         }
         setErrors(errs);
         if (Object.keys(errs).length > 0) return;
@@ -130,14 +133,14 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
     const handleSubmit = () => {
         const errs = validate(loanApplicationSchema, form);
         if (selectedProduct && Number(selectedProduct.required_co_makers) > 0 && coMakers.length !== Number(selectedProduct.required_co_makers)) {
-            errs.co_makers = `Add exactly ${selectedProduct.required_co_makers} co-members`;
+            errs.co_makers = t('Add exactly {count} co-members').replace('{count}', String(selectedProduct.required_co_makers));
         }
         if (selectedProduct?.requires_interview && !form.interview_schedule) {
-            errs.interview_schedule = 'An interview schedule is required for this loan product';
+            errs.interview_schedule = t('An interview schedule is required for this loan product');
         }
         if (Object.keys(errs).length > 0) {
             setErrors(errs);
-            addToast(Object.values(errs)[0], 'error');
+            addToast(t(Object.values(errs)[0]), 'error');
             return;
         }
         submitMutation.mutate();
@@ -154,8 +157,8 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
             co_makers: coMakers.map(cm => cm.id),
             ...(selectedMember ? { user_id: selectedMember.id } : {}),
         }),
-        onSuccess: () => { addToast('Loan application submitted', 'success'); onComplete(); },
-        onError: (err: any) => addToast(err.response?.data?.message || 'Failed', 'error'),
+        onSuccess: () => { addToast(t('Loan application submitted'), 'success'); onComplete(); },
+        onError: (err: any) => addToast(t(err.response?.data?.message || 'Failed'), 'error'),
     });
 
     const handleCoMakerSearch = (val: string) => {
@@ -202,7 +205,7 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
             <div className="p-6">
                 {step === 1 && (
                     <div className="space-y-4">
-                        <h4 className="text-xl font-bold text-gray-900 mb-4">Choose Loan Type</h4>
+                    <h4 className="mb-4 flex items-center gap-2 text-xl font-bold text-gray-900">{t('Choose Loan Type')} <HelpTip text="Piliin ang loan product na bagay sa kailangan mo. Iba-iba ang limit, interest, at requirements ng bawat product." /></h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {products.map((p: any) => (
                                 <button
@@ -217,7 +220,7 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
                                         <div className="flex-1">
                                             <h5 className="font-bold text-gray-900 mb-1">{p.name}</h5>
                                             <p className="text-sm text-gray-600 mb-2">{p.description}</p>
-                                            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                                            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-700">
                                                 <span>Rate: {p.interest_rate}%</span>
                                                 <span>Overdue penalty: {penaltySummary(p)}</span>
                                                 <span>Max: {peso(p.max_amount)}</span>
@@ -238,7 +241,7 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
 
                 {step === 2 && (
                     <div className="space-y-6">
-                        <h4 className="text-xl font-bold text-gray-900">Loan Details</h4>
+                    <h4 className="text-xl font-bold text-gray-900">{t('Loan Details')}</h4>
 
                         <div className="bg-purple-50 border-l-4 border-purple-400 p-4">
                             <p className="text-sm text-purple-700">
@@ -247,9 +250,9 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Loan Amount *</label>
+                            <div className="mb-2 flex items-center gap-1.5"><label className="text-sm font-medium text-gray-700">{t('Loan Amount *')}</label><HelpTip text="Ito ang halagang gusto mong hiramin. Tingnan din ang estimated interest at total repayment bago mag-submit." /></div>
                             <div className="relative">
-                                <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500">₱</span>
+                                <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-700">₱</span>
                                 <input
                                     type="number"
                                     step="100"
@@ -261,7 +264,7 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
                                     className={`w-full pl-8 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 ${errors.amount ? 'border-red-400' : 'border-gray-300'}`}
                                 />
                             </div>
-                            <p className="text-xs text-gray-500 mt-1">Maximum: {peso(selectedProduct?.max_amount ?? 0)}</p>
+                            <p className="text-xs text-gray-700 mt-1">Maximum: {peso(selectedProduct?.max_amount ?? 0)}</p>
                             {errors.amount && <span className="text-red-500 text-xs">{errors.amount}</span>}
                         </div>
 
@@ -276,7 +279,7 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
                                     onChange={e => setForm(f => ({ ...f, term_months: e.target.value }))}
                                     className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 ${errors.term_months ? 'border-red-400' : 'border-gray-300'}`}
                                 />
-                                <p className="text-xs text-gray-500 mt-1">Max: {selectedProduct?.max_term} months</p>
+                                <p className="text-xs text-gray-700 mt-1">Max: {selectedProduct?.max_term} months</p>
                                 {errors.term_months && <span className="text-red-500 text-xs">{errors.term_months}</span>}
                             </div>
                             <div>
@@ -298,9 +301,7 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
                         {requiredCoMakers > 0 && (
                             <div className="border-t pt-6">
                                 <h5 className="font-bold text-gray-900 mb-2">Group Members (Co-makers)</h5>
-                                <p className="text-sm text-gray-600 mb-4">
-                                    Select {requiredCoMakers} members to form your loan group. Each member must approve the loan.
-                                </p>
+                                <p className="text-sm text-gray-600 mb-4">{t('Select {count} members to form your loan group. Each member must approve the loan.').replace('{count}', String(requiredCoMakers))}</p>
 
                                 <div className="mb-4">
                                     <input
@@ -320,7 +321,7 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
                                                     className="w-full px-4 py-2 hover:bg-gray-50 text-left"
                                                 >
                                                     <div className="font-medium text-gray-900">{m.name}</div>
-                                                    <div className="text-sm text-gray-500">ID: {m.user_number}</div>
+                                                    <div className="text-sm text-gray-700">ID: {m.user_number}</div>
                                                 </button>
                                             ))}
                                         </div>
@@ -329,15 +330,15 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
 
                                 <div className="space-y-2">
                                     {coMakers.length === 0 ? (
-                                        <div className="text-center py-8 text-gray-500">
-                                            <p>No members added yet</p>
-                                            <p className="text-sm">Add {requiredCoMakers} members to continue</p>
+                                        <div className="text-center py-8 text-gray-700">
+                                            <p>{t('No members added yet')}</p>
+                                            <p className="text-sm">{t('Add {count} members to continue').replace('{count}', String(requiredCoMakers))}</p>
                                         </div>
                                     ) : coMakers.map(cm => (
                                         <div key={cm.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
                                             <div>
                                                 <div className="font-medium text-gray-900">{cm.name}</div>
-                                                <div className="text-sm text-gray-500">ID: {cm.user_number}</div>
+                                                <div className="text-sm text-gray-700">ID: {cm.user_number}</div>
                                             </div>
                                             <button type="button" onClick={() => removeCoMaker(cm.id)} className="text-red-600 hover:text-red-800">
                                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -358,7 +359,7 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
                         {needsInterview && (
                             <div className="border-t pt-6">
                                 <h5 className="font-bold text-gray-900 mb-2">Business Verification</h5>
-                                <p className="text-sm text-gray-600 mb-4">Schedule an interview with a loan officer for business verification.</p>
+                                <p className="text-sm text-gray-600 mb-4">{t('Schedule an interview with a loan officer for business verification.')}</p>
 
                                 {employment ? (
                                     <div className="bg-blue-50 p-4 rounded-lg mb-4">
@@ -373,7 +374,7 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
                                 ) : (
                                     <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
                                         <p className="text-sm text-yellow-700">
-                                            ⚠️ No employment information found. Please update your profile with business/employment details before applying.
+                                            ⚠️ {t('No employment information found. Please update your profile with business/employment details before applying.')}
                                         </p>
                                     </div>
                                 )}
@@ -387,7 +388,7 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
                                         onChange={e => setForm(f => ({ ...f, interview_schedule: e.target.value }))}
                                         className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 ${errors.interview_schedule ? 'border-red-400' : 'border-gray-300'}`}
                                     />
-                                    <p className="text-xs text-gray-500 mt-1">Select a date and time for your interview (must be at least 24 hours from now)</p>
+                                    <p className="text-xs text-gray-700 mt-1">{t('Select a date and time for your interview (must be at least 24 hours from now)')}</p>
                                     {errors.interview_schedule && <span className="text-red-500 text-xs">{errors.interview_schedule}</span>}
                                 </div>
                             </div>
@@ -406,7 +407,7 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
 
                 {step === 3 && (
                     <div className="space-y-6">
-                        <h4 className="text-xl font-bold text-gray-900">Loan Purpose</h4>
+                    <h4 className="text-xl font-bold text-gray-900">{t('Loan Purpose')}</h4>
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Purpose of Loan *</label>
@@ -414,10 +415,10 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
                                 rows={4}
                                 value={form.purpose}
                                 onChange={e => setForm(f => ({ ...f, purpose: e.target.value }))}
-                                placeholder="Describe how you will use the loan..."
+                                placeholder={t('Describe how you will use the loan...')}
                                 className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 ${errors.purpose ? 'border-red-400' : 'border-gray-300'}`}
                             />
-                            <p className="text-xs text-gray-500 mt-1">Minimum 10 characters</p>
+                            <p className="text-xs text-gray-700 mt-1">Minimum 10 characters</p>
                             {errors.purpose && <span className="text-red-500 text-xs">{errors.purpose}</span>}
                         </div>
 
@@ -434,7 +435,7 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
 
                 {step === 4 && (
                     <div className="space-y-6">
-                        <h4 className="text-xl font-bold text-gray-900">Review Your Application</h4>
+                    <h4 className="flex items-center gap-2 text-xl font-bold text-gray-900">{t('Review Your Application')} <HelpTip text="Application pa lang ang isi-submit mo. Kailangan pa itong ma-review at ma-approve bago i-release ang loan." /></h4>
 
                         <div className="bg-gray-50 rounded-xl p-6 space-y-4">
                             <div>
@@ -486,11 +487,11 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
                         <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
                             <p className="text-sm text-blue-700">
                                 <strong>Important:</strong>{' '}
-                                {requiredCoMakers > 0
+                                {t(requiredCoMakers > 0
                                     ? 'After submission, all group members must approve this loan. Once approved by all members, the application will be reviewed by loan officers.'
                                     : needsInterview
                                         ? 'After submission, you must attend the scheduled interview. Your application will be reviewed after the interview is completed.'
-                                        : 'After submission, your application will be reviewed by loan officers based on your member profile and account standing.'}
+                                        : 'After submission, your application will be reviewed by loan officers based on your member profile and account standing.')}
                             </p>
                         </div>
 

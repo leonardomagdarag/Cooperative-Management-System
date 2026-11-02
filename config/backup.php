@@ -149,13 +149,9 @@ return [
 
             /*
              * The compression level corresponding to the used algorithm; an integer between 0 and 9.
-             *
-             * Check supported levels for the chosen algorithm, usually 1 means the fastest and weakest compression,
-             * while 9 the slowest and strongest one.
-             *
-             * Setting of 0 for some algorithms may switch to the strongest compression.
+             * Level 9 provides the strongest DEFLATE compression to reduce storage consumption.
              */
-            'compression_level' => 6,
+            'compression_level' => 9,
 
             /*
          * The filename prefix used for the backup zip file.
@@ -378,6 +374,25 @@ return [
          * Set to `0` for none
          */
         'retry_delay' => 0,
+    ],
+
+    /*
+     * Grandfather-Father-Son (GFS) tiered retention policy settings.
+     * Applied to both daily (local) and offsite (B2) tiers.
+     */
+    'gfs' => [
+        'daily_days' => (int) (env('BACKUP_GFS_DAILY_DAYS') ?: 14),
+        'weekly_weeks' => (int) (env('BACKUP_GFS_WEEKLY_WEEKS') ?: 5),
+        'monthly_months' => (int) (env('BACKUP_GFS_MONTHLY_MONTHS') ?: 12),
+    ],
+
+    /*
+     * Backblaze B2 / AWS S3 Object Lock configuration (WORM immutability).
+     */
+    'object_lock' => [
+        'enabled' => (bool) env('BACKUP_OFFSITE_OBJECT_LOCK_ENABLED', false),
+        'mode' => env('BACKUP_OFFSITE_OBJECT_LOCK_MODE') ?: 'GOVERNANCE',
+        'retention_days' => (int) (env('BACKUP_OFFSITE_OBJECT_LOCK_DAYS') ?: 30),
     ],
 
 ];

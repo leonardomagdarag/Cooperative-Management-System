@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Branch;
 use App\Models\Expense;
 use App\Models\PrivilegedActionRequest;
+use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\CountersignService;
 use App\Support\BranchScope;
@@ -45,7 +47,18 @@ class ExpenseController extends Controller
             $query->whereDate('expense_date', '<=', $to);
         }
 
-        $query->orderByDesc('expense_date');
+        $sort = $request->string('sort', 'expense_date')->toString();
+        $direction = $request->string('direction', 'desc')->toString() === 'asc' ? 'asc' : 'desc';
+        $allowedSorts = ['expense_date', 'category', 'amount', 'created_at', 'description'];
+        if ($sort === 'branch') {
+            $query->orderBy(Branch::select('name')->whereColumn('branches.id', 'expenses.branch_id')->limit(1), $direction);
+        } elseif ($sort === 'recorded_by') {
+            $query->orderBy(User::select('personal_data.first_name')->join('personal_data', 'personal_data.id', '=', 'users.personal_data_id')
+                ->whereColumn('users.id', 'expenses.recorded_by')->limit(1), $direction);
+        } else {
+            $query->orderBy(in_array($sort, $allowedSorts, true) ? $sort : 'expense_date', $direction);
+        }
+        $query->orderBy('expenses.id');
 
         $perPage = max(5, min((int) $request->integer('per_page', 15), 50));
         $paginator = $query->paginate($perPage);

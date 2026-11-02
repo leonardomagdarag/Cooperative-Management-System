@@ -537,11 +537,22 @@ class DashboardController extends Controller
             $branchId
         )->count();
         $totalStaff = BranchScope::applyToUsers(User::query()->officerUsers(), Auth::user(), $branchId)->count();
-        $totalSavings = $this->accountTotals($branchId)['savings'];
+        $accountTotals = $this->accountTotals($branchId);
 
         $activeLoanStatuses = ['approved', 'active'];
         $activeLoansCount = BranchScope::applyToLoans(Loan::query()->whereIn('loan_status', $activeLoanStatuses), Auth::user(), $branchId)->count();
         $pendingLoansCount = BranchScope::applyToLoans(Loan::awaitingReview(), Auth::user(), $branchId)->count();
+        $loanPrincipalActive = (float) BranchScope::applyToLoans(Loan::query()->whereIn('loan_status', $activeLoanStatuses), Auth::user(), $branchId)->sum('loan_amount');
+        $loanOutstanding = max(0, $loanPrincipalActive - $this->loanPaymentsOnActiveLoans($branchId));
+
+        $dueSoonLoansCount = BranchScope::applyToLoans(
+            Loan::query()
+                ->whereIn('loan_status', $activeLoanStatuses)
+                ->whereNotNull('due_date')
+                ->whereBetween('due_date', [today(), today()->copy()->addDays(14)]),
+            Auth::user(),
+            $branchId
+        )->count();
 
         $overdueLoansCount = BranchScope::applyToLoans(
             Loan::query()
@@ -609,16 +620,30 @@ class DashboardController extends Controller
                 'created_at_diff' => $a->created_at->diffForHumans(),
             ]);
 
+        $recentExpenses = BranchScope::applyToExpenses(Expense::query(), Auth::user(), $branchId)
+            ->orderByDesc('expense_date')
+            ->take(5)
+            ->get()
+            ->map(fn ($e) => [
+                'id' => $e->id,
+                'category' => $e->category,
+                'amount' => $e->amount,
+                'expense_date' => $e->expense_date->format('M d, Y'),
+            ]);
+
         return response()->json([
             'greeting' => $this->greeting(),
             'period_label' => $start->format('M Y'),
             'total_members' => $totalMembers,
             'members_new_month' => $newMembersThisMonth,
             'staff_total' => $totalStaff,
-            'savings_total' => $totalSavings,
+            'savings_total' => $accountTotals['savings'],
+            'share_capital_total' => $accountTotals['share_capital'],
             'loans_active' => $activeLoansCount,
             'loans_pending' => $pendingLoansCount,
             'loans_overdue' => $overdueLoansCount,
+            'loans_due_soon' => $dueSoonLoansCount,
+            'loans_outstanding' => $loanOutstanding,
             'pending_transactions' => $pendingTxnCount,
             'month_deposits' => $financialThisMonth['total_deposits'],
             'month_interest_credits' => $financialThisMonth['total_interest_credits'],
@@ -627,7 +652,9 @@ class DashboardController extends Controller
             'month_net' => $financialThisMonth['net'],
             'monthly_series' => $this->buildMonthlySeries(6, $branchId),
             'monthly_max_value' => $this->monthlyMax,
+            'loan_status_series' => $this->buildLoanStatusSeries($branchId),
             'pending_transactions_list' => $pendingTransactions,
+            'recent_expenses' => $recentExpenses,
             'recent_members' => $recentMembers,
             'recent_announcements' => $recentAnnouncements,
         ]);
@@ -992,10 +1019,10 @@ class DashboardController extends Controller
             }
         }
 
-        $user = $targetUser->load(['loans.payments']);
+        $user = $targetUser;
 
         $loans = $user->loans()
-            ->with(['payments'])
+            ->with(['payments', 'documents'])
             ->latest()
             ->get()
             ->map(function ($l) {
@@ -1048,6 +1075,13 @@ class DashboardController extends Controller
                         'status' => $p->status ?? 'completed',
                         'is_reversal' => $p->reversal_of_id !== null,
                     ]),
+                    'documents' => $l->documents->map(fn ($document) => [
+                        'id' => $document->id,
+                        'original_name' => $document->original_name,
+                        'mime_type' => $document->mime_type,
+                        'file_size' => $document->file_size,
+                        'url' => route('loans.documents.download', ['loan' => $l->id, 'document' => $document->id], false),
+                    ])->values(),
                     'estimated_interest' => $schedule ? $schedule[count($schedule) - 1]['total_interest'] ?? 0 : 0,
                     'estimated_total_repayment' => $schedule
                         ? ($schedule[count($schedule) - 1]['total_payment'] ?? 0)

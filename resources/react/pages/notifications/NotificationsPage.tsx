@@ -4,10 +4,19 @@ import { getNotifications, markAsRead, markAllAsRead, deleteNotification, delete
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Pagination from '../../components/ui/Pagination';
+import DateRangeFilter from '../../components/ui/DateRangeFilter';
+import { useLanguage } from '../../contexts/LanguageContext';
+import PageHeader from '../../components/ui/PageHeader';
 
 export default function NotificationsPage() {
+    const { t } = useLanguage();
     const [statusFilter, setStatusFilter] = useState('all');
     const [categoryFilter, setCategoryFilter] = useState('all');
+    const [search, setSearch] = useState('');
+    const [from, setFrom] = useState('');
+    const [to, setTo] = useState('');
+    const [sort, setSort] = useState('created_at');
+    const [direction, setDirection] = useState<'asc' | 'desc'>('desc');
     const [page, setPage] = useState(1);
     const [selected, setSelected] = useState<Notification | null>(null);
     const [confirmState, setConfirmState] = useState<{
@@ -22,10 +31,15 @@ export default function NotificationsPage() {
     const { addToast } = useToast();
 
     const { data, isLoading } = useQuery({
-        queryKey: ['notifications', statusFilter, categoryFilter, page],
+        queryKey: ['notifications', statusFilter, categoryFilter, search, from, to, sort, direction, page],
         queryFn: () => getNotifications({
             status: statusFilter === 'all' ? undefined : statusFilter,
             category: categoryFilter === 'all' ? undefined : categoryFilter,
+            search: search || undefined,
+            from: from || undefined,
+            to: to || undefined,
+            sort,
+            direction,
             page,
             per_page: 15,
         }),
@@ -81,12 +95,7 @@ export default function NotificationsPage() {
 
     return (
         <div className="max-w-7xl mx-auto p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-                <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Notifications</h1>
-                    <p className="text-sm text-gray-500">Stay on top of your alerts and updates</p>
-                </div>
-                <div className="flex items-center gap-2">
+            <PageHeader className="mb-6" title={t('Notifications')} description={t('Stay on top of your alerts and updates')} icon="fas fa-bell" action={<div className="flex items-center gap-2">
                     <button
                         onClick={() => markAllMutation.mutate()}
                         className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
@@ -96,8 +105,8 @@ export default function NotificationsPage() {
                     <button
                         onClick={() => setConfirmState({
                             isOpen: true,
-                            title: 'Clear Read Notifications',
-                            message: 'Are you sure you want to delete all read notifications? This action cannot be undone.',
+                            title: t('Clear Read Notifications'),
+                            message: t('Are you sure you want to delete all read notifications? This action cannot be undone.'),
                             confirmText: 'Clear All Read',
                             variant: 'danger',
                             onConfirm: () => deleteAllReadMutation.mutate(),
@@ -106,8 +115,7 @@ export default function NotificationsPage() {
                     >
                         Clear Read
                     </button>
-                </div>
-            </div>
+                </div>} />
 
             <div className="mb-6 grid gap-3 sm:grid-cols-2">
                 <div className="flex items-center gap-4 rounded-2xl border border-rose-100 bg-white p-4 shadow-sm">
@@ -121,7 +129,10 @@ export default function NotificationsPage() {
             </div>
 
             {/* Filters */}
-            <div className="flex flex-wrap gap-3 mb-4">
+            <div className="table-toolbar mb-4">
+                <input type="search" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Search notifications..." aria-label="Search notifications" className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm" />
+                <DateRangeFilter from={from} to={to} onFromChange={value => { setFrom(value); setPage(1); }} onToChange={value => { setTo(value); setPage(1); }} />
+                <select value={`${sort}:${direction}`} onChange={e => { const [field, order] = e.target.value.split(':'); setSort(field); setDirection(order as 'asc' | 'desc'); setPage(1); }} aria-label="Sort notifications" className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm"><option value="created_at:desc">Newest first</option><option value="created_at:asc">Oldest first</option><option value="title:asc">Title A–Z</option><option value="title:desc">Title Z–A</option><option value="priority:desc">Priority high first</option></select>
                 <select
                     value={statusFilter}
                     onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
@@ -154,7 +165,7 @@ export default function NotificationsPage() {
             ) : notifications.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-gray-300 bg-white p-12 text-center">
                     <i className="fas fa-bell-slash text-4xl text-gray-300"></i>
-                    <p className="mt-4 text-sm text-gray-500">No notifications found</p>
+                    <p className="mt-4 text-sm text-gray-500">{t('No notifications found')}</p>
                 </div>
             ) : (
                 <div className="space-y-2">
@@ -225,8 +236,8 @@ export default function NotificationsPage() {
                                 <button
                                     onClick={() => setConfirmState({
                                         isOpen: true,
-                                        title: 'Delete Notification',
-                                        message: 'Are you sure you want to delete this notification?',
+                                        title: t('Delete Notification'),
+                                        message: t('Are you sure you want to delete this notification?'),
                                         confirmText: 'Delete',
                                         variant: 'danger',
                                         onConfirm: () => deleteMutation.mutate(selected.id),

@@ -20,6 +20,8 @@ export async function getHistory(params?: {
     category?: string;
     status?: string;
     date?: string;
+    from?: string;
+    to?: string;
     search?: string;
     page?: number;
     per_page?: number;

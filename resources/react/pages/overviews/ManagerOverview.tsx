@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
+import LoadingIndicator from '../../components/ui/LoadingIndicator';
 
 const peso = (n: number | string | undefined | null, d = 2) =>
     '₱' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -25,15 +26,18 @@ export default function ManagerOverview() {
     const { user } = useAuth();
     const { data, isLoading } = useQuery({ queryKey: ['overview-manager'], queryFn: () => api.get('/api/dashboard') });
     const d = data?.data || {};
-    if (isLoading) return <Skeleton />;
+    if (isLoading) return <LoadingIndicator message="Loading overview..." />;
 
     const net = Number(d.month_net || 0);
     const netPos = net >= 0;
     const totalAlerts = (Number(d.pending_transactions) || 0) + (Number(d.loans_pending) || 0) + (Number(d.loans_overdue) || 0);
     const monthlySeries = d.monthly_series || [];
     const maxVal = Number(d.monthly_max_value) || 1;
+    const loanSeries = d.loan_status_series || [];
+    const loanTotal = loanSeries.reduce((sum: number, status: any) => sum + (Number(status.count) || 0), 0);
     const pendingTx = d.pending_transactions_list || [];
     const newMembers = d.recent_members || [];
+    const expenses = d.recent_expenses || [];
     const announcements = d.recent_announcements || [];
 
     return (
@@ -44,8 +48,8 @@ export default function ManagerOverview() {
                 <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                     <div>
                         <p className="text-blue-200 text-sm font-medium uppercase tracking-widest mb-1">Manager</p>
-                        <h1 className="text-3xl font-extrabold leading-tight">{d.greeting}, {user?.first_name || 'Manager'}</h1>
-                        <p className="mt-1 text-blue-200">Operations overview — {d.period_label || ''}</p>
+                        <h1 className="text-2xl font-medium leading-tight">{d.greeting}, {user?.first_name || 'Manager'}</h1>
+                        <p className="mt-1 text-sm text-blue-200">{user?.permissions?.includes('branches.bypass') ? 'Cooperative-wide operations' : 'Branch operations'} — {d.period_label || ''}</p>
                     </div>
                     <div className="sm:text-right shrink-0">
                         <p className="text-blue-200 text-xs uppercase tracking-wide">Today</p>
@@ -119,11 +123,18 @@ export default function ManagerOverview() {
                         </div>
                     </div>
                     <p className={`text-2xl font-extrabold ${Number(d.pending_transactions) > 0 ? 'text-amber-600' : 'text-gray-900'}`}>{num(d.pending_transactions)}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">Pending Approvals</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Pending Transactions</p>
                     <div className="mt-2 pt-2 border-t border-gray-50 text-xs text-gray-500">
                         <div className="flex justify-between"><span>Loan apps</span><span className="font-semibold text-gray-700">{num(d.loans_pending)}</span></div>
                     </div>
                 </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <SummaryCard label="Officers & Admins" value={num(d.staff_total)} icon="fa-user-shield" color="text-teal-600" background="bg-teal-50" />
+                <SummaryCard label="Share Capital" value={peso(d.share_capital_total)} icon="fa-coins" color="text-cyan-600" background="bg-cyan-50" />
+                <SummaryCard label="Loan Outstanding" value={peso(d.loans_outstanding)} icon="fa-file-invoice-dollar" color="text-indigo-600" background="bg-indigo-50" />
+                <SummaryCard label="Due in 14 Days" value={num(d.loans_due_soon)} icon="fa-calendar-check" color="text-amber-600" background="bg-amber-50" />
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
@@ -184,6 +195,33 @@ export default function ManagerOverview() {
                 </div>
             </div>
 
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                <div className="flex items-center justify-between gap-3 mb-4">
+                    <div>
+                        <h2 className="text-base font-bold text-gray-900">Loan Distribution</h2>
+                        <p className="text-xs text-gray-500">Loans across the {user?.permissions?.includes('branches.bypass') ? 'cooperative' : 'branch'} by status</p>
+                    </div>
+                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-lg font-medium">{num(loanTotal)} total</span>
+                </div>
+                {loanTotal > 0 ? (
+                    <>
+                        <div className="flex w-full rounded-full overflow-hidden h-4 mb-4 bg-gray-100" role="img" aria-label="Loan distribution by status">
+                            {loanSeries.filter((s: any) => Number(s.count) > 0).map((s: any, i: number) => (
+                                <div key={i} className={`${s.color} h-full`} style={{ width: `${s.percent}%` }} title={`${s.label}: ${s.count}`}></div>
+                            ))}
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            {loanSeries.map((s: any, i: number) => (
+                                <div key={i} className="flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2">
+                                    <span className="flex items-center gap-2 min-w-0 text-xs text-gray-600"><span className={`w-2.5 h-2.5 rounded-sm ${s.color} shrink-0`}></span><span className="truncate">{s.label}</span></span>
+                                    <span className="text-xs font-bold text-gray-800">{num(s.count)}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </>
+                ) : <p className="text-sm text-gray-400 text-center py-4">No loans yet.</p>}
+            </div>
+
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                 <div className="xl:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                     <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -224,6 +262,17 @@ export default function ManagerOverview() {
                 </div>
 
                 <div className="space-y-5">
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div className="px-5 py-3.5 border-b border-gray-100"><h3 className="text-sm font-bold text-gray-900">Recent Expenses</h3></div>
+                        <div className="p-5 space-y-3">
+                            {expenses.length > 0 ? expenses.map((e: any) => (
+                                <div key={e.id} className="flex items-center justify-between gap-3">
+                                    <div className="min-w-0"><p className="text-sm font-medium text-gray-900 truncate">{e.category}</p><p className="text-xs text-gray-400">{e.expense_date}</p></div>
+                                    <span className="text-sm font-bold text-gray-800 shrink-0">{peso(e.amount)}</span>
+                                </div>
+                            )) : <p className="text-sm text-gray-400 text-center py-4">No expenses recorded.</p>}
+                        </div>
+                    </div>
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                         <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
                             <h3 className="text-sm font-bold text-gray-900">Newest Members</h3>
@@ -271,11 +320,12 @@ export default function ManagerOverview() {
     );
 }
 
-function Skeleton() {
+function SummaryCard({ label, value, icon, color, background }: { label: string; value: string; icon: string; color: string; background: string }) {
     return (
-        <div className="space-y-4">
-            <div className="h-36 animate-pulse rounded-2xl bg-slate-100" />
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">{[...Array(4)].map((_, i) => <div key={i} className="h-24 animate-pulse rounded-2xl bg-slate-100" />)}</div>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+            <div className={`w-10 h-10 ${background} rounded-xl flex items-center justify-center mb-3`}><i className={`fas ${icon} w-5 h-5 ${color}`}></i></div>
+            <p className="text-2xl font-extrabold text-gray-900">{value}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{label}</p>
         </div>
     );
 }

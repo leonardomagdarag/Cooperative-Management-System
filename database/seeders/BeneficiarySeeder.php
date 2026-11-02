@@ -20,10 +20,8 @@ class BeneficiarySeeder extends Seeder
     /**
      * The household recorded for each member, by user number.
      *
-     * Every member is married or single with living parents, so the roster pairs
-     * each person with a spouse where the civil status says so and a parent
-     * otherwise. A member who holds a loan names an extra beneficiary, since a
-     * co-signed borrower is expected to.
+     * Households list a spouse, parent, or adult child appropriate to each
+     * member's civil status.
      *
      * @var array<string, list<array{first: string, last: string, relationship: string, born: string}>>
      */
@@ -65,6 +63,36 @@ class BeneficiarySeeder extends Seeder
         'USR000016' => [
             ['first' => 'Cristina', 'last' => 'Magdarag', 'relationship' => 'Spouse', 'born' => '1986-09-08'],
             ['first' => 'Angela', 'last' => 'Magdarag', 'relationship' => 'Daughter', 'born' => '2013-05-21'],
+        ],
+        'USR000017' => [
+            ['first' => 'Antonio', 'last' => 'Santos', 'relationship' => 'Spouse', 'born' => '1980-02-03'],
+        ],
+        'USR000018' => [
+            ['first' => 'Carla', 'last' => 'Dela Cruz', 'relationship' => 'Spouse', 'born' => '1992-10-20'],
+        ],
+        'USR000019' => [
+            ['first' => 'Patricia', 'last' => 'Reyes', 'relationship' => 'Daughter', 'born' => '2005-08-09'],
+        ],
+        'USR000020' => [
+            ['first' => 'Milagros', 'last' => 'Mendoza', 'relationship' => 'Spouse', 'born' => '1977-05-12'],
+        ],
+        'USR000021' => [
+            ['first' => 'Elena', 'last' => 'Garcia', 'relationship' => 'Mother', 'born' => '1968-06-24'],
+        ],
+        'USR000022' => [
+            ['first' => 'Liza', 'last' => 'Flores', 'relationship' => 'Spouse', 'born' => '1986-09-01'],
+        ],
+        'USR000023' => [
+            ['first' => 'Ernesto', 'last' => 'Bautista', 'relationship' => 'Spouse', 'born' => '1967-07-17'],
+        ],
+        'USR000024' => [
+            ['first' => 'Rosa', 'last' => 'Navarro', 'relationship' => 'Mother', 'born' => '1970-01-31'],
+        ],
+        'USR000025' => [
+            ['first' => 'Ramon', 'last' => 'Aquino', 'relationship' => 'Spouse', 'born' => '1985-11-05'],
+        ],
+        'USR000026' => [
+            ['first' => 'Grace', 'last' => 'Villanueva', 'relationship' => 'Mother', 'born' => '1973-04-27'],
         ],
     ];
 

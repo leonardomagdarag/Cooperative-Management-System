@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Branch;
 use App\Models\Loan;
 use App\Models\LoanDocument;
 use App\Models\LoanProduct;
@@ -62,13 +63,27 @@ class LoanController extends Controller
             }
         }
 
+        if ($from = $request->string('from')->toString()) {
+            $query->whereDate('created_at', '>=', $from);
+        }
+        if ($to = $request->string('to')->toString()) {
+            $query->whereDate('created_at', '<=', $to);
+        }
+
         // Sort
         $sortField = $request->string('sort', 'created_at')->toString();
         $sortDirection = $request->string('direction', 'desc')->toString();
         $allowedSorts = ['created_at', 'loan_number', 'loan_amount', 'loan_status', 'loan_type'];
-        if (in_array($sortField, $allowedSorts, true)) {
+        if ($sortField === 'member') {
+            $query->orderBy(User::select('personal_data.first_name')->join('personal_data', 'personal_data.id', '=', 'users.personal_data_id')
+                ->whereColumn('users.id', 'loans.user_id')->limit(1), $sortDirection === 'asc' ? 'asc' : 'desc');
+        } elseif ($sortField === 'branch') {
+            $query->orderBy(Branch::select('name')->whereColumn('branches.id', 'loans.branch_id')->limit(1), $sortDirection === 'asc' ? 'asc' : 'desc');
+        } elseif (in_array($sortField, $allowedSorts, true)) {
             $query->orderBy($sortField, $sortDirection === 'asc' ? 'asc' : 'desc');
         }
+
+        $query->orderBy('loans.id');
 
         $perPage = max(5, min((int) $request->integer('per_page', 10), 50));
         $paginator = $query->paginate($perPage);
@@ -190,8 +205,7 @@ class LoanController extends Controller
                 ])->values(),
                 'active_loans' => $loan->user->loans->where('loan_status', 'active')->map(function ($memberLoan) {
                     $schedule = $memberLoan->paymentSchedule() ?? [];
-                    $overdueCount = collect($schedule)->filter(fn ($installment) =>
-                        Carbon::createFromFormat('M d, Y', $installment['due_date'])->startOfDay()->lt(now()->startOfDay())
+                    $overdueCount = collect($schedule)->filter(fn ($installment) => Carbon::createFromFormat('M d, Y', $installment['due_date'])->startOfDay()->lt(now()->startOfDay())
                         && (float) $installment['amount_due'] > 0.001
                     )->count();
 

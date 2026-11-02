@@ -7,6 +7,8 @@ import EmptyState from '../../components/ui/EmptyState';
 import Pagination from '../../components/ui/Pagination';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
+import DateRangeFilter from '../../components/ui/DateRangeFilter';
+import PageHeader from '../../components/ui/PageHeader';
 
 type Intensity = 'routine' | 'important' | 'sensitive';
 
@@ -22,6 +24,21 @@ function readableLabel(value?: string | null): string {
     return value
         .replace(/[._-]+/g, ' ')
         .replace(/\b\w/g, letter => letter.toUpperCase());
+}
+
+function actionLabel(value?: string | null): string {
+    const labels: Record<string, string> = {
+        'auth.login_success': 'Signed in', 'auth.logout': 'Signed out',
+        'auth.login_blocked': 'Sign-in blocked', 'auth.login_rejected': 'Sign-in rejected',
+        'auth.login_approved': 'Sign-in approved', 'auth.login_approval_requested': 'Sign-in approval requested',
+        'backup.restore_failed': 'Backup restore failed', 'backup.restored': 'Backup restored',
+        'email.failed': 'Email sending failed', 'financial.interest.failed': 'Interest processing failed',
+        'financial.interest.started': 'Interest processing started', 'financial.interest.completed': 'Interest processing completed',
+        'transaction.reversed': 'Transaction reversed',
+        'loan.disbursed': 'Loan funds released', 'loan.closed': 'Loan paid off',
+    };
+    if (value && labels[value]) return labels[value];
+    return readableLabel(value);
 }
 
 function areaLabel(area: string): string {
@@ -45,6 +62,9 @@ function displayValue(value: unknown) {
     if (value === null || value === undefined || value === '') return 'Not provided';
     if (typeof value === 'boolean') return value ? 'Yes' : 'No';
     if (typeof value === 'object') return value;
+    if (typeof value === 'string' && /^[a-z][a-z0-9_-]*\.[a-z0-9_.-]+$/i.test(value)) {
+        return value.replace(/[._-]+/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
+    }
     return String(value);
 }
 
@@ -52,25 +72,51 @@ const detailLabels: Record<string, string> = {
     id: 'Record number', user_id: 'User number', member_id: 'Member number', loan_id: 'Loan number',
     transaction_id: 'Transaction number', branch_id: 'Branch number', amount: 'Amount',
     old: 'Previous information', new: 'Updated information', attributes: 'Information saved',
-    old_values: 'Previous information', new_values: 'Updated information', reason: 'Reason',
-    status: 'Status', action: 'Action', delivery_method: 'How funds were delivered',
-    approved_by: 'Approved by', rejected_by: 'Reviewed by',
+    old_values: 'Previous information', new_values: 'Updated information', reason: 'What to check',
+    status: 'Status', old_status: 'Previous status', new_status: 'New status', action: 'Action',
+    delivery_method: 'How funds were delivered', approved_by: 'Approved by', rejected_by: 'Reviewed by',
+    to: 'Recipient', from: 'From', source: 'Backup source', storage_tier: 'Backup location',
+    scope: 'What was included', files_restored: 'Files restored', file: 'Backup file name', tier: 'Backup location',
+    account_type: 'Account type', assigned_to: 'Assigned to', is_active: 'Active',
+    is_internal: 'Visible to staff only', title: 'Title', name: 'Name', email: 'Email address', phone: 'Phone number',
+    ip_address: 'Network address (IP)', user_agent: 'Device and browser', permission: 'Permission', permissions: 'Permissions',
+    count: 'Number of items', total: 'Total', note: 'Note', reason_code: 'Reason',
 };
 
 function detailLabel(key: string): string {
     return detailLabels[key.toLowerCase()] ?? readableLabel(key);
 }
 
-const technicalRequestDetails = new Set(['path', 'route', 'method']);
+const technicalRequestDetails = new Set(['path', 'route', 'method', 'mailable', 'batch_key']);
+const sensitiveDetailKeys = /password|secret|token|api[_-]?key|credential|otp/i;
+const valueLabelKeys = new Set(['status', 'old_status', 'new_status', 'scope', 'tier', 'storage_tier', 'source', 'type', 'category', 'priority', 'outcome', 'action', 'role', 'decision', 'permission', 'account_type']);
+
+function detailValue(key: string, value: unknown): unknown {
+    if (typeof value !== 'string') return displayValue(value);
+    if (key.toLowerCase() === 'file') return value.split(/[\\/]/).pop() || value;
+    if (key.toLowerCase() === 'user_agent') {
+        const browser = /Edg\//.test(value) ? 'Microsoft Edge' : /Firefox\//.test(value) ? 'Firefox' : /Opera|OPR\//.test(value) ? 'Opera' : /Chrome\//.test(value) ? 'Google Chrome' : /Safari\//.test(value) ? 'Safari' : null;
+        const device = /Android/i.test(value) ? 'Android' : /iPhone|iPad/i.test(value) ? 'iPhone or iPad' : /Windows/i.test(value) ? 'Windows' : /Mac OS X/i.test(value) ? 'Mac' : /Linux/i.test(value) ? 'Linux' : null;
+        return [browser, device].filter(Boolean).join(' on ') || 'Browser or device information unavailable';
+    }
+    if (!valueLabelKeys.has(key.toLowerCase())) return displayValue(value);
+    const normalized = value.toLowerCase();
+    const knownValues: Record<string, string> = {
+        db: 'Database', files: 'Files', both: 'Database and files', daily: 'On this server', offsite: 'Off-site storage',
+        true: 'Yes', false: 'No',
+    };
+    if (knownValues[normalized]) return knownValues[normalized];
+    return value.replace(/[._-]+/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
+}
 
 function PropertyDetails({ value, depth = 0 }: { value: unknown; depth?: number }) {
     if (value && typeof value === 'object' && !Array.isArray(value)) {
         const entries = Object.entries(value as Record<string, unknown>)
-            .filter(([key]) => !technicalRequestDetails.has(key.toLowerCase()));
+            .filter(([key]) => !technicalRequestDetails.has(key.toLowerCase()) && !sensitiveDetailKeys.test(key));
         if (entries.length) return <dl className={depth ? 'mt-2 space-y-2 border-l-2 border-slate-200 pl-3' : 'divide-y divide-slate-100'}>
             {entries.map(([key, child]) => <div key={key} className="py-2 first:pt-0 last:pb-0">
                 <dt className="text-xs font-semibold text-slate-600">{detailLabel(key)}</dt>
-                <dd className="mt-0.5 break-words text-sm text-slate-800"><PropertyDetails value={child} depth={depth + 1} /></dd>
+                <dd className="mt-0.5 break-words text-sm text-slate-800">{child && typeof child === 'object' ? <PropertyDetails value={child} depth={depth + 1} /> : <>{detailValue(key, child) as string}</>}</dd>
             </div>)}
         </dl>;
         return 'None';
@@ -86,20 +132,26 @@ export default function LogsPage() {
     const [area, setArea] = useState('all');
     const [event, setEvent] = useState('all');
     const [userId, setUserId] = useState('all');
-    const [dateRange, setDateRange] = useState('all');
+    const [from, setFrom] = useState('');
+    const [to, setTo] = useState('');
+    const [sort, setSort] = useState('created_at');
+    const [direction, setDirection] = useState<'asc' | 'desc'>('desc');
     const [page, setPage] = useState(1);
     const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
     const [isExporting, setIsExporting] = useState(false);
     const canExport = user?.permissions?.includes('logs.export') ?? false;
 
     const { data, isLoading } = useQuery({
-        queryKey: ['logs', search, area, event, userId, dateRange, page],
+        queryKey: ['logs', search, area, event, userId, from, to, sort, direction, page],
         queryFn: () => getLogs({
             search: search || undefined,
             tag: area === 'all' ? undefined : area,
             event: event === 'all' ? undefined : event,
             user_id: userId === 'all' ? undefined : Number(userId),
-            date_range: dateRange === 'all' ? undefined : dateRange,
+            from: from || undefined,
+            to: to || undefined,
+            sort,
+            direction,
             page,
             per_page: 15,
         }),
@@ -121,7 +173,8 @@ export default function LogsPage() {
                 tag: area === 'all' ? undefined : area,
                 event: event === 'all' ? undefined : event,
                 user_id: userId === 'all' ? undefined : Number(userId),
-                date_range: dateRange === 'all' ? undefined : dateRange,
+                from: from || undefined,
+                to: to || undefined,
             });
             const disposition = response.headers['content-disposition'] || '';
             const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1]
@@ -151,17 +204,7 @@ export default function LogsPage() {
 
     return (
         <>
-            <header className="border-b border-slate-200 bg-white px-4 py-5 sm:px-6">
-                <div className="mx-auto flex max-w-7xl items-start gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-                        <i className="fas fa-clock-rotate-left text-lg" aria-hidden="true" />
-                    </div>
-                    <div>
-                        <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">Activity history</h1>
-                        <p className="mt-1 text-sm text-slate-500">A readable record of actions taken across the cooperative system.</p>
-                    </div>
-                </div>
-            </header>
+            <div className="p-4 sm:p-6"><PageHeader title="Activity history" description="A readable record of actions taken across the cooperative system." icon="fas fa-clock-rotate-left" /></div>
 
             <main className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6">
                 <section aria-label="Action intensity guide" className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3">
@@ -173,7 +216,7 @@ export default function LogsPage() {
                     <span className="text-xs text-slate-500">Color reflects the action type, not its success or failure.</span>
                 </section>
 
-                <section aria-label="Activity filters" className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-5">
+                <section aria-label="Activity filters" className="table-toolbar grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                     <label className="relative sm:col-span-2 lg:col-span-1">
                         <span className="sr-only">Search activity</span>
                         <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
@@ -190,7 +233,7 @@ export default function LogsPage() {
                         <span className="sr-only">Filter by action</span>
                         <select value={event} onChange={e => updateFilter(setEvent)(e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100">
                             <option value="all">All actions</option>
-                            {filters?.events?.map((value: string) => <option key={value} value={value}>{readableLabel(value)}</option>)}
+                            {filters?.events?.map((value: string) => <option key={value} value={value}>{actionLabel(value)}</option>)}
                         </select>
                     </label>
                     <label>
@@ -200,13 +243,11 @@ export default function LogsPage() {
                             {filters?.users?.map((user: { id: number; name: string }) => <option key={user.id} value={user.id}>{user.name}</option>)}
                         </select>
                     </label>
+                    <DateRangeFilter from={from} to={to} onFromChange={value => { setFrom(value); setPage(1); }} onToChange={value => { setTo(value); setPage(1); }} />
                     <label>
-                        <span className="sr-only">Filter by date</span>
-                        <select value={dateRange} onChange={e => updateFilter(setDateRange)(e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100">
-                            <option value="all">Any date</option>
-                            <option value="today">Today</option>
-                            <option value="week">This week</option>
-                            <option value="month">This month</option>
+                        <span className="sr-only">Sort activity</span>
+                        <select value={`${sort}:${direction}`} onChange={e => { const [field, order] = e.target.value.split(':'); setSort(field); setDirection(order as 'asc' | 'desc'); setPage(1); }} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100">
+                            <option value="created_at:desc">Newest first</option><option value="created_at:asc">Oldest first</option><option value="event:asc">Action A–Z</option><option value="event:desc">Action Z–A</option><option value="log_name:asc">Area A–Z</option><option value="log_name:desc">Area Z–A</option>
                         </select>
                     </label>
                 </section>
@@ -241,7 +282,7 @@ export default function LogsPage() {
                                                 <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${intensity.className}`}><i className={`fas ${intensity.icon}`} aria-hidden="true" />{intensity.label}</span>
                                                 <span className="text-xs font-medium text-slate-500">{areaLabel(log.log_name)}</span>
                                                 <span className="text-slate-300" aria-hidden="true">•</span>
-                                                <span className="text-xs text-slate-500">{readableLabel(log.event)}</span>
+                                                <span className="text-xs text-slate-500">{actionLabel(log.event)}</span>
                                             </div>
                                             <p className="mt-1 text-sm font-semibold leading-5 text-slate-900">{log.description || readableLabel(log.event)}</p>
                                             {(log.subject_name || log.subject_type) && <p className="mt-0.5 text-xs text-slate-600">{log.subject_name || `${readableLabel(log.subject_type)}${log.subject_id ? ` #${log.subject_id}` : ''}`}</p>}
@@ -271,7 +312,7 @@ export default function LogsPage() {
                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                             <div className="flex flex-wrap items-center gap-2">
                                 <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${intensity.className}`}><i className={`fas ${intensity.icon}`} aria-hidden="true" />{intensity.label} action</span>
-                                <span className="text-xs font-medium text-slate-500">{areaLabel(selectedLog.log_name)} · {readableLabel(selectedLog.event)}</span>
+                                <span className="text-xs font-medium text-slate-500">{areaLabel(selectedLog.log_name)} · {actionLabel(selectedLog.event)}</span>
                             </div>
                             <p className="mt-3 text-base font-semibold text-slate-900">{selectedLog.description}</p>
                         </div>
@@ -281,12 +322,12 @@ export default function LogsPage() {
                             <Detail label="Area" value={areaLabel(selectedLog.log_name)} />
                             <Detail label="Related record" value={selectedLog.subject_name || (selectedLog.subject_type ? `${readableLabel(selectedLog.subject_type)}${selectedLog.subject_id ? ` #${selectedLog.subject_id}` : ''}` : 'No related record')} />
                         </dl>
-                        <section>
+                        {permission && <section>
                             <h3 className="text-sm font-semibold text-slate-800">Permission accessed</h3>
                             <p className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                                {permission ? <PropertyDetails value={permission} /> : 'The permission used for this action was not recorded.'}
+                                <PropertyDetails value={permission} />
                             </p>
-                        </section>
+                        </section>}
                         <section>
                             <h3 className="text-sm font-semibold text-slate-800">What changed or was recorded?</h3>
                             {Object.keys(properties).length === 0 ? <p className="mt-2 rounded-lg bg-slate-50 p-4 text-sm text-slate-500">No extra details were saved for this action.</p> : (
