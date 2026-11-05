@@ -354,15 +354,15 @@ class XenditService
             $paidAmount = $payment['request_amount'] ?? null;
             if (($payment['payment_id'] ?? null) !== ($session['payment_id'] ?? null)
                 || ! is_numeric($sessionAmount) || ! is_numeric($paidAmount)
-                || abs((float) $sessionAmount - (float) $transaction->amount) > 0.01
-                || abs((float) $paidAmount - (float) $transaction->amount) > 0.01
+                || abs((float) $sessionAmount - (float) $transaction->amount - (float) $transaction->fee_amount) > 0.01
+                || abs((float) $paidAmount - (float) $transaction->amount - (float) $transaction->fee_amount) > 0.01
                 || strtoupper((string) ($payment['currency'] ?? $session['currency'] ?? '')) !== 'PHP'
                 || ($session['reference_id'] ?? null) !== $transaction->transaction_number
                 || ($payment['reference_id'] ?? null) !== $transaction->transaction_number) {
                 Log::warning('Xendit payment session did not match its local transaction.', [
                     'transaction_id' => $transaction->id,
                     'session_id' => $sessionId,
-                    'expected_amount' => (float) $transaction->amount,
+                    'expected_amount' => round((float) $transaction->amount + (float) $transaction->fee_amount, 2),
                     'actual_amount' => $sessionAmount,
                     'actual_payment_amount' => $paidAmount,
                     'currency' => $payment['currency'] ?? $session['currency'] ?? null,
@@ -420,7 +420,9 @@ class XenditService
                         $user,
                         $transaction,
                         'pending',
-                        'Your payment of ₱'.number_format((float) $transaction->amount, 2).' was verified; manager or chairman approval is still required.'
+                        'Your Xendit payment total was ₱'.number_format((float) $transaction->amount + (float) $transaction->fee_amount, 2)
+                            .((float) $transaction->fee_amount > 0 ? ' (including a ₱'.number_format((float) $transaction->fee_amount, 2).' transaction fee);' : ';')
+                            .' manager or chairman approval is still required.'
                     );
                 }
             } catch (Throwable $exception) {

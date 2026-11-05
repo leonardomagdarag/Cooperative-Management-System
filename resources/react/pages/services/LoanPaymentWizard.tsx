@@ -21,6 +21,7 @@ interface AvailabilityFlags {
     counter?: boolean;
     online?: boolean;
     bank_transfer?: boolean;
+    fee?: { mode: 'fixed' | 'percent'; value: number };
 }
 
 interface LoanOption {
@@ -139,6 +140,9 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
     const installmentAmount = selectedSchedules.reduce((sum, schedule) => sum + (Number(allocationAmounts[schedule.period]) || 0), 0);
     const penaltyAmount = Math.round(selectedSchedules.reduce((sum, schedule) => sum + schedule.penalty_amount, 0) * 100) / 100;
     const totalAmount = Math.round((installmentAmount + penaltyAmount) * 100) / 100;
+    const feeAmount = availability?.fee?.mode === 'percent'
+        ? Math.round(totalAmount * Number(availability.fee.value) / 100 * 100) / 100
+        : Number(availability?.fee?.value ?? 0);
 
     const selectLoan = (id: string) => {
         setForm(f => ({ ...f, loan_id: id }));
@@ -431,6 +435,8 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                             <div className="flex justify-between"><span className="text-gray-600">{t('Selected installment amounts:')}</span><span className="font-semibold text-gray-900">{peso(installmentAmount)}</span></div>
                             <div className="flex justify-between"><span className="text-gray-600">{t('Selected accrued penalties:')}</span><span className="font-semibold text-amber-700">{peso(penaltyAmount)}</span></div>
                             <div className="flex justify-between border-t border-gray-200 pt-2"><span className="font-medium text-gray-700">{t('Total payment:')}</span><span className="font-bold text-blue-700">{peso(totalAmount)}</span></div>
+                            {feeAmount > 0 && <div className="flex justify-between"><span className="text-gray-600">Fee:</span><span className="font-semibold text-amber-700">{peso(feeAmount)}</span></div>}
+                            {feeAmount > 0 && <div className="flex justify-between border-t border-gray-200 pt-2"><span className="font-medium text-gray-700">Total due:</span><span className="font-bold text-blue-700">{peso(totalAmount + feeAmount)}</span></div>}
                         </div>
                     )}
 

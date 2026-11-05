@@ -98,6 +98,15 @@ class TransactionReceiptController extends Controller
                 'transaction_number' => $transaction->transaction_number,
                 'type' => $transaction->transaction_type,
                 'amount' => (string) $transaction->amount,
+                'fee_amount' => (string) $transaction->fee_amount,
+                'total' => number_format(
+                    (float) $transaction->amount + ($transaction->transaction_type === 'loan_disbursement'
+                        ? -(float) $transaction->fee_amount
+                        : (float) $transaction->fee_amount),
+                    2,
+                    '.',
+                    ''
+                ),
                 'date' => $transaction->transaction_date?->format('Y-m-d'),
                 'status' => $transaction->status,
                 'branch' => $transaction->branch?->name,

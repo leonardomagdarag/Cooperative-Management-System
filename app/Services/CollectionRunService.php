@@ -10,6 +10,7 @@ use App\Models\Notification;
 use App\Models\SystemSetting;
 use App\Models\Transaction;
 use App\Models\TransactionReceipt;
+use App\Support\FinancialSettings;
 use App\Models\User;
 use App\Support\BranchScope;
 use App\Support\PermissionCatalog;
@@ -91,6 +92,7 @@ class CollectionRunService
                 'loan_id' => $data['loan_id'],
                 'account_id' => $accountId,
                 'amount' => $data['amount'],
+                'fee_amount' => FinancialSettings::feeAmount('loan_payment', (float) $data['amount']),
                 'note' => $data['note'] ?? null,
                 'visited' => $data['visited'] ?? true,
                 'outcome' => 'pending',
@@ -124,6 +126,7 @@ class CollectionRunService
             $lockedItem->update([
                 'account_id' => null,
                 'amount' => $data['amount'],
+                'fee_amount' => FinancialSettings::feeAmount('loan_payment', (float) $data['amount']),
                 'note' => $data['note'] ?? null,
                 'visited' => $data['visited'] ?? false,
             ]);
@@ -135,7 +138,7 @@ class CollectionRunService
 
     private function recalculateRun(CollectionRun $run): void
     {
-        $aggregates = $run->items()->selectRaw('COUNT(*) as count, SUM(amount) as total')->first();
+        $aggregates = $run->items()->selectRaw('COUNT(*) as count, SUM(amount + fee_amount) as total')->first();
         $run->update([
             'item_count' => $aggregates->count ?? 0,
             'total_amount' => $aggregates->total ?? 0,
@@ -291,6 +294,7 @@ class CollectionRunService
                     $transaction = Transaction::create([
                         'account_id' => null,
                         'amount' => $lockedItem->amount,
+                        'fee_amount' => $lockedItem->fee_amount,
                         'transaction_type' => 'loan_payment',
                         'status' => 'completed',
                         'transaction_mode' => 'counter',

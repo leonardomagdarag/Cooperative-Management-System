@@ -12,6 +12,7 @@ use App\Services\AuditLogService;
 use App\Services\CollectionRunService;
 use App\Services\CountersignService;
 use App\Support\BranchScope;
+use App\Support\FinancialSettings;
 use App\Support\SearchFilter;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -119,11 +120,12 @@ class CollectionRunController extends Controller
 
         $loansQuery = Loan::with(['branch', 'user.personalData.address', 'user.personalData.contact']);
         BranchScope::applyToLoans($loansQuery, $user);
+        $feeRule = FinancialSettings::transactionFees()['loan_payment'];
         $loans = $loansQuery
             ->whereIn('loan_status', ['approved', 'active'])
             ->when($claimedLoanIds->isNotEmpty(), fn ($query) => $query->whereNotIn('id', $claimedLoanIds))
             ->get()
-            ->map(function ($loan) {
+            ->map(function ($loan) use ($feeRule) {
                 $metrics = $loan->getCollectionMetrics();
                 $person = $loan->user->personalData;
                 $address = $person?->address;
@@ -144,6 +146,7 @@ class CollectionRunController extends Controller
                         $address->region,
                     ])->filter()->implode(', ')) : null,
                     'amount_due' => $metrics['amount_due'],
+                    'fee_rule' => $feeRule,
                     'days_overdue' => $metrics['days_overdue'],
                 ];
             })

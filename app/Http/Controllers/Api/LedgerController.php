@@ -12,6 +12,7 @@ use App\Services\AuditLogService;
 use App\Services\CountersignService;
 use App\Services\SecurityOtpService;
 use App\Support\BranchScope;
+use App\Support\FinancialSettings;
 use App\Support\SearchFilter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -102,6 +103,7 @@ class LedgerController extends Controller
                 'reversal_of_id' => $t->reversal_of_id,
                 'reversal_of_transaction_number' => $t->reversalOf?->transaction_number,
                 'amount' => $t->amount,
+                'fee_amount' => $t->fee_amount,
                 'status' => $t->status,
                 'note' => $t->note,
                 'transaction_date' => $t->transaction_date?->format('Y-m-d'),
@@ -211,7 +213,7 @@ class LedgerController extends Controller
 
         return response()->streamDownload(function () use ($transactions, $installmentAllocations) {
             $out = fopen('php://output', 'w');
-            fputcsv($out, ['Transaction #', 'Type', 'Amount', 'Status', 'Mode', 'Member', 'User #', 'Loan #', 'Installment allocations', 'Reversal Of', 'Note', 'Date', 'Recorded By']);
+            fputcsv($out, ['Transaction #', 'Type', 'Amount', 'Fee', 'Total', 'Status', 'Mode', 'Member', 'User #', 'Loan #', 'Installment allocations', 'Reversal Of', 'Note', 'Date', 'Recorded By']);
 
             foreach ($transactions as $t) {
                 $allocationLabel = $installmentAllocations
@@ -229,6 +231,8 @@ class LedgerController extends Controller
                     $t->transaction_number,
                     $t->transaction_type,
                     $t->amount,
+                    $t->fee_amount,
+                    (float) $t->amount + ($t->transaction_type === 'loan_disbursement' ? -(float) $t->fee_amount : (float) $t->fee_amount),
                     $t->status,
                     $t->transaction_mode,
                     $t->account?->user ? trim(($t->account->user->personalData->first_name ?? '').' '.($t->account->user->personalData->last_name ?? '')) : '',
@@ -274,6 +278,7 @@ class LedgerController extends Controller
         $transaction = Transaction::create([
             'transaction_type' => $validated['transaction_type'],
             'amount' => $validated['amount'],
+            'fee_amount' => FinancialSettings::feeAmount($type, (float) $validated['amount']),
             'penalty_amount' => $type === 'loan_payment'
                 ? min((float) Loan::findOrFail($validated['loan_id'])->accruedPenalty(), (float) $validated['amount'])
                 : 0,
@@ -349,6 +354,7 @@ class LedgerController extends Controller
                     'changes' => [
                         'transaction_type' => $validated['transaction_type'],
                         'amount' => $validated['amount'],
+                        'fee_amount' => FinancialSettings::feeAmount($validated['transaction_type'], (float) $validated['amount']),
                         'note' => $validated['note'] ?? null,
                         'account_id' => $validated['transaction_type'] === 'loan_payment' ? null : ($validated['account_id'] ?? null),
                         'loan_id' => $validated['loan_id'] ?? null,
@@ -492,10 +498,13 @@ class LedgerController extends Controller
                 abort_if($account->trashed(), 422, 'Cannot reverse transaction on a closed account.');
 
                 if (in_array($transaction->transaction_type, ['deposit', 'loan_disbursement', 'interest'], true)) {
-                    abort_if((float) $account->balance < (float) $transaction->amount, 422, 'Cannot reverse credit: insufficient current balance.');
-                    $account->decrement('balance', $transaction->amount);
+                    $credit = $transaction->transaction_type === 'loan_disbursement'
+                        ? (float) $transaction->amount - (float) $transaction->fee_amount
+                        : (float) $transaction->amount;
+                    abort_if((float) $account->balance < $credit, 422, 'Cannot reverse credit: insufficient current balance.');
+                    $account->decrement('balance', $credit);
                 } elseif (in_array($transaction->transaction_type, ['withdrawal', 'loan_payment'], true)) {
-                    $account->increment('balance', $transaction->amount);
+                    $account->increment('balance', (float) $transaction->amount + (float) $transaction->fee_amount);
                 }
             }
 
@@ -506,6 +515,7 @@ class LedgerController extends Controller
                 'loan_id' => $transaction->loan_id,
                 'amount' => $transaction->amount,
                 'penalty_amount' => $transaction->penalty_amount,
+                'fee_amount' => $transaction->fee_amount,
                 'transaction_date' => now(),
                 'status' => 'completed',
                 'approved_by' => $user->id,

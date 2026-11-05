@@ -238,7 +238,7 @@ export default function RunHistoryTab({ canViewAll }: { canViewAll: boolean }) {
                                             <div>{item.member?.personal_data?.first_name} {item.member?.personal_data?.last_name}</div>
                                             <div className="text-xs text-slate-500">{item.loan?.loan_number}</div>
                                         </td>
-                                        <td className="p-2 text-right font-medium">₱{parseFloat(item.amount).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                        <td className="p-2 text-right font-medium">{'\u20b1'}{parseFloat(item.amount).toLocaleString(undefined, {minimumFractionDigits: 2})}{Number(item.fee_amount) > 0 && <div className="text-xs font-normal text-amber-700">Fee {'\u20b1'}{Number(item.fee_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>}</td>
                                         <td className="p-2 text-center">
                                             <Badge variant={
                                                 item.outcome === 'applied' ? 'emerald' : 

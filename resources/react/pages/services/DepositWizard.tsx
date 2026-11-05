@@ -21,6 +21,7 @@ interface AvailabilityFlags {
     counter?: boolean;
     online?: boolean;
     bank_transfer?: boolean;
+    fee?: { mode: 'fixed' | 'percent'; value: number };
 }
 
 const detailsSchema = depositSchema.pick({ amount: true, account_type: true, note: true });
@@ -51,6 +52,10 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
     const isXenditAvailable = Boolean(xenditData?.enabled);
 
     const setField = (key: string, value: string) => setForm(f => ({ ...f, [key]: value }));
+    const amount = Number(form.amount) || 0;
+    const feeAmount = availability?.fee?.mode === 'percent'
+        ? Math.round(amount * Number(availability.fee.value) / 100 * 100) / 100
+        : Number(availability?.fee?.value ?? 0);
 
     useEffect(() => {
         onDirtyChange?.(!receipt && (form.amount !== '' || form.note !== '' || form.transaction_mode !== '' || !!proof));
@@ -324,6 +329,8 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
                             <span className="text-gray-600">Amount:</span>
                             <span className="font-semibold text-gray-900">₱{Number(form.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>
+                        {feeAmount > 0 && <div className="flex justify-between"><span className="text-gray-600">Fee:</span><span className="font-semibold text-amber-700">{'\u20b1'}{feeAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>}
+                        {feeAmount > 0 && <div className="flex justify-between border-t border-gray-200 pt-2"><span className="font-medium text-gray-700">Total to pay:</span><span className="font-bold text-gray-900">{'\u20b1'}{(amount + feeAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>}
                         <div className="flex justify-between">
                             <span className="text-gray-600">Payment Channel:</span>
                             <span className="font-semibold text-gray-900">
@@ -415,7 +422,7 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
                         </div>
                         <div className="flex justify-between">
                             <span className="text-gray-600">Total Amount:</span>
-                            <span className="font-bold text-emerald-600">₱{Number(form.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                            <span className="font-bold text-emerald-600">{'\u20b1'}{(amount + feeAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>
                     </div>
 

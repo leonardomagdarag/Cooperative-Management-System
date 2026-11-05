@@ -19,6 +19,7 @@ interface AvailabilityFlags {
     min_amount?: number;
     max_amount?: number;
     savings_enabled?: boolean;
+    fee?: { mode: 'fixed' | 'percent'; value: number };
 }
 
 const peso = (n: number | string) => `₱${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
@@ -64,7 +65,7 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
 
     const pendingWithdrawalSum = (pendingWithdrawalsData?.data?.data ?? [])
         .filter((t: any) => t.transaction_type === 'withdrawal')
-        .reduce((sum: number, t: any) => sum + Number(t.amount), 0);
+        .reduce((sum: number, t: any) => sum + Number(t.amount) + Number(t.fee_amount ?? 0), 0);
 
     const savingsAccount = memberDetail?.accounts?.find((a: any) => a.account_type === 'savings') ?? dashboard?.data?.savings_account;
     const balance = Number(savingsAccount?.balance ?? 0);
@@ -72,6 +73,10 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
         ? Number(savingsAccount?.pending_withdrawals ?? 0)
         : pendingWithdrawalSum;
     const availableBalance = Math.max(0, balance - pendingWithdrawalAmount);
+    const amount = Number(form.amount) || 0;
+    const feeAmount = availability?.fee?.mode === 'percent'
+        ? Math.round(amount * Number(availability.fee.value) / 100 * 100) / 100
+        : Number(availability?.fee?.value ?? 0);
 
     const isModeAvailable = (mode: 'counter' | 'online' | 'bank_transfer'): boolean => {
         if (!availability) return true;
@@ -294,6 +299,8 @@ export default function WithdrawalWizard({ onComplete, onRequestClose, selectedM
                             <span className="text-gray-600">Amount:</span>
                             <span className="font-semibold text-gray-900">{peso(form.amount)}</span>
                         </div>
+                        {feeAmount > 0 && <div className="flex justify-between"><span className="text-gray-600">Fee:</span><span className="font-semibold text-amber-700">{peso(feeAmount)}</span></div>}
+                        {feeAmount > 0 && <div className="flex justify-between border-t border-gray-200 pt-2"><span className="font-medium text-gray-700">Total deducted:</span><span className="font-bold text-gray-900">{peso(amount + feeAmount)}</span></div>}
                         <div className="flex justify-between">
                             <span className="text-gray-600">Reason:</span>
                             <span className="font-semibold text-gray-900">{form.reason}</span>

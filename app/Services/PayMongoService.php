@@ -491,7 +491,8 @@ class PayMongoService
                         $user,
                         $transaction,
                         'completed',
-                        'Your payment of ₱'.number_format((float) $transaction->amount, 2).' has been confirmed via PayMongo.'
+                        'Your PayMongo payment total was ₱'.number_format((float) $transaction->amount + (float) $transaction->fee_amount, 2)
+                            .((float) $transaction->fee_amount > 0 ? ' (including a ₱'.number_format((float) $transaction->fee_amount, 2).' transaction fee).' : '.'),
                     );
                 }
             } catch (Throwable $e) {

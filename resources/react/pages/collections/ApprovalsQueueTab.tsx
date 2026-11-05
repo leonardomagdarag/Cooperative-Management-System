@@ -187,7 +187,7 @@ export default function ApprovalsQueueTab() {
                                     <tr key={item.id}>
                                         <td className="p-2">{item.member?.personal_data?.first_name} {item.member?.personal_data?.last_name}</td>
                                         <td className="p-2 text-slate-500">{item.loan?.loan_number}</td>
-                                        <td className="p-2 text-right text-emerald-600 font-semibold">₱{parseFloat(item.amount).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                        <td className="p-2 text-right text-emerald-600 font-semibold">{'\u20b1'}{parseFloat(item.amount).toLocaleString(undefined, {minimumFractionDigits: 2})}{Number(item.fee_amount) > 0 && <div className="text-xs font-normal text-amber-700">+ {'\u20b1'}{Number(item.fee_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })} fee</div>}</td>
                                         <td className="p-2 text-center text-slate-500">
                                             {item.visited ? <i className="fa-solid fa-check text-emerald-500"></i> : '-'}
                                         </td>

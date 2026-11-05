@@ -316,6 +316,8 @@ export default function TransactionApproval({ onComplete, onRequestClose }: { on
                                             </div>
                                             <div className="text-right">
                                                 <p className="text-xl font-bold text-slate-900">{peso(t.amount)}</p>
+                                                {Number(t.fee_amount) > 0 && <p className="text-xs font-medium text-amber-700">Fee {peso(t.fee_amount)}</p>}
+                                                {Number(t.fee_amount) > 0 && <p className="text-xs text-slate-600">Total {peso(Number(t.amount) + Number(t.fee_amount))}</p>}
                                                 <p className="text-xs text-slate-700 mt-1">{fmtDate(t.created_at)}</p>
                                             </div>
                                         </div>

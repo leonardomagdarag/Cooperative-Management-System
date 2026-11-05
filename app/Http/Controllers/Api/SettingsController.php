@@ -386,6 +386,11 @@ class SettingsController extends Controller
             'share_capital.min_balance' => 'required|numeric|min:0',
             'interest.min_payout' => 'required|numeric|min:0',
             'interest.notify_members' => 'required|boolean',
+            'fees' => 'sometimes|array',
+            ...collect(FinancialSettings::FEE_TYPES)->flatMap(fn (string $type) => [
+                "fees.{$type}.mode" => ['sometimes', Rule::in(FinancialSettings::FEE_MODES)],
+                "fees.{$type}.value" => ['sometimes', 'numeric', 'min:0', Rule::when($request->input("fees.{$type}.mode") === 'percent', ['max:100'])],
+            ])->all(),
             'withdrawal.min_amount' => 'required|numeric|min:0',
             'withdrawal.max_amount' => 'required|numeric|min:0',
             'withdrawal.savings_enabled' => 'required|boolean',
@@ -424,6 +429,22 @@ class SettingsController extends Controller
             'service_withdrawal_online_enabled' => (bool) $validated['withdrawal']['online'],
             'service_withdrawal_bank_transfer_enabled' => (bool) $validated['withdrawal']['bank_transfer'],
         ];
+
+        $currentFees = FinancialSettings::transactionFees();
+        foreach (FinancialSettings::FEE_TYPES as $type) {
+            $fee = $validated['fees'][$type] ?? null;
+            if ($fee === null) {
+                continue;
+            }
+            $currentFee = $currentFees[$type];
+            $mode = $fee['mode'] ?? $currentFee['mode'];
+            $value = (float) ($fee['value'] ?? $currentFee['value']);
+            if ($mode === 'percent' && $value > 100) {
+                return response()->json(['message' => 'Percentage transaction fees cannot exceed 100%.'], 422);
+            }
+            $flatSettings['financial_fee_'.$type.'_mode'] = $mode;
+            $flatSettings['financial_fee_'.$type.'_value'] = $value;
+        }
 
         // Only the withdrawal service is affected by this tab, so its flag tree
         // is what notifyAffectedUsers() needs — and only when asked.
@@ -516,6 +537,7 @@ class SettingsController extends Controller
                 'min_payout' => FinancialSettings::minPayout(),
                 'notify_members' => FinancialSettings::notifyMembers(),
             ],
+            'fees' => FinancialSettings::transactionFees(),
             'withdrawal' => [
                 'min_amount' => FinancialSettings::withdrawalMin(),
                 'max_amount' => FinancialSettings::withdrawalMax(),

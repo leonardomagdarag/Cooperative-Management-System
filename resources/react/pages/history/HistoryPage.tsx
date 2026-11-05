@@ -151,6 +151,8 @@ export default function HistoryPage() {
                                 </div>
                                 <div className="text-right">
                                     <p className={`text-xl font-bold ${amountColor}`}>{isCredit ? '+' : '-'}&#8369;{Number(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                    {Number(t.fee_amount) > 0 && <p className="text-xs font-medium text-amber-700">Fee: {'\u20b1'}{Number(t.fee_amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>}
+                                    {Number(t.fee_amount) > 0 && <p className="text-xs text-gray-600">{t.transaction_type === 'loan_disbursement' ? 'Net disbursed' : 'Total'}: {'\u20b1'}{(Number(t.amount) + (t.transaction_type === 'loan_disbursement' ? -Number(t.fee_amount) : Number(t.fee_amount))).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>}
                                     {t.balance_after !== null && (
                                         <p className="text-sm text-gray-600">
                                             {translate('Balance after:')} &#8369;{Number(t.balance_after).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

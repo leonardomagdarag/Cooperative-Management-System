@@ -21,6 +21,10 @@ class FinancialSettings
 
     public const INTERVALS = ['daily', 'monthly', 'yearly'];
 
+    public const FEE_TYPES = ['deposit', 'withdrawal', 'loan_payment', 'loan_disbursement'];
+
+    public const FEE_MODES = ['fixed', 'percent'];
+
     /**
      * Keys the financial-accounts endpoint may read/write. Includes the
      * relocation of the withdrawal card out of the Service Availability tab.
@@ -40,6 +44,14 @@ class FinancialSettings
         'financial_withdrawal_share_capital_enabled',
         'financial_interest_min_payout',
         'financial_interest_notify_members',
+        'financial_fee_deposit_mode',
+        'financial_fee_deposit_value',
+        'financial_fee_withdrawal_mode',
+        'financial_fee_withdrawal_value',
+        'financial_fee_loan_payment_mode',
+        'financial_fee_loan_payment_value',
+        'financial_fee_loan_disbursement_mode',
+        'financial_fee_loan_disbursement_value',
         // Withdrawal card relocated from Service Availability.
         'service_withdrawal_enabled',
         'service_withdrawal_member_enabled',
@@ -96,6 +108,34 @@ class FinancialSettings
     public static function notifyMembers(): bool
     {
         return (bool) SystemSetting::get('financial_interest_notify_members', false);
+    }
+
+    public static function transactionFees(): array
+    {
+        $fees = [];
+        foreach (self::FEE_TYPES as $type) {
+            $mode = (string) SystemSetting::get('financial_fee_'.$type.'_mode', 'fixed');
+            $fees[$type] = [
+                'mode' => in_array($mode, self::FEE_MODES, true) ? $mode : 'fixed',
+                'value' => (float) SystemSetting::get('financial_fee_'.$type.'_value', 0),
+            ];
+        }
+
+        return $fees;
+    }
+
+    public static function feeAmount(string $transactionType, float $amount): float
+    {
+        if (! in_array($transactionType, self::FEE_TYPES, true) || $amount <= 0) {
+            return 0.0;
+        }
+
+        $fee = self::transactionFees()[$transactionType];
+        $calculated = $fee['mode'] === 'percent'
+            ? $amount * $fee['value'] / 100
+            : $fee['value'];
+
+        return round($calculated, 2);
     }
 
     public static function withdrawalMin(): float

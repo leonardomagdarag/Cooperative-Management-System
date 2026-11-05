@@ -18,8 +18,14 @@ interface RouteLoan {
     contact_number: string | null;
     address: string | null;
     amount_due: number;
+    fee_rule?: { mode: 'fixed' | 'percent'; value: number };
     days_overdue: number;
 }
+
+const collectionFee = (amount: number, rule?: RouteLoan['fee_rule']) => {
+    if (!rule || amount <= 0) return 0;
+    return Math.round((rule.mode === 'percent' ? amount * rule.value / 100 : rule.value) * 100) / 100;
+};
 
 export default function MyRouteTab() {
     const { user } = useAuth();
@@ -228,6 +234,7 @@ export default function MyRouteTab() {
                                     </div>
                                     <div className="text-right">
                                         <div className="text-lg font-bold text-slate-800">₱{loan.amount_due.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                                        {Number(loan.fee_rule?.value) > 0 && <div className="text-xs text-amber-700">Fee ₱{collectionFee(loan.amount_due, loan.fee_rule).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>}
                                         {loan.days_overdue > 0 && <Badge variant="red" className="mt-1">{loan.days_overdue} days overdue</Badge>}
                                         
                                         <div className="mt-2">
@@ -305,6 +312,8 @@ export default function MyRouteTab() {
                                             </div>
                                             <div className="font-semibold text-emerald-600 text-right">
                                                 ₱{parseFloat(item.amount).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                                {Number(item.fee_amount) > 0 && <div className="text-xs font-normal text-amber-700">Fee ₱{Number(item.fee_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>}
+                                                {Number(item.fee_amount) > 0 && <div className="text-xs font-medium text-slate-600">Total ₱{(Number(item.amount) + Number(item.fee_amount)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>}
                                             </div>
                                             <div className="flex gap-1">
                                                 <Button variant="secondary" size="sm" onClick={() => editItem(item)}>Edit</Button>
@@ -339,7 +348,7 @@ export default function MyRouteTab() {
                     <div className="bg-slate-50 p-4 rounded-lg mb-6">
                         <div className="font-semibold text-slate-800">{selectedLoan?.member_name || `${editingItem?.member?.personal_data?.first_name || ''} ${editingItem?.member?.personal_data?.last_name || ''}`}</div>
                         <div className="text-sm text-slate-500">Loan: {selectedLoan?.loan_number || editingItem?.loan?.loan_number}</div>
-                        {selectedLoan && <div className="text-sm text-slate-500 font-medium mt-1">Expected: ₱{selectedLoan.amount_due.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>}
+                        {selectedLoan && <div className="text-sm text-slate-500 font-medium mt-1">Expected: ₱{selectedLoan.amount_due.toLocaleString(undefined, {minimumFractionDigits: 2})}{Number(selectedLoan.fee_rule?.value) > 0 && ` + ₱${collectionFee(selectedLoan.amount_due, selectedLoan.fee_rule).toFixed(2)} fee = ₱${(selectedLoan.amount_due + collectionFee(selectedLoan.amount_due, selectedLoan.fee_rule)).toFixed(2)}`}</div>}
                     </div>
 
                     <form onSubmit={handleAddItem}>

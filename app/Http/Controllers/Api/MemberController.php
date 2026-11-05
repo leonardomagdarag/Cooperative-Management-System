@@ -229,7 +229,7 @@ class MemberController extends Controller
             ->whereIn('account_id', $user->accounts->pluck('id'))
             ->where('transaction_type', 'withdrawal')
             ->where('status', 'pending')
-            ->selectRaw('account_id, SUM(amount) as total')
+            ->selectRaw('account_id, SUM(amount + fee_amount) as total')
             ->groupBy('account_id')
             ->pluck('total', 'account_id');
 

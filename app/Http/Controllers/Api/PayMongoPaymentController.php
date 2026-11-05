@@ -12,6 +12,7 @@ use App\Services\AuditLogService;
 use App\Services\LoanPaymentAllocationService;
 use App\Services\PayMongoService;
 use App\Support\PermissionCatalog;
+use App\Support\FinancialSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -168,6 +169,7 @@ class PayMongoPaymentController extends Controller
             $penaltyAmount = $loan
                 ? (float) ($validated['penalty_amount'] ?? min((float) $loan->accruedPenalty(), (float) $validated['amount']))
                 : 0.0;
+            $feeAmount = FinancialSettings::feeAmount($serviceType, (float) $validated['amount']);
             $transaction = Transaction::create([
                 'account_id' => $account?->id,
                 'loan_id' => $loan?->id,
@@ -178,6 +180,7 @@ class PayMongoPaymentController extends Controller
                 'payment_gateway' => 'paymongo',
                 'amount' => $validated['amount'],
                 'penalty_amount' => $penaltyAmount,
+                'fee_amount' => $feeAmount,
                 'status' => 'pending',
                 'note' => $validated['note'] ?? null,
                 'transaction_date' => now(),
@@ -202,7 +205,7 @@ class PayMongoPaymentController extends Controller
         try {
             $session = $this->payMongoService->createCheckoutSession([
                 'name' => $itemName,
-                'amount' => $validated['amount'],
+                'amount' => round((float) $transaction->amount + (float) $transaction->fee_amount, 2),
                 'description' => "Cooperative transaction {$transaction->transaction_number}",
                 'reference_number' => $transaction->transaction_number,
                 'success_url' => $successUrl,

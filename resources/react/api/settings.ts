@@ -49,6 +49,7 @@ export interface ServiceAvailabilityFlags {
     max_amount?: number;
     savings_enabled?: boolean;
     share_capital_enabled?: boolean;
+    fee?: { mode: 'fixed' | 'percent'; value: number };
 }
 
 export interface ServiceAvailabilityData {
@@ -109,6 +110,7 @@ export interface FinancialSettings {
         min_payout: number;
         notify_members: boolean;
     };
+    fees: Record<'deposit' | 'withdrawal' | 'loan_payment' | 'loan_disbursement', { mode: 'fixed' | 'percent'; value: number }>;
     withdrawal: FinancialWithdrawalConfig;
     last_credited: {
         savings: string | null;
@@ -123,6 +125,7 @@ export interface FinancialSettingsPayload {
         min_payout: number;
         notify_members: boolean;
     };
+    fees: FinancialSettings['fees'];
     withdrawal: FinancialWithdrawalConfig;
     notify_affected: boolean;
 }

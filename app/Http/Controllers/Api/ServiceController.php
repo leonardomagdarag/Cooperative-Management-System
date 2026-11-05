@@ -32,6 +32,7 @@ class ServiceController extends Controller
 
         $services = ['deposit', 'withdrawal', 'loan_application', 'loan_payment'];
         $result = [];
+        $transactionFees = FinancialSettings::transactionFees();
 
         foreach ($services as $service) {
             $flags = [
@@ -39,6 +40,10 @@ class ServiceController extends Controller
                 'member' => (bool) SystemSetting::get("service_{$service}_member_enabled", true),
                 'officer' => (bool) SystemSetting::get("service_{$service}_officer_enabled", true),
             ];
+
+            if (in_array($service, ['deposit', 'withdrawal', 'loan_payment'], true)) {
+                $flags['fee'] = $transactionFees[$service];
+            }
 
             if (in_array($service, ['deposit', 'withdrawal', 'loan_payment'], true)) {
                 $flags['counter'] = (bool) SystemSetting::get("service_{$service}_counter_enabled", true);
@@ -159,13 +164,15 @@ class ServiceController extends Controller
             && (int) $targetUserId !== (int) $user->id;
         $status = $isOfficerProcessingCash ? 'completed' : 'pending';
 
-        $transaction = DB::transaction(function () use ($account, $validated, $status, $proofPath, $user, $targetBranchId) {
+        $feeAmount = FinancialSettings::feeAmount('deposit', (float) $validated['amount']);
+        $transaction = DB::transaction(function () use ($account, $validated, $status, $proofPath, $user, $targetBranchId, $feeAmount) {
             $transaction = Transaction::create([
                 'account_id' => $account->id,
                 'branch_id' => $targetBranchId,
                 'client_request_id' => $validated['client_request_id'] ?? null,
                 'transaction_type' => 'deposit',
                 'amount' => $validated['amount'],
+                'fee_amount' => $feeAmount,
                 'status' => $status,
                 'transaction_mode' => $validated['transaction_mode'],
                 'note' => $validated['note'] ?? null,
@@ -254,12 +261,14 @@ class ServiceController extends Controller
                 ->where('transaction_type', 'withdrawal')
                 ->where('status', 'pending')
                 ->lockForUpdate()
-                ->sum('amount');
+                ->selectRaw('COALESCE(SUM(amount + fee_amount), 0) as total')
+                ->value('total');
+            $feeAmount = FinancialSettings::feeAmount('withdrawal', (float) $validated['amount']);
             $available = (float) $lockedAccount->balance - $pendingWithdrawals;
 
             $cap = $maxWithdrawal > 0 ? min($available, $maxWithdrawal) : $available;
 
-            if ($validated['amount'] > $cap) {
+            if ((float) $validated['amount'] + $feeAmount > $cap) {
                 $message = ($maxWithdrawal > 0 && $maxWithdrawal <= $available)
                     ? 'Amount exceeds the maximum withdrawal limit of ₱'.number_format($maxWithdrawal, 2).'.'
                     : 'Insufficient available balance. Available: ₱'.number_format($available, 2);
@@ -272,6 +281,7 @@ class ServiceController extends Controller
                 'client_request_id' => $validated['client_request_id'] ?? null,
                 'transaction_type' => 'withdrawal',
                 'amount' => $validated['amount'],
+                'fee_amount' => $feeAmount,
                 'status' => $status,
                 'transaction_mode' => $validated['transaction_mode'],
                 'note' => $validated['note'] ?? $validated['reason'] ?? null,
@@ -280,7 +290,7 @@ class ServiceController extends Controller
             ]);
 
             if ($status === 'completed') {
-                $lockedAccount->decrement('balance', $validated['amount']);
+                $lockedAccount->decrement('balance', (float) $validated['amount'] + $feeAmount);
             }
 
             app(AuditLogService::class)->log(
@@ -488,7 +498,8 @@ class ServiceController extends Controller
             $proofPath = $request->file('proof')->store('transaction-proofs', 'public');
         }
 
-        $transaction = DB::transaction(function () use ($account, $loan, $validated, $status, $proofPath, $user, $targetBranchId) {
+        $feeAmount = FinancialSettings::feeAmount('loan_payment', (float) $validated['amount']);
+        $transaction = DB::transaction(function () use ($account, $loan, $validated, $status, $proofPath, $user, $targetBranchId, $feeAmount) {
             $lockedLoan = Loan::whereKey($loan->id)->lockForUpdate()->firstOrFail();
             abort_unless($lockedLoan->loan_status === 'active' && $lockedLoan->disbursed_at !== null, 409, 'Loan is no longer open for payment.');
             abort_if((float) $validated['amount'] > (float) $lockedLoan->remainingBalance() + 0.01, 422, 'Payment exceeds the remaining loan balance.');
@@ -511,6 +522,7 @@ class ServiceController extends Controller
                 'transaction_type' => 'loan_payment',
                 'amount' => $validated['amount'],
                 'penalty_amount' => $penaltyAmount,
+                'fee_amount' => $feeAmount,
                 'status' => 'pending',
                 'transaction_mode' => $validated['transaction_mode'],
                 'note' => $validated['note'] ?? null,
@@ -625,7 +637,7 @@ class ServiceController extends Controller
                 }
 
                 if ($lockedTransaction->transaction_type === 'withdrawal' && $lockedAccount) {
-                    if ((float) $lockedAccount->balance < (float) $lockedTransaction->amount) {
+                    if ((float) $lockedAccount->balance < (float) $lockedTransaction->amount + (float) $lockedTransaction->fee_amount) {
                         abort(422, 'Insufficient available balance to approve this transaction.');
                     }
                 }
@@ -636,7 +648,7 @@ class ServiceController extends Controller
                     if ($lockedTransaction->transaction_type === 'deposit') {
                         $lockedAccount->increment('balance', $lockedTransaction->amount);
                     } elseif ($lockedTransaction->transaction_type === 'withdrawal') {
-                        $lockedAccount->decrement('balance', $lockedTransaction->amount);
+                        $lockedAccount->decrement('balance', (float) $lockedTransaction->amount + (float) $lockedTransaction->fee_amount);
                     }
                 }
 

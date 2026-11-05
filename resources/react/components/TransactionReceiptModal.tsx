@@ -19,6 +19,8 @@ export interface TransactionReceiptData {
         transaction_number: string;
         type: string;
         amount: string;
+        fee_amount: string;
+        total: string;
         date: string | null;
         status: string;
         branch: string | null;
@@ -145,6 +147,12 @@ export default function TransactionReceiptModal({ receipt, onClose }: Transactio
                     <div>
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-300">Amount</p>
                         <p className="text-xl font-bold">{amountInWordsHint}</p>
+                        {Number(receipt.transaction.fee_amount) > 0 && <>
+                            <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-amber-200">Fee</p>
+                            <p className="text-sm font-semibold">{peso(receipt.transaction.fee_amount)}</p>
+                            <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-300">{receipt.transaction.type === 'loan_disbursement' ? 'Net disbursed' : 'Total'}</p>
+                            <p className="text-lg font-bold">{peso(receipt.transaction.total)}</p>
+                        </>}
                     </div>
                     {receipt.transaction.loan_number && (
                         <div className="text-right">

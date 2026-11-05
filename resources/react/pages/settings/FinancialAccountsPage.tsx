@@ -38,7 +38,7 @@ function Toggle({ checked, onChange, disabled = false, label }: { checked: boole
     );
 }
 
-function NumberField({ label, value, onChange, suffix, min = 0, step = '0.01', hint }: { label: string; value: number; onChange: (v: number) => void; suffix?: string; min?: number; step?: string; hint?: string }) {
+function NumberField({ label, value, onChange, suffix, min = 0, max, step = '0.01', hint }: { label: string; value: number; onChange: (v: number) => void; suffix?: string; min?: number; max?: number; step?: string; hint?: string }) {
     return (
         <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">{label}</label>
@@ -46,6 +46,7 @@ function NumberField({ label, value, onChange, suffix, min = 0, step = '0.01', h
                 <input
                     type="number"
                     min={min}
+                    max={max}
                     step={step}
                     value={value}
                     onChange={e => onChange(Number(e.target.value))}
@@ -127,6 +128,7 @@ export default function FinancialAccountsPage() {
     const updateShareCapital = (next: FinancialAccountConfig) => setDraft(d => (d ? { ...d, share_capital: next } : d));
     const updateWithdrawal = (patch: Partial<FinancialWithdrawalConfig>) => setDraft(d => (d ? { ...d, withdrawal: { ...d.withdrawal, ...patch } } : d));
     const updateInterest = (patch: Partial<FinancialSettings['interest']>) => setDraft(d => (d ? { ...d, interest: { ...d.interest, ...patch } } : d));
+    const updateFee = (type: keyof FinancialSettings['fees'], patch: Partial<FinancialSettings['fees'][keyof FinancialSettings['fees']]>) => setDraft(d => (d ? { ...d, fees: { ...d.fees, [type]: { ...d.fees[type], ...patch } } } : d));
 
     const save = () => {
         if (!draft) return;
@@ -134,6 +136,7 @@ export default function FinancialAccountsPage() {
             savings: draft.savings,
             share_capital: draft.share_capital,
             interest: draft.interest,
+            fees: draft.fees,
             withdrawal: draft.withdrawal,
             notify_affected: notifyAffected,
         });
@@ -154,7 +157,7 @@ export default function FinancialAccountsPage() {
             <SettingsTabHeader
                 eyebrow="High-security configuration"
                 title="Financial Accounts"
-                description="Interest crediting, withdrawal limits, and account withdrawal switches for member accounts."
+                description="Interest crediting, transaction fees, withdrawal limits, and account withdrawal switches."
                 icon="fas fa-piggy-bank"
                 helpText="Changes here are high-security and require chairman countersign approval before they take effect. Interest is a nominal annual rate prorated by the chosen interval (daily = /365, monthly = /12, yearly = /1)."
             />
@@ -183,6 +186,29 @@ export default function FinancialAccountsPage() {
                         </div>
                         <Toggle checked={draft.interest.notify_members} onChange={v => updateInterest({ notify_members: v })} label="Notify members on interest credit" />
                     </div>
+                </div>
+            </section>
+
+            <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="border-b border-gray-100 px-5 py-4">
+                    <h3 className="font-semibold text-gray-900">Transaction fees</h3>
+                    <p className="mt-1 text-xs text-gray-500">Fees are captured when a transaction is created. Changes require countersign approval and apply to new transactions.</p>
+                </div>
+                <div className="divide-y divide-gray-100">
+                    {([
+                        ['deposit', 'Deposits'], ['withdrawal', 'Withdrawals'], ['loan_payment', 'Loan payments'], ['loan_disbursement', 'Loan disbursements'],
+                    ] as const).map(([type, label]) => (
+                        <div key={type} className="grid grid-cols-1 items-end gap-3 px-5 py-4 sm:grid-cols-3">
+                            <div className="text-sm font-medium text-gray-800">{label}</div>
+                            <div>
+                                <label className="mb-1 block text-xs font-medium text-gray-600" htmlFor={`fee-mode-${type}`}>Fee type</label>
+                                <select id={`fee-mode-${type}`} value={draft?.fees[type].mode ?? 'fixed'} onChange={e => updateFee(type, { mode: e.target.value as 'fixed' | 'percent' })} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm">
+                                    <option value="fixed">Fixed amount</option><option value="percent">Percentage of amount</option>
+                                </select>
+                            </div>
+                            <NumberField label="Fee" value={draft?.fees[type].value ?? 0} onChange={v => updateFee(type, { value: v })} suffix={draft?.fees[type].mode === 'percent' ? '%' : '₱'} max={draft?.fees[type].mode === 'percent' ? 100 : undefined} />
+                        </div>
+                    ))}
                 </div>
             </section>
 

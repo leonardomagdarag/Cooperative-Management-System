@@ -1178,7 +1178,15 @@ class DashboardController extends Controller
         $totalLoanReleases = (float) ($totals['loan_disbursement'] ?? 0);
         $totalLoanRepayments = (float) ($totals['loan_payment'] ?? 0);
         $totalInterestCredits = (float) ($totals['interest'] ?? 0);
-        $totalFees = (float) ($totals['fee'] ?? 0);
+        $attachedFees = (float) Transaction::query()
+            ->where('status', 'completed')
+            ->where(function ($q) use ($start, $end) {
+                $q->whereBetween('transaction_date', [$start, $end])
+                    ->orWhere(fn ($q2) => $q2->whereNull('transaction_date')->whereBetween('created_at', [$start, $end]));
+            })
+            ->when($branchId !== null, fn ($q) => $q->where('transactions.branch_id', $branchId))
+            ->selectRaw('SUM(CASE WHEN transactions.reversal_of_id IS NULL THEN fee_amount ELSE -fee_amount END) as total')->value('total');
+        $totalFees = (float) ($totals['fee'] ?? 0) + $attachedFees;
 
         $totalExpenses = (float) Expense::query()
             ->whereBetween('expense_date', [$start, $end])

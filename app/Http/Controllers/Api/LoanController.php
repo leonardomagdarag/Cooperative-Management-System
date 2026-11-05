@@ -14,6 +14,7 @@ use App\Services\AuditLogService;
 use App\Services\CountersignService;
 use App\Services\NotificationService;
 use App\Support\BranchScope;
+use App\Support\FinancialSettings;
 use App\Support\SearchFilter;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -532,12 +533,15 @@ class LoanController extends Controller
                 abort_unless($account, 422, 'Borrower has no savings account.');
             }
 
+            $feeAmount = FinancialSettings::feeAmount('loan_disbursement', (float) $lockedLoan->loan_amount);
+            abort_if($feeAmount >= (float) $lockedLoan->loan_amount, 422, 'Loan disbursement fee must be less than the loan amount.');
             Transaction::create([
                 'account_id' => $account?->id,
                 'loan_id' => $lockedLoan->id,
                 'branch_id' => $lockedLoan->branch_id,
                 'transaction_type' => 'loan_disbursement',
                 'amount' => $lockedLoan->loan_amount,
+                'fee_amount' => $feeAmount,
                 'status' => 'completed',
                 'transaction_mode' => 'counter',
                 'transaction_date' => now(),
@@ -546,7 +550,7 @@ class LoanController extends Controller
             ]);
 
             if ($account) {
-                $account->increment('balance', $lockedLoan->loan_amount);
+                $account->increment('balance', (float) $lockedLoan->loan_amount - $feeAmount);
             }
 
             $lockedLoan->update([

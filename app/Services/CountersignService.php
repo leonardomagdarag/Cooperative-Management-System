@@ -653,6 +653,10 @@ class CountersignService
                     'transaction_type' => $changes['transaction_type'],
                     'amount' => $changes['amount'],
                     'penalty_amount' => $penaltyAmount,
+                    'fee_amount' => (float) ($changes['fee_amount'] ?? \App\Support\FinancialSettings::feeAmount(
+                        $changes['transaction_type'],
+                        (float) $changes['amount']
+                    )),
                     'note' => $changes['note'] ?? null,
                     'account_id' => ($changes['transaction_type'] ?? null) === 'loan_payment'
                         ? null

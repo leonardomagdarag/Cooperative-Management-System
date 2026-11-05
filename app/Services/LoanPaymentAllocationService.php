@@ -65,6 +65,6 @@ class LoanPaymentAllocationService
         }
 
         abort_if($penaltyAmount > (float) $loan->accruedPenalty() + 0.01, 422, 'Penalty allocation exceeds the current accrued penalty.');
-        abort_if(abs(($allocatedTotal + $penaltyAmount) - (float) $transaction->amount) > 0.01, 422, 'Payment total must equal selected installment amounts plus penalty.');
+        abort_if(abs(($allocatedTotal + $penaltyAmount) - (float) $transaction->amount) > 0.01, 422, 'Payment amount must equal selected installment amounts plus penalty.');
     }
 }

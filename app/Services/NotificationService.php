@@ -308,11 +308,14 @@ class NotificationService
      */
     public function notifyWithdrawalApproved(Transaction $withdrawal, bool $sendEmail = true): void
     {
+        $feeMessage = (float) $withdrawal->fee_amount > 0
+            ? ' A fee of ₱'.number_format((float) $withdrawal->fee_amount, 2).' was also deducted, for a total account deduction of ₱'.number_format((float) $withdrawal->amount + (float) $withdrawal->fee_amount, 2).'.'
+            : '';
         $this->create(
             $withdrawal->user,
             'general',
             'Withdrawal Request Approved',
-            'Your withdrawal request for ₱'.number_format($withdrawal->amount, 2).' has been approved and processed.',
+            'Your withdrawal request for ₱'.number_format($withdrawal->amount, 2).' has been approved and processed.'.$feeMessage,
             'high',
             $this->resolveUserDashboardUrl($withdrawal->user),
             $withdrawal

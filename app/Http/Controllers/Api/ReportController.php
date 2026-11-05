@@ -81,7 +81,13 @@ class ReportController extends Controller
             ->sum(fn (Loan $loan) => $loan->totalInterest());
 
         $totalInterestCredits = (float) ($totals['interest'] ?? 0);
-        $inflows = (float) ($totals['deposit'] ?? 0) + (float) ($totals['loan_payment'] ?? 0) + $totalInterestCredits + (float) ($totals['fee'] ?? 0);
+        $attachedFees = (float) $this->applyWindowToTransactions(
+            $this->completedTransactions($branchId),
+            $start,
+            $end
+        )->selectRaw('SUM(CASE WHEN transactions.reversal_of_id IS NULL THEN fee_amount ELSE -fee_amount END) as total')->value('total');
+        $totalFees = (float) ($totals['fee'] ?? 0) + $attachedFees;
+        $inflows = (float) ($totals['deposit'] ?? 0) + (float) ($totals['loan_payment'] ?? 0) + $totalInterestCredits + $totalFees;
         $outflows = (float) ($totals['withdrawal'] ?? 0) + (float) ($totals['loan_disbursement'] ?? 0) + $totalExpenses;
 
         return response()->json([
@@ -94,7 +100,7 @@ class ReportController extends Controller
             'total_interest_credits' => $totalInterestCredits,
             'total_interest_earned' => $totalInterestEarned,
             'projected_interest' => round($projectedInterest, 2),
-            'total_fees' => (float) ($totals['fee'] ?? 0),
+            'total_fees' => $totalFees,
             'total_expenses' => $totalExpenses,
             'net' => $inflows - $outflows,
             'monthly_series' => $this->monthlySeries($end, $branchId),
@@ -973,7 +979,13 @@ class ReportController extends Controller
             ->groupBy('transaction_type')
             ->pluck('total', 'transaction_type');
 
-        $cashInflows = (float) ($totalsByType['deposit'] ?? 0) + (float) ($totalsByType['loan_payment'] ?? 0) + (float) ($totalsByType['interest'] ?? 0) + (float) ($totalsByType['fee'] ?? 0);
+        $attachedFeesToDate = (float) $this->completedTransactions($branchId)
+            ->where(function ($q) use ($end) {
+                $q->whereDate('transaction_date', '<=', $end->toDateString())
+                    ->orWhere(fn ($q2) => $q2->whereNull('transaction_date')->whereDate('created_at', '<=', $end->toDateString()));
+            })
+            ->selectRaw('SUM(CASE WHEN transactions.reversal_of_id IS NULL THEN fee_amount ELSE -fee_amount END) as total')->value('total');
+        $cashInflows = (float) ($totalsByType['deposit'] ?? 0) + (float) ($totalsByType['loan_payment'] ?? 0) + (float) ($totalsByType['interest'] ?? 0) + (float) ($totalsByType['fee'] ?? 0) + $attachedFeesToDate;
         $cashOutflows = (float) ($totalsByType['withdrawal'] ?? 0) + (float) ($totalsByType['loan_disbursement'] ?? 0);
 
         $totalExpenses = (float) Expense::query()
@@ -1019,7 +1031,13 @@ class ReportController extends Controller
             ->groupBy('transaction_type')
             ->pluck('total', 'transaction_type');
 
-        $priorInflows = (float) ($priorTotalsByType['deposit'] ?? 0) + (float) ($priorTotalsByType['loan_payment'] ?? 0) + (float) ($priorTotalsByType['interest'] ?? 0) + (float) ($priorTotalsByType['fee'] ?? 0);
+        $priorAttachedFees = (float) $this->completedTransactions($branchId)
+            ->where(function ($q) use ($start) {
+                $q->whereDate('transaction_date', '<', $start->toDateString())
+                    ->orWhere(fn ($q2) => $q2->whereNull('transaction_date')->whereDate('created_at', '<', $start->toDateString()));
+            })
+            ->selectRaw('SUM(CASE WHEN transactions.reversal_of_id IS NULL THEN fee_amount ELSE -fee_amount END) as total')->value('total');
+        $priorInflows = (float) ($priorTotalsByType['deposit'] ?? 0) + (float) ($priorTotalsByType['loan_payment'] ?? 0) + (float) ($priorTotalsByType['interest'] ?? 0) + (float) ($priorTotalsByType['fee'] ?? 0) + $priorAttachedFees;
         $priorOutflows = (float) ($priorTotalsByType['withdrawal'] ?? 0) + (float) ($priorTotalsByType['loan_disbursement'] ?? 0);
         $priorExpenses = (float) Expense::query()
             ->when($branchId !== null, fn ($q) => $q->where('expenses.branch_id', $branchId))
@@ -1084,6 +1102,10 @@ class ReportController extends Controller
                 ->whereBetween('expense_date', [$from, $to])
                 ->sum('amount');
 
+            $attachedFees = (float) $this->applyWindowToTransactions(
+                $this->completedTransactions($branchId), $from, $to
+            )->selectRaw('SUM(CASE WHEN transactions.reversal_of_id IS NULL THEN fee_amount ELSE -fee_amount END) as total')->value('total');
+
             $deposits = (float) ($totals['deposit'] ?? 0);
             $interestCredits = (float) ($totals['interest'] ?? 0);
             $withdrawals = (float) ($totals['withdrawal'] ?? 0);
@@ -1095,9 +1117,9 @@ class ReportController extends Controller
                 'loan_repayments' => (float) ($totals['loan_payment'] ?? 0),
                 'loan_releases' => (float) ($totals['loan_disbursement'] ?? 0),
                 'withdrawals' => $withdrawals,
-                'fees' => (float) ($totals['fee'] ?? 0),
+                'fees' => (float) ($totals['fee'] ?? 0) + $attachedFees,
                 'expenses' => $expenses,
-                'net' => $deposits + $interestCredits + (float) ($totals['loan_payment'] ?? 0) + (float) ($totals['fee'] ?? 0) - $withdrawals - (float) ($totals['loan_disbursement'] ?? 0) - $expenses,
+                'net' => $deposits + $interestCredits + (float) ($totals['loan_payment'] ?? 0) + (float) ($totals['fee'] ?? 0) + $attachedFees - $withdrawals - (float) ($totals['loan_disbursement'] ?? 0) - $expenses,
             ];
         }
 

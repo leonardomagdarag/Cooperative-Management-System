@@ -12,6 +12,7 @@ use App\Services\AuditLogService;
 use App\Services\LoanPaymentAllocationService;
 use App\Services\XenditService;
 use App\Support\BranchScope;
+use App\Support\FinancialSettings;
 use App\Support\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -176,6 +177,7 @@ class XenditPaymentController extends Controller
             $penaltyAmount = $loan
                 ? (float) ($validated['penalty_amount'] ?? min((float) $loan->accruedPenalty(), (float) $validated['amount']))
                 : 0.0;
+            $feeAmount = FinancialSettings::feeAmount($serviceType, (float) $validated['amount']);
             $transaction = Transaction::create([
                 'account_id' => $account?->id,
                 'loan_id' => $loan?->id,
@@ -186,6 +188,7 @@ class XenditPaymentController extends Controller
                 'payment_gateway' => 'xendit',
                 'amount' => $validated['amount'],
                 'penalty_amount' => $penaltyAmount,
+                'fee_amount' => $feeAmount,
                 'status' => 'pending',
                 'note' => $validated['note'] ?? null,
                 'transaction_date' => now(),
@@ -216,7 +219,7 @@ class XenditPaymentController extends Controller
         try {
             $sessionParams = [
                 'reference_id' => $transaction->transaction_number,
-                'amount' => $transaction->amount,
+                'amount' => round((float) $transaction->amount + (float) $transaction->fee_amount, 2),
                 'description' => "{$itemName} for cooperative transaction {$transaction->transaction_number}",
                 'metadata' => [
                     'transaction_id' => (string) $transaction->id,

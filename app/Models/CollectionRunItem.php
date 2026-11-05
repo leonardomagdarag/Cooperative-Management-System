@@ -16,6 +16,7 @@ class CollectionRunItem extends Model
     {
         return [
             'amount' => 'decimal:2',
+            'fee_amount' => 'decimal:2',
             'visited' => 'boolean',
         ];
     }

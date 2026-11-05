@@ -14,6 +14,7 @@ class ArchivedTransaction extends Model
         'account_id',
         'loan_id',
         'amount',
+        'fee_amount',
         'transaction_date',
         'note',
         'recorded_by',
@@ -24,6 +25,7 @@ class ArchivedTransaction extends Model
 
     protected $casts = [
         'amount' => 'decimal:2',
+        'fee_amount' => 'decimal:2',
         'transaction_date' => 'datetime',
         'archived_at' => 'datetime',
     ];

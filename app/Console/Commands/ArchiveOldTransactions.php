@@ -70,6 +70,7 @@ class ArchiveOldTransactions extends Command
                         'account_id' => $transaction->account_id,
                         'loan_id' => $transaction->loan_id,
                         'amount' => $transaction->amount,
+                        'fee_amount' => $transaction->fee_amount,
                         'transaction_date' => $transaction->transaction_date,
                         'note' => $transaction->note,
                         'recorded_by' => $transaction->recorded_by,

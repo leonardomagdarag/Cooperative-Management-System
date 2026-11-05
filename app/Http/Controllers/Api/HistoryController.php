@@ -89,7 +89,7 @@ class HistoryController extends Controller
             ->orderBy('transaction_date')
             ->orderBy('created_at')
             ->orderBy('id')
-            ->get(['id', 'account_id', 'transaction_type', 'amount', 'reversal_of_id']);
+            ->get(['id', 'account_id', 'transaction_type', 'amount', 'fee_amount', 'reversal_of_id']);
 
         // Anchor the running balances to the current account totals so legacy
         // accounts with an opening balance remain accurate.
@@ -121,6 +121,7 @@ class HistoryController extends Controller
                 'transaction_type' => $t->transaction_type,
                 'reversal_of_id' => $t->reversal_of_id,
                 'amount' => $t->amount,
+                'fee_amount' => $t->fee_amount,
                 'balance_after' => $balancesAfter[$t->id] ?? null,
                 'status' => $t->status,
                 'note' => $t->note,
@@ -152,8 +153,10 @@ class HistoryController extends Controller
     private function balanceEffect(Transaction $transaction): float
     {
         $effect = match ($transaction->transaction_type) {
-            'deposit', 'loan_disbursement', 'interest' => (float) $transaction->amount,
-            'withdrawal', 'loan_payment' => -(float) $transaction->amount,
+            'deposit', 'interest' => (float) $transaction->amount,
+            'loan_disbursement' => (float) $transaction->amount - (float) $transaction->fee_amount,
+            'withdrawal' => -((float) $transaction->amount + (float) $transaction->fee_amount),
+            'loan_payment' => -(float) $transaction->amount,
             default => 0.0,
         };
 
