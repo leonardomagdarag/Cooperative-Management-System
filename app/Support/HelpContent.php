@@ -21,12 +21,12 @@ class HelpContent
                     'id' => 'membership',
                     'label' => 'Membership & Onboarding',
                     'icon' => 'fa-id-card',
-                    'description' => 'Registration, profile completion requirements, and approval processes.',
+                    'description' => 'Office enrollment, profile completion requirements, and account access.',
                     'faqs' => [
                         [
                             'q' => 'How do I apply for cooperative membership?',
-                            'a' => 'You can register directly online through the public Registration portal. After submitting your primary information and verifying your email address, your application is submitted to the Secretary and Manager for review.',
-                            'tags' => ['register', 'application', 'new member'],
+                            'a' => 'Visit the main office or a branch office to apply for membership. An authorized officer records your details and verifies your email address. Once your account is created, you will receive an email link to set your own password.',
+                            'tags' => ['apply', 'office', 'new member'],
                         ],
                         [
                             'q' => 'What profile details must I complete before transacting?',
@@ -35,7 +35,7 @@ class HelpContent
                         ],
                         [
                             'q' => 'How long does membership approval take?',
-                            'a' => 'Membership applications are reviewed by our officers within 1 to 2 business days. Once approved, you will receive an approval email containing your official account activation link.',
+                            'a' => 'An officer will explain the review process at the office. After your account is created, check your email for the password setup link. Contact the office if the link expires.',
                             'tags' => ['approval timeline', 'activation email'],
                         ],
                     ],

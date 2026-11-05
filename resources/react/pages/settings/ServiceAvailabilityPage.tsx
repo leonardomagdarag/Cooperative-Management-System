@@ -9,7 +9,6 @@ type ServiceKey = keyof SettingsServiceAvailabilityData;
 type AvailabilityFlag = keyof ServiceAvailabilityFlags;
 
 const serviceConfig: Record<ServiceKey, { label: string; description: string; icon: string; flags: Array<{ key: AvailabilityFlag; label: string; description: string }> }> = {
-    registration: { label: 'Member Registration', description: 'Control whether visitors can create member accounts from the public website.', icon: 'fas fa-user-plus', flags: [] },
     login: { label: 'Login', description: 'Control whether users can log in to the system.', icon: 'fas fa-sign-in-alt', flags: [
         { key: 'member', label: 'Members', description: 'Allow members to log in.' },
         { key: 'officer', label: 'Officers', description: 'Allow officers to log in.' },
@@ -93,9 +92,6 @@ export default function ServiceAvailabilityPage() {
         setEditedFlags(previous => {
             const currentService = previous[service] || {};
             const nextService = { ...currentService, [flag]: value };
-            if (service === 'registration' && flag === 'global') {
-                nextService.member = value;
-            }
             return { ...previous, [service]: nextService };
         });
     };

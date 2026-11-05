@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\TrustedDevice;
 use App\Models\LoginHandoff;
+use App\Models\TrustedDevice;
 use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\NotificationService;
@@ -85,7 +85,12 @@ class PasswordResetController extends Controller
         $status = Password::reset(
             $request->only('email', 'password', 'password_confirmation', 'token'),
             function (User $user, string $password): void {
-                $user->forceFill(['password' => Hash::make($password), 'remember_token' => Str::random(60)])->save();
+                $changes = ['password' => Hash::make($password), 'remember_token' => Str::random(60)];
+                if ($user->must_set_password) {
+                    $changes['must_set_password'] = false;
+                    $changes['email_verified_at'] = $user->email_verified_at ?? now();
+                }
+                $user->forceFill($changes)->save();
                 event(new PasswordReset($user));
                 $user->invalidateOtherSessions();
                 $user->clearCurrentSession();

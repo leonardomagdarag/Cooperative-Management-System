@@ -65,7 +65,6 @@ test('F020-4: authorized user retrieves full service availability schema', funct
                 'deposit' => ['global', 'member', 'officer', 'counter', 'online'],
                 'loan_application' => ['global', 'member', 'officer'],
                 'loan_payment' => ['global', 'member', 'officer', 'counter', 'online'],
-                'registration' => ['global', 'member'],
                 'login' => ['global', 'member', 'officer'],
             ],
         ])

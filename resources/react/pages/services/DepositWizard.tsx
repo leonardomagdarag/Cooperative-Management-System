@@ -219,7 +219,7 @@ export default function DepositWizard({ onComplete, onRequestClose, selectedMemb
                     </div>
 
                     <div className="flex gap-3 pt-4">
-                        <button type="button" onClick={onComplete} className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50">
+                        <button type="button" onClick={onRequestClose} className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50">
                             Cancel
                         </button>
                         <button type="button" onClick={goNextFromDetails} className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700">

@@ -50,6 +50,7 @@ export default function LoansPage() {
     const queryClient = useQueryClient();
     const { addToast } = useToast();
     const canAssignBranch = !!user?.permissions?.includes('branches.view');
+    const canUploadDocument = !!user?.permissions?.includes('loans.update');
 
     const { data, isLoading } = useQuery({
         queryKey: ['loans', search, page, sort, direction, branchFilter, from, to, loanStatus],
@@ -436,27 +437,29 @@ export default function LoansPage() {
                             {/* Tab: Documents */}
                             {activeTab === 'documents' && (
                                 <div>
-                                    <div className="mb-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4">
-                                        <label className="flex cursor-pointer flex-col items-center justify-center gap-2">
-                                            <i className="fas fa-cloud-upload-alt text-2xl text-gray-400"></i>
-                                            <span className="text-sm font-medium text-gray-600">Upload a supporting document</span>
-                                            <span className="text-xs text-gray-400">JPG, PNG, GIF, WebP or PDF &middot; max 10MB</span>
-                                            <input
-                                                type="file"
-                                                accept=".jpg,.jpeg,.png,.gif,.webp,.pdf"
-                                                className="hidden"
-                                                disabled={uploadDocMutation.isPending}
-                                                onChange={e => {
-                                                    const file = e.target.files?.[0];
-                                                    if (file && selectedLoanId) {
-                                                        uploadDocMutation.mutate({ loanId: selectedLoanId, file });
-                                                        e.target.value = '';
-                                                    }
-                                                }}
-                                            />
-                                        </label>
-                                        {uploadDocMutation.isPending && <p className="mt-2 text-center text-xs text-gray-500">Uploading...</p>}
-                                    </div>
+                                    {canUploadDocument && (
+                                        <div className="mb-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4">
+                                            <label className="flex cursor-pointer flex-col items-center justify-center gap-2">
+                                                <i className="fas fa-cloud-upload-alt text-2xl text-gray-400"></i>
+                                                <span className="text-sm font-medium text-gray-600">Upload a supporting document</span>
+                                                <span className="text-xs text-gray-400">JPG, PNG, GIF, WebP or PDF &middot; max 10MB</span>
+                                                <input
+                                                    type="file"
+                                                    accept=".jpg,.jpeg,.png,.gif,.webp,.pdf"
+                                                    className="hidden"
+                                                    disabled={uploadDocMutation.isPending}
+                                                    onChange={e => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file && selectedLoanId) {
+                                                            uploadDocMutation.mutate({ loanId: selectedLoanId, file });
+                                                            e.target.value = '';
+                                                        }
+                                                    }}
+                                                />
+                                            </label>
+                                            {uploadDocMutation.isPending && <p className="mt-2 text-center text-xs text-gray-500">Uploading...</p>}
+                                        </div>
+                                    )}
                                     {detail?.documents?.length > 0 ? (
                                         <div className="space-y-2">
                                             {detail.documents.map((d: any) => (

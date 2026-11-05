@@ -27,6 +27,7 @@ interface MemberProfileModalProps {
     onClose: () => void;
     onEdit?: () => void;
     canEdit?: boolean;
+    canResendInvitation?: boolean;
     canViewIds?: boolean;
     canViewLoans?: boolean;
     canViewActivity?: boolean;
@@ -43,7 +44,7 @@ interface MemberProfileModalProps {
     isForceDeleting?: boolean;
 }
 
-export default function MemberProfileModal({ memberId, onClose, onEdit, canEdit, canViewIds, canViewLoans, canViewActivity, canViewFinancial, canApprove, onApprove, onDecline, isApproving, isDeclining, isAdmin, onRestore, onForceDelete, isRestoring, isForceDeleting }: MemberProfileModalProps) {
+export default function MemberProfileModal({ memberId, onClose, onEdit, canEdit, canResendInvitation, canViewIds, canViewLoans, canViewActivity, canViewFinancial, canApprove, onApprove, onDecline, isApproving, isDeclining, isAdmin, onRestore, onForceDelete, isRestoring, isForceDeleting }: MemberProfileModalProps) {
     const [activeTab, setActiveTab] = useState('overview');
     const [lightbox, setLightbox] = useState<string | null>(null);
     const queryClient = useQueryClient();
@@ -74,6 +75,12 @@ export default function MemberProfileModal({ memberId, onClose, onEdit, canEdit,
             addToast(res?.data?.special_loan_eligible ? 'Special loan eligibility enabled' : 'Special loan eligibility disabled', 'success');
         },
         onError: (err: any) => addToast(err.response?.data?.message || 'Failed to update eligibility', 'error'),
+    });
+
+    const resendInvitationMutation = useMutation({
+        mutationFn: () => api.post(`/api/members/${memberId}/resend-invitation`),
+        onSuccess: () => addToast('A new password setup invitation was sent. Previous links are no longer valid.', 'success'),
+        onError: (err: any) => addToast(err.response?.data?.message || 'Could not resend the invitation', 'error'),
     });
 
     const m = data?.data;
@@ -157,6 +164,17 @@ export default function MemberProfileModal({ memberId, onClose, onEdit, canEdit,
                     <div className="flex-1 overflow-y-auto p-6">
                         {activeTab === 'overview' && (
                             <div className="flex flex-col gap-6">
+                                {m.must_set_password && !m.archived_at && (
+                                    <div className="rounded-lg border border-cyan-200 bg-cyan-50 p-4">
+                                        <p className="text-sm font-semibold text-cyan-900">Online access pending</p>
+                                        <p className="mt-1 text-xs text-cyan-800">The member needs to use the emailed invitation to set their own password.</p>
+                                        {canResendInvitation && m.account_status === 'active' && (
+                                            <button type="button" onClick={() => resendInvitationMutation.mutate()} disabled={resendInvitationMutation.isPending} className="mt-3 rounded-lg bg-cyan-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-cyan-800 disabled:opacity-50">
+                                                {resendInvitationMutation.isPending ? 'Sending...' : 'Resend invitation'}
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
                                 {m.has_pending_application && (
                                     <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
                                         <p className="text-sm font-semibold text-amber-800"><i className="fas fa-hourglass-half mr-1.5"></i>Pending membership application</p>

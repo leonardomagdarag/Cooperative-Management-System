@@ -93,7 +93,7 @@ test('member edit allows a blank password', function () {
     ])->assertOk();
 });
 
-test('member password changes require an OTP bound to the member', function () {
+test('officers cannot change a member password', function () {
     $member = User::factory()->create(['email' => 'member.password@example.com']);
     $payload = [
         'first_name' => 'Jane',
@@ -104,28 +104,12 @@ test('member password changes require an OTP bound to the member', function () {
 
     actingAs($this->admin);
 
-    $this->postJson('/api/members/'.$member->id.'/password/send-otp')->assertOk();
-    expect(OtpChallenge::query()
-        ->where('user_id', $this->admin->id)
-        ->where('purpose', 'member_password_change')
-        ->latest('id')
-        ->first()?->context)->toBe(['member_id' => $member->id]);
+    $this->postJson('/api/members/'.$member->id.'/password/send-otp')->assertForbidden();
 
     $this->putJson('/api/members/'.$member->id, $payload)
         ->assertUnprocessable()
-        ->assertJsonValidationErrors('otp_code');
-
-    $securityOtp = app(SecurityOtpService::class);
-    $issued = $securityOtp->issueChallenge(
-        $this->admin,
-        $securityOtp->memberPasswordChangePurpose(),
-        ['member_id' => $member->id],
-    );
-
-    $this->putJson('/api/members/'.$member->id, array_merge($payload, ['otp_code' => $issued['otp_code']]))
-        ->assertOk();
-
-    expect(Hash::check('Securepass123', $member->fresh()->password))->toBeTrue();
+        ->assertJsonValidationErrors('password');
+    expect(Hash::check('Securepass123', $member->fresh()->password))->toBeFalse();
 });
 
 test('member profile returns education and special loan eligibility fields', function () {
@@ -768,7 +752,7 @@ test('member create rejects an email already used on a contact record', function
         ->assertJsonValidationErrors('email');
 });
 
-test('admin-created member starts unverified and receives a verification notification', function () {
+test('phone verification alone cannot create an invited member', function () {
     actingAs($this->admin);
 
     $this->withSession(['verified_officer_phone' => '09171234567'])
@@ -780,15 +764,9 @@ test('admin-created member starts unverified and receives a verification notific
             'civil_status' => 'single',
             'email' => 'carl.miguel@example.com',
             'phone_number' => '09171234567',
-            'password' => 'S3curepass!',
-            'password_confirmation' => 'S3curepass!',
-        ])->assertCreated();
-
-    $member = User::where('email', 'carl.miguel@example.com')->firstOrFail();
-
-    expect($member->email_verified_at)->toBeNull();
-    expect($member->notifications()->where('type', 'email_verification')->exists())->toBeTrue();
-    expect($member->personalData->contact->phone_verified_at)->not->toBeNull();
+            'agreement' => true,
+        ])->assertUnprocessable()->assertJsonValidationErrors('contact_verification');
+    expect(User::where('email', 'carl.miguel@example.com')->exists())->toBeFalse();
 });
 
 test('member cannot pay another member loan without supplying their own id', function () {
@@ -875,6 +853,7 @@ test('admin can create officer when email is verified even if phone is unverifie
         'password' => 'S3cureOfficerPass!1',
         'password_confirmation' => 'S3cureOfficerPass!1',
         'role' => 'loan',
+        'agreement' => true,
     ])->assertStatus(202);
 
     $officer = User::where('email', $email)->firstOrFail();

@@ -6,11 +6,11 @@ import BranchSelect from '../../components/BranchSelect';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
-import { validate, memberStepSchemas, memberEditStepSchemas, memberSchema, memberEditSchema, passwordStrength, onlyDigits, formatGroupedDigits, EMPLOYMENT_TYPES, type FieldErrors } from '../../lib/validation';
+import { validate, memberStepSchemas, memberEditStepSchemas, memberSchema, memberEditSchema, onlyDigits, formatGroupedDigits, EMPLOYMENT_TYPES, type FieldErrors } from '../../lib/validation';
 import OtpVerifyField from '../../components/OtpVerifyField';
 import PolicyModal from '../../components/PolicyModal';
 
-const STEPS = ['personal', 'address', 'contact', 'ids', 'employment', 'login', 'beneficiaries', 'agreement', 'review'];
+const STEPS = ['personal', 'address', 'contact', 'ids', 'employment', 'beneficiaries', 'agreement', 'review'];
 
 const BIRTH_FROM_YEAR = new Date().getFullYear() - 100;
 const BIRTH_TO_YEAR = new Date().getFullYear();
@@ -21,7 +21,6 @@ const STEP_LABELS: Record<string, string> = {
     contact: 'Contact Info',
     ids: "Gov't IDs",
     employment: 'Employment',
-    login: 'Login Info',
     beneficiaries: 'Beneficiaries',
     agreement: 'Agreement',
     review: 'Review',
@@ -52,7 +51,6 @@ const emptyForm = {
     email: '', phone_number: '', facebook_link: '',
     national_id: '', tin: '', sss: '', philhealth: '', barangay_id: '',
     employment_type: '', employer_name: '', position: '', monthly_income: '',
-    password: '', password_confirmation: '',
     branch_id: '' as number | '',
     agreement: false,
     beneficiaries: [] as any[],
@@ -200,8 +198,12 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
     const validateStep = (s: string) => {
         const schema = isEdit ? memberEditStepSchemas[s] : memberStepSchemas[s];
         const errs = schema ? validate(schema, form) : {};
-        if (s === 'contact' && !isEdit && !isEmailVerified && !isPhoneVerified) {
-            errs.contact_verification = 'Verify either the email address or phone number before continuing.';
+        if (s === 'contact' && !isEdit && !isEmailVerified) {
+            errs.contact_verification = 'Verify the member email address before continuing.';
+        }
+        if (s === 'contact' && isEdit && member?.must_set_password
+            && form.email !== (detailData?.data?.email ?? member.email) && !isEmailVerified) {
+            errs.contact_verification = 'Verify the new member email address before continuing.';
         }
         setErrors(errs);
         return Object.keys(errs).length === 0;
@@ -366,7 +368,22 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 {isEdit ? (
                                     <>
-                                        <Field label="Email Address" type="email" value={form.email} onChange={setClearing('email')} required error={errors.email} placeholder="email@example.com" helperText="Primary contact email" />
+                                        {member?.must_set_password ? (
+                                            <OtpVerifyField
+                                                label="Email Address *"
+                                                value={form.email}
+                                                onChange={v => { setClearing('email')(v); setIsEmailVerified(false); }}
+                                                type="email"
+                                                error={errors.email}
+                                                isVerified={form.email === (detailData?.data?.email ?? member.email) || isEmailVerified}
+                                                onSendOtp={async email => (await api.post('/api/officers/verify-email/send', { email })).data}
+                                                onVerifyOtp={async (_email, otp) => {
+                                                    const res = await api.post('/api/officers/verify-email', { otp_code: otp });
+                                                    setIsEmailVerified(true);
+                                                    return { success: true, message: res.data.message };
+                                                }}
+                                            />
+                                        ) : <Field label="Email Address" type="email" value={form.email} onChange={setClearing('email')} required error={errors.email} placeholder="email@example.com" helperText="Primary contact email" />}
                                         <Field label="Phone Number" value={form.phone_number} onChange={setDigits('phone_number', PHONE_MAX)} required error={errors.phone_number} maxLength={PHONE_MAX} inputMode="tel" placeholder="09XXXXXXXXX" helperText="10 or 11 digits, numbers only" />
                                     </>
                                 ) : (
@@ -406,7 +423,7 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
                                 </div>
                             </div>
                             {errors.contact_verification && <p className="text-sm text-red-600">{errors.contact_verification}</p>}
-                            {!isEdit && <p className="text-sm text-gray-500">Email and phone are both required. Verify at least one contact method to continue.</p>}
+                            {!isEdit && <p className="text-sm text-gray-500">Email and phone are both required. Verify the email address before continuing; this address receives the password setup invitation.</p>}
                         </div>
                     )}
 
@@ -447,46 +464,6 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
                                 {canAssignBranch && (
                                     <BranchSelect value={form.branch_id} onChange={v => { set('branch_id', v); clearError('branch_id'); }} error={errors.branch_id} />
                                 )}
-                            </div>
-                        </div>
-                    )}
-
-                    {currentStep === 'login' && !isEdit && (
-                        <div className="space-y-6">
-                            <div className="rounded-xl border border-cyan-100 bg-linear-to-r from-cyan-50 to-emerald-50 p-4">
-                                <div className="flex items-start gap-3">
-                                    <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cyan-100 text-cyan-700">
-                                        <i className="fas fa-info"></i>
-                                    </div>
-                                    <div className="text-sm text-gray-700">
-                                        <p className="font-semibold text-gray-900">Password guidance</p>
-                                        <p className="mt-1 leading-6">Must be at least 8 characters and include an uppercase letter, a lowercase letter, and a number.</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <Field label="Password" type="password" value={form.password} onChange={v => { set('password', v); clearError('password'); clearError('password_confirmation'); }} required error={errors.password} placeholder="Enter password" helperText="Re-enter the same password to continue." />
-                                    {form.password && (
-                                        <div className="mt-3 flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
-                                            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Strength:</span>
-                                            <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
-                                                <div className="h-full rounded-full bg-emerald-500 transition-all duration-200" style={{ width: `${passwordStrength(form.password).score * 25}%` }} />
-                                            </div>
-                                            <span className="min-w-16 text-sm font-semibold text-gray-700">{passwordStrength(form.password).label}</span>
-                                        </div>
-                                    )}
-                                </div>
-                                <Field label="Confirm Password" type="password" value={form.password_confirmation} onChange={v => { set('password_confirmation', v); clearError('password_confirmation'); }} required error={errors.password_confirmation} placeholder="Re-enter password" />
-                            </div>
-                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                                <div className="flex items-start gap-3">
-                                    <i className="fas fa-exclamation-triangle text-amber-600 mt-0.5"></i>
-                                    <div className="text-sm text-amber-800">
-                                        <p className="font-medium">Initial Login Credentials</p>
-                                        <p className="mt-1">The member will use the email and password set here to log into the system.</p>
-                                    </div>
-                                </div>
                             </div>
                         </div>
                     )}
@@ -588,7 +565,7 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
                                 <i className="fas fa-check-circle text-emerald-600 mt-0.5"></i>
                                 <div className="text-sm text-emerald-800">
                                     <p className="font-semibold">Review before creating</p>
-                                    <p className="mt-0.5">Please verify the information below. Click <strong>Previous</strong> to go back and make changes, or <strong>Create Member</strong> when everything looks correct.</p>
+                                    <p className="mt-0.5">Please verify the information below. Click <strong>Previous</strong> to make changes, or <strong>Create &amp; Invite Member</strong> when everything looks correct.</p>
                                 </div>
                             </div>
 
@@ -609,9 +586,10 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
                                 ['Type', form.employment_type], ['Employer', form.employer_name], ['Position', form.position], ['Monthly Income', form.monthly_income ? `₱${Number(form.monthly_income).toLocaleString()}` : ''],
                             ]} />
                             {!isEdit && (
-                                <ReviewSection icon="fas fa-lock" title="Login Credentials" rows={[
-                                    ['Email (login)', form.email], ['Password', form.password ? '•'.repeat(Math.min(form.password.length, 12)) : ''],
-                                ]} />
+                                <div className="rounded-lg border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-900">
+                                    <p className="font-semibold">Online access invitation</p>
+                                    <p className="mt-1">An invitation will be sent to {form.email}. The member will verify their email and set their own password. Officers cannot see or set it.</p>
+                                </div>
                             )}
                         </div>
                     )}
@@ -644,7 +622,7 @@ export default function MemberWizardForm({ member, onClose }: { member: any; onC
                                     </>
                                 ) : (
                                     <>
-                                        <i className={`fas fa-user-plus mr-2`}></i> {isEdit ? 'Update Member' : 'Create Member'}
+                                        <i className={`fas fa-user-plus mr-2`}></i> {isEdit ? 'Update Member' : 'Create & Invite Member'}
                                     </>
                                 )}
                             </button>

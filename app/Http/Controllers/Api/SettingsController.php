@@ -280,12 +280,6 @@ class SettingsController extends Controller
             $result[$service] = $base;
         }
 
-        // Registration settings
-        $result['registration'] = [
-            'global' => (bool) SystemSetting::get('service_registration_enabled', true),
-            'member' => (bool) SystemSetting::get('service_registration_member_enabled', true),
-        ];
-
         // Login settings
         $result['login'] = [
             'global' => (bool) SystemSetting::get('service_login_enabled', true),
@@ -312,7 +306,7 @@ class SettingsController extends Controller
         ]);
 
         // Withdrawal is no longer managed here — see updateFinancialSettings().
-        $allowedServices = ['deposit', 'loan_application', 'loan_payment', 'registration', 'login'];
+        $allowedServices = ['deposit', 'loan_application', 'loan_payment', 'login'];
         $unknownServices = array_diff(array_keys($validated['services']), $allowedServices);
 
         if ($unknownServices !== []) {
@@ -323,13 +317,7 @@ class SettingsController extends Controller
         $flatSettings = [];
 
         foreach ($validated['services'] as $service => $flags) {
-            if ($service === 'registration') {
-                $registrationEnabled = (bool) ($flags['global'] ?? $flags['member'] ?? true);
-                $flatSettings['service_registration_enabled'] = (bool) ($flags['global'] ?? $registrationEnabled);
-                $flatSettings['service_registration_member_enabled'] = (bool) ($flags['member'] ?? $registrationEnabled);
-
-                continue;
-            } elseif ($service === 'login') {
+            if ($service === 'login') {
                 $settings = [
                     'global' => 'service_login_enabled',
                     'member' => 'service_login_member_enabled',
@@ -552,21 +540,6 @@ class SettingsController extends Controller
         $notificationService = app(NotificationService::class);
 
         foreach ($services as $service => $flags) {
-            if ($service === 'registration') {
-                if (isset($flags['global']) && $flags['global'] === false) {
-                    $users = User::role(['admin', 'chairman'])->where('account_status', 'active')->get();
-                    foreach ($users as $user) {
-                        $notificationService->notifyAccountActivity(
-                            $user,
-                            'Service Unavailable',
-                            'Public member registration has been disabled.'
-                        );
-                    }
-                }
-
-                continue;
-            }
-
             if ($service === 'login') {
                 if (isset($flags['global']) && $flags['global'] === false) {
                     $users = User::where('account_status', 'active')->get();

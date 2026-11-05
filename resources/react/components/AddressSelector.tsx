@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { getRegions, getProvinces, getCities, getBarangays, type PsgcItem } from '../api/psgc';
 
 export interface AddressValues {
@@ -27,6 +27,7 @@ const DEFAULT_SELECT_CLASS = 'block w-full rounded-lg border border-gray-300 bg-
 const DEFAULT_INPUT_CLASS = 'block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-cyan-500 focus:ring-cyan-500';
 
 export default function AddressSelector({ value, onChange, errors = {}, selectClassName, inputClassName }: AddressSelectorProps) {
+    const idPrefix = useId();
     const selectCls = selectClassName ?? DEFAULT_SELECT_CLASS;
     const inputCls = inputClassName ?? DEFAULT_INPUT_CLASS;
 
@@ -204,10 +205,13 @@ export default function AddressSelector({ value, onChange, errors = {}, selectCl
         required = true,
     ) => (
         <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
+            <label htmlFor={`${idPrefix}-${field}`} className="block text-sm font-medium text-slate-700 mb-2">
                 {label}{required && <span className="text-red-500">*</span>}
             </label>
             <select
+                id={`${idPrefix}-${field}`}
+                aria-invalid={Boolean(errors[field])}
+                aria-describedby={errors[field] ? `${idPrefix}-${field}-error` : undefined}
                 value={selected ? selected.name : ''}
                 onChange={e => {
                     const match = items.find(i => i.name === e.target.value) ?? null;
@@ -221,15 +225,15 @@ export default function AddressSelector({ value, onChange, errors = {}, selectCl
                     <option key={i.code} value={i.name}>{i.name}</option>
                 ))}
             </select>
-            {(errors as any)[field] && <p className="mt-1 text-xs text-red-500">{(errors as any)[field]}</p>}
+            {errors[field] && <p id={`${idPrefix}-${field}-error`} role="alert" className="mt-1 text-xs text-red-500">{errors[field]}</p>}
         </div>
     );
 
     const renderInput = (field: string, label: string, placeholder: string) => (
         <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">{label}</label>
-            <input type="text" value={(value as any)[field] || ''} onChange={e => onChange({ ...value, [field]: e.target.value })} placeholder={placeholder} className={`${inputCls} ${(errors as any)[field] ? 'border-red-400' : ''}`} />
-            {(errors as any)[field] && <p className="mt-1 text-xs text-red-500">{(errors as any)[field]}</p>}
+            <label htmlFor={`${idPrefix}-${field}`} className="block text-sm font-medium text-slate-700 mb-2">{label}</label>
+            <input id={`${idPrefix}-${field}`} type="text" value={(value as any)[field] || ''} onChange={e => onChange({ ...value, [field]: e.target.value })} aria-invalid={Boolean(errors[field])} aria-describedby={errors[field] ? `${idPrefix}-${field}-error` : undefined} placeholder={placeholder} className={`${inputCls} ${errors[field] ? 'border-red-400' : ''}`} />
+            {errors[field] && <p id={`${idPrefix}-${field}-error`} role="alert" className="mt-1 text-xs text-red-500">{errors[field]}</p>}
         </div>
     );
 

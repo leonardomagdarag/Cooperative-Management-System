@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\TurnstileService;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\UserSeeder;
+use Illuminate\Support\Facades\Hash;
 
 use function Pest\Laravel\mock;
 
@@ -51,9 +52,28 @@ function memberApplicationPayload(array $overrides = []): array
 
 function createPendingApplicant(string $email): User
 {
-    test()->post('/register', memberApplicationPayload(['email' => $email]));
+    // Historical applications remain reviewable after public registration closes.
+    $user = User::factory()->unverified()->create([
+        'email' => $email,
+        'password' => Hash::make('Password123'),
+        'account_status' => 'inactive',
+        'branch_id' => test()->accountant->branch_id,
+    ]);
+    $user->assignRole('member');
+    $user->personalData->update(['first_name' => 'Maria', 'last_name' => 'Reyes']);
+    $user->personalData->contact->update(['email' => $email]);
+    MemberApplication::create([
+        'user_id' => $user->id,
+        'branch_id' => $user->branch_id,
+        'original_email' => $email,
+        'first_name' => 'Maria',
+        'last_name' => 'Reyes',
+        'phone' => '09218887766',
+        'membership_type' => 'Regular',
+        'status' => 'pending',
+    ]);
 
-    return User::where('email', $email)->firstOrFail();
+    return $user;
 }
 
 test('a pending applicant cannot log in until approved', function () {
@@ -138,21 +158,13 @@ test('accountant can decline a pending application and release the email', funct
     Mail::assertSent(MemberApplicationStatusMail::class, fn ($mail) => $mail->status === 'declined' && $mail->applicantName === 'Maria Reyes');
 });
 
-test('the same email can re-register after a declined application', function () {
+test('declined applicant cannot self-register again', function () {
     $applicant = createPendingApplicant('rereregister@example.com');
 
     $this->actingAs($this->accountant)->postJson("/api/members/{$applicant->id}/decline", ['reason' => 'Duplicated record.'])->assertOk();
 
-    $response = $this->post('/register', memberApplicationPayload([
-        'email' => 'rereregister@example.com',
-    ]));
-
-    $response->assertRedirect(route('login_page', absolute: false));
-
-    $reApplicant = User::withTrashed()->where('email', 'rereregister@example.com')->first();
-    expect($reApplicant)->not->toBeNull()
-        ->and($reApplicant->trashed())->toBeFalse()
-        ->and(MemberApplication::where('user_id', $reApplicant->id)->where('status', 'pending')->exists())->toBeTrue();
+    $this->post('/register', memberApplicationPayload(['email' => 'rereregister@example.com']))->assertNotFound();
+    expect(User::where('email', 'rereregister@example.com')->exists())->toBeFalse();
 });
 
 test('decline requires a valid reviewer', function () {

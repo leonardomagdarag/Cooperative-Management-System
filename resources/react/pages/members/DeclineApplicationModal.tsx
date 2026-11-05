@@ -45,7 +45,7 @@ export default function DeclineApplicationModal({ member, onConfirm, onClose, su
                     </div>
                     <div className="flex items-start gap-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-700">
                         <i className="fas fa-info-circle mt-0.5"></i>
-                        <span>The applicant's membership record will be archived and they will be free to register again with the same email in the future.</span>
+                        <span>The applicant's membership record will be archived. An officer can create a new record with the same email after a future office application.</span>
                     </div>
                 </div>
                 <div className="flex items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4">

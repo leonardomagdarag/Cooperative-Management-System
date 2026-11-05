@@ -34,7 +34,6 @@ export default function LoginPage() {
         queryFn: () => api.get('/api/public-content'),
     });
     const loginImage = pc?.data?.form?.login?.login_image || '/images/hero_banner.jpg';
-    const registrationEnabled = pc?.data?.availability?.registration?.global !== false && pc?.data?.availability?.registration?.member !== false;
     const loginEnabled = pc?.data?.availability?.login?.global !== false;
 
     const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>({
@@ -95,12 +94,14 @@ export default function LoginPage() {
                             <input
                                 type="text"
                                 id="email"
+                                aria-invalid={Boolean(errors.email)}
+                                aria-describedby={errors.email ? 'email-error' : undefined}
                                 autoComplete="username"
                                 {...register('email')}
                                 className="public-input text-sm"
                                 placeholder={t('Enter your email or phone number')}
                             />
-                            {errors.email && <p className="mt-1 text-xs text-red-500">{t(errors.email.message || '')}</p>}
+                            {errors.email && <p id="email-error" role="alert" className="mt-1 text-xs text-red-500">{t(errors.email.message || '')}</p>}
                         </div>
 
                         <div>
@@ -109,6 +110,8 @@ export default function LoginPage() {
                                 <input
                                     type={showPassword ? 'text' : 'password'}
                                     id="password"
+                                    aria-invalid={Boolean(errors.password)}
+                                    aria-describedby={errors.password ? 'password-error' : undefined}
                                     autoComplete="current-password"
                                     {...register('password')}
                                     className="public-input pr-12 text-sm"
@@ -122,7 +125,7 @@ export default function LoginPage() {
                                     <i className={`fas fa-eye${showPassword ? '-slash' : ''}`}></i>
                                 </button>
                             </div>
-                            {errors.password && <p className="mt-1 text-xs text-red-500">{t(errors.password.message || '')}</p>}
+                            {errors.password && <p id="password-error" role="alert" className="mt-1 text-xs text-red-500">{t(errors.password.message || '')}</p>}
                         </div>
 
                         {loginError && (
@@ -155,16 +158,13 @@ export default function LoginPage() {
                             {t(isSubmitting ? 'Signing in...' : 'Sign in')}
                         </button>
 
-                        {registrationEnabled && (
-                            <div className="text-center pt-4 mt-4 border-t border-gray-200">
-                                <p className="text-sm text-slate-600 mb-2">{t("Don't have an account?")}</p>
-                                <Link to="/register" className="inline-flex items-center gap-2 text-emerald-700 hover:text-emerald-800 font-semibold transition-colors">
-                                    <i className="fas fa-user-plus"></i>
-                                    <span>{t('Create an Account')}</span>
-                                    <i className="fas fa-arrow-right text-sm"></i>
-                                </Link>
-                            </div>
-                        )}
+                        <div className="text-center pt-4 mt-4 border-t border-gray-200">
+                            <p className="text-sm text-slate-600 mb-2">{t('Interested in becoming a member? Apply at our main office or a branch.')}</p>
+                            <Link to="/contact" className="inline-flex items-center gap-2 text-emerald-700 hover:text-emerald-800 font-semibold transition-colors">
+                                <span>{t('Contact us about membership')}</span>
+                                <i className="fas fa-arrow-right text-sm"></i>
+                            </Link>
+                        </div>
 
                     </form> : (
                         <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">

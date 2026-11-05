@@ -295,7 +295,7 @@ class SiteContentCatalog
             ],
             'policies' => [
                 'label' => 'Policies & Agreements',
-                'description' => 'Maintain the public Terms and Conditions and Data Privacy Policy used in the footer and member registration flows.',
+                'description' => 'Maintain the public Terms and Conditions and Data Privacy Policy used on the website and during office enrollment.',
                 'groups' => [
                     [
                         'title' => 'Terms and Conditions',
@@ -303,7 +303,7 @@ class SiteContentCatalog
                             [
                                 'path' => 'terms_and_conditions',
                                 'label' => 'Terms and Conditions',
-                                'description' => 'Public terms and agreement copy shown in the footer and registration flows.',
+                                'description' => 'Public terms and agreement copy shown in the footer and office enrollment.',
                                 'control' => 'textarea',
                                 'rows' => 18,
                                 'columnSpan' => 2,
@@ -317,7 +317,7 @@ class SiteContentCatalog
                             [
                                 'path' => 'privacy_policy',
                                 'label' => 'Privacy Policy',
-                                'description' => 'Public privacy policy copy shown in the footer and registration flows.',
+                                'description' => 'Public privacy policy copy shown in the footer and office enrollment.',
                                 'control' => 'textarea',
                                 'rows' => 18,
                                 'columnSpan' => 2,
@@ -568,7 +568,7 @@ class SiteContentCatalog
             'about' => [
                 'about_image' => '/images/hero_banner.jpg',
                 'about1' => 'Services and community support. Our mission is to provide accessible and affordable financial solutions that help our members achieve their goals.',
-                'about2' => "Founded with a vision to strengthen ottlers Credit Cooperative is dedicated to empowering our members through financial sur community, we've been serving our members with integrity, innovation, and unwavering commitment to their financial well-being.",
+                'about2' => "Founded with a vision to strengthen our community, Settlers Credit Cooperative is dedicated to empowering our members through financial services. We've been serving our members with integrity, innovation, and unwavering commitment to their financial well-being.",
                 'history' => 'Founded in 2016, Settlers Credit Cooperative (previously known as Southville 7 Credit Cooperative) has grown from a small group of community members into a trusted financial organization serving hundreds of members. <br><br> Over the years, we have expanded our services and strengthened our commitment to member satisfaction and community development. Our journey reflects our dedication to financial excellence and community empowerment. ',
                 'mission' => 'Ang Settlers Credit Cooperative ay nagbibigay ng pangunahing serbisyo sa mga kasapi sa pamamagitan ng pagbibigay ng pagkakataon na maka-ipon at makapagpahiram sa mababang interest',
                 'vision' => "Kooperatibang naghuhubog sa kakayahan ng Settlers Credit Cooperative sa pamamahala ng iba't ibang proyekto",

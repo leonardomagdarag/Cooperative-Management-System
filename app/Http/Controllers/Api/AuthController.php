@@ -103,6 +103,10 @@ class AuthController extends Controller
             return response()->json(['message' => 'Your account is not active.'], 403);
         }
 
+        if ($user->must_set_password) {
+            return response()->json(['message' => 'Please set your password using the invitation sent to your email.'], 403);
+        }
+
         $previousSessionId = $request->session()->getId();
         Auth::guard('web')->login($user, $request->boolean('remember'));
         $request->session()->regenerate();

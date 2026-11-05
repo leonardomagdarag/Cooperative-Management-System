@@ -1,11 +1,10 @@
 <?php
 
 use App\Http\Middleware\CheckServiceAvailability;
-use App\Http\Middleware\EnsureOtpVerified;
 use App\Http\Middleware\EnsureCurrentSession;
+use App\Http\Middleware\EnsureOtpVerified;
 use App\Http\Middleware\EnsureProfileCompleted;
 use App\Http\Middleware\EnsurePublicLoginEnabled;
-use App\Http\Middleware\EnsurePublicMemberRegistrationEnabled;
 use App\Http\Middleware\RoleMiddleware;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
@@ -39,7 +38,6 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => PermissionMiddleware::class,
             'role_or_permission' => RoleOrPermissionMiddleware::class,
             'spatie_role' => Spatie\Permission\Middleware\RoleMiddleware::class,
-            'public.registration.enabled' => EnsurePublicMemberRegistrationEnabled::class,
             'public.login.enabled' => EnsurePublicLoginEnabled::class,
             'otp.verified' => EnsureOtpVerified::class,
             'service.availability' => CheckServiceAvailability::class,

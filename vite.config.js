@@ -36,7 +36,6 @@ export default defineConfig({
             '/logout': backendUrl,
             '/forgot-password': backendUrl,
             '/reset-password': backendUrl,
-            '/register': backendUrl,
             '/contact': backendUrl,
             '/security': backendUrl,
             '/verify-email': backendUrl,

@@ -11,6 +11,7 @@ use App\Mail\LoanDueNotification;
 use App\Mail\LoanLifecycleNotification;
 use App\Mail\LoanStatusNotification;
 use App\Mail\MemberApplicationStatusMail;
+use App\Mail\MemberPasswordSetupMail;
 use App\Mail\WithdrawalStatusNotification;
 use App\Models\Announcement;
 use App\Models\Loan;
@@ -23,6 +24,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\URL;
 use Spatie\Permission\Exceptions\RoleDoesNotExist;
@@ -54,7 +56,7 @@ class NotificationService
             // keep the flow usable during development (e.g. the verification URL).
             $detail = $mailable instanceof EmailVerificationMail
                 ? $mailable->verificationUrl
-                : get_class($mailable);
+                : ($mailable instanceof MemberPasswordSetupMail ? $mailable->setupUrl : get_class($mailable));
             Log::info("Email ({$tag}) for {$toEmail}: {$detail}");
 
             return;
@@ -683,6 +685,26 @@ class NotificationService
             $user->email,
             new MemberApplicationStatusMail($user, 'approved', '', $activationUrl),
             'member.approved'
+        );
+    }
+
+    public function sendMemberPasswordSetupInvitation(User $user): void
+    {
+        if (! $user->email || ! $user->must_set_password) {
+            return;
+        }
+
+        $token = Password::broker()->createToken($user);
+        $setupUrl = url('/reset-password?'.http_build_query([
+            'token' => $token,
+            'email' => $user->email,
+            'setup' => 1,
+        ]));
+
+        $this->safeSendEmail(
+            $user->email,
+            new MemberPasswordSetupMail($user->name ?: 'Member', $setupUrl),
+            'member.password_setup'
         );
     }
 

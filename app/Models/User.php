@@ -33,6 +33,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'branch_id',
         'email',
         'password',
+        'must_set_password',
         'role',
         'account_status',
         'is_officer',
@@ -63,6 +64,7 @@ class User extends Authenticatable implements MustVerifyEmail
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'must_set_password' => 'boolean',
             'account_status' => 'string',
             'special_loan_eligible' => 'boolean',
             'profile_completion_required' => 'boolean',

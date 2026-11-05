@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getProfile, updateProfile, type ProfileData } from '../../api/profile';
 import EmailChangeVerification from '../../components/EmailChangeVerification';
@@ -344,7 +344,7 @@ export default function ProfilePage() {
                 <EditModal
                     title={t('Edit Personal Info')}
                     onClose={() => setEditModal(null)}
-                    onSave={(data) => updateMutation.mutate(createProfileFormData(profile, data))}
+                    onSave={(data) => updateMutation.mutateAsync(createProfileFormData(profile, data))}
                     isSaving={updateMutation.isPending}
                 >
                     {(state, handleChange, errors) => (
@@ -368,7 +368,7 @@ export default function ProfilePage() {
                 <EditModal
                     title={t('Edit Contact Info')}
                     onClose={() => setEditModal(null)}
-                    onSave={(data) => updateMutation.mutate(createProfileFormData(profile, data))}
+                    onSave={(data) => updateMutation.mutateAsync(createProfileFormData(profile, data))}
                     isSaving={updateMutation.isPending}
                 >
                     {(state, handleChange, errors) => (
@@ -388,7 +388,7 @@ export default function ProfilePage() {
                 <EditModal
                     title={t('Edit Address')}
                     onClose={() => setEditModal(null)}
-                    onSave={(data) => updateMutation.mutate(createProfileFormData(profile, data))}
+                    onSave={(data) => updateMutation.mutateAsync(createProfileFormData(profile, data))}
                     isSaving={updateMutation.isPending}
                 >
                     {(state, handleChange, errors) => (
@@ -409,7 +409,7 @@ export default function ProfilePage() {
                 <EditModal
                     title={t('Edit Government IDs')}
                     onClose={() => setEditModal(null)}
-                    onSave={(data) => updateMutation.mutate(createProfileFormData(profile, data))}
+                    onSave={(data) => updateMutation.mutateAsync(createProfileFormData(profile, data))}
                     isSaving={updateMutation.isPending}
                 >
                     {(state, handleChange) => (
@@ -427,7 +427,7 @@ export default function ProfilePage() {
                 <EditModal
                     title={t('Edit Employment Info')}
                     onClose={() => setEditModal(null)}
-                    onSave={(data) => updateMutation.mutate(createProfileFormData(profile, data))}
+                    onSave={(data) => updateMutation.mutateAsync(createProfileFormData(profile, data))}
                     isSaving={updateMutation.isPending}
                 >
                     {(state, handleChange) => (
@@ -448,7 +448,7 @@ export default function ProfilePage() {
                     onSave={(data) => {
                         const fd = createProfileFormData(profile, {});
                         if (data.profile_photo) fd.append('profile_photo', data.profile_photo);
-                        updateMutation.mutate(fd);
+                        return updateMutation.mutateAsync(fd);
                     }}
                     isSaving={updateMutation.isPending}
                 >
@@ -491,20 +491,23 @@ function Field({ label, name, required, type, value, onChange, error }: { label:
     const { t } = useLanguage();
     return (
         <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-700">{label}</label>
+            <label htmlFor={`profile-${name}`} className="mb-1.5 block text-sm font-medium text-gray-700">{label}{required && ' *'}</label>
             {type === 'date' ? (
                 <>
                     <DatePicker value={value ?? ''} onChange={(v) => onChange(name, v)} fromYear={new Date().getFullYear() - 100} toYear={new Date().getFullYear()} className={`w-full rounded-lg border bg-white px-3 py-2 text-sm ${error ? 'border-red-400' : 'border-gray-200'}`} />
                 </>
             ) : (
                 <input
+                    id={`profile-${name}`}
                     type={type || 'text'}
                     value={value ?? ''}
                     onChange={(e) => onChange(name, e.target.value)}
+                    aria-invalid={Boolean(error)}
+                    aria-describedby={error ? `profile-${name}-error` : undefined}
                     className={`w-full rounded-lg border bg-white px-3 py-2 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 ${error ? 'border-red-400' : 'border-gray-200'}`}
                 />
             )}
-            {error && <p className="mt-1 text-xs text-red-600">{t(error)}</p>}
+            {error && <p id={`profile-${name}-error`} role="alert" className="mt-1 text-xs text-red-600">{t(error)}</p>}
         </div>
     );
 }
@@ -513,7 +516,7 @@ function EditModal({ title, children, onClose, onSave, isSaving }: {
     title: string;
     children: (state: any, handleChange: (name: string, v: any) => void, errors: FieldErrors) => React.ReactNode;
     onClose: () => void;
-    onSave: (data: any) => void;
+    onSave: (data: any) => Promise<unknown>;
     isSaving: boolean;
 }) {
     const { t } = useLanguage();
@@ -529,14 +532,38 @@ function EditModal({ title, children, onClose, onSave, isSaving }: {
 
     const requestCloseGuard = () => requestClose(onClose);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    useEffect(() => {
+        const previouslyFocused = document.activeElement as HTMLElement | null;
+        return () => previouslyFocused?.focus();
+    }, []);
+
+    useEffect(() => {
+        const handleEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') requestClose(onClose);
+        };
+        window.addEventListener('keydown', handleEscape);
+        return () => window.removeEventListener('keydown', handleEscape);
+    }, [onClose, requestClose]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        onSave(state);
+        try {
+            await onSave(state);
+        } catch (error: any) {
+            const responseErrors = error.response?.data?.errors;
+            if (responseErrors) {
+                const fields: FieldErrors = {};
+                for (const [field, messages] of Object.entries(responseErrors)) {
+                    fields[field] = Array.isArray(messages) ? String(messages[0]) : String(messages);
+                }
+                setErrors(fields);
+            }
+        }
     };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={requestCloseGuard}>
-            <div className="w-full max-w-xl max-h-[90vh] flex flex-col rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div role="dialog" aria-modal="true" aria-label={title} className="w-full max-w-xl max-h-[90vh] flex flex-col rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 shrink-0">
                     <h2 className="text-lg font-bold text-gray-900">{title}</h2>
                     <button onClick={requestCloseGuard} className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"><i className="fas fa-times"></i></button>

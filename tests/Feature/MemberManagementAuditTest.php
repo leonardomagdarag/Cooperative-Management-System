@@ -107,8 +107,7 @@ test('F017-6: admin creates new member with personal data, contact, address and 
         'civil_status' => 'single',
         'email' => $email,
         'phone_number' => '09191234567',
-        'password' => 'Password123!',
-        'password_confirmation' => 'Password123!',
+        'agreement' => true,
         'street' => '100 Mabini St',
         'city' => 'Manila',
         'branch_id' => $this->mainBranch->id,
@@ -118,7 +117,7 @@ test('F017-6: admin creates new member with personal data, contact, address and 
     $response = $this->withSession(['verified_officer_email' => $email])
         ->postJson('/api/members', $payload);
     $response->assertStatus(201)
-        ->assertJson(['message' => 'Member created successfully.']);
+        ->assertJsonPath('must_set_password', true);
 
     $createdUser = User::where('email', $email)->first();
     expect($createdUser)->not->toBeNull()
@@ -133,7 +132,7 @@ test('F017-6: admin creates new member with personal data, contact, address and 
         ->and($createdUser->accounts()->where('account_type', 'share-capital')->exists())->toBeTrue();
 });
 
-test('F017-6a: admin cannot create a member until at least one contact method is verified', function () {
+test('F017-6a: member email must be verified before account creation', function () {
     $this->actingAs($this->chairman)
         ->postJson('/api/members', [
             'first_name' => 'Unverified',
@@ -143,17 +142,16 @@ test('F017-6a: admin cannot create a member until at least one contact method is
             'civil_status' => 'single',
             'email' => 'unverified.member@example.com',
             'phone_number' => '09191234568',
-            'password' => 'Password123!',
-            'password_confirmation' => 'Password123!',
+            'agreement' => true,
             'role' => 'member',
         ])
         ->assertUnprocessable()
-        ->assertJsonPath('errors.contact_verification.0', 'Verify either the email address or phone number.');
+        ->assertJsonPath('errors.contact_verification.0', 'Verify the member email address.');
 
     expect(User::where('email', 'unverified.member@example.com')->exists())->toBeFalse();
 });
 
-test('F017-6b: phone verification is sufficient when creating a member and is stored on the contact', function () {
+test('F017-6b: phone verification alone cannot create a member', function () {
     $payload = [
         'first_name' => 'Phone',
         'last_name' => 'Verified',
@@ -162,21 +160,16 @@ test('F017-6b: phone verification is sufficient when creating a member and is st
         'civil_status' => 'single',
         'email' => 'phone.verified@example.com',
         'phone_number' => '09191234569',
-        'password' => 'Password123!',
-        'password_confirmation' => 'Password123!',
+        'agreement' => true,
         'role' => 'member',
     ];
 
     $this->actingAs($this->chairman)
         ->withSession(['verified_officer_phone' => $payload['phone_number']])
         ->postJson('/api/members', $payload)
-        ->assertCreated();
-
-    $createdUser = User::where('email', $payload['email'])->firstOrFail();
-    expect($createdUser->hasVerifiedEmail())->toBeFalse()
-        ->and($createdUser->personalData->contact->phone_verified_at)->not->toBeNull()
-        ->and($createdUser->personalData->contact->email_verified_at)->toBeNull()
-        ->and($createdUser->branch_id)->toBe($this->mainBranch->id);
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('contact_verification');
+    expect(User::where('email', $payload['email'])->exists())->toBeFalse();
 });
 
 test('F017-6c: a member creator can verify a new email without officer permissions', function () {
@@ -239,12 +232,11 @@ test('F017-8: admin toggles special loan eligibility', function () {
     expect($log)->not->toBeNull();
 });
 
-test('F017-9: admin triggers password change OTP challenge for a member', function () {
+test('F017-9: officer cannot issue a member password change OTP', function () {
     $this->actingAs($this->chairman);
 
     $response = $this->postJson("/api/members/{$this->mainMember->id}/password/send-otp");
-    $response->assertOk()
-        ->assertJsonStructure(['message', 'expires_at']);
+    $response->assertForbidden();
 });
 
 test('F017-10: member export validates dates and generates export response', function () {

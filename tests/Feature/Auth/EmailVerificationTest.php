@@ -82,25 +82,6 @@ test('verified user reports email_verified true through the api', function () {
         ->assertJsonPath('email_verified', true);
 });
 
-test('registration queues an email verification notification', function () {
-    $this->post('/register', [
-        'name' => 'Test User',
-        'email' => 'test@example.com',
-        'password' => 'Password123',
-        'password_confirmation' => 'Password123',
-    ]);
-
-    $user = User::where('email', 'test@example.com')->first();
-
-    expect($user)->not->toBeNull();
-    expect($user->email_verified_at)->toBeNull();
-    expect($user->account_status)->toBe('inactive');
-
-    // Awaiting-approval applicants do not receive an email verification yet:
-    // the activation link is sent by an officer once the application is approved.
-    expect($user->notifications()->where('type', 'email_verification')->exists())->toBeFalse();
-});
-
 test('unverified user can resend the verification email', function () {
     $user = User::factory()->unverified()->create();
 

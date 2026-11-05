@@ -36,6 +36,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Spatie\Activitylog\Models\Activity;
@@ -164,6 +165,7 @@ class MemberController extends Controller
                 'user_number' => $u->user_number,
                 'email' => $u->email,
                 'account_status' => $u->account_status,
+                'must_set_password' => (bool) $u->must_set_password,
                 'is_officer' => $u->is_officer,
                 'primary_role' => $u->primary_role,
                 'name' => trim(($u->personalData->first_name ?? '').' '.($u->personalData->last_name ?? '')),
@@ -236,6 +238,7 @@ class MemberController extends Controller
             'user_number' => $user->user_number,
             'email' => $user->email,
             'account_status' => $user->account_status,
+            'must_set_password' => (bool) $user->must_set_password,
             'is_officer' => $user->is_officer,
             'primary_role' => $user->primary_role,
             'branch_id' => $user->branch_id,
@@ -321,6 +324,7 @@ class MemberController extends Controller
     public function store(Request $request): JsonResponse
     {
         $requestedRole = $request->input('role');
+        $creatingOfficer = filled($requestedRole) && $requestedRole !== 'member';
         $requiredPermission = ! empty($requestedRole) && $requestedRole !== 'member'
             ? 'officers.create'
             : 'members.create';
@@ -371,12 +375,14 @@ class MemberController extends Controller
             'employer_name' => PersonFieldRules::text(false, PersonFieldRules::TEXT_MAX),
             'position' => PersonFieldRules::text(false, 100),
             'monthly_income' => PersonFieldRules::income(),
-            'password' => PersonPasswordPolicy::passwordRules(false, PersonPasswordPolicy::normalizedNameTokens([
-                $request->input('first_name'),
-                $request->input('mid_name'),
-                $request->input('last_name'),
-            ])),
-            'password_confirmation' => 'required|string|same:password',
+            'password' => $creatingOfficer
+                ? PersonPasswordPolicy::passwordRules(false, PersonPasswordPolicy::normalizedNameTokens([
+                    $request->input('first_name'),
+                    $request->input('mid_name'),
+                    $request->input('last_name'),
+                ]))
+                : ['prohibited'],
+            'password_confirmation' => $creatingOfficer ? 'required|string|same:password' : ['prohibited'],
             'agreement' => 'required|accepted',
             'role' => ['nullable', 'string', Rule::exists('roles', 'name')->where('guard_name', 'web')],
             'beneficiaries' => 'nullable|array|max:5',
@@ -397,10 +403,10 @@ class MemberController extends Controller
         if ($role && $role !== 'member' && ! $verifiedEmail) {
             return response()->json(['message' => 'Email must be verified via OTP first.'], 422);
         }
-        if ((! $role || $role === 'member') && ! $verifiedEmail && ! $verifiedPhone) {
+        if ((! $role || $role === 'member') && ! $verifiedEmail) {
             return response()->json([
-                'message' => 'Verify the member email address or phone number before creating the account.',
-                'errors' => ['contact_verification' => ['Verify either the email address or phone number.']],
+                'message' => 'Verify the member email address before creating the account.',
+                'errors' => ['contact_verification' => ['Verify the member email address.']],
             ], 422);
         }
 
@@ -475,7 +481,8 @@ class MemberController extends Controller
 
             $user = User::create([
                 'email' => $validated['email'],
-                'password' => Hash::make($validated['password']),
+                'password' => Hash::make($role === 'member' ? Str::random(64) : $validated['password']),
+                'must_set_password' => $role === 'member',
                 'personal_data_id' => $personalData->id,
                 'branch_id' => $this->resolveMemberBranch($validated),
                 'role' => $storedRole,
@@ -511,7 +518,7 @@ class MemberController extends Controller
                 }
             }
 
-            $isOfficer = ! empty($validated['role']);
+            $isOfficer = $role !== 'member';
 
             $submittedData = collect($validated)->except(['password', 'password_confirmation', 'otp_code', 'profile_photo', 'national_id_photo', 'tin_photo', 'sss_photo', 'philhealth_photo', 'barangay_id_photo', 'agreement_file'])->toArray();
             app(AuditLogService::class)->log($isOfficer ? 'officer.created' : 'member.created', $isOfficer ? 'New officer created.' : 'New member created.', $isOfficer ? 'officer' : 'member', $user, Auth::user(), [
@@ -525,11 +532,14 @@ class MemberController extends Controller
             return $user;
         });
 
-        if (! $verifiedEmail) {
+        $role = $validated['role'] ?? 'member';
+        if ($role === 'member') {
+            app(NotificationService::class)->sendMemberPasswordSetupInvitation($user);
+        } elseif (! $verifiedEmail) {
             app(NotificationService::class)->sendEmailVerification($user);
         }
 
-        if (config('mail.default') !== 'log') {
+        if ($role !== 'member' && config('mail.default') !== 'log') {
             $name = trim(($validated['first_name'] ?? '').' '.($validated['last_name'] ?? ''));
             SendEmailJob::dispatch(
                 $validated['email'],
@@ -540,7 +550,6 @@ class MemberController extends Controller
 
         $request->session()->forget(['verified_officer_email', 'verified_officer_phone']);
 
-        $role = $validated['role'] ?? 'member';
         if ($role !== 'member') {
             $countersign = app(CountersignService::class);
             $pending = $countersign->request('role.assign', [
@@ -558,7 +567,30 @@ class MemberController extends Controller
             ], 202);
         }
 
-        return response()->json(['message' => 'Member created successfully.'], 201);
+        return response()->json(['message' => 'Member created. A password setup invitation was sent to the verified email address.', 'must_set_password' => true], 201);
+    }
+
+    public function resendPasswordSetupInvitation(User $user): JsonResponse
+    {
+        $actor = Auth::user();
+        abort_unless($actor?->can('members.update'), 403);
+        abort_unless(BranchScope::canAccessBranch($actor, $user->branch_id), 403);
+        abort_unless(! $user->is_officer && $user->primary_role === 'member', 404);
+
+        if ($user->account_status !== 'active' || ! $user->must_set_password) {
+            return response()->json(['message' => 'This member does not have a pending password invitation.'], 409);
+        }
+
+        app(NotificationService::class)->sendMemberPasswordSetupInvitation($user);
+        app(AuditLogService::class)->log(
+            'member.password_setup_invitation_resent',
+            'Member password setup invitation resent.',
+            'member',
+            $user,
+            $actor
+        );
+
+        return response()->json(['message' => 'A new password setup invitation was sent. Previous links are no longer valid.']);
     }
 
     public function update(Request $request, User $user): JsonResponse
@@ -568,6 +600,15 @@ class MemberController extends Controller
         $assigningOfficerRole = filled($request->input('role')) && $request->input('role') !== 'member';
         $requiredPermission = ($isOfficerAccount || $assigningOfficerRole) ? 'officers.update' : 'members.update';
         abort_unless(Auth::user()?->can($requiredPermission), 403);
+        abort_unless(BranchScope::canAccessBranch(Auth::user(), $user->branch_id), 403);
+
+        if (! $isOfficerAccount) {
+            $request->validate([
+                'password' => ['prohibited'],
+                'password_confirmation' => ['prohibited'],
+                'otp_code' => ['prohibited'],
+            ]);
+        }
 
         $this->assertCanAssignRole($request->input('role'), 'officers.update');
 
@@ -626,6 +667,16 @@ class MemberController extends Controller
             'agreement_file' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
         ], PersonFieldRules::messages());
 
+        $originalEmail = $user->email;
+        $emailChanged = $originalEmail !== User::normalizeEmail($validated['email']);
+        if ($emailChanged && $user->must_set_password
+            && $request->session()->get('verified_officer_email') !== User::normalizeEmail($validated['email'])) {
+            return response()->json([
+                'message' => 'Verify the new member email address before changing it.',
+                'errors' => ['email' => ['Verify the new member email address.']],
+            ], 422);
+        }
+
         if (! empty($validated['password'])) {
             $actor = Auth::user();
             $securityOtp = app(SecurityOtpService::class);
@@ -665,13 +716,16 @@ class MemberController extends Controller
         $roleNeedsCountersign = ! empty($validated['role'])
             && $validated['role'] !== $user->primary_role;
 
-        DB::transaction(function () use ($user, $validated, $profilePhotoPath, $idPhotoPaths, $agreementPath, $roleNeedsCountersign) {
+        DB::transaction(function () use ($user, $validated, $profilePhotoPath, $idPhotoPaths, $agreementPath, $roleNeedsCountersign, $emailChanged, $request) {
             $pd = $user->personalData;
 
             if ($pd?->contact) {
                 $pd->contact->update([
                     'phone_no' => $validated['phone_number'] ?? null,
                     'email' => $validated['email'],
+                    'email_verified_at' => $emailChanged
+                        ? ($request->session()->get('verified_officer_email') === User::normalizeEmail($validated['email']) ? now() : null)
+                        : $pd->contact->email_verified_at,
                     'facebook' => $validated['facebook_link'] ?? null,
                 ]);
             }
@@ -757,10 +811,17 @@ class MemberController extends Controller
             app(AuditLogService::class)->log($isOfficer ? 'officer.updated' : 'member.updated', $isOfficer ? 'Officer profile updated.' : 'Member profile updated.', $isOfficer ? 'officer' : 'member', $user, Auth::user(), ['attributes' => $submittedData]);
         });
 
-        $emailChanged = $user->email !== $validated['email'];
         if ($emailChanged) {
+            DB::table(config('auth.passwords.users.table', 'password_reset_tokens'))
+                ->where('email', $originalEmail)
+                ->delete();
             $user->forceFill(['email_verified_at' => null])->save();
-            app(NotificationService::class)->sendEmailVerification($user->refresh());
+            if ($user->must_set_password) {
+                app(NotificationService::class)->sendMemberPasswordSetupInvitation($user->refresh());
+                $request->session()->forget('verified_officer_email');
+            } else {
+                app(NotificationService::class)->sendEmailVerification($user->refresh());
+            }
         }
 
         $role = $validated['role'] ?? null;
@@ -785,7 +846,10 @@ class MemberController extends Controller
 
     public function sendPasswordChangeOtp(User $user): JsonResponse
     {
-        abort_unless(Auth::user()?->can('members.update'), 403);
+        $isOfficerAccount = (bool) ($user->is_officer
+            || $user->hasAnyRole(array_merge(PermissionCatalog::officerRoles(), ['admin', 'developer'])));
+        abort_unless($isOfficerAccount && Auth::user()?->can('officers.update'), 403);
+        abort_unless(BranchScope::canAccessBranch(Auth::user(), $user->branch_id), 403);
 
         $actor = Auth::user();
         $securityOtp = app(SecurityOtpService::class);

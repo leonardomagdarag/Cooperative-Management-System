@@ -370,6 +370,37 @@ export default function ServicesPage() {
                 </div>
             )}
 
+            {!isOfficer && (
+                <section aria-labelledby="services-overview-title" className="space-y-4">
+                    <div>
+                        <h2 id="services-overview-title" className="text-lg font-bold text-slate-900">{t('Your accounts at a glance')}</h2>
+                        <p className="text-sm text-slate-600">{t('Your current balances and request activity.')}</p>
+                    </div>
+                    <div className={`grid grid-cols-1 ${gridCols} gap-4`}>
+                        {!hideFinancials && (
+                            <>
+                                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-5 border-l-4 border-green-500">
+                                    <p className="text-sm font-medium text-green-700 mb-1">{t('Savings Balance')}</p>
+                                    <p className="text-2xl font-bold text-green-900">{!dashboardData ? '\u2014' : `\u20B1${Number(savingsBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}</p>
+                                </div>
+                                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-5 border-l-4 border-blue-500">
+                                    <p className="text-sm font-medium text-blue-700 mb-1">{t('Share Capital')}</p>
+                                    <p className="text-2xl font-bold text-blue-900">{!dashboardData ? '\u2014' : `\u20B1${Number(shareCapitalBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}</p>
+                                </div>
+                            </>
+                        )}
+                        <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-5 border-l-4 border-purple-500">
+                            <p className="text-sm font-medium text-purple-700 mb-1">{t('Active Loans')}</p>
+                            <p className="text-2xl font-bold text-purple-900">{!dashboardData ? '\u2014' : activeLoanCount}</p>
+                        </div>
+                        <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-5 border-l-4 border-orange-500">
+                            <p className="text-sm font-medium text-orange-700 mb-1">{t('Pending Requests')}</p>
+                            <p className="text-2xl font-bold text-orange-900">{myPendingCount}</p>
+                        </div>
+                    </div>
+                </section>
+            )}
+
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
                 <div className="mb-5">
                     {isOfficer && <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Step 2</p>}
@@ -511,7 +542,7 @@ export default function ServicesPage() {
                 )}
             </section>
 
-            {(!isOfficer || hasSelectedMember) && <section aria-labelledby="services-overview-title" className="space-y-4">
+            {isOfficer && hasSelectedMember && <section aria-labelledby="services-overview-title" className="space-y-4">
                 <div>
                     <h2 id="services-overview-title" className="text-lg font-bold text-slate-900">{isOfficer ? `${selectedMember.name}'s overview` : t('Your accounts at a glance')}</h2>
                     <p className="text-sm text-slate-600">{t(isOfficer ? 'Balances and activity for the selected member.' : 'Your current balances and request activity.')}</p>
@@ -553,21 +584,21 @@ export default function ServicesPage() {
                     </div>
 
                     <div className="space-y-3">
-                        {myPendingRequests.map((t: any) => (
-                            <div key={t.id} className="flex items-center justify-between p-4 bg-orange-50 rounded-lg border border-orange-200">
+                        {myPendingRequests.map((request: any) => (
+                            <div key={request.id} className="flex items-center justify-between p-4 bg-orange-50 rounded-lg border border-orange-200">
                                 <div className="flex-1">
                                     <div className="flex items-center gap-2 mb-1">
-                                        <span className="font-semibold text-gray-900">₱{Number(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                        <span className="font-semibold text-gray-900">₱{Number(request.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                         <span className="px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs font-medium rounded">{t('Awaiting Approval')}</span>
                                     </div>
                                     <p className="text-sm text-gray-600 capitalize">
-                                        {pendingTypeLabel(t.transaction_type)} · <span className="normal-case">{formatPendingDate(t.created_at)}</span>
+                                        {pendingTypeLabel(request.transaction_type)} · <span className="normal-case">{formatPendingDate(request.created_at)}</span>
                                     </p>
-                                    {t.note && <p className="text-xs text-gray-700 mt-1">{t.note}</p>}
+                                    {request.note && <p className="text-xs text-gray-700 mt-1">{request.note}</p>}
                                 </div>
                                 <div className="text-right">
                                     <span className="text-sm text-gray-700 capitalize">
-                                        {t.account?.account_type ? pendingTypeLabel(t.account.account_type) : 'Transaction'}
+                                        {request.account?.account_type ? pendingTypeLabel(request.account.account_type) : 'Transaction'}
                                     </span>
                                 </div>
                             </div>

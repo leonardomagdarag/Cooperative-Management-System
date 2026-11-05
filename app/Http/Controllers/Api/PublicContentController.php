@@ -27,10 +27,6 @@ class PublicContentController extends Controller
             'form' => SiteContentCatalog::editorContent(),
             'metrics' => app(CooperativeMetricsService::class)->publicMetrics(),
             'availability' => [
-                'registration' => [
-                    'global' => (bool) SystemSetting::get('service_registration_enabled', true),
-                    'member' => (bool) SystemSetting::get('service_registration_member_enabled', true),
-                ],
                 'login' => [
                     'global' => (bool) SystemSetting::get('service_login_enabled', true),
                     'member' => (bool) SystemSetting::get('service_login_member_enabled', true),

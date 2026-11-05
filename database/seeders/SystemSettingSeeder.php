@@ -20,23 +20,6 @@ class SystemSettingSeeder extends Seeder
     {
         $settings = [
             // ── Registration ──────────────────────────────────────────────
-            [
-                'key' => 'service_registration_enabled',
-                'value' => '1',
-                'type' => 'boolean',
-                'group' => 'service_availability',
-                'label' => 'Registration (Global)',
-                'description' => 'Allow new members to register',
-            ],
-            [
-                'key' => 'service_registration_member_enabled',
-                'value' => '1',
-                'type' => 'boolean',
-                'group' => 'service_availability',
-                'label' => 'Registration (Member)',
-                'description' => 'Allow a registered member to file a second application',
-            ],
-
             // ── Login ─────────────────────────────────────────────────────
             [
                 'key' => 'service_login_enabled',

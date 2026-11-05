@@ -5,7 +5,7 @@
 
     <p>Dear {{ $loan->user?->personalData?->first_name ?? 'Member' }},</p>
 
-    <p>{{ $message }}</p>
+    <p>{{ $bodyMessage }}</p>
 
     <p><strong>Loan reference:</strong> {{ $loan->loan_number }}</p>
     <p><strong>Requested amount:</strong> ₱{{ number_format((float) $loan->loan_amount, 2) }}</p>

@@ -1,6 +1,7 @@
 <?php
 
 use App\Jobs\SendEmailJob;
+use App\Mail\MemberPasswordSetupMail;
 use App\Mail\MemberWelcomeMail;
 use App\Models\User;
 use Database\Seeders\SpatieRolePermissionSeeder;
@@ -28,7 +29,7 @@ test('MemberWelcomeMail rendered content does not contain plaintext password', f
     expect($reflection->hasProperty('plainPassword'))->toBeFalse();
 });
 
-test('chairman creating member does not leak plaintext password in welcome email job', function () {
+test('chairman creates member with a password setup invitation', function () {
     Bus::fake();
     Config::set('mail.default', 'smtp');
 
@@ -43,8 +44,7 @@ test('chairman creating member does not leak plaintext password in welcome email
         'civil_status' => 'single',
         'email' => 'roberto.silang@example.com',
         'phone_number' => '09181234567',
-        'password' => 'SuperSecret123!',
-        'password_confirmation' => 'SuperSecret123!',
+        'agreement' => true,
         'monthly_income' => 25000,
     ];
 
@@ -54,24 +54,22 @@ test('chairman creating member does not leak plaintext password in welcome email
 
     $response->assertStatus(201);
 
-    Bus::assertDispatched(SendEmailJob::class, function (SendEmailJob $job) use ($payload) {
+    Bus::assertDispatched(SendEmailJob::class, function (SendEmailJob $job) {
         if ($job->toEmail !== 'roberto.silang@example.com') {
             return false;
         }
 
-        if (! ($job->mailable instanceof MemberWelcomeMail)) {
+        if (! ($job->mailable instanceof MemberPasswordSetupMail)) {
             return false;
         }
 
         $rendered = $job->mailable->render();
 
-        // Plaintext password MUST NOT appear anywhere in the rendered mail
-        return ! str_contains($rendered, $payload['password'])
-            && ! property_exists($job->mailable, 'plainPassword');
+        return str_contains($rendered, 'Set Your Password')
+            && str_contains($job->mailable->setupUrl, 'setup=1');
     });
 
-    // Check user in database: password must only be stored hashed
+    // The member must choose a password before signing in.
     $user = User::where('email', 'roberto.silang@example.com')->firstOrFail();
-    expect($user->password)->not->toBe($payload['password'])
-        ->and(password_verify($payload['password'], $user->password))->toBeTrue();
+    expect($user->must_set_password)->toBeTrue();
 });

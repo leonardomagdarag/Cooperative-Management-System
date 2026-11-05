@@ -48,7 +48,7 @@ test('public content api returns form, can_manage and turnstile key but hides th
 
     expect($data)->not->toHaveKey('sections')
         ->and($data['form'])->toBeArray()
-        ->and($data['availability']['registration'])->toEqual(['global' => true, 'member' => true])
+        ->and($data['availability'])->not->toHaveKey('registration')
         ->and($data['availability']['login'])->toEqual(['global' => true, 'member' => true, 'officer' => true])
         ->and($data['can_manage'])->toBeFalse();
 });
@@ -102,23 +102,21 @@ test('admin can save public content through the api', function () {
     )->toBe('Updated through React API');
 });
 
-test('admin can save the online member registration service availability setting', function () {
+test('admin can save the member login service availability setting', function () {
     $admin = makePublicContentEditor();
     $this->seed(SystemSettingSeeder::class);
 
     actingAs($admin)
         ->getJson('/api/settings/service-availability')
         ->assertOk()
-        ->assertJsonPath('data.registration.global', true)
-        ->assertJsonPath('data.registration.member', true)
+        ->assertJsonMissingPath('data.registration')
         ->assertJsonPath('data.login.member', true)
         ->assertJsonPath('data.login.officer', true);
 
     $response = actingAs($admin)
         ->putJson('/api/settings/service-availability', [
             'services' => [
-                'registration' => ['global' => true, 'member' => false],
-                'login' => ['global' => true, 'member' => true, 'officer' => true],
+                'login' => ['global' => true, 'member' => false, 'officer' => true],
                 'deposit' => ['global' => true, 'member' => true, 'officer' => true, 'counter' => true, 'online' => true],
                 'loan_application' => ['global' => true, 'member' => true, 'officer' => true],
                 'loan_payment' => ['global' => true, 'member' => true, 'officer' => true, 'counter' => true, 'online' => true],
@@ -136,7 +134,7 @@ test('admin can save the online member registration service availability setting
     app(CountersignService::class)->approve($request, $chairman);
 
     expect(
-        (bool) SystemSetting::get('service_registration_member_enabled', true)
+        (bool) SystemSetting::get('service_login_member_enabled', true)
     )->toBeFalse();
 });
 

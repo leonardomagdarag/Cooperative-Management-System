@@ -18,8 +18,6 @@ beforeEach(function () {
 function seedAuthAvailability(array $overrides = []): void
 {
     $defaults = [
-        'service_registration_enabled' => true,
-        'service_registration_member_enabled' => true,
         'service_login_enabled' => true,
         'service_login_member_enabled' => true,
         'service_login_officer_enabled' => true,
@@ -45,13 +43,11 @@ test('global login availability drives the public login route', function () {
     $this->get('/login')->assertOk();
 });
 
-test('global registration availability drives the public registration route', function () {
-    seedAuthAvailability(['service_registration_enabled' => false]);
-
-    $this->get('/register')->assertRedirect(route('home_page', absolute: false));
-
-    seedAuthAvailability(['service_registration_enabled' => true]);
-    $this->get('/register')->assertOk();
+test('public registration stays unavailable regardless of legacy settings', function () {
+    SystemSetting::set('service_registration_enabled', true);
+    SystemSetting::set('service_registration_member_enabled', true);
+    $this->get('/register')->assertNotFound();
+    $this->post('/register')->assertNotFound();
 });
 
 test('member login is blocked when member login availability is disabled', function () {
@@ -106,24 +102,20 @@ test('member login still works when only officer login availability is disabled'
         ->assertJsonMissing(['message' => 'Login is currently unavailable for your account. Please try again later.']);
 });
 
-test('public content availability reflects the registration and login toggles', function () {
+test('public content availability reflects login toggles', function () {
     seedAuthAvailability([
-        'service_registration_member_enabled' => false,
         'service_login_officer_enabled' => false,
     ]);
 
     $this->get('/api/public-content')
         ->assertOk()
-        ->assertJsonPath('availability.registration.global', true)
-        ->assertJsonPath('availability.registration.member', false)
+        ->assertJsonMissingPath('availability.registration')
         ->assertJsonPath('availability.login.officer', false)
         ->assertJsonPath('availability.login.member', true);
 });
 
-test('seeded system setting defaults enable registration and login for everyone', function () {
-    expect((bool) SystemSetting::get('service_registration_enabled', true))->toBeTrue()
-        ->and((bool) SystemSetting::get('service_registration_member_enabled', true))->toBeTrue()
-        ->and((bool) SystemSetting::get('service_login_enabled', true))->toBeTrue()
+test('seeded system setting defaults enable login for everyone', function () {
+    expect((bool) SystemSetting::get('service_login_enabled', true))->toBeTrue()
         ->and((bool) SystemSetting::get('service_login_member_enabled', true))->toBeTrue()
         ->and((bool) SystemSetting::get('service_login_officer_enabled', true))->toBeTrue();
 });

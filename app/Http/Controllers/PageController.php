@@ -44,11 +44,6 @@ class PageController extends Controller
         return $this->serveReactApp();
     }
 
-    public function register()
-    {
-        return $this->serveReactApp();
-    }
-
     public function forgotPassword()
     {
         return $this->serveReactApp();

@@ -12,7 +12,6 @@ const HomePage = lazy(() => import('./pages/public/HomePage'));
 const AboutPage = lazy(() => import('./pages/public/AboutPage'));
 const NewsPage = lazy(() => import('./pages/public/NewsPage'));
 const StoriesPage = lazy(() => import('./pages/public/StoriesPage'));
-const RegisterPage = lazy(() => import('./pages/public/RegisterPage'));
 const ContactPage = lazy(() => import('./pages/public/ContactPage'));
 const NotificationsPage = lazy(() => import('./pages/notifications/NotificationsPage'));
 const HistoryPage = lazy(() => import('./pages/history/HistoryPage'));
@@ -299,7 +298,6 @@ export default function App() {
                         <Route path="/about" element={<IsolatedPage><AboutPage /></IsolatedPage>} />
                         <Route path="/news" element={<IsolatedPage><NewsPage /></IsolatedPage>} />
                         <Route path="/stories" element={<IsolatedPage><StoriesPage /></IsolatedPage>} />
-                        <Route path="/register" element={<IsolatedPage><RegisterPage /></IsolatedPage>} />
                         <Route path="/contact" element={<IsolatedPage><ContactPage /></IsolatedPage>} />
                     </Route>
 

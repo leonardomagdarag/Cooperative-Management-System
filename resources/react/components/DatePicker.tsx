@@ -73,9 +73,12 @@ interface DatePickerProps {
     placeholder?: string;
     fromYear?: number;
     toYear?: number;
+    inputId?: string;
+    ariaInvalid?: boolean;
+    ariaDescribedBy?: string;
 }
 
-export default function DatePicker({ value, onChange, className = '', minDate, maxDate, clearable = true, placeholder = 'Select date', fromYear, toYear }: DatePickerProps) {
+export default function DatePicker({ value, onChange, className = '', minDate, maxDate, clearable = true, placeholder = 'Select date', fromYear, toYear, inputId, ariaInvalid, ariaDescribedBy }: DatePickerProps) {
     const [open, setOpen] = useState(false);
     const [text, setText] = useState<string>(() => (value ? formatDisplay(value) : ''));
     const selected = parseISODate(value);
@@ -200,6 +203,7 @@ export default function DatePicker({ value, onChange, className = '', minDate, m
         <div ref={wrapRef} className="relative">
             <div className="relative">
                 <input
+                    id={inputId}
                     ref={anchorRef}
                     type="text"
                     value={text}
@@ -210,6 +214,8 @@ export default function DatePicker({ value, onChange, className = '', minDate, m
                     autoComplete="off"
                     aria-haspopup="dialog"
                     aria-expanded={open}
+                    aria-invalid={ariaInvalid}
+                    aria-describedby={ariaDescribedBy}
                     aria-label={value ? `Selected date ${formatDisplay(value)}` : placeholder}
                     className={`pr-8 ${className}`}
                 />

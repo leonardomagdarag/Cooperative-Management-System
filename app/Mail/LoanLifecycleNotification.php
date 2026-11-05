@@ -16,7 +16,7 @@ class LoanLifecycleNotification extends Mailable
     public function __construct(
         public Loan $loan,
         public string $title,
-        public string $message,
+        public string $bodyMessage,
     ) {}
 
     public function envelope(): Envelope

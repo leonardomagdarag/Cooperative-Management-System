@@ -23,7 +23,6 @@ function HeroSection() {
     const { data: pc } = useQuery({ queryKey: ['public-content'], queryFn: () => api.get('/api/public-content') });
     const home = pc?.data?.form?.home || {};
     const heroImage = home.hero_image || '/images/hero_banner.jpg';
-    const registrationEnabled = pc?.data?.availability?.registration?.global !== false && pc?.data?.availability?.registration?.member !== false;
 
     return (
         <section className="relative flex min-h-[100vh] items-center overflow-hidden pt-24">
@@ -45,8 +44,8 @@ function HeroSection() {
                         <a href="#about" className="public-btn public-btn-primary">
                             {t('Explore membership')}
                         </a>
-                        <Link to={registrationEnabled ? '/register' : '#Contact'} className="public-btn public-btn-secondary">
-                            {t('Join now')}
+                        <Link to="/contact" className="public-btn public-btn-secondary">
+                            {t('Ask about joining at a branch')}
                         </Link>
                     </div>
                 </div>
@@ -151,8 +150,6 @@ function MissionVision() {
 
 function MembershipSection() {
     const { t } = useLanguage();
-    const { data: pc } = useQuery({ queryKey: ['public-content'], queryFn: () => api.get('/api/public-content') });
-    const registrationEnabled = pc?.data?.availability?.registration?.global !== false && pc?.data?.availability?.registration?.member !== false;
 
     const requirements = [
         'Must be at least 18 years old',
@@ -180,8 +177,8 @@ function MembershipSection() {
                         ))}
                     </div>
                     <div className="mt-10 text-center">
-                        <Link to={registrationEnabled ? '/register' : '#Contact'} className="public-btn public-btn-primary">
-                            {t('Join Now')}
+                        <Link to="/contact" className="public-btn public-btn-primary">
+                            {t('Contact us to join')}
                             <i className="fas fa-user-plus ml-2"></i>
                         </Link>
                     </div>

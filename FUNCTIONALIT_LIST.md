@@ -50,10 +50,10 @@ Public layout routes (`PublicLayout` in `App.tsx`, `PageController` in `web.php`
    - `GET /contact` — Contact (`ContactPage`)
    - `GET /api/public-content` — session-aware public CMS content (hero, stats, services, FAQs, board, etc.)
    - `GET /api/announcements/public` — paginated public/cooperative announcements (title, 200-char excerpt, type, image, creator).
-2. **Register as member (if enabled)**
-   - `GET /register` gated by `public.registration.enabled` middleware.
-   - `POST /register` (`LoginController@register`, `throttle:5,10`).
-   - Controlled by Service Availability toggles: `service_registration_enabled` (global) + `service_registration_member_enabled`.
+2. **Apply for membership at an office**
+   - A member visits the main office or a branch office. An authorized officer records the application and verifies the member's email address before creating the account.
+   - The member receives a one-time password setup link by email. The officer cannot enter or change the member's password.
+   - Public `GET /register` and `POST /register` return 404.
 3. **Login (if enabled)**
    - `GET /login` gated by `public.login.enabled`.
    - `POST /login` and `POST /api/login` (`throttle:5,1`).
@@ -191,7 +191,7 @@ The admin preset is limited to system configuration, backups, security logs, tro
   - `POST /api/backups/{tier}/run`, `POST /api/backups/{tier}/cleanup`, `GET /api/backups/{tier}/download`, `DELETE /api/backups/{tier}/backup`, `POST /api/backups/restore`.
   - Cron fallback: `GET /backup/ping?token=BACKUP_PING_TOKEN` → `backup:ping`.
 - **System settings & toggles:**
-  - `GET /api/settings/service-availability`, `PUT /api/settings/service-availability` (`settings.update`) — all services incl. registration/login (see §8).
+- `GET /api/settings/service-availability`, `PUT /api/settings/service-availability` (`settings.update`) — service and login controls (see §8).
   - `PUT /api/public-content` — edit public website CMS (`PublicContentPage`).
   - `POST/PUT/DELETE /api/loan-products*` — manage loan products (`LoanProductsPage`).
 - **Admin-owned system actions:** officer management, logs, backups, role/permission configuration, service availability, and system integrations. Operational member, branch, transaction, loan, and financial account work belongs to the manager and other assigned officers.
@@ -250,7 +250,7 @@ do not treat old secretary-specific behavior as a separate role contract.
 | Function | Endpoint / UI |
 |---|---|
 | Login / Logout | `POST /login`, `POST /api/login`, `POST /logout`, `POST /api/logout` |
-| Public registration toggle | `public.registration.enabled` + `service_registration_*` |
+| Member enrollment | Officer-created record, verified email, one-time password setup invitation |
 | Public login toggle | `public.login.enabled` + `service_login_*` |
 | Email verification | `GET /verify-email`, `GET /verify-email/{id}/{hash}`, `VerifyEmailPage`, resend API |
 | OTP challenge (login-sensitive actions) | `GET/POST /security/verify-otp`, resend, `SecurityOtpService`; successful challenge completion is required by the `otp.verified` middleware on protected routes |
@@ -347,9 +347,9 @@ do not treat old secretary-specific behavior as a separate role contract.
 - **Webhook:** `POST /api/webhooks/xendit` is a public callback-token-verified endpoint. Completion requires the Xendit session and underlying payment to match the stored transaction reference, PHP amount, and successful payment status. External checkout verification requires test credentials; never use live transactions for manual QA.
 
 ### 6.20 Supporting Security, Address, and Infrastructure Behaviors
-- **PSGC address lookup:** `GET /psgc/regions|provinces|cities|barangays` (and individual-code endpoints) supplies address selectors used by registration/profile/member workflows.
+- **PSGC address lookup:** `GET /psgc/regions|provinces|cities|barangays` (and individual-code endpoints) supplies address selectors used by profile and officer member workflows.
 - **Confirm password:** authenticated `GET/POST /confirm-password` validates `current_password`, records the confirmation timestamp, and redirects to the intended path. The current GET response is a simple server response rather than a dedicated React page.
-- **Turnstile and throttling:** Login, registration, and password recovery render the Turnstile widget when configured and submit its response; applicable auth/contact/OTP routes also carry Laravel throttles. Availability and configuration must be recorded during audit.
+- **Turnstile and throttling:** Login and password recovery render the Turnstile widget when configured and submit its response; applicable auth/contact/OTP routes also carry Laravel throttles. Availability and configuration must be recorded during audit.
 - **Staff member password OTP:** authorized staff can request a password-change OTP for a member through `POST /api/members/{user}/password/send-otp` (`members.update`).
 - **Withdrawal approval OTP:** authorized staff can request an approval OTP through `POST /api/services/transactions/{transaction}/send-otp`; threshold behavior is configuration-dependent.
 - **Backup scheduler fallback:** `GET /backup/ping?token=...` is an infrastructure endpoint protected by `BACKUP_PING_TOKEN`, not a normal browser workflow. It invokes `backup:ping` for due schedules.

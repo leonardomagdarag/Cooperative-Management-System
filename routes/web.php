@@ -47,19 +47,15 @@ Route::prefix('/')->group(function () {
         'login',
     ])->middleware('public.login.enabled')->name('login_page');
 
-    // Registration Page
-    Route::get('/register', [
-        PageController::class,
-        'register',
-    ])->middleware('public.registration.enabled')->name('register_page');
 });
 
 // === Authentication Routes ===
 
 // Handle Login Submission
 Route::post('/login', [LoginController::class, 'login'])->middleware(['public.login.enabled', 'throttle:5,1'])->name('login');
-// Handle Registration Submission
-Route::post('/register', [LoginController::class, 'register'])->middleware(['public.registration.enabled', 'throttle:5,10'])->name('register');
+// Membership applications are accepted at cooperative offices only. Keep the
+// explicit route ahead of the SPA catch-all so an old signup URL cannot boot it.
+Route::match(['get', 'post'], '/register', fn () => abort(404));
 Route::post('/contact', [PageController::class, 'submitContactMessage'])->middleware('throttle:5,10')->name('contact.send');
 // Handle Logout
 Route::post('/logout', [LoginController::class, 'logout'])->name('logout');

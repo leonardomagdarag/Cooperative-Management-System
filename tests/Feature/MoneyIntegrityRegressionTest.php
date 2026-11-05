@@ -21,6 +21,73 @@ beforeEach(function () {
     $this->seed(SystemSettingSeeder::class);
 });
 
+test('officer counter deposit returns success after crediting exactly once', function () {
+    $officer = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
+    $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $account = Account::where('user_id', $member->id)->where('account_type', 'savings')->firstOrFail();
+    $balance = (float) $account->balance;
+    $payload = [
+        'member_id' => $member->id,
+        'amount' => 250,
+        'account_type' => 'savings',
+        'transaction_mode' => 'counter',
+        'client_request_id' => 'counter_deposit_001',
+    ];
+
+    $this->actingAs($officer)->postJson('/api/services/deposit', $payload)
+        ->assertCreated()
+        ->assertJsonPath('data.status', 'completed');
+    $this->postJson('/api/services/deposit', $payload)->assertOk();
+
+    expect((float) $account->fresh()->balance)->toBe($balance + 250)
+        ->and(Transaction::where('client_request_id', 'counter_deposit_001')->count())->toBe(1);
+});
+
+test('officer counter loan payment validates allocations before completing payment', function () {
+    $officer = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
+    $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $account = Account::where('user_id', $member->id)->where('account_type', 'savings')->firstOrFail();
+    $balance = (float) $account->balance;
+    $loan = Loan::factory()->create([
+        'user_id' => $member->id,
+        'loan_amount' => 12000,
+        'interest_rate' => 0,
+        'term_months' => 12,
+        'loan_status' => 'active',
+        'disbursed_at' => now()->subMonths(3),
+        'penalty_amount' => 0,
+    ]);
+    $payload = [
+        'member_id' => $member->id,
+        'loan_id' => $loan->id,
+        'amount' => 1000,
+        'installment_allocations' => [['period' => 1, 'amount' => 1000]],
+        'penalty_amount' => 0,
+        'transaction_mode' => 'counter',
+        'client_request_id' => 'counter_loan_001',
+    ];
+
+    $this->actingAs($officer)->postJson('/api/services/loan-payment', $payload)
+        ->assertCreated()
+        ->assertJsonPath('data.status', 'completed');
+    $this->postJson('/api/services/loan-payment', $payload)->assertOk();
+
+    $payment = Transaction::where('client_request_id', 'counter_loan_001')->sole();
+    expect($payment->account_id)->toBeNull()
+        ->and((float) $account->fresh()->balance)->toBe($balance)
+        ->and((float) $loan->fresh()->schedulePaid())->toBe(1000.0)
+        ->and(DB::table('loan_payment_installment_allocations')->where('transaction_id', $payment->id)->value('amount'))->toBe(1000);
+
+    $this->postJson('/api/services/loan-payment', [
+        ...$payload,
+        'amount' => 1001,
+        'installment_allocations' => [['period' => 1, 'amount' => 1001]],
+        'client_request_id' => 'counter_loan_002',
+    ])->assertStatus(422);
+
+    expect(Transaction::where('client_request_id', 'counter_loan_002')->exists())->toBeFalse();
+});
+
 test("a member's own counter deposit remains pending without changing the account balance", function () {
     $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
     $account = Account::where('user_id', $member->id)->where('account_type', 'savings')->firstOrFail();

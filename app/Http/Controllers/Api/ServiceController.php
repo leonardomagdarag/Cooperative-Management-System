@@ -184,10 +184,6 @@ class ServiceController extends Controller
             return $transaction;
         });
 
-        if ($transaction->status === 'completed') {
-            app(CollectionRunService::class)->notifyOpenRunOfficersOfExternalPayment($loan->fresh(), (float) $transaction->amount);
-        }
-
         return response()->json([
             'message' => $status === 'completed' ? 'Counter deposit recorded and credited.' : 'Deposit submitted and is awaiting manager or chairman approval.',
             'data' => $transaction,
@@ -505,6 +501,8 @@ class ServiceController extends Controller
                 : min((float) $lockedLoan->accruedPenalty(), (float) $validated['amount']);
             $allocations = $validated['installment_allocations'] ?? [];
 
+            // Keep the new payment out of the completed schedule until its
+            // installment allocation has been validated and recorded.
             $transaction = Transaction::create([
                 'account_id' => null,
                 'loan_id' => $loan->id,
@@ -513,7 +511,7 @@ class ServiceController extends Controller
                 'transaction_type' => 'loan_payment',
                 'amount' => $validated['amount'],
                 'penalty_amount' => $penaltyAmount,
-                'status' => $status,
+                'status' => 'pending',
                 'transaction_mode' => $validated['transaction_mode'],
                 'note' => $validated['note'] ?? null,
                 'proof_of_payment_path' => $proofPath,
@@ -527,6 +525,7 @@ class ServiceController extends Controller
             }
 
             if ($status === 'completed') {
+                $transaction->update(['status' => 'completed']);
                 $lockedLoan->refresh();
                 if ($lockedLoan->remainingBalance() <= 0 && $lockedLoan->loan_status !== 'paid_off') {
                     $lockedLoan->update(['loan_status' => 'paid_off']);
@@ -751,7 +750,7 @@ class ServiceController extends Controller
             }
         }
 
-        $transactions = Transaction::with(['account.user.personalData', 'loan', 'recordedBy.personalData', 'branch'])
+        $transactions = Transaction::with(['account.user.personalData', 'loan.user.personalData', 'recordedBy.personalData', 'branch'])
             ->where('status', 'pending')
             ->whereIn('transaction_type', $allowedTypes);
 
@@ -790,6 +789,10 @@ class ServiceController extends Controller
                     ->orWhereHas('account.user.personalData', function ($p) use ($search) {
                         $p->where('first_name', 'like', "%{$search}%")
                             ->orWhere('last_name', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('loan.user.personalData', function ($p) use ($search) {
+                        $p->where('first_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%");
                     });
             });
         }
@@ -800,7 +803,8 @@ class ServiceController extends Controller
             ->map(fn ($t) => [
                 'id' => $t->id, 'transaction_number' => $t->transaction_number,
                 'transaction_type' => $t->transaction_type, 'amount' => $t->amount,
-                'status' => $t->status, 'account_holder' => $t->account?->user ? trim(($t->account->user->personalData->first_name ?? '').' '.($t->account->user->personalData->last_name ?? '')) : null,
+                'status' => $t->status, 'account_holder' => ($holder = $t->account?->user ?? $t->loan?->user)
+                    ? trim(($holder->personalData->first_name ?? '').' '.($holder->personalData->last_name ?? '')) : null,
                 'created_at' => $t->created_at->toISOString(),
                 'transaction_mode' => $t->transaction_mode,
                 'provider_payment_verified' => filled($t->xendit_payment_id),

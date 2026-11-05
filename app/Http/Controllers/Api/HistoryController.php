@@ -18,7 +18,14 @@ class HistoryController extends Controller
         $userAccounts = $accounts->pluck('id');
 
         $query = Transaction::with(['account', 'loan', 'recordedBy'])
-            ->whereIn('account_id', $userAccounts);
+            ->where(function ($query) use ($userAccounts, $user) {
+                $query->whereIn('account_id', $userAccounts)
+                    ->orWhere(function ($query) use ($user) {
+                        $query->whereNull('account_id')
+                            ->where('transaction_type', 'loan_payment')
+                            ->whereHas('loan', fn ($loan) => $loan->where('user_id', $user->id));
+                    });
+            });
 
         // Category filter
         $category = $request->string('category')->toString();

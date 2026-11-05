@@ -263,6 +263,7 @@ Route::middleware(['web', 'auth:web', 'otp.verified', 'verified'])->group(functi
     Route::get('/members/search', [MemberController::class, 'search']);
     Route::post('/members/export', [MemberController::class, 'export']);
     Route::post('/members/{user}/password/send-otp', [MemberController::class, 'sendPasswordChangeOtp']);
+    Route::post('/members/{user}/resend-invitation', [MemberController::class, 'resendPasswordSetupInvitation'])->middleware('throttle:3,10');
     Route::post('/members/{user}/approve', [MemberController::class, 'approve']);
     Route::post('/members/{user}/decline', [MemberController::class, 'decline']);
     Route::post('/members/{user}/toggle-special-loan', [MemberController::class, 'toggleSpecialLoanEligibility']);

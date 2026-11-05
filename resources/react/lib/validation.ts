@@ -207,13 +207,8 @@ export const memberSchema = z.object({
     civil_status: CIVIL_STATUS_SCHEMA,
     email: EMAIL_SCHEMA,
     phone_number: phoneString(true),
-    password: passwordPolicy,
-    password_confirmation: z.string(),
     monthly_income: INCOME_SCHEMA,
     branch_id: optionalId,
-}).refine(d => d.password === d.password_confirmation, {
-    message: 'Passwords do not match',
-    path: ['password_confirmation'],
 });
 
 export const memberStepSchemas: Record<string, z.ZodTypeAny> = {
@@ -257,13 +252,6 @@ export const memberStepSchemas: Record<string, z.ZodTypeAny> = {
         monthly_income: INCOME_SCHEMA,
         branch_id: optionalId,
     }),
-    login: z.object({
-        password: passwordPolicy,
-        password_confirmation: z.string(),
-    }).refine(d => d.password === d.password_confirmation, {
-        message: 'Passwords do not match',
-        path: ['password_confirmation'],
-    }),
     beneficiaries: z.object({
         beneficiaries: z.array(beneficiarySchema).max(5, 'A member may have at most 5 beneficiaries'),
     }),
@@ -284,7 +272,6 @@ export const memberEditSchema = z.object({
     email: EMAIL_SCHEMA,
     phone_number: phoneString(false),
     facebook_link: FACEBOOK_LINK_SCHEMA,
-    password: optionalPassword,
     branch_id: optionalId,
 });
 
@@ -534,65 +521,6 @@ export const announcementSchema = z.object({
 export const roleSchema = z.object({
     name: requiredString('Role name is required', 60).regex(/^[a-zA-Z0-9 _-]+$/, 'Role name may only contain letters, numbers, spaces, dashes and underscores'),
 });
-
-export const registerSchema = z.object({
-    first_name: requiredString('First name is required'),
-    middle_name: optionalString(255),
-    last_name: requiredString('Last name is required'),
-    gender: enumFrom(['Male', 'Female', 'Other'], 'Select a gender'),
-    birthdate: dateOrEmpty.refine(v => v !== '' && new Date(v) < new Date(), { message: 'Birthdate must be before today' }),
-    age: z.coerce.number().int('Age must be a whole number').min(18, 'You must be at least 18 years old'),
-    phone: requiredString('Phone number is required', 20),
-    email: z.string().trim().email('Enter a valid email address').min(1, 'Email is required').max(255, 'Maximum of 255 characters'),
-    region: z.string().trim().min(1, 'Select your region'),
-    province: optionalString(100),
-    city: z.string().trim().min(1, 'Select your city/municipality'),
-    barangay: z.string().trim().min(1, 'Select your barangay'),
-    street: requiredString('Street address is required'),
-    zip_code: requiredString('ZIP code is required', 10),
-    occupation: requiredString('Occupation is required'),
-    monthly_income: requiredString('Select an income range'),
-    membership_type: enumFrom(['Regular', 'Associate'], 'Select a membership type'),
-    referred_by: optionalString(255),
-    branch_id: optionalId,
-    password: passwordPolicy,
-    password_confirmation: requiredString('Please confirm your password'),
-    terms: z.boolean().refine(v => v === true, { message: 'You must accept the terms and conditions' }),
-}).refine(d => d.password === d.password_confirmation, { message: 'Passwords do not match', path: ['password_confirmation'] });
-
-export const registerStepSchemas: Record<number, z.ZodTypeAny> = {
-    0: z.object({
-        first_name: requiredString('First name is required'),
-        middle_name: optionalString(255),
-        last_name: requiredString('Last name is required'),
-        gender: enumFrom(['Male', 'Female', 'Other'], 'Select a gender'),
-        birthdate: dateOrEmpty.refine(v => v !== '' && new Date(v) < new Date(), { message: 'Birthdate must be before today' }),
-        age: z.coerce.number().int('Age must be a whole number').min(18, 'You must be at least 18 years old'),
-    }),
-    1: z.object({
-        phone: requiredString('Phone number is required', 20),
-        email: z.string().trim().email('Enter a valid email address').min(1, 'Email is required').max(255, 'Maximum of 255 characters'),
-        region: z.string().trim().min(1, 'Select your region'),
-        province: optionalString(100),
-        city: z.string().trim().min(1, 'Select your city/municipality'),
-        barangay: z.string().trim().min(1, 'Select your barangay'),
-        street: requiredString('Street address is required'),
-        zip_code: requiredString('ZIP code is required', 10),
-    }),
-    2: z.object({
-        occupation: requiredString('Occupation is required'),
-        monthly_income: requiredString('Select an income range'),
-        membership_type: enumFrom(['Regular', 'Associate'], 'Select a membership type'),
-        referred_by: optionalString(255),
-        branch_id: optionalId,
-    }),
-    3: z.object({
-        password: passwordPolicy,
-        password_confirmation: requiredString('Please confirm your password'),
-        terms: z.boolean().refine(v => v === true, { message: 'You must accept the terms and conditions' }),
-        privacy_acknowledged: z.boolean().refine(v => v === true, { message: 'Please acknowledge the Data Privacy Policy' }),
-    }).refine(d => d.password === d.password_confirmation, { message: 'Passwords do not match', path: ['password_confirmation'] }),
-};
 
 export const loanProductSchema = z.object({
     code: requiredString('Code is required', 50).regex(/^[a-zA-Z0-9_-]+$/, 'Code may only contain letters, numbers, dashes and underscores').min(2, 'Code must be at least 2 characters'),
