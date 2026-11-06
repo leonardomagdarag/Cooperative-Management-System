@@ -278,7 +278,7 @@ export default function App() {
                         </div>
                         <h1 className="mt-5 text-xl font-medium text-slate-900">This session has ended</h1>
                         <p className="mt-2 text-sm leading-6 text-slate-600">
-                            Your account was signed in on another device, so this session has ended. If you did not approve that sign-in, reset your password now.
+                            This session ended because it was inactive too long or your account was signed in on another device.
                         </p>
                         <div className="mt-6 flex flex-wrap justify-center gap-3">
                         <button type="button" onClick={resetPassword} className="rounded-lg bg-red-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2">

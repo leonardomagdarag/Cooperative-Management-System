@@ -110,6 +110,7 @@ Route::middleware(['web', 'auth:web'])->group(function () {
 
 Route::middleware(['web', 'auth:web', 'otp.verified'])->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
+    Route::post('/session/activity', fn () => response()->noContent());
     Route::get('/login-handoffs', [AuthController::class, 'loginHandoffs']);
     Route::post('/login-handoffs/{loginHandoff}/decision', [AuthController::class, 'decideLoginHandoff']);
 });

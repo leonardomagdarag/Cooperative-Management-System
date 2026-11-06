@@ -5,6 +5,7 @@ use App\Http\Middleware\EnsureCurrentSession;
 use App\Http\Middleware\EnsureOtpVerified;
 use App\Http\Middleware\EnsureProfileCompleted;
 use App\Http\Middleware\EnsurePublicLoginEnabled;
+use App\Http\Middleware\EnsureSessionActivity;
 use App\Http\Middleware\RoleMiddleware;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
@@ -22,7 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->web(append: [EnsureCurrentSession::class]);
+        $middleware->web(append: [EnsureCurrentSession::class, EnsureSessionActivity::class]);
 
         $middleware->trustProxies(
             at: '*',

@@ -237,8 +237,6 @@ export default function Header() {
 
                     <NotificationDropdown />
 
-                    <LanguageSwitcher compact />
-
                     <button
                         type="button"
                         onClick={() => navigate('/dashboard/settings?tab=help-support', { state: { tab: 'help-support' } })}
@@ -248,6 +246,8 @@ export default function Header() {
                     >
                         <i className="fas fa-question-circle text-base"></i>
                     </button>
+
+                    <LanguageSwitcher compact />
 
                     <button
                         onClick={() => navigate('/dashboard/profile')}

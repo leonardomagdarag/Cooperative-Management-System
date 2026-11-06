@@ -67,12 +67,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (!user || sessionEnded) return;
 
+        let lastInteractionAt = Date.now();
+        let lastActivityPingAt = 0;
+        const markInteraction = () => {
+            lastInteractionAt = Date.now();
+        };
+        const activityEvents: Array<keyof DocumentEventMap> = ['pointerdown', 'pointermove', 'keydown', 'touchstart', 'scroll', 'wheel'];
+        activityEvents.forEach((event) => document.addEventListener(event, markInteraction as EventListener, { passive: true }));
+
+        const activityInterval = window.setInterval(() => {
+            const now = Date.now();
+            if (now - lastInteractionAt < 20_000 && now - lastActivityPingAt >= 15_000) {
+                lastActivityPingAt = now;
+                void api.post('/api/session/activity').catch(() => {});
+            }
+        }, 15_000);
+
         const interval = window.setInterval(() => {
             void api.get('/api/user').catch(() => {});
             void api.get('/api/login-handoffs').then(({ data }) => setPendingLoginHandoff(data.request)).catch(() => {});
         }, 5_000);
 
-        return () => window.clearInterval(interval);
+        return () => {
+            activityEvents.forEach((event) => document.removeEventListener(event, markInteraction as EventListener));
+            window.clearInterval(activityInterval);
+            window.clearInterval(interval);
+        };
     }, [user?.id, sessionEnded]);
 
     const decideLoginHandoff = async (id: number, decision: 'approve' | 'reject') => {

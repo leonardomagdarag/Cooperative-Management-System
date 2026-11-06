@@ -25,7 +25,7 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response?.status === 401 && error.response?.data?.reason === 'session_ended') {
+        if (error.response?.status === 401 && ['session_ended', 'session_expired'].includes(error.response?.data?.reason)) {
             window.dispatchEvent(new CustomEvent('auth:session-ended'));
         }
         // Don't hard-redirect on 401 — let React handle routing via AuthContext.
