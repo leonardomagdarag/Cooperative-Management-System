@@ -64,7 +64,7 @@ const REPORTS: Report[] = [
         exportType: "balance_sheet",
         permission: "reports.financial",
         description: "Management report - simplified financial position.",
-        note: "Management report using simplified ledger calculations. Cash is calculated through the selected end date; savings, share capital and loan balances are current. Retained earnings is a residual. This is not an audited or fully historical financial statement.",
+        note: "Statement of financial position as of selected date. Cash reflects actual cash transactions (excluding member interest credits and savings-credited releases); loans receivable reflects active disbursed principal; savings and share capital reflect balances through the selected date. Retained earnings represents accumulated net surplus.",
     },
     {
         key: "member_savings",
@@ -1181,8 +1181,7 @@ function BalanceSheet({ data }: { data: any }) {
     return (
         <div className="space-y-4">
             <p className="text-sm text-gray-500">
-                Cash through {date(data?.as_of)} / balance figures current at
-                generation
+                Financial position as of {date(data?.as_of)}
             </p>
             <div className="grid gap-4 xl:grid-cols-3">
                 {["assets", "liabilities", "equity"].map((section) => (

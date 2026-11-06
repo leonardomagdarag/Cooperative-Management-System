@@ -98,8 +98,8 @@ test('accountant can approve a pending application', function () {
     $response->assertOk()->assertJsonPath('message', 'Application approved and activation email sent.');
 
     expect($applicant->fresh()->account_status)->toBe('active')
-        ->and(Account::where('user_id', $applicant->id)->where('account_type', 'savings')->where('balance', 500)->exists())->toBeTrue()
-        ->and(Account::where('user_id', $applicant->id)->where('account_type', 'share-capital')->where('balance', 500)->exists())->toBeTrue();
+        ->and(Account::where('user_id', $applicant->id)->where('account_type', 'savings')->where('balance', 0)->exists())->toBeTrue()
+        ->and(Account::where('user_id', $applicant->id)->where('account_type', 'share-capital')->where('balance', 0)->exists())->toBeTrue();
 
     $application->refresh();
     expect($application->status)->toBe('approved');

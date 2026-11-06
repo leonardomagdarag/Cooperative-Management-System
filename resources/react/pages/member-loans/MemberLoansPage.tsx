@@ -62,12 +62,12 @@ export default function MemberLoansPage() {
                                     <tr key={l.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => { setSelected(l); setTab('details'); }}>
                                         <td className="px-6 py-3 font-mono text-xs font-medium whitespace-nowrap truncate max-w-[160px]" title={l.loan_number}>{l.loan_number}</td>
                                         <td className="px-6 py-3 whitespace-nowrap truncate max-w-[220px]" title={l.loan_type_label || l.loan_type}>{l.loan_type_label || l.loan_type}</td>
-                                        <td className="px-6 py-3 text-right font-medium">₱{Number(l.loan_amount).toLocaleString()}</td>
+                                        <td className="px-6 py-3 text-right font-medium">â‚±{Number(l.loan_amount).toLocaleString()}</td>
                                         <td className="px-6 py-3 text-center">{Number(l.interest_rate).toFixed(1)}%</td>
                                         <td className="px-6 py-3 text-center">
                                             <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${loanStatusMeta(l.loan_status).className}`}>{t(loanStatusMeta(l.loan_status).label)}</span>
                                         </td>
-                                        <td className="px-6 py-3 text-center text-sm">{l.due_date || '—'}</td>
+                                        <td className="px-6 py-3 text-center text-sm">{l.due_date || 'â€”'}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -82,7 +82,7 @@ export default function MemberLoansPage() {
                     <div className="w-full max-w-5xl h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
                         <div className="bg-linear-to-r from-emerald-600 to-cyan-600 px-6 py-4 text-white flex items-center justify-between shrink-0">
                             <div>
-                                <h2 className="text-lg font-bold">{t('Loan Details')} — {selected.loan_number}</h2>
+                                <h2 className="text-lg font-bold">{t('Loan Details')} â€” {selected.loan_number}</h2>
                                 <p className="text-sm text-white/80">{selected.loan_type_label || selected.loan_type}</p>
                             </div>
                             <button onClick={() => setSelected(null)} aria-label="Close loan details" className="text-white/80 hover:text-white cursor-pointer"><i className="fas fa-times text-xl"></i></button>
@@ -139,10 +139,10 @@ export default function MemberLoansPage() {
                                             <dl className="space-y-2 text-sm">
                                                 <div className="flex justify-between"><dt className="text-gray-500">Type</dt><dd className="font-medium">{selected.loan_type_label || selected.loan_type}</dd></div>
                                                 <div className="flex justify-between"><dt className="flex items-center gap-1 text-gray-500">Principal <HelpTip text="The amount you borrowed, before interest." /></dt><dd className="font-medium">{formatPeso(selected.principal_amount || selected.loan_amount)}</dd></div>
-                                                <div className="flex justify-between"><dt className="flex items-center gap-1 text-gray-500">Interest Rate <HelpTip text="The percentage charged on the loan, applied over the term." /></dt><dd className="font-medium">{Number(selected.interest_rate).toFixed(1)}%</dd></div>
+                                                <div className="flex justify-between"><dt className="flex items-center gap-1 text-gray-500">Interest Rate <HelpTip text="The monthly flat rate charged on the loan, applied over the term." /></dt><dd className="font-medium">{Number(selected.interest_rate).toFixed(1)}% / mo (Flat)</dd></div>
                                                 <div className="flex justify-between"><dt className="flex items-center gap-1 text-gray-500">Term <HelpTip text="How long you have to repay the loan, in months." /></dt><dd className="font-medium">{selected.term_months} months</dd></div>
                                                 <div className="flex justify-between"><dt className="flex items-center gap-1 text-gray-500">Payment Frequency <HelpTip text="How often an installment is due (for example, monthly)." /></dt><dd className="font-medium capitalize">{selected.payment_frequency}</dd></div>
-                                                <div className="flex justify-between"><dt className="text-gray-500">Overdue Penalty</dt><dd className="font-medium">{Number(selected.penalty_amount) > 0 ? `${selected.penalty_type === 'percent' ? `${selected.penalty_amount}%` : formatPeso(selected.penalty_amount)} · ${selected.penalty_frequency === 'per_due' ? 'per overdue installment' : selected.penalty_frequency}` : 'None'}</dd></div>
+                                                <div className="flex justify-between"><dt className="text-gray-500">Overdue Penalty</dt><dd className="font-medium">{Number(selected.penalty_amount) > 0 ? `${selected.penalty_type === 'percent' ? `${selected.penalty_amount}%` : formatPeso(selected.penalty_amount)} Â· ${selected.penalty_frequency === 'per_due' ? 'per overdue installment' : selected.penalty_frequency}` : 'None'}</dd></div>
                                                 <div className="flex justify-between"><dt className="text-gray-500">{t('Accrued Penalties')}</dt><dd className="font-medium text-amber-700">{formatPeso(selected.accrued_penalty || 0)}</dd></div>
                                                 <div className="flex justify-between"><dt className="text-gray-500">{t('Amount Due Now')}</dt><dd className="font-medium">{formatPeso(selected.amount_due || 0)}</dd></div>
                                                 {selected.estimated_interest > 0 && <><div className="flex justify-between"><dt className="flex items-center gap-1 text-gray-500">Est. Interest <HelpTip text="Estimated total interest over the whole term." /></dt><dd className="font-medium">{formatPeso(selected.estimated_interest)}</dd></div><div className="flex justify-between"><dt className="flex items-center gap-1 text-gray-500">Est. Total Repayment <HelpTip text="Principal plus estimated interest." /></dt><dd className="font-medium">{formatPeso(selected.estimated_total_repayment)}</dd></div></>}
@@ -153,8 +153,8 @@ export default function MemberLoansPage() {
                                             <h3 className="font-semibold text-gray-900 mb-3">{t('Important Dates')}</h3>
                                             <dl className="space-y-2 text-sm">
                                                 <div className="flex justify-between"><dt className="text-gray-500">Applied</dt><dd className="font-medium">{selected.applied_at}</dd></div>
-                                                <div className="flex justify-between"><dt className="text-gray-500">Approved</dt><dd className="font-medium">{selected.approved_at || '—'}</dd></div>
-                                                <div className="flex justify-between"><dt className="flex items-center gap-1 text-gray-500">Due Date <HelpTip text="The final date by which the whole loan should be repaid." /></dt><dd className="font-medium">{selected.due_date || '—'}</dd></div>
+                                                <div className="flex justify-between"><dt className="text-gray-500">Approved</dt><dd className="font-medium">{selected.approved_at || 'â€”'}</dd></div>
+                                                <div className="flex justify-between"><dt className="flex items-center gap-1 text-gray-500">Due Date <HelpTip text="The final date by which the whole loan should be repaid." /></dt><dd className="font-medium">{selected.due_date || 'â€”'}</dd></div>
                                                 {selected.approved_by && <div className="flex justify-between"><dt className="text-gray-500">Approved By</dt><dd className="font-medium">{selected.approved_by}</dd></div>}
                                             </dl>
                                         </div>

@@ -248,10 +248,10 @@ class InterestService
 
     private function note(string $accountType, string $interval, float $rate, string $periodLabel): string
     {
-        $label = $accountType === 'share-capital' ? 'Share capital' : 'Savings';
+        $label = $accountType === 'share-capital' ? 'Share capital dividend' : 'Savings interest';
 
         return sprintf(
-            '%s interest credit — %s%% p.a. (%s) for %s.',
+            '%s credit — %s%% p.a. (%s) for %s.',
             $label,
             rtrim(rtrim(number_format($rate, 4, '.', ''), '0'), '.'),
             $interval,

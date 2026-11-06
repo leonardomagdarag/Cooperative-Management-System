@@ -48,10 +48,10 @@ interface LoanOption {
     }>;
 }
 
-const peso = (n: number | string) => `₱${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+const peso = (n: number | string) => `â‚±${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 const padId = (n: number | string) => String(n).padStart(8, '0');
 const formatDateTime = (iso?: string) => new Date(iso ?? new Date().toISOString()).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
-const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.replace(/_/g, ' ');
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ');
 
 const modeLabels: Record<string, { title: string; sub: string; icon: string }> = {
     counter: { title: 'Over the Counter', sub: 'Visit our office to make payment', icon: 'fa-cash-register' },
@@ -68,7 +68,7 @@ function isDueDateOnOrBeforeToday(value: string | null) {
     return due <= today;
 }
 
-function overdueSchedules(loan?: LoanOption) {
+function unpaidSchedules(loan?: LoanOption) {
     if (!loan?.payment_schedule) return [];
     return loan.payment_schedule
         .map(installment => ({
@@ -78,8 +78,9 @@ function overdueSchedules(loan?: LoanOption) {
             paid: installment.paid,
             amount_due: Math.round(Number(installment.amount_due) * 100) / 100,
             penalty_amount: Math.round(Number(installment.penalty ?? 0) * 100) / 100,
+            is_overdue: isDueDateOnOrBeforeToday(installment.due_date),
         }))
-        .filter(installment => isDueDateOnOrBeforeToday(installment.due_date) && installment.amount_due > 0.009);
+        .filter(installment => installment.amount_due > 0.009);
 }
 
 export default function LoanPaymentWizard({ onComplete, onRequestClose, selectedMember, onDirtyChange, availability }: {
@@ -135,7 +136,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
     const activeLoans = loans.filter(l => l.loan_status === 'active');
     const selectedLoan = activeLoans.find(l => l.id === Number(form.loan_id));
 
-    const availableSchedules = useMemo(() => overdueSchedules(selectedLoan), [selectedLoan]);
+    const availableSchedules = useMemo(() => unpaidSchedules(selectedLoan), [selectedLoan]);
     const selectedSchedules = availableSchedules.filter(s => selectedPeriods.includes(s.period));
     const installmentAmount = selectedSchedules.reduce((sum, schedule) => sum + (Number(allocationAmounts[schedule.period]) || 0), 0);
     const penaltyAmount = Math.round(selectedSchedules.reduce((sum, schedule) => sum + schedule.penalty_amount, 0) * 100) / 100;
@@ -154,13 +155,26 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
     const toggleSchedule = (schedule: typeof availableSchedules[number], checked: boolean) => {
         setErrors(prev => ({ ...prev, installments: '', amount: '' }));
         if (checked) {
-            setSelectedPeriods(periods => periods.includes(schedule.period) ? periods : [...periods, schedule.period]);
-            setAllocationAmounts(amounts => ({ ...amounts, [schedule.period]: schedule.amount_due.toFixed(2) }));
-        } else {
-            setSelectedPeriods(periods => periods.filter(period => period !== schedule.period));
+            const toSelect = availableSchedules.filter(s => s.period <= schedule.period);
+            setSelectedPeriods(toSelect.map(s => s.period));
             setAllocationAmounts(amounts => {
                 const next = { ...amounts };
-                delete next[schedule.period];
+                toSelect.forEach(s => {
+                    if (!next[s.period]) {
+                        next[s.period] = s.amount_due.toFixed(2);
+                    }
+                });
+                return next;
+            });
+        } else {
+            const toKeep = availableSchedules.filter(s => s.period < schedule.period && selectedPeriods.includes(s.period));
+            const keepPeriods = toKeep.map(s => s.period);
+            setSelectedPeriods(keepPeriods);
+            setAllocationAmounts(amounts => {
+                const next: Record<number, string> = {};
+                keepPeriods.forEach(p => {
+                    if (amounts[p]) next[p] = amounts[p];
+                });
                 return next;
             });
         }
@@ -180,12 +194,35 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
     const validateStepOne = () => {
         const next: Record<string, string> = {};
         if (!form.loan_id) next.loan_id = t('Please select a loan.');
-        if (selectedPeriods.length === 0) next.installments = t('Select at least one overdue installment.');
-        else if (selectedSchedules.length !== selectedPeriods.length) next.installments = t('The loan schedule changed. Review the overdue installments and select them again.');
+        if (selectedPeriods.length === 0) next.installments = t('Select at least one installment to pay.');
+        else if (selectedSchedules.length !== selectedPeriods.length) next.installments = t('The loan schedule changed. Review the installments and select them again.');
+
+        if (!next.installments) {
+            for (let i = 0; i < selectedSchedules.length; i++) {
+                const expected = availableSchedules[i];
+                if (selectedSchedules[i]?.period !== expected?.period) {
+                    next.installments = t('Earlier installments must be paid first. You cannot skip installment {period}.').replace('{period}', String(expected?.period));
+                    break;
+                }
+            }
+        }
+
         if (!next.installments && selectedSchedules.some(schedule => {
             const amount = Number(allocationAmounts[schedule.period]);
             return !Number.isFinite(amount) || amount <= 0 || amount > schedule.amount_due;
         })) next.amount = t('Enter a positive amount no greater than the unpaid amount for each selected installment.');
+
+        if (!next.installments && !next.amount && selectedSchedules.length > 1) {
+            for (let i = 0; i < selectedSchedules.length - 1; i++) {
+                const sched = selectedSchedules[i];
+                const amount = Number(allocationAmounts[sched.period]);
+                if (amount < sched.amount_due - 0.01) {
+                    next.amount = t('Installment {period} must be paid in full before allocating payment to subsequent installments.').replace('{period}', String(sched.period));
+                    break;
+                }
+            }
+        }
+
         if (!next.installments && !next.amount && totalAmount > Number(selectedLoan?.remaining_balance ?? 0)) {
             next.amount = t('Payment exceeds remaining loan balance ({amount})').replace('{amount}', peso(selectedLoan?.remaining_balance ?? 0));
         }
@@ -374,12 +411,12 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
 
                     <div>
                         <div className="mb-2 flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-1.5"><label className="text-sm font-medium text-gray-700">{t('Overdue installments *')}</label><HelpTip text="Ito ang mga hulog na lampas na sa due date. Piliin ang babayaran at tingnan kung may penalty bago mag-confirm." /></div>
-                            {availableSchedules.length > 0 && <span className="text-xs text-gray-700">{t('Select one or more')}</span>}
+                            <div className="flex items-center gap-1.5"><label className="text-sm font-medium text-gray-700">{t('Installments to pay *')}</label><HelpTip text="Piliin ang mga hulog na babayaran (overdue o advance). Babayaran ang mga hulog nang sunod-sunod." /></div>
+                            {availableSchedules.length > 0 && <span className="text-xs text-gray-700">{t('Select one or more in order')}</span>}
                         </div>
                         {availableSchedules.length === 0 ? (
                             <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                                {t(form.loan_id ? 'No unpaid installments are due today or overdue for this loan.' : 'Select a loan to see overdue installments.')}
+                                {t(form.loan_id ? 'No unpaid installments remain for this loan.' : 'Select a loan to see installments.')}
                             </p>
                         ) : (
                             <div className="space-y-3">
@@ -398,7 +435,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                                                 <span className="min-w-0 flex-1">
                                                     <span className="flex flex-wrap items-center justify-between gap-2 text-sm">
                                                         <span className="font-semibold text-gray-900">Installment {schedule.period}</span>
-                                                        <span className="text-red-700">Due {schedule.due_date}</span>
+                                                        <span className={schedule.is_overdue ? "text-red-700" : "text-emerald-700 font-medium"}>{schedule.is_overdue ? `Due ${schedule.due_date}` : `Advance · Due ${schedule.due_date}`}</span>
                                                     </span>
                                                     <span className="mt-1 block text-xs text-gray-600">{t('Unpaid installment:')} {peso(schedule.amount_due)}</span>
                                                     {schedule.penalty_amount > 0 && <span className="mt-1 block text-xs font-medium text-amber-700">{t('Accrued penalty:')} {peso(schedule.penalty_amount)}</span>}
@@ -541,7 +578,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                         )}
                         {selectedSchedules.map(schedule => (
                             <div key={schedule.period} className="flex justify-between gap-4">
-                                <span className="text-gray-600">Installment {schedule.period} · {schedule.due_date}:</span>
+                                <span className="text-gray-600">Installment {schedule.period} Â· {schedule.due_date}:</span>
                                 <span className="font-semibold text-gray-900">{peso(allocationAmounts[schedule.period] || 0)}</span>
                             </div>
                         ))}
@@ -550,6 +587,18 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                             <span className="text-gray-600">{t('Payment Amount:')}</span>
                             <span className="font-semibold text-gray-900">{peso(totalAmount)}</span>
                         </div>
+                        {feeAmount > 0 && (
+                            <div className="flex justify-between">
+                                <span className="text-gray-600">{t('Fee:')}</span>
+                                <span className="font-semibold text-amber-700">{peso(feeAmount)}</span>
+                            </div>
+                        )}
+                        {feeAmount > 0 && (
+                            <div className="flex justify-between border-t border-gray-200 pt-2">
+                                <span className="font-medium text-gray-700">{t('Total due:')}</span>
+                                <span className="font-bold text-blue-700">{peso(totalAmount + feeAmount)}</span>
+                            </div>
+                        )}
                         <div className="flex justify-between">
                             <span className="text-gray-600">{t('Payment Method:')}</span>
                             <span className="font-semibold text-gray-900">
@@ -634,9 +683,15 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                                 <span className="font-semibold text-gray-900">{selectedLoan.loan_number}</span>
                             </div>
                         )}
+                        {feeAmount > 0 && (
+                            <div className="flex justify-between">
+                                <span className="text-gray-600">{t('Fee:')}</span>
+                                <span className="font-semibold text-amber-700">{peso(feeAmount)}</span>
+                            </div>
+                        )}
                         <div className="flex justify-between">
                             <span className="text-gray-600">Total Amount:</span>
-                            <span className="font-bold text-blue-600">{peso(totalAmount)}</span>
+                            <span className="font-bold text-blue-600">{peso(totalAmount + feeAmount)}</span>
                         </div>
                     </div>
 
@@ -716,7 +771,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                         </div>
                         <div className="flex justify-between text-sm">
                             <span className="text-gray-600">Loan:</span>
-                            <span className="font-semibold text-gray-900">{selectedLoan?.loan_number ?? '—'}</span>
+                            <span className="font-semibold text-gray-900">{selectedLoan?.loan_number ?? 'â€”'}</span>
                         </div>
                         <div className="flex justify-between text-sm pt-3 border-t border-gray-300">
                             <span className="text-gray-600">Amount:</span>

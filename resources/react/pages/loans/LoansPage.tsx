@@ -263,7 +263,7 @@ export default function LoansPage() {
                                     <tr key={l.id} className={awaitingDisbursement ? 'bg-emerald-50 hover:bg-emerald-100' : 'hover:bg-gray-50'}>
                                         <td className="p-4 text-sm font-medium text-gray-900">{l.loan_number}</td>
                                         <td className="p-4 text-sm font-medium text-gray-900 truncate" title={l.borrower?.name || 'Unknown'}>{l.borrower?.name || 'Unknown'}{l.borrower?.user_number && <div className="text-xs text-gray-500">{l.borrower.user_number}</div>}</td>
-                                        <td className="p-4 text-base font-semibold text-gray-900">₱{Number(l.loan_amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                        <td className="p-4 text-base font-semibold text-gray-900">â‚±{Number(l.loan_amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                         <td className="p-4 truncate" title={l.loan_product_name || l.loan_product || l.loan_type}><span className="px-2.5 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800 rounded capitalize">{l.loan_product_name || l.loan_product || l.loan_type}</span></td>
                                         <td className="p-4">
                                             <span className={`px-2.5 py-0.5 text-xs font-medium rounded ${getStatusColor(l.loan_status)}`}>{getStatusLabel(l.loan_status)}</span>
@@ -277,7 +277,11 @@ export default function LoansPage() {
                                                     <i className="fas fa-eye"></i>
                                                 </button>
                                                 {canDisburse && l.loan_status === 'approved' && (
-                                                    <button onClick={() => { setDisbursementLoan(l); setDisbursementDestination('cash'); }} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="Disburse">
+                                                    <button 
+                                                        disabled={Boolean(l.approved_by && Number(l.approved_by) === Number(user?.id) && !user?.roles?.includes('admin'))}
+                                                        onClick={() => { setDisbursementLoan(l); setDisbursementDestination('cash'); }} 
+                                                        className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed" 
+                                                        title={l.approved_by && Number(l.approved_by) === Number(user?.id) && !user?.roles?.includes('admin') ? 'Separation of duties: Cannot disburse a loan you approved' : 'Disburse'}>
                                                         <i className="fas fa-money-bill-wave"></i>
                                                     </button>
                                                 )}
@@ -376,7 +380,7 @@ export default function LoansPage() {
                                                 <p className="mt-1 text-lg font-semibold text-emerald-700">{formatPeso(detail.estimated_total_repayment)}</p>
                                             </div>
                                             <div className="rounded-lg border border-amber-100 bg-amber-50 p-4">
-                                                <p className="flex items-center gap-1 text-xs font-medium text-amber-700">Accrued Penalties <HelpTip text="Current overdue charges based on this loan’s penalty policy and unpaid installments." /></p>
+                                                <p className="flex items-center gap-1 text-xs font-medium text-amber-700">Accrued Penalties <HelpTip text="Current overdue charges based on this loanâ€™s penalty policy and unpaid installments." /></p>
                                                 <p className="mt-1 text-lg font-semibold text-amber-800">{formatPeso(detail.accrued_penalty || 0)}</p>
                                             </div>
                                         </div>
@@ -393,20 +397,20 @@ export default function LoansPage() {
                                     </div>
                                     <div className="space-y-3">
                                         <InfoRow label="Loan Number" value={detail.loan_number} />
-                                        <InfoRow label="Borrower" value={detail.borrower?.name || '—'} />
+                                        <InfoRow label="Borrower" value={detail.borrower?.name || 'â€”'} />
                                         <InfoRow label="Type" value={detail.loan_product_name || detail.loan_type_label || detail.loan_type} />
                                         <InfoRow label="Amount" value={formatPeso(detail.loan_amount)} hint="The total amount borrowed for this loan." />
-                                        <InfoRow label="Interest Rate" value={`${detail.interest_rate}%`} hint="The percentage charged on the loan, applied over the term." />
+                                        <InfoRow label="Interest Rate" value={`${detail.interest_rate}% / mo (Flat)`} hint="Nominal monthly rate applied over the term (flat / add-on interest)." />
                                         <InfoRow label="Term" value={`${detail.term_months} months`} hint="How long the borrower has to repay the loan, in months." />
                                         <InfoRow label="Payment Frequency" value={detail.payment_frequency} hint="How often an installment is due (for example, monthly)." />
-                                        <InfoRow label="Overdue Penalty" value={detail.penalty_amount > 0 ? `${detail.penalty_type === 'percent' ? `${detail.penalty_amount}%` : formatPeso(detail.penalty_amount)} · ${detail.penalty_frequency === 'per_due' ? 'per overdue installment' : detail.penalty_frequency}` : 'None'} hint="Penalty rules are copied from the loan product when the loan is created." />
+                                        <InfoRow label="Overdue Penalty" value={detail.penalty_amount > 0 ? `${detail.penalty_type === 'percent' ? `${detail.penalty_amount}%` : formatPeso(detail.penalty_amount)} Â· ${detail.penalty_frequency === 'per_due' ? 'per overdue installment' : detail.penalty_frequency}` : 'None'} hint="Penalty rules are copied from the loan product when the loan is created." />
                                         <InfoRow label="Post-term interest amortization" value={<span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${detail.interest_extension_penalty ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300' : 'bg-gray-100 text-gray-600'}`}><i className={`fa-solid ${detail.interest_extension_penalty ? 'fa-circle-exclamation' : 'fa-circle-minus'}`} aria-hidden="true" />{detail.interest_extension_penalty ? 'Enabled' : 'Disabled'}</span>} hint="When enabled, interest-only installments are added at each payment interval after the final due date while scheduled amounts remain unpaid." />
                                         <InfoRow label="Amount Due Now" value={formatPeso(detail.amount_due || 0)} hint="Unpaid scheduled installments plus accrued overdue penalties." />
                                         <InfoRow label="Status" value={<span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${getStatusColor(detail.loan_status)}`}>{getStatusLabel(detail.loan_status)}</span>} />
-                                        <InfoRow label="Applied" value={detail.applied_at || '—'} />
-                                        <InfoRow label="Approved" value={detail.approved_at || '—'} />
-                                        <InfoRow label="Due Date" value={detail.due_date ? new Date(`${String(detail.due_date).slice(0, 10)}T00:00:00`).toLocaleDateString() : '—'} hint="The final date by which the whole loan should be repaid." />
-                                        <InfoRow label="Approved By" value={detail.approved_by?.name || '—'} />
+                                        <InfoRow label="Applied" value={detail.applied_at || 'â€”'} />
+                                        <InfoRow label="Approved" value={detail.approved_at || 'â€”'} />
+                                        <InfoRow label="Due Date" value={detail.due_date ? new Date(`${String(detail.due_date).slice(0, 10)}T00:00:00`).toLocaleDateString() : 'â€”'} hint="The final date by which the whole loan should be repaid." />
+                                        <InfoRow label="Approved By" value={detail.approved_by?.name || 'â€”'} />
                                         {detail.reviewed_by?.name && <InfoRow label="Reviewed / Endorsed By" value={detail.reviewed_by.name} />}
                                         {detail.next_approver && <InfoRow label="Next Approver" value={detail.next_approver} />}
                                     </div>
@@ -604,7 +608,7 @@ export default function LoansPage() {
                     <section className="w-full max-w-lg rounded-2xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="loan-disbursement-title" onClick={e => e.stopPropagation()}>
                         <div className="border-b border-gray-200 px-6 py-5">
                             <h2 id="loan-disbursement-title" className="flex items-center gap-2 text-lg font-bold text-gray-900">Confirm Loan Disbursement <HelpTip text="Karaniwang cash ang loan proceeds. Piliin lang ang Credit to savings kung iyon talaga ang napagkasunduan at na-confirm ng borrower. Mare-record ang piniling paraan sa transaction." /></h2>
-                            <p className="mt-1 text-sm text-gray-600">{disbursementLoan.loan_number} · ₱{Number(disbursementLoan.loan_amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                            <p className="mt-1 text-sm text-gray-600">{disbursementLoan.loan_number} Â· â‚±{Number(disbursementLoan.loan_amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                         </div>
                         <div className="space-y-3 p-6">
                             <p className="text-sm text-gray-700">Choose how the borrower will receive the loan proceeds:</p>
@@ -614,7 +618,7 @@ export default function LoansPage() {
                             </label>
                             <label className={`flex cursor-pointer gap-3 rounded-xl border p-4 ${disbursementDestination === 'savings' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200'}`}>
                                 <input type="radio" name="loan-disbursement-destination" value="savings" checked={disbursementDestination === 'savings'} onChange={() => setDisbursementDestination('savings')} className="mt-1 accent-emerald-600" />
-                                <span><span className="block text-sm font-semibold text-gray-900">Credit to savings</span><span className="mt-1 block text-xs text-gray-600">Post the loan proceeds to the borrower’s savings ledger.</span></span>
+                                <span><span className="block text-sm font-semibold text-gray-900">Credit to savings</span><span className="mt-1 block text-xs text-gray-600">Post the loan proceeds to the borrowerâ€™s savings ledger.</span></span>
                             </label>
                             <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">Confirm the selected delivery method only after the disbursement has been completed.</p>
                         </div>

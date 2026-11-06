@@ -1123,11 +1123,11 @@ class MemberController extends Controller
             ]);
 
             if (! $user->accounts()->where('account_type', 'savings')->exists()) {
-                Account::create(['user_id' => $user->id, 'account_type' => 'savings', 'balance' => 500.00]);
+                Account::create(['user_id' => $user->id, 'account_type' => 'savings', 'balance' => 0.00]);
             }
 
             if (! $user->accounts()->where('account_type', 'share-capital')->exists()) {
-                Account::create(['user_id' => $user->id, 'account_type' => 'share-capital', 'balance' => 500.00]);
+                Account::create(['user_id' => $user->id, 'account_type' => 'share-capital', 'balance' => 0.00]);
             }
 
             app(AuditLogService::class)->log(

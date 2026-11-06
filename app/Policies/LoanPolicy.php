@@ -45,9 +45,22 @@ class LoanPolicy
 
     public function disburse(User $user, Loan $loan): bool
     {
-        return BranchScope::canAccessBranch($user, $loan->branch_id)
-            && $this->isOfficerUser($user)
-            && $user->can('loans.disburse');
+        if (! BranchScope::canAccessBranch($user, $loan->branch_id) || ! $this->isOfficerUser($user) || ! $user->can('loans.disburse')) {
+            return false;
+        }
+
+        // If the loan is already disbursed, let the controller handle it with a 409 Conflict.
+        if ($loan->disbursed_at !== null) {
+            return true;
+        }
+
+        // Maker-checker segregation: The officer who gave final approval cannot disburse the loan
+        // (admin bypasses for administrative/testing purposes).
+        if ($loan->approved_by !== null && (int) $loan->approved_by === (int) $user->id && ! $user->hasRole('admin')) {
+            return false;
+        }
+
+        return true;
     }
 
     public function uploadDocument(User $user, Loan $loan): bool

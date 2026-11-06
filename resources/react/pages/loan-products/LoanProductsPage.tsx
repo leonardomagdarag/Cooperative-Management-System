@@ -36,7 +36,7 @@ const loanProductIcons = [
     { value: 'hand-holding-dollar', label: 'Support' },
 ];
 
-const peso = (v: number) => '₱' + Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const peso = (v: number) => 'â‚±' + Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function LoanProductsPage() {
     const [showModal, setShowModal] = useState(false);
@@ -419,8 +419,8 @@ export default function LoanProductsPage() {
                                     </div>
 
                                     <div className="grid grid-cols-3 gap-3">
-                                        <NumberInput label="Interest Rate (%)" value={form.interest_rate} onChange={v => setField('interest_rate', v)} step="0.01" min={0} helpText="The monthly rate used to estimate interest over the loan term." error={errors.interest_rate} />
-                                        <NumberInput label="Max Amount (₱)" value={form.max_amount} onChange={v => setField('max_amount', v)} step="0.01" min={0} error={errors.max_amount} />
+                                        <NumberInput label="Interest Rate (%)" value={form.interest_rate} onChange={v => setField('interest_rate', v)} step="0.01" min={0} helpText="The monthly flat rate used to compute interest over the loan term." error={errors.interest_rate} />
+                                        <NumberInput label="Max Amount (â‚±)" value={form.max_amount} onChange={v => setField('max_amount', v)} step="0.01" min={0} error={errors.max_amount} />
                                         <NumberInput label="Max Term (months)" value={form.max_term} onChange={v => setField('max_term', v)} min={1} helpText="The longest repayment term a member may select." error={errors.max_term} />
                                     </div>
 
@@ -458,11 +458,11 @@ export default function LoanProductsPage() {
                                             <div>
                                                 <label className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-900">Charge type <HelpTip text="Choose a fixed currency amount or a percentage of the unpaid scheduled installment." /></label>
                                                 <select value={form.penalty_type} onChange={e => setField('penalty_type', e.target.value)} className="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm">
-                                                    <option value="flat">Flat amount (₱)</option>
+                                                    <option value="flat">Flat amount (â‚±)</option>
                                                     <option value="percent">Percentage (%)</option>
                                                 </select>
                                             </div>
-                                            <NumberInput label={form.penalty_type === 'percent' ? 'Rate (%)' : 'Amount (₱)'} value={form.penalty_amount} onChange={v => setField('penalty_amount', v)} step="0.01" min={0} helpText={form.penalty_type === 'percent' ? 'Applied to the unpaid installment. The percentage does not compound.' : 'The fixed charge applied at the selected frequency.'} error={errors.penalty_amount} />
+                                            <NumberInput label={form.penalty_type === 'percent' ? 'Rate (%)' : 'Amount (â‚±)'} value={form.penalty_amount} onChange={v => setField('penalty_amount', v)} step="0.01" min={0} helpText={form.penalty_type === 'percent' ? 'Applied to the unpaid installment. The percentage does not compound.' : 'The fixed charge applied at the selected frequency.'} error={errors.penalty_amount} />
                                             <div>
                                                 <label className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-900">Apply <HelpTip text="Daily charges accrue each overdue day, weekly charges after each full week, and per installment applies once to each overdue installment." /></label>
                                                 <select value={form.penalty_frequency} onChange={e => setField('penalty_frequency', e.target.value)} className="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm">
@@ -495,7 +495,7 @@ export default function LoanProductsPage() {
                                         <legend className="px-2 text-sm font-semibold text-gray-900">Requirements</legend>
                                         <p className="-mt-2 text-xs text-gray-500">Set member eligibility rules and any extra steps needed to apply.</p>
                                     <div className="grid grid-cols-3 gap-3">
-                                        <NumberInput label="Min Share Capital (₱)" value={form.minimum_share_capital} onChange={v => setField('minimum_share_capital', v)} step="0.01" min={0} helpText="Applicants must have at least this much share capital. Set to zero for no minimum." error={errors.minimum_share_capital} />
+                                        <NumberInput label="Min Share Capital (â‚±)" value={form.minimum_share_capital} onChange={v => setField('minimum_share_capital', v)} step="0.01" min={0} helpText="Applicants must have at least this much share capital. Set to zero for no minimum." error={errors.minimum_share_capital} />
                                         <NumberInput label="Min Membership Yrs" value={form.minimum_membership_years} onChange={v => setField('minimum_membership_years', v)} min={0} helpText="Applicants must have been members for at least this many years." error={errors.minimum_membership_years} />
                                         <NumberInput label="Required Co-Makers" value={form.required_co_makers} onChange={v => setField('required_co_makers', v)} min={0} helpText="The number of co-makers an applicant must provide. Set to zero if none are required." error={errors.required_co_makers} />
                                     </div>
@@ -508,7 +508,7 @@ export default function LoanProductsPage() {
                                             <Checkbox label="Active product" checked={form.is_active} onChange={v => setField('is_active', v)} helpText="Inactive products are hidden from new applications but remain attached to existing loans." />
                                             <Checkbox label="No existing active loan" checked={form.requires_no_existing_loan} onChange={v => setField('requires_no_existing_loan', v)} helpText="Blocks an application if the member already has an active loan." />
                                             <Checkbox label="Require interview schedule" checked={form.requires_interview} onChange={v => setField('requires_interview', v)} helpText="Applicants must choose an interview appointment before submitting." />
-                                            <Checkbox label="Require special-eligibility flag" checked={form.requires_special_eligibility} onChange={v => setField('requires_special_eligibility', v)} helpText="Restricts this product to applicants who meet the cooperative’s special eligibility checks." />
+                                            <Checkbox label="Require special-eligibility flag" checked={form.requires_special_eligibility} onChange={v => setField('requires_special_eligibility', v)} helpText="Restricts this product to applicants who meet the cooperativeâ€™s special eligibility checks." />
                                         </div>
                                     </fieldset>
                                     </fieldset>

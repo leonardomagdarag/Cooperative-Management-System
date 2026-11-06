@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\Loan;
 use App\Models\Transaction;
-use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class LoanPaymentAllocationService
@@ -45,6 +44,7 @@ class LoanPaymentAllocationService
         $today = now()->startOfDay();
         $periods = [];
         $allocatedTotal = 0.0;
+        $allocationsByPeriod = collect($allocations)->keyBy(fn ($a) => (int) $a['period']);
 
         foreach ($allocations as $allocation) {
             $period = (int) $allocation['period'];
@@ -52,8 +52,15 @@ class LoanPaymentAllocationService
             $periods[$period] = true;
             $installment = $schedule->get($period);
             abort_unless($installment, 422, 'A selected installment does not exist.');
-            $dueDate = Carbon::createFromFormat('M d, Y', $installment['due_date'])->startOfDay();
-            abort_if($dueDate->greaterThan($today), 422, 'Only installments due today or overdue can be paid here.');
+            // Advance installments can be paid as long as any preceding installments are already paid or fully covered in this transaction.
+            for ($p = 1; $p < $period; $p++) {
+                $prevInstallment = $schedule->get($p);
+                if ($prevInstallment) {
+                    $prevRemaining = max(0.0, (float) $prevInstallment['amount_due'] - (float) ($reservedAllocations[$p] ?? 0));
+                    $prevAllocatedInThisTx = isset($allocationsByPeriod[$p]) ? (float) $allocationsByPeriod[$p]['amount'] : 0.0;
+                    abort_if($prevRemaining - $prevAllocatedInThisTx > 0.01, 422, "Installment {$p} must be fully paid before paying installment {$period}.");
+                }
+            }
 
             $remaining = max(
                 0.0,

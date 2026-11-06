@@ -198,11 +198,11 @@ test('financial report counts credited interest as cash separately from collecte
     $this->actingAs($admin)
         ->getJson('/api/reports/balance-sheet?from='.$date.'&to='.$date)
         ->assertOk()
-        ->assertJsonPath('period_movement.inflows', 55);
+        ->assertJsonPath('period_movement.inflows', 0);
 
     $dashboard = $this->actingAs($admin)->getJson('/api/dashboard')->assertOk();
     expect((float) $dashboard->json('month_interest_credits'))->toBe(55.0)
-        ->and((float) $dashboard->json('month_net'))->toBe(55.0);
+        ->and((float) $dashboard->json('month_net'))->toBe(0.0);
 });
 
 test('member financial history filters interest and supports safe sorting', function () {

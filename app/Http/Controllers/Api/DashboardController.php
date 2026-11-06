@@ -1193,7 +1193,9 @@ class DashboardController extends Controller
             ->when($branchId !== null, fn ($q) => $q->where('expenses.branch_id', $branchId))
             ->sum('amount');
 
-        $inflows = $totalDeposits + $totalLoanRepayments + $totalInterestCredits + $totalFees;
+        // Interest credited to members increases deposit liabilities and is an operational
+        // expense/surplus allocation; it is not a cash inflow to the cooperative.
+        $inflows = $totalDeposits + $totalLoanRepayments + $totalFees;
         $outflows = $totalWithdrawals + $totalLoanReleases + $totalExpenses;
 
         return $this->financialSummaryCache[$cacheKey] = [

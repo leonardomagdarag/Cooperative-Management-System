@@ -188,7 +188,7 @@ The admin preset is limited to system configuration, backups, security logs, tro
   - `GET /api/backups`, `GET /api/backups/runs` — list tiers/runs.
   - `PUT /api/backups/settings` — schedules, scope (db/files/both), retention, encryption.
   - `POST /api/backups/offsite/test` — test the configured Backblaze B2 off-site connection.
-  - `POST /api/backups/{tier}/run`, `POST /api/backups/{tier}/cleanup`, `GET /api/backups/{tier}/download`, `DELETE /api/backups/{tier}/backup`, `POST /api/backups/restore`.
+  - `POST /api/backups/{tier}/run`, `POST /api/backups/{tier}/cleanup`, `GET /api/backups/{tier}/download`, `POST /api/backups/restore` (manual `DELETE /api/backups/{tier}/backup` is permanently disabled for security).
   - Cron fallback: `GET /backup/ping?token=BACKUP_PING_TOKEN` → `backup:ping`.
 - **System settings & toggles:**
 - `GET /api/settings/service-availability`, `PUT /api/settings/service-availability` (`settings.update`) — service and login controls (see §8).
@@ -276,7 +276,7 @@ do not treat old secretary-specific behavior as a separate role contract.
 ### 6.3 Services & Transactions (`ServicesPage`, `services.*`, `transactions.*`, `deposits.*`, `withdrawals.*`)
 - Availability-gated wizards (Deposit/Withdrawal/Loan Application/Loan Payment) for self (member) or selected member (officer).
 - Pending queue: `GET /api/services/pending` + `TransactionApproval` modal; approve: `POST /api/services/approve/{transaction}` (`transactions.approve`/`deposits.approve`/`withdrawals.approve`).
-- An officer cannot approve or reject a transaction they recorded unless they also have the explicit `transactions.approve-own` permission. This permission only lifts the self-approval restriction; the existing permission for the transaction type is still required. It is available through per-officer permission overrides and is not included in built-in role presets.
+- An officer cannot approve or reject a transaction they recorded unless they have the explicit `transactions.approve-own` permission. This permission only lifts the self-approval restriction on financial transactions; the existing permission for the transaction type is still required, and loan applications remain independently gated. It is included in the built-in `manager` role preset and is available to other officers via per-officer permission overrides.
 - **Posting and approval workflow:** An officer who records a member's cash deposit, counter payout, or counter loan payment at the branch posts it immediately. A member's self-service counter request stays pending and requires a manager or chairman approval. Online and bank-transfer transactions stay pending; Xendit provider verification confirms payment but does not credit/debit an account or complete a loan payment by itself. A manager can approve only transactions in their assigned branch when `branches.bypass` is off. When the approver has branch bypass, only a chairman can approve. The transaction type permission and branch access checks still apply; high-value withdrawals also require OTP.
 - Account types: `savings`, `share-capital`; transaction types: `deposit`, `withdrawal`, `loan_payment`, `loan_disbursement`, `interest`, `fee`.
 - Channels/modes: Counter (OTC), Online, Bank Transfer (withdrawal).
@@ -339,7 +339,7 @@ do not treat old secretary-specific behavior as a separate role contract.
 - `GET /api/public-content` (public read) / `PUT /api/public-content` (admin edit) — sections from `SiteContentCatalog`/`SiteContentSeeder`: home/hero, stats, services, about, news, stories, board members, contact info, footer, legal/privacy.
 
 ### 6.18 Backup & Restore (`BackupPage`, `backups.*`, admin)
-- Tiers: hourly and daily local archives plus an off-site Backblaze B2 replica; fixed schedules, retention, and optional archive encryption (`BACKUP_ARCHIVE_PASSWORD`). The UI can view runs, manage settings, test off-site connectivity, run/clean/download/delete archives, and request restore through the countersigned workflow. `backup:ping` + `/backup/ping` remain the scheduler fallback. See `docs/BACKUPS.md`.
+- Tiers: hourly and daily local archives plus an off-site Backblaze B2 replica; fixed schedules, retention, and optional archive encryption (`BACKUP_ARCHIVE_PASSWORD`). The UI can view runs, manage settings, test off-site connectivity, run/clean/download archives (manual deletion is permanently disabled for security), and request restore through the countersigned workflow. `backup:ping` + `/backup/ping` remain the scheduler fallback. See `docs/BACKUPS.md`.
 
 ### 6.19 Xendit Payment Gateway (`XenditPage`, Deposit/Loan Payment wizards)
 - **Settings:** administrators manage test/live mode, encrypted secret API keys, callback tokens, and connection tests through `GET/PUT /api/settings/xendit`, `PUT/DELETE /api/settings/xendit/credentials`, and `POST /api/settings/xendit/test`.
