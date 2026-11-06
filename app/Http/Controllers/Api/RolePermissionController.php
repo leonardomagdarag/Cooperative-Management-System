@@ -16,7 +16,7 @@ use Spatie\Permission\PermissionRegistrar;
 
 class RolePermissionController extends Controller
 {
-    private const RESERVED_ROLES = ['admin', 'chairman', 'developer', 'member', 'inactive', 'terminated'];
+    private const RESERVED_ROLES = ['admin', 'chairman', 'developer', 'member', 'inactive', 'terminated', 'loan', 'unassigned_officer'];
 
     private const LOCKED_PERMISSIONS = [
         'dashboard.view',
@@ -92,7 +92,6 @@ class RolePermissionController extends Controller
         $baseRoleRequiredPermissions = [
             'manager' => ['members.view', 'loans.view', 'services.view'],
             'accountant' => ['transactions.view', 'services.view', 'reports.view'],
-            'loan' => ['loans.view', 'services.view'],
         ];
         $roleSpecificLocked = $baseRoleRequiredPermissions[$role] ?? [];
         $allLocked = array_unique(array_merge($lockedPermissions, $roleSpecificLocked));

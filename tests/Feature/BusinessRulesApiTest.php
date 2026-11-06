@@ -36,7 +36,7 @@ test('user seeder does not create duplicate fixed login accounts', function () {
         'leo.baluyot039+admin@gmail.com',
         'leo.baluyot039+manager@gmail.com',
         'leo.baluyot039+accountant@gmail.com',
-        'leo.baluyot039+loan@gmail.com',
+        'leo.baluyot039+accountant@gmail.com',
     ])->count())->toBe(5);
 });
 
@@ -852,7 +852,7 @@ test('admin can create officer when email is verified even if phone is unverifie
         'phone_number' => '09179998877',
         'password' => 'S3cureOfficerPass!1',
         'password_confirmation' => 'S3cureOfficerPass!1',
-        'role' => 'loan',
+        'role' => 'accountant',
         'agreement' => true,
     ])->assertStatus(202);
 

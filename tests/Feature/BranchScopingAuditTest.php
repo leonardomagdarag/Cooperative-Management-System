@@ -2,8 +2,6 @@
 
 use App\Models\Account;
 use App\Models\Branch;
-use App\Models\CollectionRun;
-use App\Models\CollectionRunItem;
 use App\Models\Loan;
 use App\Models\LoanProduct;
 use App\Models\MemberApplication;
@@ -25,12 +23,10 @@ beforeEach(function () {
     $this->chairman = User::where('user_number', 'USR000002')->firstOrFail();
     $this->accountant = User::where('user_number', 'USR000004')->firstOrFail();
     $this->manager = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
-    $this->loanOfficer = User::where('email', 'leo.baluyot039+loan@gmail.com')->firstOrFail();
 
     $this->mainBranch = Branch::where('code', 'BR000001')->firstOrFail();
     $this->officeBranch = Branch::where('code', 'BR000002')->firstOrFail();
     $this->accountant->update(['branch_id' => $this->officeBranch->id]);
-    $this->loanOfficer->update(['branch_id' => $this->officeBranch->id]);
 
     $this->mainMember = User::where('user_number', 'USR000007')->firstOrFail();
     $this->officeMember = User::where('user_number', 'USR000012')->firstOrFail();
@@ -163,7 +159,7 @@ test('built-in officer roles with branch bypass can see all branches regardless 
         ->and($this->chairman->can('branches.bypass'))->toBeTrue()
         ->and($this->accountant->can('branches.bypass'))->toBeTrue()
         ->and($this->manager->can('branches.bypass'))->toBeTrue()
-        ->and($this->loanOfficer->can('branches.bypass'))->toBeTrue();
+        ->and($this->accountant->can('branches.bypass'))->toBeTrue();
 
     $product = LoanProduct::first() ?? LoanProduct::create([
         'name' => 'Standard Loan',
@@ -175,7 +171,7 @@ test('built-in officer roles with branch bypass can see all branches regardless 
         'max_term_months' => 24,
     ]);
 
-    // Create loan in mainBranch (loanOfficer is in officeBranch)
+    // Create loan in mainBranch while the accountant is assigned to officeBranch.
     Loan::create([
         'user_id' => $this->mainMember->id,
         'loan_product_id' => $product->id,
@@ -197,14 +193,14 @@ test('built-in officer roles with branch bypass can see all branches regardless 
         'term_months' => 12,
     ]);
 
-    $this->actingAs($this->loanOfficer);
+    $this->actingAs($this->accountant);
     $response = $this->getJson('/api/loans?loan_status=pending');
     $response->assertOk();
 
     $branchIds = collect($response->json('data'))->pluck('branch_id')->filter()->unique()->values()->all();
     expect($branchIds)->toEqualCanonicalizing([$this->mainBranch->id, $this->officeBranch->id]);
 
-    $memberBranchIds = BranchScope::applyToUsers(User::query()->memberUsers(), $this->loanOfficer)
+    $memberBranchIds = BranchScope::applyToUsers(User::query()->memberUsers(), $this->accountant)
         ->pluck('branch_id')->unique()->values()->all();
     expect($memberBranchIds)->toEqualCanonicalizing([$this->mainBranch->id, $this->officeBranch->id]);
 });
@@ -277,20 +273,20 @@ test('a per-officer deny override keeps the officer scoped despite the role bypa
     ]);
 
     OfficerPermissionOverride::create([
-        'user_id' => $this->loanOfficer->id,
+        'user_id' => $this->accountant->id,
         'permission' => 'branches.bypass',
         'effect' => OfficerPermissionOverride::EFFECT_DISALLOW,
     ]);
 
-    $this->actingAs($this->loanOfficer);
+    $this->actingAs($this->accountant);
     $response = $this->getJson('/api/loans?loan_status=pending');
     $response->assertOk();
 
     $branchIds = collect($response->json('data'))->pluck('branch_id')->filter()->unique()->values()->all();
     expect($branchIds)->toBe([$this->officeBranch->id]);
-    expect($this->loanOfficer->can('view', $mainLoan))->toBeFalse();
+    expect($this->accountant->can('view', $mainLoan))->toBeFalse();
 
-    $memberBranchIds = BranchScope::applyToUsers(User::query()->memberUsers(), $this->loanOfficer)
+    $memberBranchIds = BranchScope::applyToUsers(User::query()->memberUsers(), $this->accountant)
         ->pluck('branch_id')->unique()->values()->all();
     expect($memberBranchIds)->toBe([$this->officeBranch->id]);
 });
@@ -336,50 +332,4 @@ test('an officer without bypass and without a branch receives no branch scoped d
     $this->actingAs($this->accountant);
     $members = BranchScope::applyToUsers(User::query()->memberUsers(), $this->accountant)->get();
     expect($members)->toBeEmpty();
-});
-
-test('branch bypass lets a loan officer add a collection item to a draft in another branch', function () {
-    $product = LoanProduct::first() ?? LoanProduct::create([
-        'name' => 'Standard Loan',
-        'code' => 'STD01',
-        'interest_rate' => 5,
-        'min_amount' => 1000,
-        'max_amount' => 50000,
-        'min_term_months' => 6,
-        'max_term_months' => 24,
-    ]);
-    $loan = Loan::create([
-        'user_id' => $this->mainMember->id,
-        'loan_product_id' => $product->id,
-        'branch_id' => $this->mainBranch->id,
-        'loan_amount' => 10000,
-        'loan_status' => 'active',
-        'interest_rate' => 5,
-        'term_months' => 12,
-    ]);
-    $run = CollectionRun::create([
-        'run_number' => 'CR-BRANCH-ISOLATION',
-        'loan_officer_id' => $this->loanOfficer->id,
-        'collection_date' => today(),
-        'branch_id' => $this->mainBranch->id,
-        'status' => 'draft',
-    ]);
-    $item = CollectionRunItem::create([
-        'collection_run_id' => $run->id,
-        'member_id' => $this->mainMember->id,
-        'recorded_by' => $this->loanOfficer->id,
-        'loan_id' => $loan->id,
-        'account_id' => null,
-        'amount' => 100,
-        'visited' => true,
-    ]);
-
-    $this->actingAs($this->loanOfficer);
-    $this->postJson("/api/collections/{$run->id}/items", [
-        'member_id' => $this->mainMember->id,
-        'loan_id' => $loan->id,
-        'amount' => 100,
-    ])->assertCreated();
-
-    expect(CollectionRunItem::where('collection_run_id', $run->id)->count())->toBe(2);
 });

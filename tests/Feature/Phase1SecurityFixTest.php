@@ -154,9 +154,9 @@ test('members.delete cannot delete an officer account', function () {
     $officerTarget = User::factory()->create([
         'account_status' => 'active',
         'is_officer' => true,
-        'role' => 'loan',
+        'role' => 'accountant',
     ]);
-    $officerTarget->assignRole('loan');
+    $officerTarget->assignRole('accountant');
 
     // Attempting to delete officer with members.delete only must fail with 403
     actingAs($memberDeleter);

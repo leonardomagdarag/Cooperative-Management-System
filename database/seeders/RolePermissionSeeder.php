@@ -13,6 +13,7 @@ class RolePermissionSeeder extends Seeder
     public function run(): void
     {
         RolePermission::query()->where('role', 'treasurer')->delete();
+        RolePermission::query()->where('role', 'loan')->delete();
 
         $rolePermissions = [
             // ADMIN
@@ -39,16 +40,6 @@ class RolePermissionSeeder extends Seeder
             ['role' => 'member', 'section' => 'history', 'permissions' => ['view']],
             ['role' => 'member', 'section' => 'announcements', 'permissions' => ['view']],
             ['role' => 'member', 'section' => 'settings', 'permissions' => ['view', 'edit']],
-
-            // LOAN OFFICER
-            ['role' => 'loan', 'section' => 'dashboard', 'permissions' => ['view']],
-            ['role' => 'loan', 'section' => 'services', 'permissions' => ['view', 'create', 'edit']],
-            ['role' => 'loan', 'section' => 'loans', 'permissions' => ['view', 'approve', 'reject']],
-            ['role' => 'loan', 'section' => 'members', 'permissions' => ['view']],
-            ['role' => 'loan', 'section' => 'messages', 'permissions' => ['view', 'create', 'reply']],
-            ['role' => 'loan', 'section' => 'announcements', 'permissions' => ['view']],
-            ['role' => 'loan', 'section' => 'reports', 'permissions' => ['view', 'export']],
-            ['role' => 'loan', 'section' => 'settings', 'permissions' => ['view']],
 
             // SECRETARY
             ['role' => 'secretary', 'section' => 'dashboard', 'permissions' => ['view']],

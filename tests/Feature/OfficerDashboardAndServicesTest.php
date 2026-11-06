@@ -19,7 +19,6 @@ beforeEach(function () {
     $this->admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
     $this->manager = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
     $this->accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
-    $this->loan = User::where('email', 'leo.baluyot039+loan@gmail.com')->firstOrFail();
 
     // Branches
     $this->mainBranch = Branch::where('code', 'BR000001')->firstOrFail();
@@ -152,7 +151,7 @@ test('dashboard and services pending-loan totals exclude rejected review request
         ->assertOk()
         ->assertJsonPath('pending_loans', 1);
 
-    $this->actingAs($this->loan)
+    $this->actingAs($this->accountant)
         ->getJson('/api/dashboard')
         ->assertOk()
         ->assertJsonPath('pending_loans', 1)
@@ -206,11 +205,11 @@ test('F015-4: GET /api/dashboard returns treasurer overview for accountant role'
 });
 
 // ---------------------------------------------------------------------------
-// F015-6: Loan officer dashboard
+// F015-6: Accountant loan dashboard
 // ---------------------------------------------------------------------------
 
-test('F015-6: GET /api/dashboard returns loan officer overview for loan role', function () {
-    $response = $this->actingAs($this->loan)->getJson('/api/dashboard');
+test('F015-6: GET /api/dashboard returns accountant loan overview', function () {
+    $response = $this->actingAs($this->accountant)->getJson('/api/dashboard');
 
     $response->assertOk()
         ->assertJsonStructure([
@@ -347,34 +346,6 @@ test('F015-14: Manager can deposit to member account in any branch (act-on-behal
 });
 
 // ---------------------------------------------------------------------------
-// F015-15: POST /api/services/deposit — officer with branch bypass can act on member in different branch
-// ---------------------------------------------------------------------------
-
-test('F015-15: Loan officer cannot deposit even with branch bypass (403)', function () {
-    // loan officer is in office branch; mainMember is in main branch
-    $savingsAccount = Account::where('user_id', $this->mainMember->id)
-        ->where('account_type', 'savings')
-        ->first();
-
-    if (! $savingsAccount) {
-        Account::create([
-            'user_id' => $this->mainMember->id,
-            'account_type' => 'savings',
-            'balance' => 5000,
-        ]);
-    }
-
-    $response = $this->actingAs($this->loan)->postJson('/api/services/deposit', [
-        'member_id' => $this->mainMember->id,
-        'amount' => 500,
-        'account_type' => 'savings',
-        'transaction_mode' => 'counter',
-    ]);
-
-    $response->assertStatus(403);
-});
-
-// ---------------------------------------------------------------------------
 // F015-16: POST /api/services/deposit — officer same-branch can act on behalf
 // ---------------------------------------------------------------------------
 
@@ -442,33 +413,6 @@ test('F015-18: Manager can withdraw from member account in same branch (act-on-b
 
     // NOT 403 (branch and officer permission OK)
     expect($response->status())->not->toBe(403);
-});
-
-// ---------------------------------------------------------------------------
-// F015-19: POST /api/services/withdrawal — officer with branch bypass can withdraw cross-branch
-// ---------------------------------------------------------------------------
-
-test('F015-19: Loan officer cannot withdraw even with branch bypass (403)', function () {
-    // loan officer is in office branch; mainMember is in main branch
-    $savingsAccount = Account::where('user_id', $this->mainMember->id)
-        ->where('account_type', 'savings')
-        ->first();
-
-    if (! $savingsAccount) {
-        Account::create([
-            'user_id' => $this->mainMember->id,
-            'account_type' => 'savings',
-            'balance' => 5000,
-        ]);
-    }
-
-    $response = $this->actingAs($this->loan)->postJson('/api/services/withdrawal', [
-        'member_id' => $this->mainMember->id,
-        'amount' => 200,
-        'transaction_mode' => 'counter',
-    ]);
-
-    $response->assertStatus(403);
 });
 
 // ---------------------------------------------------------------------------

@@ -63,7 +63,7 @@ test('F019-3: admin lists roles with permissions, counts, and catalog groups', f
     $roles = $response->json('roles');
     expect($roles)->toContain('manager')
         ->and($roles)->toContain('accountant')
-        ->and($roles)->toContain('loan');
+        ->not->toContain('loan');
 });
 
 test('F019-4: reserved roles are excluded from editable roles list', function () {

@@ -47,7 +47,7 @@ class LogSeeder extends Seeder
         $created = 0;
         $accountant = $this->officer('accountant');
         $manager = $this->officer('manager');
-        $loanOfficer = $this->officer('loan');
+        $reviewer = $this->officer('accountant');
 
         foreach (Loan::query()->with('user')->orderBy('id')->get() as $loan) {
             $member = $loan->user;
@@ -104,7 +104,7 @@ class LogSeeder extends Seeder
                     $loan->loan_number,
                     (int) $loan->term_months,
                     number_format($settled, 2)
-                ), 'loans', $loan, $loanOfficer, $loan->approved_at?->copy()->addMonths((int) $loan->term_months));
+                ), 'loans', $loan, $reviewer, $loan->approved_at?->copy()->addMonths((int) $loan->term_months));
             }
         }
 

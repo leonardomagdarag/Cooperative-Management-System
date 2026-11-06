@@ -280,7 +280,7 @@ final class MemberRoster
                     'interview' => [
                         'scheduled_ago_days' => 15,
                         'completed_ago_days' => 8,
-                        'officer_user_number' => 'USR000005',
+                        'officer_user_number' => 'USR000004',
                         'notes' => 'Applicant is a permanent government employee with a confirmed salary credit. '
                             .'Business proposal reviewed, projected cash flow covers the amortisation.',
                     ],
@@ -397,7 +397,7 @@ final class MemberRoster
                     'interview' => [
                         'scheduled_ago_days' => 32,
                         'completed_ago_days' => 20,
-                        'officer_user_number' => 'USR000005',
+                        'officer_user_number' => 'USR000004',
                         'notes' => 'Trading volume and cash on hand do not support a ₱30,000 amortisation.',
                     ],
                 ],

@@ -17,7 +17,7 @@ beforeEach(function () {
     $this->manager = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
     $this->accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
     $this->accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
-    $this->loanOfficer = User::where('email', 'leo.baluyot039+loan@gmail.com')->firstOrFail();
+    $this->accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
     $this->member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
 });
 

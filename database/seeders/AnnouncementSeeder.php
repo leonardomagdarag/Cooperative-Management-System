@@ -42,7 +42,7 @@ class AnnouncementSeeder extends Seeder
                 'title' => 'Group Lending: Four Co-makers Required',
                 'content' => 'A group loan of up to ₱5,000 over six months needs four co-makers who are members in good '
                     .'standing. All five names appear on the same promissory note, so please confirm the list with the '
-                    .'loan officer before signing.',
+                    .'cooperative staff before signing.',
                 'type' => Announcement::TYPE_ANNOUNCEMENT,
                 'visibility' => [Announcement::VISIBILITY_MEMBERS],
                 'created_at' => now()->subDays(38),

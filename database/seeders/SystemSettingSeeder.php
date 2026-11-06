@@ -123,27 +123,6 @@ class SystemSettingSeeder extends Seeder
                 'label' => 'Backup Storage Warning Threshold',
                 'description' => 'Notify administrators when local backup storage usage reaches this percentage',
             ],
-
-            // ── Collections ───────────────────────────────────────────────
-            [
-                'key' => 'collections.approval_stages',
-                'value' => json_encode([
-                    ['key' => 'review', 'label' => 'Accountant Review', 'permission' => 'collections.review'],
-                    ['key' => 'approve', 'label' => 'Manager Approval', 'permission' => 'collections.approve'],
-                ]),
-                'type' => 'json',
-                'group' => 'collections',
-                'label' => 'Approval Stages',
-                'description' => 'Configurable approval chain for collection runs',
-            ],
-            [
-                'key' => 'collections.submit_grace_minutes',
-                'value' => '0',
-                'type' => 'number',
-                'group' => 'collections',
-                'label' => 'Submission Grace Period (minutes)',
-                'description' => 'Allow submission after the collection date ends',
-            ],
         ];
 
         foreach ($settings as $setting) {

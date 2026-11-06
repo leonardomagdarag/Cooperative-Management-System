@@ -44,18 +44,6 @@ class OversightRequestSeeder extends Seeder
                 'expires_at' => now()->addHours(21),
             ],
             [
-                'idempotency_key' => '22222222-2222-4222-8222-222222222222',
-                'action_type' => 'permissions.update',
-                'status' => 'pending',
-                'payload' => [
-                    'role' => 'loan',
-                    'permissions' => ['dashboard.view', 'loans.view', 'loans.create', 'loans.update'],
-                ],
-                'requested_by' => $manager?->id,
-                'requested_at' => now()->subHours(9),
-                'expires_at' => now()->addHours(15),
-            ],
-            [
                 'idempotency_key' => '33333333-3333-4333-8333-333333333333',
                 'action_type' => 'settings.update',
                 'status' => 'rejected',

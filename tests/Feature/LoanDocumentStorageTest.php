@@ -16,8 +16,8 @@ beforeEach(function () {
 });
 
 test('loan document upload stores file on private local disk and not public disk', function () {
-    $loanOfficer = User::where('email', 'leo.baluyot039+loan@gmail.com')->firstOrFail();
-    $loanOfficer->givePermissionTo('loans.update');
+    $accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
+    $accountant->givePermissionTo('loans.update');
     $borrower = User::factory()->create();
     $borrower->assignRole('member');
 
@@ -28,7 +28,7 @@ test('loan document upload stores file on private local disk and not public disk
 
     $file = UploadedFile::fake()->create('payslip.pdf', 100, 'application/pdf');
 
-    $response = $this->actingAs($loanOfficer)
+    $response = $this->actingAs($accountant)
         ->postJson("/api/loans/{$loan->id}/documents", [
             'document' => $file,
         ]);
@@ -120,7 +120,7 @@ test('another member cannot download a borrower loan document', function () {
 });
 
 test('officer with loans.view permission can download borrower loan document', function () {
-    $admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
+    $accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
     $borrower = User::factory()->create();
     $borrower->assignRole('member');
 
@@ -137,7 +137,7 @@ test('officer with loans.view permission can download borrower loan document', f
         'uploaded_by' => $borrower->id,
     ]);
 
-    $response = $this->actingAs($admin)
+    $response = $this->actingAs($accountant)
         ->get("/api/loans/{$loan->id}/documents/{$document->id}");
 
     $response->assertOk();

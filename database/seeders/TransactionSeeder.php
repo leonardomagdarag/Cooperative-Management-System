@@ -31,8 +31,8 @@ class TransactionSeeder extends Seeder
     /** Counter staff: the officer who books counter transactions. */
     private const TELLER = 'USR000004';
 
-    /** Loan officer, who countersigns loan disbursements and payments. */
-    private const LOAN_OFFICER = 'USR000005';
+    /** The accountant records loan disbursements and payments. */
+    private const LOAN_OFFICER = 'USR000004';
 
     public function run(): void
     {
@@ -49,7 +49,7 @@ class TransactionSeeder extends Seeder
         $this->ensureAccounts($members);
 
         $teller = $ledger->officer(self::TELLER);
-        $loanOfficer = $ledger->officer(self::LOAN_OFFICER);
+        $loanReviewer = $ledger->officer(self::LOAN_OFFICER);
 
         foreach (MemberRoster::all() as $member) {
             $user = $members[$member['user_number']] ?? null;
@@ -73,7 +73,7 @@ class TransactionSeeder extends Seeder
             $this->savingsHistory($ledger, $savings, $member, $installments, $this->disbursedAmount($loan), $teller?->id);
 
             if ($loan) {
-                $this->loanActivity($ledger, $savings, $loan, $installments, $teller?->id, $loanOfficer?->id);
+                $this->loanActivity($ledger, $savings, $loan, $installments, $teller?->id, $loanReviewer?->id);
             }
         }
 

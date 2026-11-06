@@ -104,7 +104,7 @@ class HelpContent
                         ],
                         [
                             'q' => 'What are the review stages of a loan application?',
-                            'a' => 'Your application progresses through five transparent stages: (1) Pending submission, (2) Under Review by the Loan Officer, (3) Endorsed for Approval, (4) Approved by the Manager/Board, and (5) Disbursed by the Cashier/Accountant.',
+                            'a' => 'Your application progresses through five transparent stages: (1) Pending submission, (2) Under Review by cooperative staff, (3) Endorsed for Approval, (4) Approved by the Manager/Board, and (5) Disbursed by the Cashier/Accountant.',
                             'tags' => ['review pipeline', 'approval stages', 'loan status'],
                         ],
                         [

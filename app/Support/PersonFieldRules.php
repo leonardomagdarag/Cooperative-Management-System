@@ -45,7 +45,6 @@ final class PersonFieldRules
         'Vice Chairman',
         'Secretary',
         'Treasurer',
-        'Loan Officer',
         'Accountant',
         'Member',
     ];

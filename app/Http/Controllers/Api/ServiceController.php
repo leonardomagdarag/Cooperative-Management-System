@@ -10,7 +10,6 @@ use App\Models\SystemSetting;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\AuditLogService;
-use App\Services\CollectionRunService;
 use App\Services\LoanPaymentAllocationService;
 use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
@@ -672,7 +671,6 @@ class ServiceController extends Controller
         });
 
         if ($validated['action'] === 'approve' && $transaction->transaction_type === 'loan_payment' && $transaction->loan) {
-            app(CollectionRunService::class)->notifyOpenRunOfficersOfExternalPayment($transaction->loan, (float) $transaction->amount);
         }
 
         $this->notifyTransactionDecision($transaction->fresh(), $validated['action'], $validated['reason'] ?? null);

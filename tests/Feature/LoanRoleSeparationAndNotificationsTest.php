@@ -15,8 +15,8 @@ beforeEach(function () {
     $this->chairman->assignRole('chairman');
     $this->manager = User::factory()->create(['role' => 'manager', 'is_officer' => true]);
     $this->manager->assignRole('manager');
-    $this->loanOfficer = User::factory()->create(['role' => 'loan', 'is_officer' => true]);
-    $this->loanOfficer->assignRole('loan');
+    $this->reviewer = User::factory()->create(['role' => 'accountant', 'is_officer' => true]);
+    $this->reviewer->assignRole('accountant');
     $this->applicant = User::factory()->create(['role' => 'member']);
     $this->applicant->assignRole('member');
 });
@@ -24,14 +24,14 @@ beforeEach(function () {
 test('chairman may approve own endorsement but remains distinct from the applicant and encoder', function () {
     $loan = Loan::factory()->pending()->create([
         'user_id' => $this->applicant->id,
-        'encoded_by' => $this->loanOfficer->id,
+        'encoded_by' => $this->reviewer->id,
         'reviewed_by' => $this->manager->id,
     ]);
 
     expect(Gate::forUser($this->chairman)->allows('finalApprove', $loan))->toBeTrue()
         ->and(Gate::forUser($this->manager)->allows('finalApprove', $loan))->toBeFalse()
         ->and(Gate::forUser($this->applicant)->allows('finalApprove', $loan))->toBeFalse()
-        ->and(Gate::forUser($this->loanOfficer)->allows('finalApprove', $loan))->toBeFalse();
+        ->and(Gate::forUser($this->reviewer)->allows('finalApprove', $loan))->toBeFalse();
 
     $loan->update(['reviewed_by' => $this->chairman->id]);
     expect(Gate::forUser($this->chairman)->allows('finalApprove', $loan->fresh()))->toBeTrue();
@@ -39,7 +39,7 @@ test('chairman may approve own endorsement but remains distinct from the applica
     $loan->update(['reviewed_by' => $this->manager->id, 'encoded_by' => $this->chairman->id]);
     expect(Gate::forUser($this->chairman)->allows('finalApprove', $loan->fresh()))->toBeFalse();
 
-    $loan->update(['encoded_by' => $this->loanOfficer->id, 'user_id' => $this->chairman->id]);
+    $loan->update(['encoded_by' => $this->reviewer->id, 'user_id' => $this->chairman->id]);
     expect(Gate::forUser($this->chairman)->allows('finalApprove', $loan->fresh()))->toBeFalse();
 });
 

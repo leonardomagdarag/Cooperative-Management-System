@@ -20,10 +20,9 @@ beforeEach(function () {
 
     $this->admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
     $this->manager = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
-    $this->loanOfficer = User::where('email', 'leo.baluyot039+loan@gmail.com')->firstOrFail();
-    // Review and loan maintenance are permission-gated and are not in the
-    // default loan role preset. Grant them explicitly for these workflow tests.
-    $this->loanOfficer->givePermissionTo('loans.update');
+    $this->accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
+    // Review and loan maintenance are permission-gated; grant them explicitly for these workflow tests.
+    $this->accountant->givePermissionTo('loans.update');
     $this->chairman = User::factory()->create(['role' => 'chairman', 'is_officer' => true]);
     $this->chairman->assignRole('chairman');
     $this->borrower = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
@@ -53,7 +52,7 @@ test('F024-2: regular borrower cannot review, disburse, or close loans', functio
     $this->postJson("/api/loans/{$loan->id}/close")->assertForbidden();
 });
 
-test('F024-3: loan officer can start review and endorse loan for approval', function () {
+test('F024-3: staff with loan update permission can start review and endorse a loan', function () {
     $loan = Loan::factory()->create([
         'user_id' => $this->borrower->id,
         'account_id' => $this->savingsAccount->id,
@@ -62,14 +61,14 @@ test('F024-3: loan officer can start review and endorse loan for approval', func
         'review_status' => null,
     ]);
 
-    $this->actingAs($this->loanOfficer);
+    $this->actingAs($this->accountant);
 
     // 1. Start review
     $res1 = $this->postJson("/api/loans/{$loan->id}/review", ['action' => 'start_review']);
     $res1->assertOk();
     $loan->refresh();
     expect($loan->review_status)->toBe('under_review')
-        ->and($loan->reviewed_by)->toBe($this->loanOfficer->id);
+        ->and($loan->reviewed_by)->toBe($this->accountant->id);
 
     // 2. Endorse for approval
     $res2 = $this->postJson("/api/loans/{$loan->id}/review", ['action' => 'endorse']);
@@ -78,7 +77,7 @@ test('F024-3: loan officer can start review and endorse loan for approval', func
     expect($loan->review_status)->toBe('endorsed_for_approval');
 });
 
-test('F024-4: loan officer can reject loan during review with notes', function () {
+test('F024-4: staff with loan update permission can reject a loan during review', function () {
     $loan = Loan::factory()->create([
         'user_id' => $this->borrower->id,
         'account_id' => $this->savingsAccount->id,
@@ -87,7 +86,7 @@ test('F024-4: loan officer can reject loan during review with notes', function (
         'review_status' => 'under_review',
     ]);
 
-    $response = $this->actingAs($this->loanOfficer)->postJson("/api/loans/{$loan->id}/review", [
+    $response = $this->actingAs($this->accountant)->postJson("/api/loans/{$loan->id}/review", [
         'action' => 'reject',
         'notes' => 'Credit score does not meet minimum threshold.',
     ]);
@@ -97,10 +96,10 @@ test('F024-4: loan officer can reject loan during review with notes', function (
     expect($loan->review_status)->toBe('review_rejected')
         ->and($loan->loan_status)->toBe('rejected')
         ->and($loan->review_notes)->toBe('Credit score does not meet minimum threshold.')
-        ->and($loan->reviewed_by)->toBe($this->loanOfficer->id);
+        ->and($loan->reviewed_by)->toBe($this->accountant->id);
 });
 
-test('F024-5: loan officer can record interview completion and schedule', function () {
+test('F024-5: staff with loan update permission can record interview completion and schedule', function () {
     $loan = Loan::factory()->create([
         'user_id' => $this->borrower->id,
         'account_id' => $this->savingsAccount->id,
@@ -111,7 +110,7 @@ test('F024-5: loan officer can record interview completion and schedule', functi
 
     $futureSchedule = now()->addDays(2)->format('Y-m-d H:i:s');
 
-    $response = $this->actingAs($this->loanOfficer)->postJson("/api/loans/{$loan->id}/review", [
+    $response = $this->actingAs($this->accountant)->postJson("/api/loans/{$loan->id}/review", [
         'action' => 'interview_complete',
         'notes' => 'Interview conducted. Collateral verified.',
         'interview_schedule' => $futureSchedule,
@@ -303,7 +302,7 @@ test('F024-12: officer updates loan terms with validation', function () {
         'loan_status' => 'pending',
     ]);
 
-    $response = $this->actingAs($this->loanOfficer)->putJson("/api/loans/{$loan->id}", [
+    $response = $this->actingAs($this->accountant)->putJson("/api/loans/{$loan->id}", [
         'loan_amount' => 6000.00,
         'interest_rate' => 4.0,
         'term_months' => 18,
@@ -331,7 +330,7 @@ test('F024-13: loan deletion requires chairman countersign and only removes an u
         'due_date' => null,
     ]);
 
-    $response = $this->actingAs($this->loanOfficer)->deleteJson("/api/loans/{$loan->id}");
+    $response = $this->actingAs($this->accountant)->deleteJson("/api/loans/{$loan->id}");
     $response->assertStatus(202)
         ->assertJsonPath('status', 'pending');
 
@@ -385,12 +384,12 @@ test('F024-15: active loan with payment history cannot be deleted or disappear f
         'account_id' => $this->savingsAccount->id,
         'loan_id' => $loan->id,
         'branch_id' => $this->mainBranch->id,
-        'recorded_by' => $this->loanOfficer->id,
+        'recorded_by' => $this->accountant->id,
         'transaction_type' => 'loan_payment',
         'status' => 'completed',
     ]);
 
-    $this->actingAs($this->loanOfficer)
+    $this->actingAs($this->accountant)
         ->deleteJson("/api/loans/{$loan->id}")
         ->assertStatus(409);
 
@@ -413,7 +412,7 @@ test('F024-16: loan list marks only untouched pending applications as deletable'
         'due_date' => null,
     ]);
 
-    $this->actingAs($this->loanOfficer)
+    $this->actingAs($this->accountant)
         ->getJson('/api/loans?search='.$loan->loan_number)
         ->assertOk()
         ->assertJsonPath('data.0.id', $loan->id)

@@ -109,7 +109,6 @@ Route::middleware(['auth', 'otp.verified', 'verified'])->group(function () {
             '/member/dashboard' => 'member.dashboard',
             '/accountant/dashboard' => 'accountant.dashboard',
             '/secretary/dashboard' => 'secretary.dashboard',
-            '/loan/dashboard' => 'loan.dashboard',
         ] as $legacyPath => $legacyName
     ) {
         Route::get($legacyPath, function (Request $request) {

@@ -160,7 +160,7 @@ class NotificationSeeder extends Seeder
                 strtolower($loan->loan_type_label),
                 number_format((float) $loan->loan_amount, 2),
                 $loan->loan_number,
-                $loan->reviewer_note ?: 'Please discuss the requirements with the loan officer.'
+                $loan->reviewer_note ?: 'Please discuss the requirements with cooperative staff.'
             ), 'normal', $loan, read: true);
 
             $created++;

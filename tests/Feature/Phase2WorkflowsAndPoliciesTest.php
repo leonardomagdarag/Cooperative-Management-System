@@ -17,8 +17,6 @@ beforeEach(function () {
 
     $this->admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
     $this->manager = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
-    $this->loanOfficer = User::where('email', 'leo.baluyot039+loan@gmail.com')->firstOrFail();
-    $this->accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
     $this->accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
     $this->member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
 
@@ -26,8 +24,8 @@ beforeEach(function () {
     Storage::fake('public');
 });
 
-test('loan role cannot encode loans without loans.encode', function () {
-    actingAs($this->loanOfficer);
+test('accountant cannot encode loans without loans.encode', function () {
+    actingAs($this->accountant);
 
     $indexResponse = $this->getJson('/api/loans')
         ->assertOk();
@@ -49,7 +47,7 @@ test('loan role cannot encode loans without loans.encode', function () {
     $this->postJson('/api/loans', $payload)->assertForbidden();
 });
 
-test('loan officer with loans.disburse can disburse approved loan', function () {
+test('accountant with loans.disburse can disburse an approved loan', function () {
     $memberAccount = Account::firstOrCreate(
         ['user_id' => $this->member->id, 'account_type' => 'savings'],
         ['balance' => 1000]
@@ -69,8 +67,8 @@ test('loan officer with loans.disburse can disburse approved loan', function () 
         'approved_by' => $this->manager->id,
     ]);
 
-    $this->loanOfficer->givePermissionTo('loans.disburse');
-    actingAs($this->loanOfficer);
+    $this->accountant->givePermissionTo('loans.disburse');
+    actingAs($this->accountant);
     $this->postJson("/api/loans/{$loan->id}/disburse", ['destination' => 'savings'])
         ->assertOk();
 
@@ -78,7 +76,7 @@ test('loan officer with loans.disburse can disburse approved loan', function () 
         ->and((float) $memberAccount->fresh()->balance)->toBe(21000.0);
 });
 
-test('loan officer or borrower can upload loan document', function () {
+test('only an officer granted loans.update or the borrower can upload a loan document', function () {
     $loan = Loan::create([
         'user_id' => $this->member->id,
         'loan_product' => 'business',
@@ -93,8 +91,8 @@ test('loan officer or borrower can upload loan document', function () {
 
     $file = UploadedFile::fake()->create('contract.pdf', 50, 'application/pdf');
 
-    // Upload is permission-gated; the default loan preset lacks loans.update.
-    actingAs($this->loanOfficer);
+    // Upload is permission-gated; accountant defaults do not grant loans.update.
+    actingAs($this->accountant);
     $this->postJson("/api/loans/{$loan->id}/documents", [
         'document' => $file,
     ])->assertForbidden();

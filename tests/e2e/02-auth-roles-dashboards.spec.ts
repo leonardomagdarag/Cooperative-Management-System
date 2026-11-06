@@ -49,17 +49,6 @@ test.describe('2. Authentication, Roles & Dashboards', () => {
     await logoutViaUI(page);
   });
 
-  test('2.5 Loan Officer logs in and views Loan Overview dashboard', async ({ page }) => {
-    await loginViaUI(page, 'loan');
-    await expect(page).toHaveURL(/\/dashboard/);
-
-    // Verify Loan Overview elements
-    await expect(page.locator('text=/Loan Portfolio|Active Loans|Loan Status/i').first()).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('aside a[href="/dashboard/loans"]').first()).toBeVisible();
-
-    await logoutViaUI(page);
-  });
-
   test('2.6 Chairman logs in and demonstrates payload is_officer omission defect', async ({ page }) => {
     await loginViaUI(page, 'chairman');
     await expect(page).toHaveURL(/\/dashboard/);

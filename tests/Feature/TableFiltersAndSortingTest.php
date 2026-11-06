@@ -13,7 +13,7 @@ beforeEach(function () {
 });
 
 test('officer role priority sorts the full result before pagination and uses assigned roles', function () {
-    $officer = User::factory()->create(['role' => 'loan', 'is_officer' => true]);
+    $officer = User::factory()->create(['role' => 'accountant', 'is_officer' => true]);
     $officer->assignRole('manager');
     $response = $this->actingAs($this->viewer)->getJson('/api/members?is_officer=1&sort=role&role_first=manager&direction=asc&per_page=5');
     $response->assertOk();
@@ -22,8 +22,8 @@ test('officer role priority sorts the full result before pagination and uses ass
     expect($response->json('sort_roles'))->toContain('manager');
     expect(collect($response->json('data'))->pluck('id'))->toContain($officer->id);
 
-    $this->getJson('/api/members?is_officer=1&sort=role&role_first=loan&direction=asc&per_page=5')
-        ->assertOk()->assertJsonPath('data.0.primary_role', 'loan');
+    $this->getJson('/api/members?is_officer=1&sort=role&role_first=accountant&direction=asc&per_page=5')
+        ->assertOk()->assertJsonPath('data.0.primary_role', 'accountant');
 });
 
 test('member name sorting preserves user ids and respects branch filters', function () {

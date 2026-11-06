@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -32,6 +33,9 @@ class LoanController extends Controller
     {
         $user = Auth::user();
         $canViewAll = (bool) ($user && $user->can('loans.view'));
+        $overdueToday = $request->boolean('overdue_today');
+
+        abort_if($overdueToday && ! $canViewAll, 403);
 
         $query = Loan::with(['branch', 'user.personalData', 'reviewer.personalData', 'groupMembers.personalData', 'product'])
             ->withCount(['transactions', 'documents', 'groupMembers', 'collectionRunItems']);
@@ -40,6 +44,10 @@ class LoanController extends Controller
             $query->where('user_id', $user->id);
         } else {
             BranchScope::applyToLoans($query, $user, $request->input('branch_id'));
+        }
+
+        if ($overdueToday) {
+            $query->where('loan_status', 'active')->whereNotNull('disbursed_at');
         }
 
         // Search
@@ -87,7 +95,26 @@ class LoanController extends Controller
         $query->orderBy('loans.id');
 
         $perPage = max(5, min((int) $request->integer('per_page', 10), 50));
-        $paginator = $query->paginate($perPage);
+        if ($overdueToday) {
+            // The schedule includes cent-level installment allocations, reversals,
+            // and penalty payments, so calculate from the canonical Loan model.
+            $overdueLoans = $query->get()->filter(function (Loan $loan) {
+                $metrics = $loan->getCollectionMetrics();
+                $loan->setAttribute('overdue_metrics', $metrics);
+
+                return $metrics['amount_due'] > 0;
+            })->values();
+            $page = max(1, $request->integer('page', 1));
+            $paginator = new LengthAwarePaginator(
+                $overdueLoans->forPage($page, $perPage)->values(),
+                $overdueLoans->count(),
+                $perPage,
+                $page,
+                ['path' => $request->url(), 'query' => $request->query()],
+            );
+        } else {
+            $paginator = $query->paginate($perPage);
+        }
 
         return response()->json([
             'data' => $paginator->getCollection()->map(fn ($l) => [
@@ -104,6 +131,8 @@ class LoanController extends Controller
                 'applied_at' => $l->applied_at?->format('Y-m-d'),
                 'created_at' => $l->created_at->format('M d, Y'),
                 'due_date' => $l->due_date,
+                'amount_due' => $l->getAttribute('overdue_metrics')['amount_due'] ?? null,
+                'days_overdue' => $l->getAttribute('overdue_metrics')['days_overdue'] ?? null,
                 'borrower' => $l->user?->personalData ? [
                     'name' => trim($l->user->personalData->first_name.' '.$l->user->personalData->last_name),
                     'user_number' => $l->user->user_number,

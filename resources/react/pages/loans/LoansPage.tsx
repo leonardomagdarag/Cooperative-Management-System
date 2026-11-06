@@ -26,6 +26,7 @@ export default function LoansPage() {
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
     const [loanStatus, setLoanStatus] = useState('');
+    const [overdueToday, setOverdueToday] = useState(false);
     const [selectedLoanId, setSelectedLoanId] = useState<number | null>(null);
     const [disbursementLoan, setDisbursementLoan] = useState<any>(null);
     const [disbursementDestination, setDisbursementDestination] = useState<'cash' | 'savings'>('cash');
@@ -53,8 +54,8 @@ export default function LoansPage() {
     const canUploadDocument = !!user?.permissions?.includes('loans.update');
 
     const { data, isLoading } = useQuery({
-        queryKey: ['loans', search, page, sort, direction, branchFilter, from, to, loanStatus],
-        queryFn: () => api.get('/api/loans', { params: { search: search || undefined, branch_id: branchFilter || undefined, page, per_page: 10, sort, direction, from: from || undefined, to: to || undefined, loan_status: loanStatus || undefined } }),
+        queryKey: ['loans', search, page, sort, direction, branchFilter, from, to, loanStatus, overdueToday],
+        queryFn: () => api.get('/api/loans', { params: { search: search || undefined, branch_id: branchFilter || undefined, page, per_page: 10, sort, direction, from: from || undefined, to: to || undefined, loan_status: overdueToday ? undefined : (loanStatus || undefined), overdue_today: overdueToday || undefined } }),
     });
 
     const { data: loanDetail } = useQuery({
@@ -163,6 +164,7 @@ export default function LoansPage() {
     const loans = data?.data?.data ?? [];
     const pagination = data?.data?.pagination;
     const canEncode = data?.data?.can_encode;
+    const canViewAll = !!user?.permissions?.includes('loans.view');
     const role = user?.primary_role;
     const canDisburse = !!user?.permissions?.includes('loans.disburse');
     const canClose = role === 'chairman' || role === 'manager';
@@ -222,12 +224,15 @@ export default function LoansPage() {
                 />
 
                 <div className="table-toolbar mb-4">
+                    {canViewAll && <button type="button" onClick={() => { setOverdueToday(value => !value); setLoanStatus(''); setPage(1); }} aria-pressed={overdueToday} className={`rounded-lg border px-3 py-2 text-sm font-medium ${overdueToday ? 'border-amber-600 bg-amber-50 text-amber-800' : 'border-gray-300 bg-white text-gray-700'}`}>
+                        <i className="fas fa-clock mr-2"></i>{overdueToday ? 'Showing overdue today' : 'Overdue today'}
+                    </button>}
                     <DateRangeFilter from={from} to={to} onFromChange={value => { setFrom(value); setPage(1); }} onToChange={value => { setTo(value); setPage(1); }} />
-                    <label className="flex items-center gap-2 text-sm text-gray-600">Status
+                    {!overdueToday && <label className="flex items-center gap-2 text-sm text-gray-600">Status
                         <select value={loanStatus} onChange={event => { setLoanStatus(event.target.value); setPage(1); }} className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm">
                             <option value="">All statuses</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="active">Active</option><option value="paid_off">Paid off</option><option value="rejected">Rejected</option>
                         </select>
-                    </label>
+                    </label>}
                     {canAssignBranch && <div className="w-full sm:w-64"><BranchSelect label="" value={branchFilter} onChange={v => { setBranchFilter(v); setPage(1); }} allLabel="All branches" /></div>}
                 </div>
 
@@ -236,7 +241,7 @@ export default function LoansPage() {
                 ) : loans.length === 0 ? (
                     <div className="rounded-lg border border-dashed border-gray-300 bg-white p-12 text-center">
                         <i className="fas fa-file-invoice-dollar text-4xl text-gray-300"></i>
-                        <p className="mt-4 text-sm text-gray-500">No loans found</p>
+                        <p className="mt-4 text-sm text-gray-500">{overdueToday ? 'No loans are due or overdue today' : 'No loans found'}</p>
                     </div>
                 ) : (
                     <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-xs">
@@ -248,6 +253,7 @@ export default function LoansPage() {
                                     {sortableTh('Amount', 'loan_amount')}
                                     {sortableTh('Type', 'loan_type')}
                                     {sortableTh('Status', 'loan_status')}
+                                    {overdueToday && <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Due now</th>}
                                     {canAssignBranch && <SortableHeader field="branch" sort={sort} direction={direction} onSort={toggleSort} className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Branch</SortableHeader>}
                                     {sortableTh('Date', 'created_at')}
                                     <th className="p-4 text-xs font-medium text-left text-gray-500 uppercase">Actions</th>
@@ -269,6 +275,7 @@ export default function LoansPage() {
                                             <span className={`px-2.5 py-0.5 text-xs font-medium rounded ${getStatusColor(l.loan_status)}`}>{getStatusLabel(l.loan_status)}</span>
                                             {awaitingDisbursement && <div className="mt-1 text-xs font-medium text-emerald-800">Awaiting disbursement</div>}
                                         </td>
+                                        {overdueToday && <td className="p-4 text-sm font-semibold text-amber-800">₱{Number(l.amount_due ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}<div className="text-xs font-normal text-gray-500">{l.days_overdue === 0 ? 'Due today' : `${l.days_overdue} day(s) overdue`}</div></td>}
                                         {canAssignBranch && <td className="p-4 truncate" title={l.branch_name}><BranchBadge name={l.branch_name} /></td>}
                                         <td className="p-4 text-sm text-gray-900">{l.created_at}</td>
                                         <td className="p-4">

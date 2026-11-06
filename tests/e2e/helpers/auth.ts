@@ -21,12 +21,6 @@ export const TEST_USERS = {
     name: 'Jasmin Latayan',
     role: 'accountant',
   },
-  loan: {
-    email: 'leo.baluyot039+loan@gmail.com',
-    password: 'password',
-    name: 'Leanard Guiriba',
-    role: 'loan',
-  },
   chairman: {
     email: 'leo.baluyot039+chairman@gmail.com',
     password: 'password',

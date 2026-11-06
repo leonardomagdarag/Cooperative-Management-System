@@ -14,11 +14,11 @@ beforeEach(function () {
     $this->admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
     $this->chairman = User::factory()->create(['role' => 'chairman', 'is_officer' => true]);
     $this->chairman->assignRole('chairman');
-    $this->officer = User::where('email', 'leo.baluyot039+loan@gmail.com')->firstOrFail();
+    $this->officer = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
     $this->borrower = User::factory()->create();
 });
 
-test('loan officer cannot approve an endorsed loan (role gate)', function () {
+test('accountant without loan review permission cannot approve an endorsed loan', function () {
     $loan = Loan::factory()->create([
         'user_id' => $this->borrower->id,
         'loan_status' => 'pending',
@@ -102,7 +102,7 @@ test('chairman can return an endorsed loan for review with notes', function () {
         ->and($loan->loan_status)->toBe('pending');
 });
 
-test('loan officer can start review', function () {
+test('accountant granted loan review permission can start review', function () {
     $loan = Loan::factory()->create([
         'user_id' => $this->borrower->id,
         'loan_status' => 'pending',

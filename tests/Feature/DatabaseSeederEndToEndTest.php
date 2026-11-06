@@ -41,7 +41,7 @@ test('the whole seeder runs on an empty database and produces a coherent coopera
     $this->seed(DatabaseSeeder::class);
 
     // Nothing should be missing.
-    expect(User::count())->toBe(26)
+    expect(User::count())->toBe(25)
         ->and(Branch::count())->toBe(2)
         ->and(LoanProduct::count())->toBe(3)
         ->and(Account::count())->toBe(40)
@@ -55,7 +55,7 @@ test('the whole seeder runs on an empty database and produces a coherent coopera
     // The previously empty modules carry data too.
     expect(MemberApplication::count())->toBeGreaterThan(0)
         ->and(Ticket::count())->toBeGreaterThan(0)
-        ->and(CollectionRun::count())->toBe(2)
+        ->and(CollectionRun::count())->toBe(0)
         ->and(TrustedDevice::count())->toBeGreaterThan(0)
         ->and(PrivilegedActionRequest::count())->toBeGreaterThan(0)
         ->and(LoanDocument::count())->toBeGreaterThan(0)

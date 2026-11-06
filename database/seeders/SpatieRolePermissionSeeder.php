@@ -40,7 +40,6 @@ class SpatieRolePermissionSeeder extends Seeder
             'chairman' => $officerPresets['chairman'],
             'manager' => $officerPresets['manager'],
             'accountant' => $officerPresets['accountant'],
-            'loan' => $officerPresets['loan'],
             'developer' => $officerPresets['developer'],
 
             // Regular members: limited self-service permissions
@@ -83,6 +82,10 @@ class SpatieRolePermissionSeeder extends Seeder
                 $role->givePermissionTo($missingPermissions);
             }
         }
+
+        // Clear grants from any legacy loan role that predates the retirement migration.
+        Role::query()->where('name', 'loan')->where('guard_name', 'web')->get()
+            ->each(fn (Role $role) => $role->syncPermissions([]));
 
         // Maker-checker exceptions belong to officer-level overrides, except
         // for manager who has self-approval for financial transactions in preset.

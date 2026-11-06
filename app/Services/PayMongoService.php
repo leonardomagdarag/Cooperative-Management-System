@@ -471,7 +471,6 @@ class PayMongoService
                     if ($loan->remainingBalance() <= 0 && $loan->loan_status !== 'paid_off') {
                         $loan->update(['loan_status' => 'paid_off']);
                     }
-                    app(CollectionRunService::class)->notifyOpenRunOfficersOfExternalPayment($loan, (float) $transaction->amount);
                 }
             }
 

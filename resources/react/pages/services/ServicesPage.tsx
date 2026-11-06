@@ -39,11 +39,9 @@ export default function ServicesPage() {
     
     const perms = user?.permissions || [];
     const isOfficer = user?.primary_role !== 'member' && user?.primary_role !== null;
-    const isAdmin = user?.primary_role === 'admin';
     const canApprove = perms.includes('transactions.approve') || perms.includes('deposits.approve') || perms.includes('withdrawals.approve');
     const canReviewLoans = perms.includes('loans.update');
     const canDeposit = perms.includes('deposits.create') || perms.includes('services.create');
-    const isLoanFocused = !!user && !isAdmin && user.primary_role === 'loan';
 
     const activeService = (searchParams.get('service') as ServiceType) || null;
     const setActiveService = (svc: ServiceType) => {
@@ -156,8 +154,7 @@ export default function ServicesPage() {
         ? (selectedMemberDetail?.loans?.filter((l: any) => ['approved', 'active'].includes(l.loan_status)) ?? []).length
         : (isOfficer ? 0 : (dashboardData?.data?.active_loans_count ?? 0));
 
-    const hideFinancials = isLoanFocused;
-    const gridCols = hideFinancials ? 'sm:grid-cols-2' : isOfficer ? 'sm:grid-cols-2 xl:grid-cols-3' : 'sm:grid-cols-2 xl:grid-cols-4';
+    const gridCols = isOfficer ? 'sm:grid-cols-2 xl:grid-cols-3' : 'sm:grid-cols-2 xl:grid-cols-4';
 
     const handleSelectMember = (m: any) => {
         setSelectedMember(m);
@@ -377,8 +374,7 @@ export default function ServicesPage() {
                         <p className="text-sm text-slate-600">{t('Your current balances and request activity.')}</p>
                     </div>
                     <div className={`grid grid-cols-1 ${gridCols} gap-4`}>
-                        {!hideFinancials && (
-                            <>
+                        <>
                                 <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-5 border-l-4 border-green-500">
                                     <p className="text-sm font-medium text-green-700 mb-1">{t('Savings Balance')}</p>
                                     <p className="text-2xl font-bold text-green-900">{!dashboardData ? '\u2014' : `\u20B1${Number(savingsBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}</p>
@@ -387,8 +383,7 @@ export default function ServicesPage() {
                                     <p className="text-sm font-medium text-blue-700 mb-1">{t('Share Capital')}</p>
                                     <p className="text-2xl font-bold text-blue-900">{!dashboardData ? '\u2014' : `\u20B1${Number(shareCapitalBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}</p>
                                 </div>
-                            </>
-                        )}
+                        </>
                         <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-5 border-l-4 border-purple-500">
                             <p className="text-sm font-medium text-purple-700 mb-1">{t('Active Loans')}</p>
                             <p className="text-2xl font-bold text-purple-900">{!dashboardData ? '\u2014' : activeLoanCount}</p>
@@ -548,8 +543,7 @@ export default function ServicesPage() {
                     <p className="text-sm text-slate-600">{t(isOfficer ? 'Balances and activity for the selected member.' : 'Your current balances and request activity.')}</p>
                 </div>
                 <div className={`grid grid-cols-1 ${gridCols} gap-4`}>
-                {!hideFinancials && (
-                    <>
+                <>
                         <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-5 border-l-4 border-green-500">
                             <p className="text-sm font-medium text-green-700 mb-1">{t('Savings Balance')}</p>
                             <p className="text-2xl font-bold text-green-900">{hasSelectedMember ? (selectedMemberDetail ? `₱${Number(savingsBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—') : !isOfficer && !dashboardData ? '—' : `₱${Number(savingsBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}</p>
@@ -558,8 +552,7 @@ export default function ServicesPage() {
                             <p className="text-sm font-medium text-blue-700 mb-1">{t('Share Capital')}</p>
                             <p className="text-2xl font-bold text-blue-900">{hasSelectedMember ? (selectedMemberDetail ? `₱${Number(shareCapitalBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—') : !isOfficer && !dashboardData ? '—' : `₱${Number(shareCapitalBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}</p>
                         </div>
-                    </>
-                )}
+                </>
                 <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-5 border-l-4 border-purple-500">
                     <p className="text-sm font-medium text-purple-700 mb-1">{t('Active Loans')}</p>
                     <p className="text-2xl font-bold text-purple-900">{hasSelectedMember ? (selectedMemberDetail ? activeLoanCount : '—') : !isOfficer && !dashboardData ? '—' : activeLoanCount}</p>

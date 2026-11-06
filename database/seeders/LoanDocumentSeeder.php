@@ -36,7 +36,7 @@ class LoanDocumentSeeder extends Seeder
 
     public function run(): void
     {
-        $uploader = User::query()->where('user_number', 'USR000005')->first();
+        $uploader = User::query()->where('user_number', 'USR000004')->first();
 
         $loans = Loan::query()
             ->whereIn('loan_status', ['active', 'paid_off'])

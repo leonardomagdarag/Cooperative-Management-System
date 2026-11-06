@@ -18,7 +18,7 @@ beforeEach(function () {
     $this->admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
     $this->manager = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
     $this->accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
-    $this->loanOfficer = User::where('email', 'leo.baluyot039+loan@gmail.com')->firstOrFail();
+    $this->accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
     $this->borrower = User::where('user_number', 'USR000007')->firstOrFail();
 });
 
@@ -183,9 +183,9 @@ test('approving officer cannot disburse their own approved loan', function () {
         ->postJson("/api/loans/{$loan->id}/disburse", ['destination' => 'cash'])
         ->assertForbidden();
 
-    // A different officer (loan officer holding loans.disburse) CAN disburse it
-    $this->loanOfficer->givePermissionTo('loans.disburse');
-    $this->actingAs($this->loanOfficer)
+    // A different officer with loans.disburse CAN disburse it
+    $this->accountant->givePermissionTo('loans.disburse');
+    $this->actingAs($this->accountant)
         ->postJson("/api/loans/{$loan->id}/disburse", ['destination' => 'cash'])
         ->assertOk();
 

@@ -25,7 +25,7 @@ class DatabaseSeeder extends Seeder
      *  4. CMS content and settings, including the approval chain and the
      *     financial settings the later work reads.
      *  5. Work the desk has already been through — membership, support,
-     *     collections, paperwork and interest crediting — and finally the audit
+     *     paperwork and interest crediting — and finally the audit
      *     trail, which records a slice of the most recent ledger entries and so
      *     has to run after the last one is written.
      */
@@ -60,7 +60,7 @@ class DatabaseSeeder extends Seeder
             AnnouncementSeeder::class,
 
             // 4. Work the desk has already been through — membership, support,
-            //    collections, paperwork and the month's interest crediting.
+            //    paperwork and the month's interest crediting.
             //    These all read rows produced above, so they sit last.
             MemberApplicationSeeder::class,     // the membership tray, incl. one still pending
             TicketSeeder::class,                // the member-support inbox
@@ -68,7 +68,6 @@ class DatabaseSeeder extends Seeder
             OversightRequestSeeder::class,      // two pending countersigns and one declined
             LoanDocumentSeeder::class,          // scanned paperwork on the loan files
             TransactionReceiptSeeder::class,    // printed receipts for counter transactions
-            CollectionRunSeeder::class,         // the loan officer's collection routes
             InterestDisbursementSeeder::class,  // month's interest on savings and share capital
 
             // 5. The audit trail last, so it reads the finished transaction set

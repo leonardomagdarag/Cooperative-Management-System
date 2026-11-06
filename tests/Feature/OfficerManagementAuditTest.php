@@ -16,7 +16,7 @@ beforeEach(function () {
     $this->admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
     $this->manager = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
     $this->accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
-    $this->loanOfficer = User::where('email', 'leo.baluyot039+loan@gmail.com')->firstOrFail();
+    $this->accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
     $this->member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
     $this->mainBranch = Branch::where('code', 'BR000001')->firstOrFail();
 });
@@ -188,7 +188,7 @@ test('F018-11: creating officer with valid officer role requires officers.create
         'phone_number' => '09171234567',
         'password' => 'Password123!',
         'password_confirmation' => 'Password123!',
-        'role' => 'loan',
+        'role' => 'accountant',
     ];
 
     $response = $this->postJson('/api/members', $payload);

@@ -38,10 +38,8 @@ const MemberOverview = lazy(() => import('./pages/overviews/MemberOverview'));
 const AdminOverview = lazy(() => import('./pages/overviews/AdminOverview'));
 const ManagerOverview = lazy(() => import('./pages/overviews/ManagerOverview'));
 const TreasurerOverview = lazy(() => import('./pages/overviews/TreasurerOverview'));
-const LoanOverview = lazy(() => import('./pages/overviews/LoanOverview'));
 const OfficerOverview = lazy(() => import('./pages/overviews/OfficerOverview'));
 const MemberLoansPage = lazy(() => import('./pages/member-loans/MemberLoansPage'));
-const CollectionsPage = lazy(() => import('./pages/collections/CollectionsPage'));
 const MembersPage = lazy(() => import('./pages/members/MembersPage'));
 const OversightApprovalsPage = lazy(() => import('./pages/oversight/OversightApprovalsPage'));
 const ChairmanOverview = lazy(() => import('./pages/overviews/ChairmanOverview'));
@@ -141,13 +139,14 @@ function DashboardRouter() {
 
     if (!section) return <DefaultOverview role={user?.primary_role || 'member'} isOfficer={!!user?.is_officer} />;
 
+    if (section === 'collections') return <Navigate to="/dashboard/loans" replace />;
+
     const sectionMap: Record<string, React.ReactNode> = {
         'notifications': <NotificationsPage />,
         'history': <HistoryPage />,
         'profile': <ProfilePage />,
         'settings': <SettingsPageRoute />,
         'member-loans': <MemberLoansPage />,
-        'collections': <CollectionsPage />,
         'approvals': <PermissionGate permission="oversight.approve"><OversightApprovalsPage /></PermissionGate>,
         'public-content': <PermissionGate permission="settings.update"><PublicContentPage /></PermissionGate>,
         'loan-products': <PermissionGate permission="settings.update"><LoanProductsPage /></PermissionGate>,
@@ -169,7 +168,6 @@ function DashboardRouter() {
         'reports': { permission: 'reports.view' },
         'services': { permission: 'services.view' },
         'members': { permission: 'members.view' },
-        'collections': { multiPermission: ['collections.view-all', 'collections.view-own', 'collections.review', 'collections.approve'] },
     };
 
     if (sectionMap[section]) return sectionMap[section];
@@ -204,7 +202,6 @@ function DashboardRouter() {
                  section === 'reports' ? <ReportsPage /> :
                  section === 'services' ? <ServicesPage /> :
                  section === 'members' ? <MembersPage /> :
-                 section === 'collections' ? <CollectionsPage /> :
                  <DefaultOverview role={user?.primary_role || 'member'} isOfficer={!!user?.is_officer} />}
             </PermissionGate>
         );
@@ -221,7 +218,6 @@ function DefaultOverview({ role, isOfficer }: { role: string; isOfficer?: boolea
         case 'chairman': return <ChairmanOverview />;
         case 'manager': return <ManagerOverview />;
         case 'accountant': case 'treasurer': return <TreasurerOverview />;
-        case 'loan': return <LoanOverview />;
         default:
             if (isOfficer) return <OfficerOverview />;
             return <MemberOverview />;

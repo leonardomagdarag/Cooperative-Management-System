@@ -15,10 +15,9 @@
 | Guest (unauthenticated) | — | No | Public website visitor |
 | Member | `member` | No | Regular cooperative member, self-service only |
 | Administrator | `admin` | Yes | Full system access, all permissions |
-| Chairman | `chairman` | Yes | Countersign approval, officer and branch management, ledger, logs, reports, expenses, collections, and tickets |
+| Chairman | `chairman` | Yes | Countersign approval, officer and branch management, ledger, logs, reports, expenses, and tickets |
 | Manager | `manager` | Yes | Broad operational oversight |
 | Accountant (Treasurer) | `accountant` | Yes | Transactions, services, financial reporting |
-| Loan Officer | `loan` | Yes | Loan processing and member loan support |
 | Developer (testing) | `developer` | Yes | All catalog permissions except chairman-only countersign, granted through the normal permission matrix |
 | Inactive / Terminated | `inactive`, `terminated` | No | Lifecycle states with no active permissions |
 
@@ -197,14 +196,14 @@ The admin preset is limited to system configuration, backups, security logs, tro
 - **Admin-owned system actions:** officer management, logs, backups, role/permission configuration, service availability, and system integrations. Operational member, branch, transaction, loan, and financial account work belongs to the manager and other assigned officers.
 
 ### 5.1.1 Chairman (`chairman`)
-Preset: oversight approval, officer and branch management, ledger and expense access, logs, reports, collections review/approval, and tickets. The chairman is the countersign approver for privileged actions and is subject to the same server-side branch, OTP, separation-of-duty, and workflow checks as every other user.
+Preset: oversight approval, officer and branch management, ledger and expense access, logs, reports, and tickets. The chairman is the countersign approver for privileged actions and is subject to the same server-side branch, OTP, separation-of-duty, and workflow checks as every other user.
 
 `oversight.approve` is chairman-only. Role and officer permission editors omit it, server authorization rejects it for non-chairman accounts (including the developer testing role), and pending permission changes cannot grant it. Ledger transaction changes remain in the chairman countersign workflow.
 
 The `developer` role is a local testing role, not a production officer preset. It receives every catalog permission except `oversight.approve` and `transactions.approve-own`, so it exercises the same `can(...)` checks as any other role. Remove the account (and optionally the role preset) when testing is finished.
 
 ### 5.2 Manager (`manager`)
-Preset: members (view/create/update/approve plus detail facets), services (view/create/update), loans (view/create/encode/update/approve/reject/disburse), transactions (view/view-all/create/update/approve/reversal/export), deposits & withdrawals (view/create/approve/reject), reports (view/export/financial), announcements (view), `branches.bypass`, logs (view), settings (view), tickets, notifications, profile, and collections review/approval. The default manager preset does not grant member deletion, announcement writes, officer management, or `settings.update`. Managers have cross-branch access through `branches.bypass`.
+Preset: members (view/create/update/approve plus detail facets), services (view/create/update), loans (view/create/encode/update/approve/reject/disburse), transactions (view/view-all/create/update/approve/reversal/export), deposits & withdrawals (view/create/approve/reject), reports (view/export/financial), announcements (view), `branches.bypass`, logs (view), settings (view), tickets, notifications, and profile. The default manager preset does not grant member deletion, announcement writes, officer management, or `settings.update`. Managers have cross-branch access through `branches.bypass`.
 - Approve member applications (`POST /api/members/{user}/approve`, `POST /api/members/{user}/decline`).
 - Approve transactions (`POST /api/services/approve/{transaction}`, withdrawal OTP `POST /api/services/transactions/{transaction}/send-otp`, `GET /api/services/pending`).
 - Review/endorse/approve/reject/disburse/close loans (`POST /api/loans/{loan}/review|disburse|close`, `PUT /api/loans/{loan}`). Loan deletion is available only for untouched pending applications and always requires countersign by a different active chairman; reviewed or financially linked loans stay in the borrower's history.
@@ -212,21 +211,16 @@ Preset: members (view/create/update/approve plus detail facets), services (view/
 - Tickets: view/edit/close/assign (the SPA direct ticket route recognizes admin/manager/accountant; the backend's support-staff predicate also recognizes a user with `tickets.manage`, so this UI/API difference must be audited rather than assumed consistent).
 
 ### 5.3 Accountant / Treasurer (`accountant`)
-Preset: members (view/create/update/approve plus detail facets), services (view/create/update), loans (view), transactions (view/view-all/create/update/export — no `approve` in preset), deposits/withdrawals (view/create), announcements (CRUD), reports (view/export/financial), `branches.bypass`, settings (view), tickets, notifications, profile, and collection review. Accountants can access records across branches; branch CRUD still requires its separate `branches.create`, `branches.update`, or `branches.delete` permission.
+Preset: members (view/create/update/approve plus detail facets), services (view/create/update), loans (view), transactions (view/view-all/create/update/export — no `approve` in preset), deposits/withdrawals (view/create), announcements (CRUD), reports (view/export/financial), `branches.bypass`, settings (view), tickets, notifications, and profile. Accountants can access records across branches; branch CRUD still requires its separate `branches.create`, `branches.update`, or `branches.delete` permission.
 - **Ledger** (`/dashboard/ledger`, `transactions.view`): `GET /api/ledger`, `POST /api/ledger`, `PUT /api/ledger/{transaction}`, `DELETE /api/ledger/{transaction}`, `GET /api/ledger/export`, `GET /api/ledger/summary`.
 - **Expenses** (`/dashboard/expenses`): `GET/POST/PUT/DELETE /api/expenses`.
 - **Reports:** financial, expenses, member activity/savings, loans, payments, balance sheet + download (`GET /api/reports/*`).
 - Process member services where the underlying service and branch checks permit it, approve member onboarding, and view detail tabs granted by the member-detail facet permissions.
 - Tickets support view (`isSupportStaff` includes accountant).
 
-### 5.4 Loan Officer (`loan`)
-The default loan role also grants `deposits.create`, allowing loan officers to record member deposits through Services without granting ledger or expense access.
-Preset: dashboard.view, members.view, services.view, loans (view/create), `branches.bypass`, settings.view, tickets (view/reply), notifications.view, profile (view/update), collections (view-own/create/submit). The preset does not grant `loans.encode` or `loans.update`; loan encoding, review, edits, deletes, and officer document uploads are therefore unavailable unless those permissions are explicitly granted. The admin role can encode loans through its explicit admin policy exception. Loan officers can access records across branches, while loan lifecycle permissions remain separately enforced. **No `transactions.*`** — ledger/expenses return 403.
-- **Loan Applications** (`Services → Loan Applications`, `LoanReviewModal`): loan officers can view the loan queue and product/member lookup; review and endorsement require `loans.update`, which is not in the default loan role preset.
-- **Loans module** (`/dashboard/loans`, `loans.view`): `GET /api/loans/search-members`, `GET /api/loans/loan-products`, and `GET /api/loans/{loan}`. Encoding requires `loans.encode`; edits and officer uploads require `loans.update`. Loan deletion requests require `loans.update`, are limited to pending unreviewed loans with no linked records, and execute only after another active chairman countersigns. Borrowers can upload documents for their own loans.
-- **Field Collections** (`/dashboard/collections`, `collections.*`): own-route envelope — `GET /api/collections/route-list` (excludes loans already recorded in an in-flight run for the same date, except items in your own draft which show as Collected), list/create own runs (`GET/POST /api/collections`), record/submit items — visibility and edits scoped to own runs; see `COLLECTIONS_REWORK.md`.
-- Financial summary cards hidden in Services (`isLoanFocused`) — sees Active Loans + Pending Requests only.
-- **No transaction visibility** — `transactions.view`/`transactions.view-all` intentionally not granted: `GET /api/ledger` and `GET /api/expenses` return 403 (enforced in `RoleSpecificAccessBehaviorAuditTest`).
+### 5.4 Retired loan role and collection workflow
+
+The former loan role is retired. Existing accounts are moved by migration to unassigned_officer with no role permissions and must be reassigned by an administrator to an active role. Historical collection records remain in the database for audit and loan-deletion protection; the collection workflow, API, and permission catalog entries are removed. Staff with loans.view can use the Loans page's **Overdue today** filter, which includes active loans with unpaid scheduled installments due on or before the current cooperative date.
 
 ### 5.5 Legacy role migration note
 `secretary` is a legacy role name and is not an active supported role. Existing
@@ -438,7 +432,7 @@ Other system settings (seeded, `SystemSettingSeeder`): site name/tagline, mainte
 
 ## 10. Permission Catalog (Summary)
 
-`PermissionCatalog::groups()` is the canonical list. It includes dashboard; member detail facets (`members.view-loans`, `members.view-ids`, `members.view-activity`, `members.view-financial`); services; loan lifecycle; transaction approval, including the separate self-approval grant (`transactions.approve-own`); transaction reversal; deposits; withdrawals; announcements; reports; officers; branches; logs; settings; financial accounts (`financial_settings.view`, `financial_settings.update`, `interest.view`, `interest.run`); backups; tickets; notifications; profile; oversight; collections; and receipt reissue permissions. `logs.export` remains a declared permission without a current log-export route or UI.
+`PermissionCatalog::groups()` is the canonical list. It includes dashboard; member detail facets (`members.view-loans`, `members.view-ids`, `members.view-activity`, `members.view-financial`); services; loan lifecycle; transaction approval, including the separate self-approval grant (`transactions.approve-own`); transaction reversal; deposits; withdrawals; announcements; reports; officers; branches; logs; settings; financial accounts (`financial_settings.view`, `financial_settings.update`, `interest.view`, `interest.run`); backups; tickets; notifications; profile; oversight; and receipt reissue permissions. `logs.export` remains a declared permission without a current log-export route or UI.
 
 Current officer presets are `admin`, `chairman`, `manager`, `accountant`, and `loan`; the effective permission returned to the SPA also includes permitted officer overrides. Member, inactive, and terminated behavior is established by the user/role seeders and authorization code. Use `PermissionCatalog::rolePresets()` and `$user->can(...)` as the authority instead of this summary when testing access.
 

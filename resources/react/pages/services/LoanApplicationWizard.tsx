@@ -359,7 +359,7 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
                         {needsInterview && (
                             <div className="border-t pt-6">
                                 <h5 className="font-bold text-gray-900 mb-2">Business Verification</h5>
-                                <p className="text-sm text-gray-600 mb-4">{t('Schedule an interview with a loan officer for business verification.')}</p>
+                                <p className="text-sm text-gray-600 mb-4">{t('Schedule an interview with cooperative staff for business verification.')}</p>
 
                                 {employment ? (
                                     <div className="bg-blue-50 p-4 rounded-lg mb-4">
@@ -488,10 +488,10 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
                             <p className="text-sm text-blue-700">
                                 <strong>Important:</strong>{' '}
                                 {t(requiredCoMakers > 0
-                                    ? 'After submission, all group members must approve this loan. Once approved by all members, the application will be reviewed by loan officers.'
+                                    ? 'After submission, all group members must approve this loan. Once approved by all members, the application will be reviewed by cooperative staff.'
                                     : needsInterview
                                         ? 'After submission, you must attend the scheduled interview. Your application will be reviewed after the interview is completed.'
-                                        : 'After submission, your application will be reviewed by loan officers based on your member profile and account standing.')}
+                                        : 'After submission, your application will be reviewed by cooperative staff based on your member profile and account standing.')}
                             </p>
                         </div>
 

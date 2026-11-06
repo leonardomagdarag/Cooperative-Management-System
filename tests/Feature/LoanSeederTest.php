@@ -5,7 +5,7 @@ use App\Models\User;
 use Database\Seeders\LoanSeeder;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\UserSeeder;
-use Spatie\Permission\Models\Role;
+use App\Support\PermissionCatalog;
 
 test('loan seeder always gives leo magdarag an active loan', function () {
     $this->seed(SpatieRolePermissionSeeder::class);
@@ -22,12 +22,7 @@ test('loan seeder always gives leo magdarag an active loan', function () {
     expect($leoLoans->first()->loan_status)->toBe('active');
 });
 
-test('loan role defaults do not include reports access', function () {
-    $this->seed(SpatieRolePermissionSeeder::class);
-
-    $loanRole = Role::findByName('loan', 'web');
-    $loanPermissions = $loanRole->permissions()->pluck('name')->all();
-
-    expect($loanPermissions)->not->toContain('reports.view')
-        ->and($loanPermissions)->not->toContain('reports.export');
+test('loan officer role is no longer part of the role catalog', function () {
+    expect(PermissionCatalog::rolePresets())->not->toHaveKey('loan')
+        ->and(PermissionCatalog::officerRoles())->not->toContain('loan');
 });

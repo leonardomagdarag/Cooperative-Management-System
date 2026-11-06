@@ -6,7 +6,7 @@ class PermissionCatalog
 {
     public static function officerRoles(): array
     {
-        return ['chairman', 'manager', 'accountant', 'loan'];
+        return ['chairman', 'manager', 'accountant'];
     }
 
     public static function groups(): array
@@ -119,15 +119,6 @@ class PermissionCatalog
                 'oversight.request',
                 'oversight.approve',
             ],
-            'Collections' => [
-                'collections.view-own',
-                'collections.create',
-                'collections.submit',
-                'collections.view-all',
-                'collections.review',
-                'collections.approve',
-                'collections.workflow.update',
-            ],
             'Receipts' => [
                 'receipts.reissue',
             ],
@@ -147,7 +138,6 @@ class PermissionCatalog
             'chairman' => 'Chairman',
             'manager' => 'Manager',
             'accountant' => 'Accountant',
-            'loan' => 'Loan Officer',
             'developer' => 'Developer',
         ];
     }
@@ -159,7 +149,6 @@ class PermissionCatalog
             'chairman' => 'Full operational authority and oversight authority.',
             'manager' => 'Broad operational oversight across officers, members, services, and reporting.',
             'accountant' => 'Transaction handling, service processing, member onboarding, and financial reporting support.',
-            'loan' => 'Loan processing, service transactions, and member loan support.',
             'developer' => 'Full testing access granted through the permission catalog. Countersign approval remains chairman-only.',
         ];
     }
@@ -261,9 +250,6 @@ class PermissionCatalog
                 'profile.update',
                 'oversight.view',
                 'oversight.approve',
-                'collections.view-all',
-                'collections.review',
-                'collections.approve',
                 'receipts.reissue',
                 'financial_settings.view',
                 'interest.view',
@@ -316,9 +302,6 @@ class PermissionCatalog
                 'notifications.view',
                 'profile.view',
                 'profile.update',
-                'collections.view-all',
-                'collections.review',
-                'collections.approve',
                 'receipts.reissue',
                 'financial_settings.view',
                 'financial_settings.update',
@@ -363,7 +346,6 @@ class PermissionCatalog
                 'notifications.view',
                 'profile.view',
                 'profile.update',
-                'collections.review',
                 'interest.view',
             ],
             // Testing role: every catalog permission is granted through the
@@ -373,24 +355,6 @@ class PermissionCatalog
                 self::allPermissions(),
                 ['oversight.approve', 'transactions.approve-own'],
             )),
-            'loan' => [
-                'dashboard.view',
-                'members.view',
-                'services.view',
-                'loans.view',
-                'loans.create',
-                'deposits.create',
-                'settings.view',
-                'branches.bypass',
-                'tickets.view',
-                'tickets.reply',
-                'notifications.view',
-                'profile.view',
-                'profile.update',
-                'collections.view-own',
-                'collections.create',
-                'collections.submit',
-            ],
         ];
     }
 

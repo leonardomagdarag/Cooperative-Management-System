@@ -27,7 +27,7 @@ export const PHILHEALTH_PATTERN = /^[0-9]{2}-?[0-9]{9}-?[0-9]$/;
 export const LOCAL_ID_PATTERN = /^[A-Za-z0-9-]+$/;
 export const URL_PATTERN = /^https?:\/\/[^\s/$.?#].[^\s]*$/i;
 
-export const PERSON_TITLES = ['Chairman', 'Vice Chairman', 'Secretary', 'Treasurer', 'Loan Officer', 'Accountant', 'Member'];
+export const PERSON_TITLES = ['Chairman', 'Vice Chairman', 'Secretary', 'Treasurer', 'Accountant', 'Member'];
 export const EMPLOYMENT_TYPES = ['full-time', 'part-time', 'self-employed', 'freelancer', 'government', 'private', 'ofw', 'retired', 'unemployed', 'student', 'homemaker'];
 
 const NAME_MSG = 'may only contain letters, spaces, apostrophes and hyphens';
@@ -310,7 +310,7 @@ export const officerStepSchemas: z.ZodTypeAny[] = [
         postal_code: POSTAL_CODE_SCHEMA,
     }),
     z.object({
-        role: enumFrom(['admin', 'chairman', 'manager', 'accountant', 'secretary', 'loan'], 'Select a role'),
+        role: enumFrom(['admin', 'chairman', 'manager', 'accountant', 'secretary'], 'Select a role'),
         branch_id: optionalId,
     }),
     z.object({
@@ -336,7 +336,7 @@ export const officerEditSchema = z.object({
     barangay: textString(100),
     city: textString(100),
     postal_code: POSTAL_CODE_SCHEMA,
-    role: enumFrom(['admin', 'chairman', 'manager', 'accountant', 'secretary', 'loan'], 'Select a role'),
+    role: enumFrom(['admin', 'chairman', 'manager', 'accountant', 'secretary'], 'Select a role'),
     password: optionalPassword,
     branch_id: optionalId,
 });
@@ -355,7 +355,7 @@ export const officerSchema = z.object({
     barangay: textString(100),
     city: textString(100),
     postal_code: POSTAL_CODE_SCHEMA,
-    role: enumFrom(['admin', 'chairman', 'manager', 'accountant', 'secretary', 'loan'], 'Select a role'),
+    role: enumFrom(['admin', 'chairman', 'manager', 'accountant', 'secretary'], 'Select a role'),
     password: passwordPolicy,
     password_confirmation: z.string(),
     branch_id: optionalId,

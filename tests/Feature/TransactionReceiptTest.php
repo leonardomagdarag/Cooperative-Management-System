@@ -34,7 +34,7 @@ beforeEach(function () {
 // Collection-run payments post with a loan_id but no account_id; receipts used to
 // 500 on the NOT NULL issued_to_member_id column because the member was only ever
 // read off the (missing) account.
-function collectionRunPayment(User $recordedBy, Loan $loan): Transaction
+function loanPaymentTransaction(User $recordedBy, Loan $loan): Transaction
 {
     return Transaction::create([
         'transaction_type' => 'loan_payment',
@@ -48,7 +48,7 @@ function collectionRunPayment(User $recordedBy, Loan $loan): Transaction
 }
 
 test('reprint of a loan-only payment resolves the member through the loan', function () {
-    $payment = collectionRunPayment($this->manager, $this->loan);
+    $payment = loanPaymentTransaction($this->manager, $this->loan);
 
     $this->actingAs($this->manager)
         ->postJson("/api/transactions/{$payment->id}/receipts/reprint")
@@ -92,7 +92,7 @@ test('reprint of an account-backed transaction resolves the member through the a
 });
 
 test('reissue of a loan-only payment records a certified replacement for the member', function () {
-    $payment = collectionRunPayment($this->manager, $this->loan);
+    $payment = loanPaymentTransaction($this->manager, $this->loan);
 
     $this->actingAs($this->manager)
         ->postJson("/api/transactions/{$payment->id}/receipts/reissue", ['note' => 'Member reported a lost receipt'])
@@ -109,7 +109,7 @@ test('reissue of a loan-only payment records a certified replacement for the mem
 });
 
 test('reissue requires a reason note', function () {
-    $payment = collectionRunPayment($this->manager, $this->loan);
+    $payment = loanPaymentTransaction($this->manager, $this->loan);
 
     $this->actingAs($this->manager)
         ->postJson("/api/transactions/{$payment->id}/receipts/reissue")
@@ -119,7 +119,7 @@ test('reissue requires a reason note', function () {
 });
 
 test('reissue requires the receipts reissue permission', function () {
-    $payment = collectionRunPayment($this->accountant, $this->loan);
+    $payment = loanPaymentTransaction($this->accountant, $this->loan);
 
     $this->actingAs($this->accountant)
         ->postJson("/api/transactions/{$payment->id}/receipts/reissue", ['note' => 'Accountant issued replacement'])
@@ -129,7 +129,7 @@ test('reissue requires the receipts reissue permission', function () {
 });
 
 test('a member can reprint their own loan-only payment but not another member payment', function () {
-    $payment = collectionRunPayment($this->manager, $this->loan);
+    $payment = loanPaymentTransaction($this->manager, $this->loan);
 
     $this->actingAs($this->member)
         ->postJson("/api/transactions/{$payment->id}/receipts/reprint")

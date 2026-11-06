@@ -28,8 +28,8 @@ use Illuminate\Support\Collection;
  */
 class LoanSeeder extends Seeder
 {
-    /** Loan officer, who runs the review and the interviews. */
-    private const REVIEWER = 'USR000005';
+    /** The accountant handles loan review and interview records. */
+    private const REVIEWER = 'USR000004';
 
     /** Chairman, who signs off approved loans. */
     private const APPROVER = 'USR000002';

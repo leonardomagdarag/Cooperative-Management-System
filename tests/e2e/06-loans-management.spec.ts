@@ -3,7 +3,7 @@ import { loginViaUI, logoutViaUI } from './helpers/auth';
 
 test.describe('6. Loans Management & Loan Lifecycle', () => {
   test.beforeEach(async ({ page }) => {
-    await loginViaUI(page, 'loan');
+    await loginViaUI(page, 'accountant');
   });
 
   test.afterEach(async ({ page }) => {
@@ -46,7 +46,7 @@ test.describe('6. Loans Management & Loan Lifecycle', () => {
       await expect(page.locator('text=/Encode Loan/i').first()).toBeVisible({ timeout: 10000 });
       await page.keyboard.press('Escape');
     } else {
-      // Loan officers verify review/filtering capability on the table
+      // Accountants can view loans and use the loan table filters.
       const searchInput = page.locator('input[placeholder*="Search loans" i]').first();
       await expect(searchInput).toBeVisible();
     }

@@ -25,7 +25,6 @@ const roleOptions = [
     { value: 'chairman', label: 'Chairman' },
     { value: 'manager', label: 'Manager' },
     { value: 'accountant', label: 'Accountant' },
-    { value: 'loan', label: 'Loan Officer' },
 ];
 
 export default function OfficerFormModal({ officer, onClose }: { officer?: any; onClose: () => void }) {

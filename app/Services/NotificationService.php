@@ -146,7 +146,7 @@ class NotificationService
             }
 
             if (in_array('officers', $visibility, true)) {
-                $officerRoles = ['admin', 'chairman', 'manager', 'accountant', 'loan', 'developer'];
+                $officerRoles = ['admin', 'chairman', 'manager', 'accountant', 'developer'];
                 $userIds = $userIds->merge(User::role($officerRoles)->pluck('id'));
             }
 
@@ -374,7 +374,7 @@ class NotificationService
         $this->notifyLoanLifecycle(
             $loan,
             'Loan Application Under Review',
-            "Your loan application {$loan->loan_number} is now being reviewed by our loan officer.",
+            "Your loan application {$loan->loan_number} is now being reviewed by cooperative staff.",
         );
     }
 

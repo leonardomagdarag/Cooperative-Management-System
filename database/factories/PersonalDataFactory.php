@@ -16,7 +16,7 @@ class PersonalDataFactory extends Factory
     public function definition(): array
     {
         $suffixes = ['Jr.', 'Sr.', 'II', 'III', 'IV', null, null, null];
-        $titles = ['Chairman', 'Vice Chairman', 'Secretary', 'Treasurer', 'Loan Officer', 'Member'];
+        $titles = ['Chairman', 'Vice Chairman', 'Secretary', 'Treasurer', 'Member'];
         $genders = ['male', 'female'];
         $civilStatuses = ['single', 'married', 'widowed', 'separated'];
         $educationLevels = ['Elementary', 'High School', 'Vocational', 'Bachelor\'s Degree', 'Master\'s Degree', 'Doctorate'];

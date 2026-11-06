@@ -101,7 +101,6 @@ function requestSummary(item: RequestItem): string {
         case 'financial.interest.run': return `Run interest batch for ${humanize(String(payload.account_type ?? 'account'))}`;
         case 'settings.update': {
             const settings = (payload.settings as Record<string, unknown>) ?? {};
-            if (Object.prototype.hasOwnProperty.call(settings, 'collections.approval_stages')) return 'Update collection approval workflow';
             if (payload.services) {
                 const services = Object.keys(payload.services as Record<string, unknown>).map(humanize).join(', ');
                 return `Change service availability${services ? ` for ${services}` : ''}`;
@@ -135,13 +134,6 @@ function requestChanges(item: RequestItem): string[] {
     }
     if (item.action_type === 'settings.update') {
         const settings = (item.payload.settings as Record<string, unknown>) ?? {};
-        const collectionStages = settings['collections.approval_stages'];
-        if (Array.isArray(collectionStages)) {
-            return collectionStages.map((stage, index) => {
-                const item = (stage as Record<string, unknown>) ?? {};
-                return `Stage ${index + 1}: ${String(item.label ?? item.key ?? 'Unnamed')} (${String(item.permission ?? 'No permission set')})`;
-            });
-        }
         const services = serviceChanges(item.payload.services);
         if (services.length) return services;
         return Object.entries(settings).map(([key, value]) => `${settingLabel(key)}: ${settingValueLabel(key, value)}`);

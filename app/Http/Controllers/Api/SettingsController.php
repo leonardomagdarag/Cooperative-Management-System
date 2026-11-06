@@ -588,7 +588,7 @@ class SettingsController extends Controller
                 }
 
                 if (isset($flags['officer']) && $flags['officer'] === false) {
-                    $officerRoles = ['admin', 'chairman', 'manager', 'accountant', 'loan'];
+                    $officerRoles = ['admin', 'chairman', 'manager', 'accountant'];
                     $users = User::whereHas('roles', fn ($q) => $q->whereIn('name', $officerRoles))
                         ->where('account_status', 'active')
                         ->get();
@@ -634,7 +634,7 @@ class SettingsController extends Controller
 
             // Officer OFF - notify active officers
             if (isset($flags['officer']) && $flags['officer'] === false) {
-                $officerRoles = ['admin', 'chairman', 'manager', 'accountant', 'loan'];
+                $officerRoles = ['admin', 'chairman', 'manager', 'accountant'];
                 $users = User::whereHas('roles', fn ($q) => $q->whereIn('name', $officerRoles))
                     ->where('account_status', 'active')
                     ->get();

@@ -18,19 +18,11 @@ beforeEach(function () {
     $this->accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
     $this->member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
 
-    // Create loan officer
-    $this->loanOfficer = User::factory()->create([
-        'email' => 'loan.officer@example.com',
-        'account_status' => 'active',
-        'is_officer' => true,
-        'role' => 'loan',
-    ]);
-    $this->loanOfficer->syncRoles(['loan']);
 });
 
 test('seeding preserves transactions.approve-own for manager but removes from other built-in roles', function () {
     $permission = Permission::findByName('transactions.approve-own', 'web');
-    $roles = Role::query()->whereIn('name', ['admin', 'chairman', 'manager', 'accountant', 'loan', 'developer', 'member'])->get();
+    $roles = Role::query()->whereIn('name', ['admin', 'chairman', 'manager', 'accountant', 'developer', 'member'])->get();
 
     foreach ($roles as $role) {
         $role->givePermissionTo($permission);
@@ -41,7 +33,7 @@ test('seeding preserves transactions.approve-own for manager but removes from ot
     $manager = Role::findByName('manager', 'web');
     expect($manager->hasPermissionTo($permission))->toBeTrue();
 
-    $otherRoles = Role::query()->whereIn('name', ['admin', 'chairman', 'accountant', 'loan', 'developer', 'member'])->get();
+    $otherRoles = Role::query()->whereIn('name', ['admin', 'chairman', 'accountant', 'developer', 'member'])->get();
     foreach ($otherRoles as $role) {
         expect($role->fresh()->hasPermissionTo($permission))->toBeFalse();
     }
@@ -163,29 +155,6 @@ test('accountant role access boundaries', function () {
     $this->getJson('/api/reports/expenses')->assertOk();
 
     // Accountant is forbidden from administrative management
-    $this->getJson('/api/roles')->assertStatus(403);
-    $this->getJson('/api/backups')->assertStatus(403);
-    $this->getJson('/api/logs')->assertStatus(403);
-});
-
-test('loan officer role access boundaries', function () {
-    $this->actingAs($this->loanOfficer);
-
-    // Loan officer has loan operations permissions
-    $this->getJson('/api/loans')->assertOk();
-    $this->getJson('/api/loans/loan-products')->assertOk();
-    $this->getJson('/api/loans/search-members')->assertOk();
-
-    // Loan officer has no global transaction visibility — ledger/expenses
-    // require transactions.view, which is intentionally not granted.
-    $this->getJson('/api/ledger')->assertStatus(403);
-    $this->getJson('/api/expenses')->assertStatus(403);
-
-    // Loan officer visibility is scoped to their own field-collection runs.
-    $this->getJson('/api/collections')->assertOk();
-    $this->getJson('/api/collections/route-list')->assertOk();
-
-    // Loan officer is forbidden from roles, backups, logs
     $this->getJson('/api/roles')->assertStatus(403);
     $this->getJson('/api/backups')->assertStatus(403);
     $this->getJson('/api/logs')->assertStatus(403);

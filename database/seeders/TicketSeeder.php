@@ -29,7 +29,7 @@ class TicketSeeder extends Seeder
         $threads = [
             [
                 'member' => 'USR000007',
-                'assigned_to' => 'USR000005',
+                'assigned_to' => 'USR000004',
                 'subject' => 'Loan balance after my last payment',
                 'category' => 'loans',
                 'priority' => 'high',

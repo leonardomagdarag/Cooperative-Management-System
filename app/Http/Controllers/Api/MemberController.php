@@ -18,7 +18,6 @@ use App\Models\PersonalData;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\AuditLogService;
-use App\Services\CollectionRunService;
 use App\Services\CountersignService;
 use App\Services\NotificationService;
 use App\Services\SecurityOtpService;
@@ -900,9 +899,6 @@ class MemberController extends Controller
             $user,
             Auth::user()
         );
-        if ($user->can('collections.create')) {
-            app(CollectionRunService::class)->markDraftRunsOrphaned($user);
-        }
         $user->delete();
 
         return response()->json(['message' => $isOfficer ? 'Officer deleted.' : 'Member deleted.']);

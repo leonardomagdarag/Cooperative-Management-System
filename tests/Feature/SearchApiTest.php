@@ -5,7 +5,6 @@ use App\Models\Loan;
 use App\Models\User;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\UserSeeder;
-use Spatie\Permission\Models\Role;
 
 use function Pest\Laravel\actingAs;
 
@@ -99,13 +98,11 @@ test('search respects the role permission for the members section', function () 
     $member->assignRole('member');
     $member->assignRole('member');
 
-    Role::findOrCreate('loan', 'web');
-
-    $loanOfficer = User::factory()->create([
+    $accountant = User::factory()->create([
         'user_number' => 'OFF999999',
         'email' => 'search.officer@example.com',
     ]);
-    $loanOfficer->assignRole('loan');
+    $accountant->assignRole('accountant');
 
     actingAs($member);
 
