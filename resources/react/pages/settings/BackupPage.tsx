@@ -11,7 +11,6 @@ import {
     runBackup,
     cleanupBackup,
     testOffsiteStorage,
-    deleteBackup,
     restoreBackup,
     backupDownloadUrl,
     type BackupIndexData,
@@ -87,7 +86,6 @@ function ArchiveTierCard({
     canRestore,
     canManage,
     onRestore,
-    onDelete,
     onBackupNow,
 }: {
     title: string;
@@ -101,7 +99,6 @@ function ArchiveTierCard({
     canRestore: boolean;
     canManage: boolean;
     onRestore: (item: BackupItem) => void;
-    onDelete: (item: BackupItem) => void;
     onBackupNow?: () => void;
 }) {
     const totalSize = items.reduce((sum, item) => sum + (item.size ?? 0), 0);
@@ -179,16 +176,6 @@ function ArchiveTierCard({
                                         <i className="fas fa-download"></i>
                                     </a>
                                 )}
-                                {canManage && (
-                                    <button
-                                        type="button"
-                                        onClick={() => onDelete(item)}
-                                        className="rounded border border-red-200 p-1.5 text-xs text-red-600 hover:bg-red-50 transition"
-                                        title="Delete archive"
-                                    >
-                                        <i className="fas fa-trash"></i>
-                                    </button>
-                                )}
                             </div>
                         </div>
                     ))
@@ -248,7 +235,6 @@ export default function BackupPage() {
     const [archivePassword, setArchivePassword] = useState('');
     const [archivePasswordConfirmation, setArchivePasswordConfirmation] = useState('');
     const [runTarget, setRunTarget] = useState<{ tier: BackupTier; scope: BackupScope } | null>(null);
-    const [deleteTarget, setDeleteTarget] = useState<{ tier: BackupTier; item: BackupItem } | null>(null);
     const [restoreTarget, setRestoreTarget] = useState<{ tier?: BackupTier; item?: BackupItem; archive?: File } | null>(null);
     const [restoreForm, setRestoreForm] = useState<{ scope: BackupScope; current_password: string; confirmation: string; acknowledged: boolean }>({ scope: 'both', current_password: '', confirmation: '', acknowledged: false });
     const archiveInput = useRef<HTMLInputElement | null>(null);
@@ -308,16 +294,6 @@ export default function BackupPage() {
             void queryClient.invalidateQueries({ queryKey: ['backups'] });
         },
         onError: (err: any) => addToast(err?.response?.data?.message || 'Failed to connect to off-site storage.', 'error'),
-    });
-
-    const deleteMutation = useMutation({
-        mutationFn: ({ tier, path }: { tier: BackupTier; path: string }) => deleteBackup(tier, path),
-        onSuccess: () => {
-            addToast('Backup deleted.', 'success');
-            setDeleteTarget(null);
-            void queryClient.invalidateQueries({ queryKey: ['backups'] });
-        },
-        onError: (err: any) => addToast(err?.response?.data?.message || 'Could not delete backup.', 'error'),
     });
 
     const restoreMutation = useMutation({
@@ -497,7 +473,7 @@ export default function BackupPage() {
                                     onClick={() => cleanupMutation.mutate('daily')}
                                     disabled={cleanupMutation.isPending}
                                     className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-                                    title="Delete archives older than the retention policy"
+                                    title="Prune archives older than the retention policy"
                                 >
                                     <i className="fas fa-broom mr-1"></i>Clean
                                 </button>
@@ -530,7 +506,6 @@ export default function BackupPage() {
                         canRestore={canRestore}
                         canManage={canManage}
                         onRestore={item => setRestoreTarget({ tier: 'daily', item })}
-                        onDelete={item => setDeleteTarget({ tier: 'daily', item })}
                         onBackupNow={() => setRunTarget({ tier: 'daily', scope: 'both' })}
                     />
                     <ArchiveTierCard
@@ -545,7 +520,6 @@ export default function BackupPage() {
                         canRestore={canRestore}
                         canManage={canManage}
                         onRestore={item => setRestoreTarget({ tier: 'daily', item })}
-                        onDelete={item => setDeleteTarget({ tier: 'daily', item })}
                     />
                     <ArchiveTierCard
                         title="Monthly Archives"
@@ -559,7 +533,6 @@ export default function BackupPage() {
                         canRestore={canRestore}
                         canManage={canManage}
                         onRestore={item => setRestoreTarget({ tier: 'daily', item })}
-                        onDelete={item => setDeleteTarget({ tier: 'daily', item })}
                     />
                 </div>
             </section>
@@ -611,7 +584,7 @@ export default function BackupPage() {
                                     onClick={() => cleanupMutation.mutate('offsite')}
                                     disabled={cleanupMutation.isPending}
                                     className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-                                    title="Delete archives older than the retention policy"
+                                    title="Prune archives older than the retention policy"
                                 >
                                     <i className="fas fa-broom mr-1"></i>Clean
                                 </button>
@@ -653,7 +626,6 @@ export default function BackupPage() {
                             canRestore={canRestore}
                             canManage={canManage}
                             onRestore={item => setRestoreTarget({ tier: 'offsite', item })}
-                            onDelete={item => setDeleteTarget({ tier: 'offsite', item })}
                         />
                         <ArchiveTierCard
                             title="Weekly Archives"
@@ -667,7 +639,6 @@ export default function BackupPage() {
                             canRestore={canRestore}
                             canManage={canManage}
                             onRestore={item => setRestoreTarget({ tier: 'offsite', item })}
-                            onDelete={item => setDeleteTarget({ tier: 'offsite', item })}
                         />
                         <ArchiveTierCard
                             title="Monthly Archives"
@@ -681,7 +652,6 @@ export default function BackupPage() {
                             canRestore={canRestore}
                             canManage={canManage}
                             onRestore={item => setRestoreTarget({ tier: 'offsite', item })}
-                            onDelete={item => setDeleteTarget({ tier: 'offsite', item })}
                         />
                     </div>
                 )}
@@ -926,19 +896,6 @@ export default function BackupPage() {
                         This queues an immediate copy of your newest local daily backup archive to Backblaze B2 with WORM immutability if enabled.
                     </p>
                 )}
-            </ConfirmModal>
-
-            {/* Delete modal */}
-            <ConfirmModal
-                open={!!deleteTarget}
-                title="Delete this backup?"
-                description={deleteTarget?.item.name}
-                danger
-                onCancel={() => setDeleteTarget(null)}
-                onConfirm={() => deleteTarget && deleteMutation.mutate({ tier: deleteTarget.tier, path: deleteTarget.item.path })}
-                confirmLabel="Delete"
-            >
-                <p className="text-sm text-gray-600">The archive will be permanently removed from the {deleteTarget?.tier ? TIER_DEFS[deleteTarget.tier].title : ''} tier. This cannot be undone.</p>
             </ConfirmModal>
 
             {/* Restore modal */}

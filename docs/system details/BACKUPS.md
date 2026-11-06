@@ -30,6 +30,7 @@ Archives are compressed using PHP's native `ZipArchive` with **Level 9 DEFLATE c
   - Local filesystems do not support S3 Object Lock.
   - For Backblaze B2, enable Object Lock when creating the bucket and configure Default Bucket Retention (e.g., 30 days) in the B2 console.
   - During GFS cleanup, locked objects are automatically detected and preserved without breaking the cleanup pipeline.
+- **Permanent Disabling of Manual Deletion**: To mitigate insider threat, accidental deletion, and ransomware sabotage, manual deletion of backups is permanently disabled across the UI, API endpoints, and countersigned oversight actions. Archives can only be pruned automatically according to the configured GFS retention schedule.
 
 ## Environment variables
 

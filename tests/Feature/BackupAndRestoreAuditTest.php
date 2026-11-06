@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\BackupNotificationService;
 use App\Services\BackupService;
+use App\Services\CountersignService;
 use App\Support\MaintenanceState;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\SystemSettingSeeder;
@@ -21,6 +22,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Sleep;
 use Illuminate\Support\Str;
 use Spatie\Activitylog\Models\Activity;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 beforeEach(function () {
     $this->seed(SpatieRolePermissionSeeder::class);
@@ -439,4 +441,33 @@ test('backup failure and download reminders queue administrator emails', functio
     Queue::assertPushed(SendEmailJob::class, app(BackupNotificationService::class)->administratorEmails()->count() * 3);
     expect($admin->email)->toBeString()
         ->and($successfulRun->filename)->toBe('Laravel/backup-daily-latest.zip');
+});
+
+test('manual deletion of backups is permanently disabled for all users including administrators', function () {
+    $admin = auditAdminWith(['backups.manage']);
+
+    $response = $this->actingAs($admin)
+        ->deleteJson('/api/backups/daily/backup?file=Laravel/backup-daily-test.zip');
+
+    $response->assertStatus(403);
+    expect($response->json('message'))->toContain('permanently disabled');
+});
+
+test('countersign request rejects backup.delete action', function () {
+    $admin = auditAdminWith(['backups.manage']);
+
+    $this->expectException(HttpException::class);
+    $this->expectExceptionMessage('Deleting backups is permanently disabled for security reasons.');
+
+    app(CountersignService::class)->request('backup.delete', [
+        'tier' => 'daily',
+        'path' => 'Laravel/backup-daily-test.zip',
+    ], $admin);
+});
+
+test('backup service delete method throws exception', function () {
+    $this->expectException(RuntimeException::class);
+    $this->expectExceptionMessage('Deleting backups is permanently disabled for security reasons.');
+
+    app(BackupService::class)->delete('daily', 'Laravel/backup-daily-test.zip');
 });

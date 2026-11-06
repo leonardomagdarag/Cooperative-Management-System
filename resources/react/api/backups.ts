@@ -97,10 +97,6 @@ export function backupDownloadUrl(tier: string, path: string) {
     return `/api/backups/${tier}/download?file=${encodeURIComponent(path)}`;
 }
 
-export async function deleteBackup(tier: BackupTier, path: string) {
-    return api.delete(`/api/backups/${tier}/backup`, { params: { file: path } });
-}
-
 export async function restoreBackup(data: {
     tier?: BackupTier;
     path?: string;

@@ -36,6 +36,8 @@ class CountersignService
      */
     public function request(string $actionType, array $payload, User $requester): PrivilegedActionRequest
     {
+        abort_if($actionType === 'backup.delete', 403, 'Deleting backups is permanently disabled for security reasons.');
+
         $activeKey = $this->activeRequestKey($actionType, $payload);
 
         try {
@@ -509,13 +511,7 @@ class CountersignService
                 return ['status' => 'success'];
 
             case 'backup.delete':
-                app(BackupService::class)->delete(
-                    $payload['tier'],
-                    $payload['path'],
-                    User::find($payload['requested_by'] ?? 1) ?? User::first()
-                );
-
-                return ['status' => 'success'];
+                abort(403, 'Deleting backups is permanently disabled for security reasons.');
 
             case 'settings.update':
                 foreach ($payload['settings'] as $key => $value) {

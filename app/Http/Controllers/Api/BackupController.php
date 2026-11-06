@@ -184,21 +184,7 @@ class BackupController extends Controller
 
     public function destroy(Request $request, string $tier): JsonResponse
     {
-        abort_unless(Auth::user()?->can('backups.manage'), 403);
-
-        $path = (string) $request->query('file');
-
-        $countersign = app(CountersignService::class);
-        $pending = $countersign->request('backup.delete', [
-            'tier' => $tier,
-            'path' => $path,
-        ], Auth::user());
-
-        return response()->json([
-            'message' => 'Backup deletion requested and requires countersign approval.',
-            'request_id' => $pending->id,
-            'status' => 'pending',
-        ], 202);
+        abort(403, 'Deleting backups is permanently disabled for security reasons.');
     }
 
     /**

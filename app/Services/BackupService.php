@@ -496,28 +496,12 @@ class BackupService
 
     /**
      * Delete a single backup archive from the given tier's disk.
+     *
+     * Manual deletion of backups is permanently disabled for security.
      */
     public function delete(string $tier, string $path, Model|Authenticatable|null $actor = null): void
     {
-        $disk = Storage::disk(self::diskFor($tier));
-        $base = (string) config('backup.backup.name');
-
-        abort_unless(Str::is("{$base}/*", $path), 422);
-
-        if (! $disk->exists($path)) {
-            throw new RuntimeException('Backup file no longer exists.');
-        }
-
-        $disk->delete($path);
-
-        $this->auditLogService->log(
-            'backup.deleted',
-            "Backup archive deleted from the {$tier} tier.",
-            'backup',
-            null,
-            $actor,
-            ['tier' => $tier, 'file' => $path],
-        );
+        throw new RuntimeException('Deleting backups is permanently disabled for security reasons.');
     }
 
     /**
