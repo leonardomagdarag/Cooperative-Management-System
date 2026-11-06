@@ -293,6 +293,7 @@ class PermissionCatalog
                 'transactions.create',
                 'transactions.update',
                 'transactions.approve',
+                'transactions.approve-own',
                 'transactions.reversal',
                 'transactions.export',
                 'deposits.view',

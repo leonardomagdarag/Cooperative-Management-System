@@ -28,7 +28,7 @@ beforeEach(function () {
     $this->loanOfficer->syncRoles(['loan']);
 });
 
-test('seeding removes transactions.approve-own from existing built-in role grants', function () {
+test('seeding preserves transactions.approve-own for manager but removes from other built-in roles', function () {
     $permission = Permission::findByName('transactions.approve-own', 'web');
     $roles = Role::query()->whereIn('name', ['admin', 'chairman', 'manager', 'accountant', 'loan', 'developer', 'member'])->get();
 
@@ -38,7 +38,11 @@ test('seeding removes transactions.approve-own from existing built-in role grant
 
     $this->seed(SpatieRolePermissionSeeder::class);
 
-    foreach ($roles as $role) {
+    $manager = Role::findByName('manager', 'web');
+    expect($manager->hasPermissionTo($permission))->toBeTrue();
+
+    $otherRoles = Role::query()->whereIn('name', ['admin', 'chairman', 'accountant', 'loan', 'developer', 'member'])->get();
+    foreach ($otherRoles as $role) {
         expect($role->fresh()->hasPermissionTo($permission))->toBeFalse();
     }
 });

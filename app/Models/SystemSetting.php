@@ -44,7 +44,8 @@ class SystemSetting extends Model
             // Parse value based on type
             return match ($setting->type) {
                 'boolean' => filter_var($setting->value, FILTER_VALIDATE_BOOLEAN),
-                'number', 'integer' => (int) $setting->value,
+                'integer' => (int) $setting->value,
+                'number' => str_contains((string) $setting->value, '.') ? (float) $setting->value : (int) $setting->value,
                 'float', 'decimal' => (float) $setting->value,
                 'json' => json_decode($setting->value, true),
                 'array' => json_decode($setting->value, true),
@@ -62,7 +63,7 @@ class SystemSetting extends Model
         $setting = static::where('key', $key)->first();
 
         if (! $setting) {
-            $type = $type ?? (is_bool($value) ? 'boolean' : (is_array($value) ? 'array' : (is_numeric($value) ? 'number' : 'string')));
+            $type = $type ?? (is_bool($value) ? 'boolean' : (is_array($value) ? 'array' : (is_float($value) ? 'float' : (is_numeric($value) ? 'number' : 'string'))));
             $stringValue = match ($type) {
                 'boolean' => $value ? '1' : '0',
                 'json', 'array' => json_encode($value),

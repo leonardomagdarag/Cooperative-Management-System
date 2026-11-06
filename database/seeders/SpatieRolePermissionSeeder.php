@@ -84,11 +84,12 @@ class SpatieRolePermissionSeeder extends Seeder
             }
         }
 
-        // Maker-checker exceptions belong to officer-level overrides, never
-        // to built-in roles. Remove stale grants from installations seeded
-        // before this permission was taken out of the presets.
+        // Maker-checker exceptions belong to officer-level overrides, except
+        // for manager who has self-approval for financial transactions in preset.
+        // Remove stale grants from other built-in roles.
         Role::query()
             ->whereIn('name', array_keys($rolePermissions))
+            ->where('name', '!=', 'manager')
             ->where('guard_name', 'web')
             ->get()
             ->each(fn (Role $role) => $role->revokePermissionTo('transactions.approve-own'));

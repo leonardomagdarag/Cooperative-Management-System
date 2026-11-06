@@ -388,7 +388,7 @@ test('F023-13: loan payment approval decrements balance and updates loan to paid
     expect($loan->loan_status)->toBe('paid_off');
 });
 
-test('F023-14: officer who recorded transaction cannot self-approve without transactions.approve-own override', function () {
+test('F023-14: manager role can self-approve recorded transactions by default and can be disallowed via override', function () {
     $this->memberAccount->update(['balance' => 5000.00]);
 
     $transaction = Transaction::create([
@@ -402,25 +402,37 @@ test('F023-14: officer who recorded transaction cannot self-approve without tran
         'recorded_by' => $this->manager->id,
     ]);
 
-    // Manager cannot self-approve by default
-    $this->actingAs($this->manager)
-        ->postJson("/api/services/approve/{$transaction->id}", ['action' => 'approve'])
-        ->assertForbidden();
-
-    // Now grant per-officer override
-    OfficerPermissionOverride::create([
-        'user_id' => $this->manager->id,
-        'permission' => 'transactions.approve-own',
-        'effect' => OfficerPermissionOverride::EFFECT_ALLOW,
-    ]);
-
-    // Now manager can self-approve
+    // Manager can self-approve by default because manager preset includes transactions.approve-own
     $this->actingAs($this->manager)
         ->postJson("/api/services/approve/{$transaction->id}", ['action' => 'approve'])
         ->assertOk()
         ->assertJson(['message' => 'Transaction approved.']);
 
     expect($transaction->fresh()->status)->toBe('completed');
+
+    // Create a second transaction to test disallow override
+    $transaction2 = Transaction::create([
+        'account_id' => $this->memberAccount->id,
+        'branch_id' => $this->mainBranch->id,
+        'transaction_type' => 'deposit',
+        'amount' => 300.00,
+        'status' => 'pending',
+        'transaction_mode' => 'counter',
+        'transaction_date' => now(),
+        'recorded_by' => $this->manager->id,
+    ]);
+
+    OfficerPermissionOverride::create([
+        'user_id' => $this->manager->id,
+        'permission' => 'transactions.approve-own',
+        'effect' => OfficerPermissionOverride::EFFECT_DISALLOW,
+    ]);
+    OfficerPermissionOverride::forgetAllCachedEffects($this->manager->id);
+
+    // With disallow override, manager cannot self-approve
+    $this->actingAs($this->manager)
+        ->postJson("/api/services/approve/{$transaction2->id}", ['action' => 'approve'])
+        ->assertForbidden();
 });
 
 test('F023-15: officer can approve fee transaction with null account_id without crashing', function () {

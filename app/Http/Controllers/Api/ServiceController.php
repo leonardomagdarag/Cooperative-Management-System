@@ -815,6 +815,7 @@ class ServiceController extends Controller
             ->map(fn ($t) => [
                 'id' => $t->id, 'transaction_number' => $t->transaction_number,
                 'transaction_type' => $t->transaction_type, 'amount' => $t->amount,
+                'fee_amount' => $t->fee_amount,
                 'status' => $t->status, 'account_holder' => ($holder = $t->account?->user ?? $t->loan?->user)
                     ? trim(($holder->personalData->first_name ?? '').' '.($holder->personalData->last_name ?? '')) : null,
                 'created_at' => $t->created_at->toISOString(),
@@ -847,11 +848,11 @@ class ServiceController extends Controller
             return 'Chairman';
         }
 
-        if ($viewer->hasRole('manager') && $viewer->can('branches.bypass')) {
+        if (! $this->canApproveTransaction($viewer, $transaction)) {
             return 'Chairman';
         }
 
-        return $transaction->branch_id ? 'Branch manager or chairman' : 'Chairman';
+        return $transaction->branch_id ? 'Branch manager or chairman' : 'Manager or chairman';
     }
 
     private function canApproveTransaction($user, Transaction $transaction): bool
