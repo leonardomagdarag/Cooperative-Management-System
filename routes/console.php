@@ -56,16 +56,23 @@ Schedule::command('interest:accrue')
     ->withoutOverlapping()
     ->description('Credit any member interest that is due');
 
+// Recover missed callbacks and abandoned manual status checks without doing
+// network requests inside the scheduler tick.
+Schedule::command('payments:reconcile-xendit')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->description('Reconcile pending Xendit payments');
+
 // Shared hosting (Namecheap) has no persistent queue worker, so drain the
 // queue on every scheduler tick instead. `--stop-when-empty` exits as soon as
 // the queue is drained. `--max-time` keeps the run inside the 60s window so it
 // cannot outlive the tick, and `--timeout` stops a single stuck job from
-// burning the whole window. All three queues are named explicitly because a
+// burning the whole window. All four queues are named explicitly because a
 // bare `queue:work` only drains `default` — OTP/email jobs sit on `emails` and
-// backup jobs on `backups`, and those would otherwise never run.
+// payment checks on `payments` and backup jobs on `backups`.
 // Declared last so it runs after the commands above that dispatch jobs.
-Schedule::command('queue:work --queue=default,emails,backups --stop-when-empty --max-time=50 --sleep=1 --tries=3 --timeout=45')
+Schedule::command('queue:work --queue=default,emails,payments,backups --stop-when-empty --max-time=50 --sleep=1 --tries=3 --timeout=45')
     ->everyMinute()
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/queue-worker.log'))
-    ->description('Drain the pending queue jobs (default, emails, backups)');
+    ->description('Drain the pending queue jobs (default, emails, payments, backups)');

@@ -38,6 +38,7 @@ Thumbs.db
 !/docs/system details/
 /docs/system details/*
 !/docs/system details/BACKUPS.md
+!/docs/system details/XENDIT_RECONCILIATION.md
 !/docs/system details/DATABASE_DICTIONARY.csv
 /*_REWORK.md
 /REWORK_IMPLEMENTATION_SUMMARY.md

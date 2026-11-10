@@ -105,10 +105,13 @@ class LedgerController extends Controller
                 'amount' => $t->amount,
                 'fee_amount' => $t->fee_amount,
                 'status' => $t->status,
+                'payment_gateway' => $t->payment_gateway,
+                'provider_payment_verified' => filled($t->xendit_payment_id),
                 'note' => $t->note,
                 'transaction_date' => $t->transaction_date?->format('Y-m-d'),
-                'account_holder' => $t->account?->user ? trim(($t->account->user->personalData->first_name ?? '').' '.($t->account->user->personalData->last_name ?? '')) : null,
-                'user_number' => $t->account?->user?->user_number,
+                'account_holder' => ($holder = $t->account?->user ?? $t->loan?->user)
+                    ? trim(($holder->personalData->first_name ?? '').' '.($holder->personalData->last_name ?? '')) : null,
+                'user_number' => $holder?->user_number,
                 'loan_number' => $t->loan?->loan_number,
                 'installment_allocations' => $installmentAllocations
                     ->get($t->reversal_of_id ?? $t->id, collect())
@@ -172,7 +175,7 @@ class LedgerController extends Controller
     {
         abort_unless(Auth::user()?->can('transactions.export') || Auth::user()?->can('transactions.view'), 403);
 
-        $query = Transaction::with(['account.user.personalData', 'loan', 'recordedBy', 'reversalOf']);
+        $query = Transaction::with(['account.user.personalData', 'loan.user.personalData', 'recordedBy.personalData', 'reversalOf']);
 
         BranchScope::applyToTransactions($query, Auth::user(), $request->input('branch_id'));
 
@@ -194,6 +197,7 @@ class LedgerController extends Controller
                     ->orWhere('note', 'like', "%{$search}%")
                     ->orWhereHas('account.user.personalData', fn ($sub) => $sub->where('first_name', 'like', "%{$search}%")->orWhere('last_name', 'like', "%{$search}%"))
                     ->orWhereHas('account.user', fn ($sub) => $sub->where('user_number', 'like', "%{$search}%"))
+                    ->orWhereHas('loan.user.personalData', fn ($sub) => $sub->where('first_name', 'like', "%{$search}%")->orWhere('last_name', 'like', "%{$search}%"))
                     ->orWhereHas('loan', fn ($sub) => $sub->where('loan_number', 'like', "%{$search}%"));
             });
         }
@@ -235,8 +239,9 @@ class LedgerController extends Controller
                     (float) $t->amount + ($t->transaction_type === 'loan_disbursement' ? -(float) $t->fee_amount : (float) $t->fee_amount),
                     $t->status,
                     $t->transaction_mode,
-                    $t->account?->user ? trim(($t->account->user->personalData->first_name ?? '').' '.($t->account->user->personalData->last_name ?? '')) : '',
-                    $t->account?->user?->user_number,
+                    ($holder = $t->account?->user ?? $t->loan?->user)
+                        ? trim(($holder->personalData->first_name ?? '').' '.($holder->personalData->last_name ?? '')) : '',
+                    $holder?->user_number,
                     $t->loan?->loan_number,
                     $allocationLabel,
                     $t->reversalOf?->transaction_number,

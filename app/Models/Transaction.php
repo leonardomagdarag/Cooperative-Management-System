@@ -122,6 +122,17 @@ class Transaction extends Model
     }
 
     // Scopes for filtering by type
+
+    public function scopeAwaitingXenditVerification($query)
+    {
+        return $query->where('status', 'pending')
+            ->where('payment_gateway', 'xendit')
+            ->whereIn('transaction_type', ['deposit', 'loan_payment'])
+            ->whereNotNull('xendit_session_id')
+            ->where('xendit_session_id', '!=', '')
+            ->where(fn ($payments) => $payments->whereNull('xendit_payment_id')->orWhere('xendit_payment_id', ''));
+    }
+
     public function scopeDeposits($query)
     {
         return $query->where('transaction_type', 'deposit');

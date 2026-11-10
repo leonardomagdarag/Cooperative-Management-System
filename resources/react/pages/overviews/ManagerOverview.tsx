@@ -41,7 +41,7 @@ export default function ManagerOverview() {
     const announcements = d.recent_announcements || [];
 
     return (
-        <div className="space-y-6">
+        <div className="flex flex-col gap-6">
             <div className="relative overflow-hidden bg-gradient-to-br from-blue-700 via-blue-600 to-sky-700 rounded-2xl shadow-xl p-8 text-white">
                 <div className="absolute -top-8 -right-8 w-48 h-48 bg-white/5 rounded-full pointer-events-none"></div>
                 <div className="absolute -bottom-12 -left-6 w-40 h-40 bg-white/5 rounded-full pointer-events-none"></div>
@@ -81,7 +81,7 @@ export default function ManagerOverview() {
                 )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 [&>*]:min-w-0">
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
                     <div className="flex items-center justify-between mb-3">
                         <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
@@ -89,7 +89,7 @@ export default function ManagerOverview() {
                         </div>
                         <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">+{num(d.members_new_month)} mo.</span>
                     </div>
-                    <p className="text-2xl font-extrabold text-gray-900">{num(d.total_members || d.members_total)}</p>
+                    <p className="min-w-0 max-w-full break-words text-xl sm:text-2xl font-extrabold leading-tight text-gray-900 [overflow-wrap:anywhere]">{num(d.total_members || d.members_total)}</p>
                     <p className="text-xs text-gray-500 mt-0.5">Total Members</p>
                 </div>
 
@@ -99,7 +99,7 @@ export default function ManagerOverview() {
                             <i className="fas fa-wallet w-5 h-5 text-sky-600"></i>
                         </div>
                     </div>
-                    <p className="text-2xl font-extrabold text-gray-900">{peso(d.savings_total)}</p>
+                    <p className="min-w-0 max-w-full break-words text-xl sm:text-2xl font-extrabold leading-tight text-gray-900 [overflow-wrap:anywhere]">{peso(d.savings_total)}</p>
                     <p className="text-xs text-gray-500 mt-0.5">Total Savings</p>
                 </div>
 
@@ -109,7 +109,7 @@ export default function ManagerOverview() {
                             <i className="fas fa-file-invoice w-5 h-5 text-indigo-600"></i>
                         </div>
                     </div>
-                    <p className="text-2xl font-extrabold text-gray-900">{num(d.loans_active || d.active_loans)}</p>
+                    <p className="min-w-0 max-w-full break-words text-xl sm:text-2xl font-extrabold leading-tight text-gray-900 [overflow-wrap:anywhere]">{num(d.loans_active || d.active_loans)}</p>
                     <p className="text-xs text-gray-500 mt-0.5">Active Loans</p>
                     <div className="mt-2 pt-2 border-t border-gray-50 text-xs text-gray-500">
                         <div className="flex justify-between"><span>Overdue</span><span className="font-semibold text-red-600">{num(d.loans_overdue)}</span></div>
@@ -122,7 +122,7 @@ export default function ManagerOverview() {
                             <i className={`fas fa-clock w-5 h-5 ${Number(d.pending_transactions) > 0 ? 'text-amber-600' : 'text-gray-400'}`}></i>
                         </div>
                     </div>
-                    <p className={`text-2xl font-extrabold ${Number(d.pending_transactions) > 0 ? 'text-amber-600' : 'text-gray-900'}`}>{num(d.pending_transactions)}</p>
+                    <p className={`min-w-0 max-w-full break-words text-xl sm:text-2xl font-extrabold leading-tight [overflow-wrap:anywhere] ${Number(d.pending_transactions) > 0 ? 'text-amber-600' : 'text-gray-900'}`}>{num(d.pending_transactions)}</p>
                     <p className="text-xs text-gray-500 mt-0.5">Pending Transactions</p>
                     <div className="mt-2 pt-2 border-t border-gray-50 text-xs text-gray-500">
                         <div className="flex justify-between"><span>Loan apps</span><span className="font-semibold text-gray-700">{num(d.loans_pending)}</span></div>
@@ -130,20 +130,21 @@ export default function ManagerOverview() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 [&>*]:min-w-0">
                 <SummaryCard label="Officers & Admins" value={num(d.staff_total)} icon="fa-user-shield" color="text-teal-600" background="bg-teal-50" />
                 <SummaryCard label="Share Capital" value={peso(d.share_capital_total)} icon="fa-coins" color="text-cyan-600" background="bg-cyan-50" />
                 <SummaryCard label="Loan Outstanding" value={peso(d.loans_outstanding)} icon="fa-file-invoice-dollar" color="text-indigo-600" background="bg-indigo-50" />
                 <SummaryCard label="Due in 14 Days" value={num(d.loans_due_soon)} icon="fa-calendar-check" color="text-amber-600" background="bg-amber-50" />
             </div>
 
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <div className="order-5 grid grid-cols-1 gap-6 xl:grid-cols-5">
+            <div className="order-2 min-w-0 bg-white rounded-2xl shadow-sm border border-gray-100 p-6 xl:col-span-3">
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
                     <div>
                         <h2 className="text-base font-bold text-gray-900">Monthly Cash Flow (Last 6 Months)</h2>
                         <p className="text-xs text-gray-500 mt-0.5">Deposits vs. withdrawals + expenses.</p>
                     </div>
-                    <div className="flex gap-4 shrink-0">
+                    <div className="flex flex-wrap gap-x-4 gap-y-2 sm:shrink-0">
                         <div className="text-right">
                             <p className="text-xs text-gray-400">This month net</p>
                             <p className={`text-sm font-bold ${netPos ? 'text-emerald-600' : 'text-red-500'}`}>{netPos ? '+' : ''}{peso(net, 0)}</p>
@@ -195,7 +196,7 @@ export default function ManagerOverview() {
                 </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <div className="order-1 min-w-0 bg-white rounded-2xl shadow-sm border border-gray-100 p-6 xl:col-span-2">
                 <div className="flex items-center justify-between gap-3 mb-4">
                     <div>
                         <h2 className="text-base font-bold text-gray-900">Loan Distribution</h2>
@@ -210,7 +211,7 @@ export default function ManagerOverview() {
                                 <div key={i} className={`${s.color} h-full`} style={{ width: `${s.percent}%` }} title={`${s.label}: ${s.count}`}></div>
                             ))}
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-2 gap-3">
                             {loanSeries.map((s: any, i: number) => (
                                 <div key={i} className="flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2">
                                     <span className="flex items-center gap-2 min-w-0 text-xs text-gray-600"><span className={`w-2.5 h-2.5 rounded-sm ${s.color} shrink-0`}></span><span className="truncate">{s.label}</span></span>
@@ -222,7 +223,9 @@ export default function ManagerOverview() {
                 ) : <p className="text-sm text-gray-400 text-center py-4">No loans yet.</p>}
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            </div>
+
+            <div className="order-4 grid grid-cols-1 xl:grid-cols-3 gap-6">
                 <div className="xl:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                     <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                         <div>
@@ -322,10 +325,14 @@ export default function ManagerOverview() {
 
 function SummaryCard({ label, value, icon, color, background }: { label: string; value: string; icon: string; color: string; background: string }) {
     return (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-            <div className={`w-10 h-10 ${background} rounded-xl flex items-center justify-center mb-3`}><i className={`fas ${icon} w-5 h-5 ${color}`}></i></div>
-            <p className="text-2xl font-extrabold text-gray-900">{value}</p>
-            <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+        <div className="min-w-0 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+            <div className="flex min-w-0 items-center gap-3">
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${background}`}><i className={`fas ${icon} h-5 w-5 ${color}`}></i></div>
+                <div className="min-w-0 flex-1">
+                    <p className="max-w-full break-words text-xl font-bold leading-tight text-gray-900 [overflow-wrap:anywhere] sm:text-2xl">{value}</p>
+                    <p className="mt-0.5 text-xs text-gray-500">{label}</p>
+                </div>
+            </div>
         </div>
     );
 }

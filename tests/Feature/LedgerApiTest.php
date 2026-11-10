@@ -10,6 +10,7 @@ use App\Services\SecurityOtpService;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\UserSeeder;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Spatie\Activitylog\Models\Activity;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -68,6 +69,80 @@ test('ledger store creates pending transaction without affecting balance', funct
         ->and($transaction->recorded_by)->toBe($this->manager->id)
         ->and($transaction->account_id)->toBe($this->account->id);
 });
+
+test('ledger and CSV identify loan members without a savings account link', function (string $type) {
+    $loan = Loan::factory()->active()->create(['user_id' => $this->member->id]);
+    $transaction = Transaction::create([
+        'transaction_type' => $type,
+        'amount' => 100,
+        'account_id' => null,
+        'loan_id' => $loan->id,
+        'status' => 'pending',
+        'recorded_by' => $this->manager->id,
+        'branch_id' => $this->manager->branch_id,
+        'transaction_date' => now(),
+    ]);
+    $holder = $this->member->personalData;
+    $name = trim($holder->first_name.' '.$holder->last_name);
+
+    $this->actingAs($this->manager)->getJson('/api/ledger?search='.$transaction->transaction_number)
+        ->assertOk()
+        ->assertJsonPath('data.0.account_holder', $name)
+        ->assertJsonPath('data.0.user_number', $this->member->user_number);
+
+    $response = $this->get('/api/ledger/export?search='.urlencode($holder->first_name))->assertOk();
+    $rows = array_map('str_getcsv', explode("\n", trim($response->streamedContent())));
+    $row = collect($rows)->first(fn ($row) => $row[0] === $transaction->transaction_number);
+    expect($row)->not->toBeNull()
+        ->and($row[7])->toBe($name)
+        ->and($row[8])->toBe($this->member->user_number);
+})->with(['loan_payment', 'loan_disbursement']);
+
+test('Xendit loan payments enter approvals only after provider verification without posting funds', function (string $paymentStatus) {
+    config(['xendit.test_secret_key' => 'test-key', 'xendit.base_url' => 'https://api.xendit.co']);
+    Http::preventStrayRequests();
+    $loan = Loan::factory()->active()->create([
+        'user_id' => $this->member->id,
+        'branch_id' => $this->manager->branch_id,
+    ]);
+    $transaction = Transaction::create([
+        'transaction_type' => 'loan_payment',
+        'transaction_mode' => 'online',
+        'payment_gateway' => 'xendit',
+        'xendit_session_id' => 'session-ledger-recovery',
+        'xendit_mode' => 'test',
+        'amount' => 100,
+        'loan_id' => $loan->id,
+        'status' => 'pending',
+        'recorded_by' => $this->member->id,
+        'branch_id' => $this->manager->branch_id,
+        'transaction_date' => now(),
+    ]);
+    Http::fake([
+        'api.xendit.co/sessions/session-ledger-recovery' => Http::response([
+            'status' => 'COMPLETED', 'payment_id' => 'payment-ledger-recovery',
+            'amount' => 100, 'currency' => 'PHP', 'reference_id' => $transaction->transaction_number,
+        ]),
+        'api.xendit.co/v3/payments/payment-ledger-recovery' => Http::response([
+            'status' => $paymentStatus, 'payment_id' => 'payment-ledger-recovery',
+            'request_amount' => 100, 'currency' => 'PHP', 'reference_id' => $transaction->transaction_number,
+        ]),
+    ]);
+    $this->actingAs($this->manager)->getJson('/api/services/pending')->assertOk()->assertJsonCount(0, 'data');
+    $this->getJson('/api/ledger?search='.$transaction->transaction_number)
+        ->assertOk()->assertJsonPath('data.0.provider_payment_verified', false);
+
+    $paid = $paymentStatus === 'SUCCEEDED';
+    $this->getJson('/api/services/xendit/verify/'.$transaction->transaction_number)
+        ->assertOk()->assertJsonPath('is_paid', $paid)->assertJsonPath('status', 'pending');
+    $this->getJson('/api/services/pending')->assertOk()->assertJsonCount($paid ? 1 : 0, 'data');
+    $this->getJson('/api/ledger?search='.$transaction->transaction_number)
+        ->assertOk()->assertJsonPath('data.0.provider_payment_verified', $paid);
+    expect($transaction->fresh()->status)->toBe('pending')
+        ->and($transaction->fresh()->account_id)->toBeNull()
+        ->and((float) $loan->fresh()->totalPaid())->toBe(0.0)
+        ->and($this->account->fresh()->balance)->toBe('1000.00');
+})->with(['SUCCEEDED', 'FAILED']);
 
 test('manual ledger creation and deletion are audited with their actor and subject', function () {
     $created = $this->actingAs($this->manager)->postJson('/api/ledger', [

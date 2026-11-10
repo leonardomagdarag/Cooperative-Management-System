@@ -346,7 +346,7 @@ class XenditService
                 throw new RuntimeException('No local transaction is associated with this Xendit payment session.');
             }
 
-            if ($transaction->status === 'completed') {
+            if ($transaction->status === 'completed' || filled($transaction->xendit_payment_id)) {
                 return $transaction;
             }
 

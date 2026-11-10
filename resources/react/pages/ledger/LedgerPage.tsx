@@ -4,6 +4,7 @@ import PageHeader from '../../components/ui/PageHeader';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import { verifyXenditPayment } from '../../api/xendit';
 import DatePicker from '../../components/DatePicker';
 import BranchSelect from '../../components/BranchSelect';
 import { useAuth } from '../../contexts/AuthContext';
@@ -86,6 +87,20 @@ export default function LedgerPage() {
     const deleteMutation = useMutation({
         mutationFn: (id: number) => api.delete(`/api/ledger/${id}`),
         onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['ledger'] }); addToast('Deleted', 'success'); },
+    });
+
+    const verifyPaymentMutation = useMutation({
+        mutationFn: verifyXenditPayment,
+        onSuccess: (result, transactionNumber) => {
+            queryClient.invalidateQueries({ queryKey: ['ledger'] });
+            queryClient.invalidateQueries({ queryKey: ['pending-transactions'] });
+            queryClient.invalidateQueries({ queryKey: ['services-pending'] });
+            setViewingTransaction((current: any) => current?.transaction_number === transactionNumber
+                ? { ...current, status: result.status, provider_payment_verified: result.is_paid }
+                : current);
+            addToast(result.message, result.is_paid ? 'success' : 'info');
+        },
+        onError: (err: any) => addToast(err.response?.data?.message || 'Could not check payment status.', 'error'),
     });
 
     const sendReversalOtpMutation = useMutation({
@@ -474,6 +489,23 @@ export default function LedgerPage() {
                         </div>
                     </div>}
                     <div className="sm:col-span-2"><div className="text-xs font-medium uppercase tracking-wide text-gray-500">Note</div><div className="mt-1 whitespace-pre-wrap break-words text-sm text-gray-900">{viewingTransaction.note || '—'}</div></div>
+                    {viewingTransaction.payment_gateway === 'xendit' && viewingTransaction.status === 'pending' && (
+                        <div className="space-y-3 sm:col-span-2">
+                            <p className="text-sm text-slate-600">
+                                {viewingTransaction.provider_payment_verified
+                                    ? 'Payment verified by Xendit. Awaiting manager or chairman approval.'
+                                    : 'Awaiting Xendit verification. This transaction will appear in approvals after payment is verified.'}
+                            </p>
+                            {!viewingTransaction.provider_payment_verified && (
+                                <Button
+                                    onClick={() => verifyPaymentMutation.mutate(viewingTransaction.transaction_number)}
+                                    disabled={verifyPaymentMutation.isPending}
+                                >
+                                    {verifyPaymentMutation.isPending ? 'Checking payment…' : 'Check payment status'}
+                                </Button>
+                            )}
+                        </div>
+                    )}
                 </div>}
             </Modal>
             <Modal
