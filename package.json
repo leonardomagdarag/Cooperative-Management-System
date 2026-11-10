@@ -5,7 +5,8 @@
     "scripts": {
         "build": "vite build",
         "dev": "vite",
-        "dev:queue": "php artisan queue:listen --queue=backups,emails,default --tries=1"
+        "dev:queue": "php artisan queue:listen --queue=backups,emails,default --tries=1",
+        "manual:screenshots": "node scripts/generate_annotated_manual.cjs"
     },
     "devDependencies": {
         "@playwright/test": "^1.63.0",
@@ -30,6 +31,7 @@
         "@tanstack/react-query": "^5.101.4",
         "animate.css": "^4.1.1",
         "chart.js": "^4.5.1",
+        "driver.js": "^1.10.2",
         "qrcode": "^1.5.4",
         "react": "^19.2.8",
         "react-chartjs-2": "^5.3.1",
