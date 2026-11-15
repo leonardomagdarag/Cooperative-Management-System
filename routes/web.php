@@ -6,9 +6,7 @@ use App\Http\Controllers\EmailVerificationController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\OtpChallengeController;
 use App\Http\Controllers\PageController;
-use App\Http\Controllers\PasswordController;
 use App\Http\Controllers\PasswordResetController;
-use App\Http\Controllers\ProfileController;
 use App\Support\MaintenanceState;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
@@ -77,10 +75,6 @@ Route::middleware('auth')->group(function () {
         ->name('verification.verify');
     Route::get('/confirm-password', [ConfirmablePasswordController::class, 'show'])->name('password.confirm');
     Route::post('/confirm-password', [ConfirmablePasswordController::class, 'store']);
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
-    Route::put('/password', [PasswordController::class, 'update']);
     Route::get('/security/verify-otp', [OtpChallengeController::class, 'show'])->name('otp.challenge.show');
     Route::post('/security/verify-otp', [OtpChallengeController::class, 'verify'])
         ->middleware('throttle:6,1')

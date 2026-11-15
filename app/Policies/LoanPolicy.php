@@ -35,7 +35,12 @@ class LoanPolicy
     {
         return BranchScope::canAccessBranch($user, $loan->branch_id)
             && (($this->isOfficerUser($user) && ($user->can('loans.update') || $user->can('loans.encode')))
-                || ($user->can('loans.create') && $loan->user_id === $user->id));
+                || ($user->can('loans.create')
+                    && (int) $loan->user_id === (int) $user->id
+                    && $loan->loan_status === 'pending'
+                    && $loan->approved_at === null
+                    && $loan->disbursed_at === null
+                    && $loan->reviewed_by === null));
     }
 
     public function approve(User $user): bool

@@ -147,7 +147,7 @@ class ServiceController extends Controller
             return response()->json(['message' => 'You can only manage members in your branch.'], 403);
         }
 
-        if ($existing = $this->existingDuplicate($validated)) {
+        if ($existing = $this->existingDuplicate($validated, $user, (int) $targetUserId, 'deposit')) {
             return response()->json(['message' => 'This request was already submitted.', 'data' => $existing], 200);
         }
 
@@ -236,7 +236,7 @@ class ServiceController extends Controller
             return response()->json(['message' => 'You can only manage members in your branch.'], 403);
         }
 
-        if ($existing = $this->existingDuplicate($validated)) {
+        if ($existing = $this->existingDuplicate($validated, $user, (int) $targetUserId, 'withdrawal')) {
             return response()->json(['message' => 'This request was already submitted.', 'data' => $existing], 200);
         }
 
@@ -475,7 +475,7 @@ class ServiceController extends Controller
             return response()->json(['message' => 'You can only manage members in your branch.'], 403);
         }
 
-        if ($existing = $this->existingDuplicate($validated)) {
+        if ($existing = $this->existingDuplicate($validated, $user, (int) $targetUserId, 'loan_payment')) {
             return response()->json(['message' => 'This request was already submitted.', 'data' => $existing], 200);
         }
 
@@ -883,7 +883,7 @@ class ServiceController extends Controller
         });
     }
 
-    private function existingDuplicate(array $validated): ?Transaction
+    private function existingDuplicate(array $validated, User $requester, int $targetUserId, string $transactionType): ?Transaction
     {
         $clientRequestId = $validated['client_request_id'] ?? null;
 
@@ -891,7 +891,34 @@ class ServiceController extends Controller
             return null;
         }
 
-        return Transaction::where('client_request_id', $clientRequestId)->first();
+        $existing = Transaction::query()
+            ->with(['account:id,user_id,account_type', 'loan:id,user_id'])
+            ->where('client_request_id', $clientRequestId)
+            ->first();
+
+        if (! $existing) {
+            return null;
+        }
+
+        $existingTargetId = $existing->account?->user_id ?? $existing->loan?->user_id;
+        $matches = (int) $existing->recorded_by === (int) $requester->id
+            && $existing->transaction_type === $transactionType
+            && (int) $existingTargetId === $targetUserId
+            && (int) round((float) $existing->amount * 100) === (int) round((float) $validated['amount'] * 100)
+            && $existing->transaction_mode === $validated['transaction_mode'];
+
+        if ($transactionType === 'deposit') {
+            $matches = $matches
+                && $existing->account?->account_type === $validated['account_type'];
+        }
+
+        if ($transactionType === 'loan_payment') {
+            $matches = $matches && (int) $existing->loan_id === (int) $validated['loan_id'];
+        }
+
+        abort_unless($matches, 409, 'This request identifier was already used for a different transaction.');
+
+        return $existing;
     }
 
     private function getLoanEligibilityError(User $targetUser, LoanProduct $product): ?string

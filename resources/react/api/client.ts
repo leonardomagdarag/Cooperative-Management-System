@@ -35,7 +35,7 @@ api.interceptors.response.use(
         }
         // 423 = security/OTP verification required (EnsureOtpVerified middleware).
         // Redirect to the server-rendered OTP challenge page.
-        if (error.response?.status === 423) {
+        if (error.response?.status === 423 && error.response?.data?.maintenance !== true) {
             const redirect = error.response.data?.redirect;
             window.location.href = redirect || '/security/verify-otp';
         }

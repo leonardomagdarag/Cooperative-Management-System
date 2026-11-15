@@ -14,6 +14,7 @@ use App\Services\SecurityOtpService;
 use App\Support\BranchScope;
 use App\Support\FinancialSettings;
 use App\Support\SearchFilter;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -25,46 +26,7 @@ class LedgerController extends Controller
     {
         abort_unless(Auth::user()?->can('transactions.view'), 403);
 
-        $query = Transaction::with(['branch', 'account.user.personalData', 'loan.user.personalData', 'recordedBy.personalData', 'approvedBy.personalData', 'reversalOf']);
-
-        BranchScope::applyToTransactions($query, Auth::user(), $request->input('branch_id'));
-
-        // Category filter
-        $category = $request->string('category')->toString();
-        if ($category !== '' && $category !== 'all') {
-            $query->where('transaction_type', $category);
-        }
-
-        if ($request->boolean('corrections')) {
-            $query->whereNotNull('reversal_of_id');
-        }
-
-        $status = $request->string('status')->toString();
-        if ($status !== '' && $status !== 'all') {
-            $query->where('status', $status);
-        }
-
-        // Search
-        if ($search = SearchFilter::escapeLike($request->string('search')->toString())) {
-            $query->where(function ($q) use ($search) {
-                $q->where('transaction_number', 'like', "%{$search}%")
-                    ->orWhere('amount', 'like', "%{$search}%")
-                    ->orWhere('status', 'like', "%{$search}%")
-                    ->orWhere('transaction_type', 'like', "%{$search}%")
-                    ->orWhere('note', 'like', "%{$search}%")
-                    ->orWhereHas('account.user.personalData', fn ($sub) => $sub->where('first_name', 'like', "%{$search}%")->orWhere('last_name', 'like', "%{$search}%"))
-                    ->orWhereHas('account.user', fn ($sub) => $sub->where('user_number', 'like', "%{$search}%"))
-                    ->orWhereHas('loan.user.personalData', fn ($sub) => $sub->where('first_name', 'like', "%{$search}%")->orWhere('last_name', 'like', "%{$search}%"))
-                    ->orWhereHas('loan', fn ($sub) => $sub->where('loan_number', 'like', "%{$search}%"));
-            });
-        }
-
-        if ($from = $request->string('from')->toString()) {
-            $query->whereDate('transaction_date', '>=', $from);
-        }
-        if ($to = $request->string('to')->toString()) {
-            $query->whereDate('transaction_date', '<=', $to);
-        }
+        $query = $this->filteredTransactions($request)->with(['branch', 'account.user.personalData', 'loan.user.personalData', 'recordedBy.personalData', 'approvedBy.personalData', 'reversalOf']);
 
         // Sort
         $sortField = $request->string('sort', 'created_at')->toString();
@@ -139,19 +101,66 @@ class LedgerController extends Controller
         ]);
     }
 
+    private function filteredTransactions(Request $request): Builder
+    {
+        $query = Transaction::query();
+
+        BranchScope::applyToTransactions($query, Auth::user(), $request->input('branch_id'));
+
+        // Category filter
+        $category = $request->string('category')->toString();
+        if ($category !== '' && $category !== 'all') {
+            $query->where('transaction_type', $category);
+        }
+
+        if ($request->boolean('corrections')) {
+            $query->whereNotNull('reversal_of_id');
+        }
+
+        $status = $request->string('status')->toString();
+        if ($status !== '' && $status !== 'all') {
+            $query->where('status', $status);
+        }
+
+        // Search
+        if ($search = SearchFilter::escapeLike($request->string('search')->toString())) {
+            $query->where(function ($q) use ($search) {
+                $q->where('transaction_number', 'like', "%{$search}%")
+                    ->orWhere('amount', 'like', "%{$search}%")
+                    ->orWhere('status', 'like', "%{$search}%")
+                    ->orWhere('transaction_type', 'like', "%{$search}%")
+                    ->orWhere('note', 'like', "%{$search}%")
+                    ->orWhereHas('account.user.personalData', fn ($sub) => $sub->where('first_name', 'like', "%{$search}%")->orWhere('last_name', 'like', "%{$search}%"))
+                    ->orWhereHas('account.user', fn ($sub) => $sub->where('user_number', 'like', "%{$search}%"))
+                    ->orWhereHas('loan.user.personalData', fn ($sub) => $sub->where('first_name', 'like', "%{$search}%")->orWhere('last_name', 'like', "%{$search}%"))
+                    ->orWhereHas('loan', fn ($sub) => $sub->where('loan_number', 'like', "%{$search}%"));
+            });
+        }
+
+        if ($from = $request->string('from')->toString()) {
+            $query->whereDate(DB::raw('COALESCE(transaction_date, created_at)'), '>=', $from);
+        }
+        if ($to = $request->string('to')->toString()) {
+            $query->whereDate(DB::raw('COALESCE(transaction_date, created_at)'), '<=', $to);
+        }
+
+        return $query;
+    }
+
     public function summary(Request $request): JsonResponse
     {
         abort_unless(Auth::user()?->can('transactions.view'), 403);
 
         $range = $request->string('range', 'today')->toString();
 
-        $transactionCountsQuery = Transaction::query()->where('status', 'completed')
-            ->applyRange($range)
-            ->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_payment', 'loan_disbursement'])
+        $transactionCountsQuery = $this->filteredTransactions($request);
+        if (! $request->filled('from') && ! $request->filled('to')) {
+            $transactionCountsQuery->applyRange($range);
+        }
+
+        $transactionCountsQuery->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_payment', 'loan_disbursement'])
             ->selectRaw('transaction_type, COUNT(*) as count')
             ->groupBy('transaction_type');
-
-        BranchScope::applyToTransactions($transactionCountsQuery, Auth::user(), $request->input('branch_id'));
 
         $transactionCounts = $transactionCountsQuery->pluck('count', 'transaction_type');
 
@@ -175,32 +184,7 @@ class LedgerController extends Controller
     {
         abort_unless(Auth::user()?->can('transactions.export') || Auth::user()?->can('transactions.view'), 403);
 
-        $query = Transaction::with(['account.user.personalData', 'loan.user.personalData', 'recordedBy.personalData', 'reversalOf']);
-
-        BranchScope::applyToTransactions($query, Auth::user(), $request->input('branch_id'));
-
-        $category = $request->string('category')->toString();
-        if ($category !== '' && $category !== 'all') {
-            $query->where('transaction_type', $category);
-        }
-
-        if ($request->boolean('corrections')) {
-            $query->whereNotNull('reversal_of_id');
-        }
-
-        if ($search = SearchFilter::escapeLike($request->string('search')->toString())) {
-            $query->where(function ($q) use ($search) {
-                $q->where('transaction_number', 'like', "%{$search}%")
-                    ->orWhere('amount', 'like', "%{$search}%")
-                    ->orWhere('status', 'like', "%{$search}%")
-                    ->orWhere('transaction_type', 'like', "%{$search}%")
-                    ->orWhere('note', 'like', "%{$search}%")
-                    ->orWhereHas('account.user.personalData', fn ($sub) => $sub->where('first_name', 'like', "%{$search}%")->orWhere('last_name', 'like', "%{$search}%"))
-                    ->orWhereHas('account.user', fn ($sub) => $sub->where('user_number', 'like', "%{$search}%"))
-                    ->orWhereHas('loan.user.personalData', fn ($sub) => $sub->where('first_name', 'like', "%{$search}%")->orWhere('last_name', 'like', "%{$search}%"))
-                    ->orWhereHas('loan', fn ($sub) => $sub->where('loan_number', 'like', "%{$search}%"));
-            });
-        }
+        $query = $this->filteredTransactions($request)->with(['account.user.personalData', 'loan.user.personalData', 'recordedBy.personalData', 'reversalOf']);
 
         $transactions = $query->orderByDesc('created_at')->get();
         $transactionIds = $transactions

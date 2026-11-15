@@ -269,7 +269,7 @@ export default function LoansPage() {
                                     <tr key={l.id} className={awaitingDisbursement ? 'bg-emerald-50 hover:bg-emerald-100' : 'hover:bg-gray-50'}>
                                         <td className="p-4 text-sm font-medium text-gray-900">{l.loan_number}</td>
                                         <td className="p-4 text-sm font-medium text-gray-900 truncate" title={l.borrower?.name || 'Unknown'}>{l.borrower?.name || 'Unknown'}{l.borrower?.user_number && <div className="text-xs text-gray-500">{l.borrower.user_number}</div>}</td>
-                                        <td className="p-4 text-base font-semibold text-gray-900">â‚±{Number(l.loan_amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                        <td className="p-4 text-base font-semibold text-gray-900">{formatPeso(l.loan_amount)}</td>
                                         <td className="p-4 truncate" title={l.loan_product_name || l.loan_product || l.loan_type}><span className="px-2.5 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800 rounded capitalize">{l.loan_product_name || l.loan_product || l.loan_type}</span></td>
                                         <td className="p-4">
                                             <span className={`px-2.5 py-0.5 text-xs font-medium rounded ${getStatusColor(l.loan_status)}`}>{getStatusLabel(l.loan_status)}</span>
@@ -615,7 +615,7 @@ export default function LoansPage() {
                     <section className="w-full max-w-lg rounded-2xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="loan-disbursement-title" onClick={e => e.stopPropagation()}>
                         <div className="border-b border-gray-200 px-6 py-5">
                             <h2 id="loan-disbursement-title" className="flex items-center gap-2 text-lg font-bold text-gray-900">Confirm Loan Disbursement <HelpTip text="Karaniwang cash ang loan proceeds. Piliin lang ang Credit to savings kung iyon talaga ang napagkasunduan at na-confirm ng borrower. Mare-record ang piniling paraan sa transaction." /></h2>
-                            <p className="mt-1 text-sm text-gray-600">{disbursementLoan.loan_number} Â· â‚±{Number(disbursementLoan.loan_amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                            <p className="mt-1 text-sm text-gray-600">{disbursementLoan.loan_number} · {formatPeso(disbursementLoan.loan_amount)}</p>
                         </div>
                         <div className="space-y-3 p-6">
                             <p className="text-sm text-gray-700">Choose how the borrower will receive the loan proceeds:</p>

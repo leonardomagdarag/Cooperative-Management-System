@@ -2,6 +2,7 @@
 
 use App\Models\Account;
 use App\Models\Branch;
+use App\Models\OfficerPermissionOverride;
 use App\Models\Transaction;
 use App\Models\User;
 use Database\Seeders\AccountSeeder;
@@ -138,6 +139,11 @@ test('F025-6: ledger export streams CSV file with headers and records', function
 test('F025-7: branch accountant only sees ledger entries from their branch', function () {
     // Give accountant the branch office, where their ledger access is scoped.
     $this->accountant->update(['branch_id' => $this->officeBranch->id]);
+    // The current accountant preset grants bypass; explicitly restrict this
+    // fixture so the test exercises branch isolation rather than that grant.
+    OfficerPermissionOverride::create([
+        'user_id' => $this->accountant->id, 'permission' => 'branches.bypass', 'effect' => 'disallow',
+    ]);
 
     $tMain = Transaction::create([
         'account_id' => $this->memberAccount->id,

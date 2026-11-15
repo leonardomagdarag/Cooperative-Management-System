@@ -1,7 +1,9 @@
 <?php
 
 use App\Models\Account;
+use App\Models\Branch;
 use App\Models\Loan;
+use App\Models\OfficerPermissionOverride;
 use App\Models\PrivilegedActionRequest;
 use App\Models\Transaction;
 use App\Models\User;
@@ -46,6 +48,80 @@ test('users without transactions permissions cannot access ledger api', function
         'amount' => 500,
         'account_id' => $this->account->id,
     ])->assertForbidden();
+});
+
+test('ledger totals and CSV follow the same date and transaction filters as the table', function (array $filters, array $expected) {
+    $this->travelTo(now()->startOfDay()->addHours(12));
+    $otherBranch = Branch::where('id', '!=', $this->manager->branch_id)->firstOrFail();
+    $original = null;
+    foreach ([
+        ['deposit', 'completed', now(), null, 'match'],
+        ['deposit', 'pending', now(), null, 'match'],
+        ['withdrawal', 'completed', now(), null, 'match'],
+        ['loan_payment', 'pending', now(), null, 'match'],
+        ['loan_disbursement', 'completed', now(), null, 'match'],
+        ['deposit', 'completed', now()->subDay(), null, 'match'],
+        ['deposit', 'completed', now(), $otherBranch->id, 'match'],
+        ['withdrawal', 'rejected', now(), null, 'different'],
+        // Legacy undated entries use their creation date.
+        ['deposit', 'completed', null, null, 'match'],
+    ] as [$type, $status, $date, $branchId, $note]) {
+        $row = Transaction::create([
+            'transaction_type' => $type, 'status' => $status,
+            'transaction_date' => $date, 'branch_id' => $branchId ?? $this->manager->branch_id,
+            'amount' => 100, 'note' => $note, 'recorded_by' => $this->manager->id,
+        ]);
+        $original ??= $row;
+    }
+    Transaction::create([
+        'transaction_type' => 'deposit', 'status' => 'completed', 'transaction_date' => now(),
+        'branch_id' => $this->manager->branch_id, 'amount' => 100, 'note' => 'match',
+        'recorded_by' => $this->manager->id, 'reversal_of_id' => $original->id,
+    ]);
+    $params = [
+        'range' => 'all', 'from' => now()->toDateString(), 'to' => now()->toDateString(),
+        'branch_id' => $this->manager->branch_id, ...$filters,
+    ];
+    $query = http_build_query($params);
+    $this->actingAs($this->manager);
+    $table = $this->getJson('/api/ledger?'.$query)->assertOk();
+    $summary = $this->getJson('/api/ledger/summary?'.$query)->assertOk();
+    foreach (['deposits', 'withdrawals', 'loan_payments', 'loan_disbursements'] as $i => $key) {
+        $summary->assertJsonPath($key, $expected[$i]);
+    }
+    $table->assertJsonPath('pagination.total', array_sum($expected));
+    $csv = $this->get('/api/ledger/export?'.$query)->assertOk()->streamedContent();
+    $rows = array_map('str_getcsv', explode("\n", trim($csv)));
+    expect(count($rows) - 1)->toBe(array_sum($expected));
+})->with([
+    'today and branch' => [[], [4, 2, 1, 1]],
+    'pending' => [['status' => 'pending'], [1, 0, 1, 0]],
+    'completed' => [['status' => 'completed'], [3, 1, 0, 1]],
+    'deposits only' => [['category' => 'deposit'], [4, 0, 0, 0]],
+    'search' => [['search' => 'different'], [0, 1, 0, 0]],
+    'corrections' => [['corrections' => 1], [1, 0, 0, 0]],
+    'all time' => [['from' => '', 'to' => ''], [5, 2, 1, 1]],
+    'custom historical dates' => [['from' => '2020-01-01', 'to' => '2020-01-02'], [0, 0, 0, 0]],
+]);
+
+test('ledger summary enforces the viewers branch even when another branch is requested', function () {
+    $accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
+    OfficerPermissionOverride::create([
+        'user_id' => $accountant->id, 'permission' => 'branches.bypass', 'effect' => 'disallow',
+    ]);
+    $otherBranch = Branch::where('id', '!=', $this->manager->branch_id)->firstOrFail();
+    Transaction::create([
+        'transaction_type' => 'deposit', 'status' => 'pending', 'amount' => 100,
+        'branch_id' => $otherBranch->id, 'transaction_date' => now(),
+        'recorded_by' => $this->manager->id,
+    ]);
+    Transaction::create([
+        'transaction_type' => 'withdrawal', 'status' => 'pending', 'amount' => 100,
+        'branch_id' => $accountant->branch_id, 'transaction_date' => now(),
+        'recorded_by' => $this->manager->id,
+    ]);
+    $this->actingAs($accountant)->getJson('/api/ledger/summary?range=all&branch_id='.$otherBranch->id)
+        ->assertOk()->assertJsonPath('deposits', 0)->assertJsonPath('withdrawals', 1);
 });
 
 test('ledger store creates pending transaction without affecting balance', function () {

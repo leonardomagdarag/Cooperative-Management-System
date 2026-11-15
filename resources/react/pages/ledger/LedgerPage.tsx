@@ -16,7 +16,7 @@ import Pagination from '../../components/ui/Pagination';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import TransactionReceiptModal, { type TransactionReceiptData } from '../../components/TransactionReceiptModal';
-import DateRangeFilter from '../../components/ui/DateRangeFilter';
+import DateRangeFilter, { presetDates } from '../../components/ui/DateRangeFilter';
 
 /** Mirrors the backend's editable list in LedgerController/CountersignService. */
 const EDITABLE_TYPES = ['deposit', 'withdrawal', 'loan_payment', 'loan_disbursement', 'fee'];
@@ -26,8 +26,8 @@ export default function LedgerPage() {
     const [search, setSearch] = useState('');
     const [branchFilter, setBranchFilter] = useState<number | ''>('');
     const [page, setPage] = useState(1);
-    const [from, setFrom] = useState('');
-    const [to, setTo] = useState('');
+    const [from, setFrom] = useState(() => presetDates('today').from);
+    const [to, setTo] = useState(() => presetDates('today').to);
     const [status, setStatus] = useState('all');
     const [sort, setSort] = useState('created_at');
     const [direction, setDirection] = useState<'asc' | 'desc'>('desc');
@@ -59,14 +59,24 @@ export default function LedgerPage() {
     const setFormD = (updater: (f: typeof form) => typeof form) => { markDirty(); setForm(updater); };
     const requestCloseGuard = () => requestClose(() => setShowAddModal(false));
 
-    const { data, isLoading } = useQuery({
-        queryKey: ['ledger', category, search, page, branchFilter, from, to, status, sort, direction],
-        queryFn: () => api.get('/api/ledger', { params: { category: category === 'all' || category === 'corrections' ? undefined : category, corrections: category === 'corrections' ? 1 : undefined, search: search || undefined, branch_id: branchFilter || undefined, from: from || undefined, to: to || undefined, status: status === 'all' ? undefined : status, sort, direction, page, per_page: 10 } }),
+    const filters = {
+        category: category === 'all' || category === 'corrections' ? undefined : category,
+        corrections: category === 'corrections' ? 1 : undefined,
+        search: search || undefined,
+        branch_id: branchFilter || undefined,
+        from: from || undefined,
+        to: to || undefined,
+        status: status === 'all' ? undefined : status,
+    };
+
+    const { data, isLoading, isFetching, refetch } = useQuery({
+        queryKey: ['ledger', filters, sort, direction, page],
+        queryFn: () => api.get('/api/ledger', { params: { ...filters, sort, direction, page, per_page: 10 } }),
     });
 
-    const { data: summaryData } = useQuery({
-        queryKey: ['ledger-summary', branchFilter],
-        queryFn: () => api.get('/api/ledger/summary', { params: { range: 'all', branch_id: branchFilter || undefined } }),
+    const { data: summaryData, isFetching: isSummaryFetching, refetch: refetchSummary } = useQuery({
+        queryKey: ['ledger-summary', filters],
+        queryFn: () => api.get('/api/ledger/summary', { params: { ...filters, range: 'all' } }),
     });
 
     const saveMutation = useMutation({
@@ -75,6 +85,7 @@ export default function LedgerPage() {
             : api.post('/api/ledger', payload),
         onSuccess: (res: any) => {
             queryClient.invalidateQueries({ queryKey: ['ledger'] });
+            queryClient.invalidateQueries({ queryKey: ['ledger-summary'] });
             setShowAddModal(false);
             setEditingId(null);
             const isPending = res?.data?.status === 'pending' || res?.status === 202;
@@ -86,13 +97,18 @@ export default function LedgerPage() {
 
     const deleteMutation = useMutation({
         mutationFn: (id: number) => api.delete(`/api/ledger/${id}`),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['ledger'] }); addToast('Deleted', 'success'); },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['ledger'] });
+            queryClient.invalidateQueries({ queryKey: ['ledger-summary'] });
+            addToast('Deleted', 'success');
+        },
     });
 
     const verifyPaymentMutation = useMutation({
         mutationFn: verifyXenditPayment,
         onSuccess: (result, transactionNumber) => {
             queryClient.invalidateQueries({ queryKey: ['ledger'] });
+            queryClient.invalidateQueries({ queryKey: ['ledger-summary'] });
             queryClient.invalidateQueries({ queryKey: ['pending-transactions'] });
             queryClient.invalidateQueries({ queryKey: ['services-pending'] });
             setViewingTransaction((current: any) => current?.transaction_number === transactionNumber
@@ -118,6 +134,7 @@ export default function LedgerPage() {
         mutationFn: () => api.post(`/api/ledger/${reversalTarget!.id}/reverse`, { otp_code: reversalOtp }),
         onSuccess: (response) => {
             queryClient.invalidateQueries({ queryKey: ['ledger'] });
+            queryClient.invalidateQueries({ queryKey: ['ledger-summary'] });
             setReversalTarget(null);
             setReversalOtp('');
             addToast(response.data.message, 'success');
@@ -177,7 +194,7 @@ export default function LedgerPage() {
     const exportCsv = async () => {
         try {
             const res = await api.get('/api/ledger/export', {
-                params: { category: category === 'all' || category === 'corrections' ? undefined : category, corrections: category === 'corrections' ? 1 : undefined, search: search || undefined },
+                params: filters,
                 responseType: 'blob',
             });
             const url = URL.createObjectURL(res.data);
@@ -212,10 +229,26 @@ export default function LedgerPage() {
         setPage(1);
     };
 
+    const reloadTransactions = async () => {
+        const results = await Promise.all([refetch(), refetchSummary()]);
+        if (results.some(result => result.isError)) {
+            addToast('Could not reload all transaction data. Please try again.', 'error');
+        }
+    };
+
     return (
         <>
             <div className="p-4">
-                <PageHeader title={<>Ledger <HelpTip text="The ledger is the financial transaction record. Use filters to narrow the entries; exports follow the currently selected filters and your branch access." /></>} description="Track all financial transactions" icon="fas fa-book" action={<div className="flex gap-2">
+                <PageHeader title={<>Ledger <HelpTip text="The ledger is the financial transaction record. Use filters to narrow the entries; exports follow the currently selected filters and your branch access." /></>} description="Track all financial transactions" icon="fas fa-book" action={<div className="flex flex-wrap gap-2">
+                    <Button
+                        variant="secondary"
+                        onClick={reloadTransactions}
+                        isLoading={isFetching || isSummaryFetching}
+                        loadingText="Reloading…"
+                        icon={<i className="fas fa-sync-alt" aria-hidden="true" />}
+                    >
+                        Reload
+                    </Button>
                     <button onClick={exportCsv} className="bg-emerald-600 hover:bg-emerald-700 rounded-lg focus:ring-4 focus:ring-emerald-200 text-white px-4 py-2 text-sm font-medium transition-colors">
                         <i className="fas fa-download mr-1"></i> Export
                     </button>
@@ -255,7 +288,7 @@ export default function LedgerPage() {
                     className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-emerald-500 focus:border-emerald-500 block w-full p-2.5 mb-4"
                 />
                 <div className="table-toolbar mb-4">
-                    <DateRangeFilter from={from} to={to} onFromChange={value => { setFrom(value); setPage(1); }} onToChange={value => { setTo(value); setPage(1); }} />
+                    <DateRangeFilter initialPreset="today" from={from} to={to} onFromChange={value => { setFrom(value); setPage(1); }} onToChange={value => { setTo(value); setPage(1); }} />
                     <select value={status} onChange={event => { setStatus(event.target.value); setPage(1); }} aria-label="Filter transactions by status" className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm"><option value="all">All statuses</option><option value="pending">Pending</option><option value="completed">Completed</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select>
                     {canAssignBranch && <div className="w-full sm:w-64"><BranchSelect label="" value={branchFilter} onChange={v => { setBranchFilter(v); setPage(1); }} allLabel="All branches" /></div>}
                 </div>

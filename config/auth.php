@@ -2,11 +2,18 @@
 
 use App\Models\User;
 
+$loginOtpBypass = env('LOGIN_OTP_BYPASS');
+
 return [
 
     // Defaults on for local development only; explicitly set false to exercise
     // login OTP locally. Other OTP-protected actions remain enforced.
-    'login_otp_bypass' => filter_var(env('LOGIN_OTP_BYPASS') ?: app()->environment('local'), FILTER_VALIDATE_BOOLEAN),
+    'login_otp_bypass' => filter_var(
+        $loginOtpBypass === null || $loginOtpBypass === ''
+            ? env('APP_ENV') === 'local'
+            : $loginOtpBypass,
+        FILTER_VALIDATE_BOOLEAN,
+    ),
 
     /*
     |--------------------------------------------------------------------------

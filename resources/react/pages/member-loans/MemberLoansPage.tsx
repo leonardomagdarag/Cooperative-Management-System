@@ -62,7 +62,7 @@ export default function MemberLoansPage() {
                                     <tr key={l.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => { setSelected(l); setTab('details'); }}>
                                         <td className="px-6 py-3 font-mono text-xs font-medium whitespace-nowrap truncate max-w-[160px]" title={l.loan_number}>{l.loan_number}</td>
                                         <td className="px-6 py-3 whitespace-nowrap truncate max-w-[220px]" title={l.loan_type_label || l.loan_type}>{l.loan_type_label || l.loan_type}</td>
-                                        <td className="px-6 py-3 text-right font-medium">â‚±{Number(l.loan_amount).toLocaleString()}</td>
+                                        <td className="px-6 py-3 text-right font-medium">{formatPeso(l.loan_amount)}</td>
                                         <td className="px-6 py-3 text-center">{Number(l.interest_rate).toFixed(1)}%</td>
                                         <td className="px-6 py-3 text-center">
                                             <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${loanStatusMeta(l.loan_status).className}`}>{t(loanStatusMeta(l.loan_status).label)}</span>

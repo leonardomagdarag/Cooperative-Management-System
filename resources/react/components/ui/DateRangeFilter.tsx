@@ -6,6 +6,7 @@ interface DateRangeFilterProps {
     onFromChange: (value: string) => void;
     onToChange: (value: string) => void;
     onRangeChange?: (from: string, to: string) => void;
+    initialPreset?: Preset;
 }
 type Preset = 'all' | 'today' | 'week' | 'month' | 'year' | 'custom';
 const inputClass = 'rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-normal text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-100';
@@ -30,8 +31,8 @@ export function presetDates(preset: Exclude<Preset, 'custom'>, now = new Date())
     return { from: dateString(start), to: dateString(end) };
 }
 
-export default function DateRangeFilter({ from, to, onFromChange, onToChange, onRangeChange }: DateRangeFilterProps) {
-    const [selection, setSelection] = useState<{ preset: Preset; from: string; to: string }>(() => ({ preset: from || to ? 'custom' : 'all', from, to }));
+export default function DateRangeFilter({ from, to, onFromChange, onToChange, onRangeChange, initialPreset }: DateRangeFilterProps) {
+    const [selection, setSelection] = useState<{ preset: Preset; from: string; to: string }>(() => ({ preset: initialPreset ?? (from || to ? 'custom' : 'all'), from, to }));
     // Parent resets and restored URL filters take precedence over the local selection.
     const preset = selection.from === from && selection.to === to ? selection.preset : from || to ? 'custom' : 'all';
     const changeRange = (nextFrom: string, nextTo: string, nextPreset: Preset) => {
