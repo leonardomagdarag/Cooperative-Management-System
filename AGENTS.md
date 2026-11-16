@@ -90,6 +90,12 @@ vendor/bin/pint     # formatter, laravel preset (no pint.json in repo)
 
 ## Environment gotchas
 
+### Namecheap automation/security investigation (2026-11-16)
+
+- Follow-up trace: `docs/QA/namecheap_automation_2026-11-16/ATTRIBUTION_TRACE.md` records requests from `220.118.15.243` to the other hosted site's `/livewire/update` endpoint 36–37 seconds before the miner script's Nov 3, 07:14:35 Philippine-time filesystem timestamp. `recordcredential.site` has Livewire v3.6.3 installed, affected by the documented CVE-2025-54068 under specific conditions. This is a suspected entry path, not proven exploit execution or personal attribution. Request Namecheap's server-level logs; neither the initial compromise date nor the operator's identity is confirmed. No containment or patching has been performed by this investigation.
+- An SSH investigation found that the hosting user's cron has no Laravel scheduler entry and instead invokes `/dev/shm/.sysd-private-6dc69179/.nm-dog.sh`. Static inspection confirmed Monero miner configuration and cron persistence. No containment or server changes were performed. Treat the hosting account as compromised until containment and integrity review are completed; do not blindly restore cron or redeploy over the evidence. See `docs/QA/namecheap_automation_2026-11-16/REPORT.md` for evidence, limitations, and the recovery sequence.
+- SMTP authentication with `system@settlerscc.online` succeeded without sending mail. The latest scheduled backup archive found was dated October 30; newer archives without the daily prefix do not prove automation resumed. The effective application timezone was UTC. Verify actual scheduler execution, backup outcomes, and recipient delivery after recovery before marking the incident resolved.
+
 ### Namecheap email (2026-11-10)
 
 - The production app at `settlerscc.online` sends SMTP mail from the `system@settlerscc.online` mailbox. Officer login and contact emails in the production database are `admin@`, `manager@`, `accountant@`, and `chairman@settlerscc.online`. Each officer address forwards incoming mail to the matching `leo.baluyot039+{role}@gmail.com` address. These are the configured destinations for notifications, OTPs, and password reset messages; officers sign in with their cooperative domain addresses. The four forwarders are configured in Namecheap, not in Laravel. `system@` is for the app's outgoing SMTP and does not forward officer mail. A test message was accepted by SMTP, but receipt was not confirmed in the connected Gmail account; verify with the destination mailbox before claiming end-to-end delivery.
@@ -109,6 +115,7 @@ vendor/bin/pint     # formatter, laravel preset (no pint.json in repo)
 ## Docs & conventions
 
 - **`FUNCTIONALIT_LIST.md` (repo root) is the system-functionality reference** for workflows and role capabilities; `app/Support/PermissionCatalog.php`, seeders, and active backend authorization remain authoritative for actual access. Read the functionality reference before changing access rules, then verify expectations against code.
+-**`UNIFIED_SYSTEM_DESCRIPTION` (`docs/system details/`) is another system details** which includes a more detailed explanation of the system, security, workflows and logics
 - `docs/QA/CODE_DOCUMENT_ALIGNMENT.md` records known code/documentation drift; `docs/QA/QA_RESULT_1.md`, `docs/QA/QA_LOG.md`, and role-specific reports under `docs/QA/` hold browser QA findings and their current statuses. Check the latest register before repeating or closing a finding.
 - `docs/system details/` is the home for documents about the system, including backup and database references, data-flow inventories, audits, research, capstone materials, and diagrams. Read the relevant references before changing system behavior; verify working notes and audit conclusions against current code.
 - Rework notes live under `docs/system details/reworks/` (including collections, roles, ledger/OTP, transaction approval, financial accounts, and SMS fallback). They are orientation only, not authoritative behavior specifications.
