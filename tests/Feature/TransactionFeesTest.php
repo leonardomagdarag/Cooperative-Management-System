@@ -102,7 +102,7 @@ test('deposit captures fee_amount and officer deposit credits principal', functi
     SystemSetting::set('financial_fee_deposit_value', 15.0);
 
     $officer = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
-    $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $member = User::where('email', 'arjay.ramos@gmail.com')->firstOrFail();
     $account = Account::where('user_id', $member->id)->where('account_type', 'savings')->firstOrFail();
     $initialBalance = (float) $account->balance;
 
@@ -123,7 +123,7 @@ test('withdrawal enforces balance including fee and decrements amount plus fee o
     SystemSetting::set('financial_fee_withdrawal_mode', 'percent');
     SystemSetting::set('financial_fee_withdrawal_value', 2.0); // 2% fee
 
-    $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $member = User::where('email', 'arjay.ramos@gmail.com')->firstOrFail();
     $account = Account::where('user_id', $member->id)->where('account_type', 'savings')->firstOrFail();
     $account->update(['balance' => 1010.00]); // available is 1010
 
@@ -181,7 +181,7 @@ test('reversing a transaction with fees correctly rolls back account balance and
     SystemSetting::set('financial_fee_withdrawal_value', 25.0);
 
     $manager = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
-    $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $member = User::where('email', 'arjay.ramos@gmail.com')->firstOrFail();
     $account = Account::where('user_id', $member->id)->where('account_type', 'savings')->firstOrFail();
     $initialBalance = (float) $account->balance;
 

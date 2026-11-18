@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Account;
 use App\Models\Announcement;
 use App\Models\BackupRun;
 use App\Models\Expense;
@@ -13,8 +12,10 @@ use App\Models\SystemSetting;
 use App\Models\Ticket;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\BackupService;
 use App\Services\XenditService;
 use App\Support\BranchScope;
+use App\Support\FinancialCashFlow;
 use App\Support\PermissionCatalog;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -33,6 +34,11 @@ class DashboardController extends Controller
     {
         $user = Auth::user();
         $role = $user->primary_role;
+
+        if (! $user->is_officer && ! in_array($role, ['admin', 'chairman', 'manager', 'accountant', 'treasurer', 'secretary', 'loan'], true)) {
+            return $this->member();
+        }
+
         $branchId = BranchScope::resolveBranchId($user, $request->integer('branch_id'));
 
         return match ($role) {
@@ -42,7 +48,7 @@ class DashboardController extends Controller
             'accountant', 'treasurer' => $this->treasurer($branchId),
             'secretary' => $this->secretary($branchId),
             'loan' => $this->loan($branchId),
-            default => $user->is_officer ? $this->officer($branchId) : $this->member(),
+            default => $this->officer($branchId),
         };
     }
 
@@ -172,18 +178,8 @@ class DashboardController extends Controller
         $activeLoansCount = BranchScope::applyToLoans(Loan::query()->whereIn('loan_status', $activeLoanStatuses), Auth::user(), $branchId)->count();
         $pendingLoansCount = BranchScope::applyToLoans(Loan::awaitingReview(), Auth::user(), $branchId)->count();
 
-        $loanPrincipalActive = (float) BranchScope::applyToLoans(Loan::query()->whereIn('loan_status', $activeLoanStatuses), Auth::user(), $branchId)->sum('loan_amount');
-        $loanPaymentsOnActive = (float) $this->loanPaymentsOnActiveLoans($branchId);
-        $loanOutstanding = max(0, $loanPrincipalActive - $loanPaymentsOnActive);
-
-        $overdueLoansCount = BranchScope::applyToLoans(
-            Loan::query()
-                ->whereNotIn('loan_status', $paidLoanStatuses)
-                ->whereNotNull('due_date')
-                ->whereDate('due_date', '<', today()),
-            Auth::user(),
-            $branchId
-        )->count();
+        $loanOutstanding = FinancialCashFlow::netLoansReceivable($branchId, Auth::user(), null, ['active']);
+        $overdueLoansCount = $this->countOverdueLoans($branchId);
 
         $dueSoonLoansCount = BranchScope::applyToLoans(
             Loan::query()
@@ -434,9 +430,9 @@ class DashboardController extends Controller
                 ],
                 'maintenance' => [
                     'active' => app()->isDownForMaintenance(),
-                    'public_login' => (bool) SystemSetting::get('public_login_enabled', true),
-                    'member_login' => (bool) SystemSetting::get('member_login_enabled', true),
-                    'officer_login' => (bool) SystemSetting::get('officer_login_enabled', true),
+                    'public_login' => (bool) SystemSetting::get('service_login_enabled', true),
+                    'member_login' => (bool) SystemSetting::get('service_login_member_enabled', true),
+                    'officer_login' => (bool) SystemSetting::get('service_login_officer_enabled', true),
                 ],
                 'services' => $services,
                 'integrations' => [
@@ -474,9 +470,12 @@ class DashboardController extends Controller
         $anyRun = false;
         $anyFailure = false;
         $latestAt = null;
+        $tierStatuses = [];
 
         foreach ($tiers as $tier) {
             $last = $lastRuns->get($tier);
+            $status = $this->backupTierStatus($last);
+
             if ($last) {
                 $anyRun = true;
                 if ($last->status === 'failed') {
@@ -486,14 +485,35 @@ class DashboardController extends Controller
                     $latestAt = $last->started_at;
                 }
             }
+
+            if ($tier === 'daily' && ! app()->runningUnitTests()) {
+                $newestOnDisk = app(BackupService::class)->newestBackupOnDisk('daily');
+                if ($newestOnDisk && ! empty($newestOnDisk['created_at'])) {
+                    $diskAt = Carbon::parse($newestOnDisk['created_at']);
+                    $runAt = ! empty($status['last_run_at']) ? Carbon::parse($status['last_run_at']) : null;
+                    if ($runAt === null || $diskAt->greaterThan($runAt)) {
+                        $anyRun = true;
+                        $status['last_status'] = $status['last_status'] ?? 'success';
+                        $status['last_filename'] = $newestOnDisk['name'] ?? $status['last_filename'];
+                        $status['last_size'] = $newestOnDisk['size'] ?? $status['last_size'];
+                        $status['last_run_at'] = $diskAt->toISOString();
+                        $status['last_finished_at'] = $diskAt->toISOString();
+                    }
+                    if ($latestAt === null || $diskAt->greaterThan($latestAt)) {
+                        $latestAt = $diskAt;
+                    }
+                }
+            }
+
+            $tierStatuses[$tier] = $status;
         }
 
+        $isStale = $latestAt !== null && $latestAt->lt(now()->subHours(48));
+
         return [
-            'health' => $anyFailure ? 'attention' : ($anyRun ? 'ok' : 'never'),
+            'health' => ($anyFailure || $isStale) ? 'attention' : ($anyRun ? 'ok' : 'never'),
             'last_run_at' => $latestAt?->toISOString() ?? null,
-            'tiers' => collect($tiers)->mapWithKeys(fn ($tier) => [
-                $tier => $this->backupTierStatus($lastRuns->get($tier)),
-            ])->all(),
+            'tiers' => $tierStatuses,
         ];
     }
 
@@ -542,8 +562,7 @@ class DashboardController extends Controller
         $activeLoanStatuses = ['approved', 'active'];
         $activeLoansCount = BranchScope::applyToLoans(Loan::query()->whereIn('loan_status', $activeLoanStatuses), Auth::user(), $branchId)->count();
         $pendingLoansCount = BranchScope::applyToLoans(Loan::awaitingReview(), Auth::user(), $branchId)->count();
-        $loanPrincipalActive = (float) BranchScope::applyToLoans(Loan::query()->whereIn('loan_status', $activeLoanStatuses), Auth::user(), $branchId)->sum('loan_amount');
-        $loanOutstanding = max(0, $loanPrincipalActive - $this->loanPaymentsOnActiveLoans($branchId));
+        $loanOutstanding = FinancialCashFlow::netLoansReceivable($branchId, Auth::user(), null, ['active']);
 
         $dueSoonLoansCount = BranchScope::applyToLoans(
             Loan::query()
@@ -554,14 +573,7 @@ class DashboardController extends Controller
             $branchId
         )->count();
 
-        $overdueLoansCount = BranchScope::applyToLoans(
-            Loan::query()
-                ->whereNotIn('loan_status', ['paid', 'paid_off', 'paid-off'])
-                ->whereNotNull('due_date')
-                ->whereDate('due_date', '<', today()),
-            Auth::user(),
-            $branchId
-        )->count();
+        $overdueLoansCount = $this->countOverdueLoans($branchId);
 
         $financialThisMonth = $this->financialSummary($start, $end, $branchId);
         $pendingTxnCount = BranchScope::applyToTransactions(Transaction::query()->where('status', 'pending'), Auth::user(), $branchId)->count();
@@ -816,14 +828,7 @@ class DashboardController extends Controller
         $activeCount = BranchScope::applyToLoans(Loan::query()->whereIn('loan_status', $activeLoanStatuses), Auth::user(), $branchId)->count();
         $rejectedCount = BranchScope::applyToLoans(Loan::query()->where('loan_status', 'rejected'), Auth::user(), $branchId)->count();
 
-        $overdueCount = BranchScope::applyToLoans(
-            Loan::query()
-                ->whereNotIn('loan_status', $paidLoanStatuses)
-                ->whereNotNull('due_date')
-                ->whereDate('due_date', '<', today()),
-            Auth::user(),
-            $branchId
-        )->count();
+        $overdueCount = $this->countOverdueLoans($branchId);
 
         $dueSoonCount = BranchScope::applyToLoans(
             Loan::query()
@@ -834,13 +839,7 @@ class DashboardController extends Controller
             $branchId
         )->count();
 
-        $loanPrincipalActive = (float) BranchScope::applyToLoans(
-            Loan::query()->whereIn('loan_status', $activeLoanStatuses),
-            Auth::user(),
-            $branchId
-        )->sum('loan_amount');
-
-        $loanOutstanding = max(0, $loanPrincipalActive - $this->loanPaymentsOnActiveLoans($branchId));
+        $loanOutstanding = FinancialCashFlow::netLoansReceivable($branchId, Auth::user(), null, ['active']);
 
         $totalLoanDisbursed = (float) BranchScope::applyToLoans(
             Loan::query()->whereIn('loan_status', array_merge($activeLoanStatuses, $paidLoanStatuses)),
@@ -956,14 +955,7 @@ class DashboardController extends Controller
         $loansOverdue = null;
         if ($user->can('loans.view')) {
             $loansActive = BranchScope::applyToLoans(Loan::query()->whereIn('loan_status', ['approved', 'active']), $user, $branchId)->count();
-            $loansOverdue = BranchScope::applyToLoans(
-                Loan::query()
-                    ->whereNotIn('loan_status', ['paid', 'paid_off', 'paid-off'])
-                    ->whereNotNull('due_date')
-                    ->whereDate('due_date', '<', today()),
-                $user,
-                $branchId
-            )->count();
+            $loansOverdue = $this->countOverdueLoans($branchId);
         }
 
         $recentAnnouncements = null;
@@ -1022,7 +1014,7 @@ class DashboardController extends Controller
         $user = $targetUser;
 
         $loans = $user->loans()
-            ->with(['payments', 'documents'])
+            ->with(['payments', 'documents', 'groupMembers.personalData'])
             ->latest()
             ->get()
             ->map(function ($l) {
@@ -1061,10 +1053,9 @@ class DashboardController extends Controller
                     'approved_by' => $l->approvedBy?->personalData
                         ? trim(($l->approvedBy->personalData->first_name ?? '').' '.($l->approvedBy->personalData->last_name ?? ''))
                         : null,
-                    'group_members' => $l->groupMembers->map(fn ($gm) => [
-                        'name' => $gm->name ?? 'Unknown',
-                        'status' => $gm->status ?? 'pending',
-                    ])->values(),
+                    'group_members' => array_map(fn (array $member) => $member + [
+                        'status' => $member['has_approved'] ? 'approved' : 'pending',
+                    ], $l->coMakerDetails()),
                     'payment_schedule' => $schedule,
                     'payments' => $l->payments->sortBy(fn ($p) => $p->transaction_date ?? $p->created_at)->values()->map(fn ($p, $idx) => [
                         'id' => $p->id,
@@ -1114,36 +1105,16 @@ class DashboardController extends Controller
             return $this->accountTotalsCache[$cacheKey];
         }
 
-        $query = Account::query()->whereIn('account_type', ['savings', 'share-capital']);
-
-        if ($branchId !== null) {
-            $query->whereHas('user', fn ($q) => $q->where('users.branch_id', $branchId));
-        }
-
-        $totals = $query
-            ->selectRaw('account_type, SUM(balance) as total')
-            ->groupBy('account_type')
-            ->pluck('total', 'account_type');
-
-        return $this->accountTotalsCache[$cacheKey] = [
-            'savings' => (float) ($totals['savings'] ?? 0),
-            'share_capital' => (float) ($totals['share-capital'] ?? 0),
-        ];
+        return $this->accountTotalsCache[$cacheKey] = FinancialCashFlow::accountTotals($branchId);
     }
 
-    private function loanPaymentsOnActiveLoans(?int $branchId): float
+    private function countOverdueLoans(?int $branchId): int
     {
-        $query = DB::table('transactions')
-            ->join('loans', 'transactions.loan_id', '=', 'loans.id')
-            ->where('transactions.transaction_type', 'loan_payment')
-            ->where('transactions.status', 'completed')
-            ->whereIn('loans.loan_status', ['approved', 'active']);
-
-        if ($branchId !== null) {
-            $query->where('loans.branch_id', $branchId);
-        }
-
-        return (float) $query->selectRaw('SUM('.Transaction::netAmountExpression().') as aggregate_total')->value('aggregate_total');
+        return BranchScope::applyToLoans(
+            Loan::query()->where('loan_status', 'active')->whereNotNull('disbursed_at'),
+            Auth::user(),
+            $branchId
+        )->get()->filter(fn (Loan $loan) => ($loan->getCollectionMetrics()['amount_due'] ?? 0) > 0)->count();
     }
 
     private function financialSummary(Carbon $start, Carbon $end, ?int $branchId = null): array
@@ -1153,57 +1124,14 @@ class DashboardController extends Controller
             return $this->financialSummaryCache[$cacheKey];
         }
 
-        $totals = Transaction::query()
-            ->where('status', 'completed')
-            ->where(function ($q) use ($start, $end) {
-                $q->whereBetween('transaction_date', [$start, $end])
-                    ->orWhere(function ($q2) use ($start, $end) {
-                        $q2->whereNull('transaction_date')
-                            ->whereBetween('created_at', [$start, $end]);
-                    });
-            })
-            ->whereIn('transaction_type', ['deposit', 'withdrawal', 'loan_disbursement', 'loan_payment', 'interest', 'fee']);
-
-        if ($branchId !== null) {
-            $totals->where('transactions.branch_id', $branchId);
-        }
-
-        $totals = $totals
-            ->selectRaw('transaction_type, SUM('.Transaction::netAmountExpression().') as total')
-            ->groupBy('transaction_type')
-            ->pluck('total', 'transaction_type');
-
-        $totalDeposits = (float) ($totals['deposit'] ?? 0);
-        $totalWithdrawals = (float) ($totals['withdrawal'] ?? 0);
-        $totalLoanReleases = (float) ($totals['loan_disbursement'] ?? 0);
-        $totalLoanRepayments = (float) ($totals['loan_payment'] ?? 0);
-        $totalInterestCredits = (float) ($totals['interest'] ?? 0);
-        $attachedFees = (float) Transaction::query()
-            ->where('status', 'completed')
-            ->where(function ($q) use ($start, $end) {
-                $q->whereBetween('transaction_date', [$start, $end])
-                    ->orWhere(fn ($q2) => $q2->whereNull('transaction_date')->whereBetween('created_at', [$start, $end]));
-            })
-            ->when($branchId !== null, fn ($q) => $q->where('transactions.branch_id', $branchId))
-            ->selectRaw('SUM(CASE WHEN transactions.reversal_of_id IS NULL THEN fee_amount ELSE -fee_amount END) as total')->value('total');
-        $totalFees = (float) ($totals['fee'] ?? 0) + $attachedFees;
-
-        $totalExpenses = (float) Expense::query()
-            ->whereBetween('expense_date', [$start, $end])
-            ->when($branchId !== null, fn ($q) => $q->where('expenses.branch_id', $branchId))
-            ->sum('amount');
-
-        // Interest credited to members increases deposit liabilities and is an operational
-        // expense/surplus allocation; it is not a cash inflow to the cooperative.
-        $inflows = $totalDeposits + $totalLoanRepayments + $totalFees;
-        $outflows = $totalWithdrawals + $totalLoanReleases + $totalExpenses;
+        $cf = FinancialCashFlow::cashFlowSummary($start, $end, $branchId);
 
         return $this->financialSummaryCache[$cacheKey] = [
-            'total_deposits' => $totalDeposits,
-            'total_interest_credits' => $totalInterestCredits,
-            'total_withdrawals' => $totalWithdrawals,
-            'total_expenses' => $totalExpenses,
-            'net' => $inflows - $outflows,
+            'total_deposits' => $cf['deposits'],
+            'total_interest_credits' => $cf['interest_credits'],
+            'total_withdrawals' => $cf['withdrawals'],
+            'total_expenses' => $cf['expenses'],
+            'net' => $cf['net'],
         ];
     }
 

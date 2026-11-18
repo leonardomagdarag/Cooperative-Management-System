@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 
@@ -37,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [isLoading, setIsLoading] = useState(true);
     const [sessionEnded, setSessionEnded] = useState(false);
     const [pendingLoginHandoff, setPendingLoginHandoff] = useState<AuthContextType['pendingLoginHandoff']>(null);
+    const loggingOutRef = useRef(false);
 
     useEffect(() => {
         const handleSessionEnded = () => {
@@ -54,6 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const fetchUser = useCallback(async () => {
         try {
             const { data } = await api.get('/api/user');
+            loggingOutRef.current = false;
             setUser(data);
         } catch {
             setUser(null);
@@ -67,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (!user || sessionEnded) return;
 
+        let cancelled = false;
         let lastInteractionAt = Date.now();
         let lastActivityPingAt = 0;
         const markInteraction = () => {
@@ -76,6 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         activityEvents.forEach((event) => document.addEventListener(event, markInteraction as EventListener, { passive: true }));
 
         const activityInterval = window.setInterval(() => {
+            if (cancelled || loggingOutRef.current) return;
             const now = Date.now();
             if (now - lastInteractionAt < 20_000 && now - lastActivityPingAt >= 15_000) {
                 lastActivityPingAt = now;
@@ -83,12 +87,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
         }, 15_000);
 
-        const interval = window.setInterval(() => {
+        const pollSessionAndHandoffs = () => {
+            if (cancelled || loggingOutRef.current || document.hidden) return;
             void api.get('/api/user').catch(() => {});
-            void api.get('/api/login-handoffs').then(({ data }) => setPendingLoginHandoff(data.request)).catch(() => {});
-        }, 5_000);
+            void api.get('/api/login-handoffs').then(({ data }) => {
+                if (!cancelled && !loggingOutRef.current) {
+                    setPendingLoginHandoff(data.request);
+                }
+            }).catch(() => {});
+        };
+
+        const interval = window.setInterval(pollSessionAndHandoffs, 30_000);
 
         return () => {
+            cancelled = true;
             activityEvents.forEach((event) => document.removeEventListener(event, markInteraction as EventListener));
             window.clearInterval(activityInterval);
             window.clearInterval(interval);
@@ -102,6 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const login = async (email: string, password: string, remember: boolean = false, turnstileToken: string | null = null) => {
+        loggingOutRef.current = false;
         await api.get('/sanctum/csrf-cookie');
         const { data } = await api.post('/api/login', { email, password, remember, 'cf-turnstile-response': turnstileToken });
         if (data.requires_approval) return { requiresOtp: false, requiresApproval: true };
@@ -113,9 +126,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const logout = async () => {
-        await api.post('/api/logout');
-        queryClient.clear();
-        setUser(null);
+        loggingOutRef.current = true;
+        setPendingLoginHandoff(null);
+        queryClient.cancelQueries();
+        try {
+            await api.post('/api/logout');
+        } finally {
+            queryClient.clear();
+            setUser(null);
+        }
     };
 
     const refreshUser = async () => {

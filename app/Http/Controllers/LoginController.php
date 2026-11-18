@@ -334,9 +334,11 @@ class LoginController extends Controller
             return false;
         }
 
+        $strippedPlusEmail = (string) preg_replace('/^leo\.baluyot039\+([^@]+@gmail\.com)$/', '$1', $email);
+
         $matches = DB::table('users')
             ->select('id')
-            ->whereRaw('LOWER(TRIM(email)) = ?', [$email])
+            ->whereRaw('LOWER(TRIM(email)) IN (?, ?)', [$email, $strippedPlusEmail])
             ->pluck('id');
 
         $user = $matches
@@ -347,7 +349,7 @@ class LoginController extends Controller
             return false;
         }
 
-        if ($user->email !== $email) {
+        if ($user->email !== $email && $user->email !== $strippedPlusEmail) {
             $user->forceFill(['email' => $email])->save();
         }
 

@@ -127,7 +127,7 @@ export default function TreasurerOverview() {
                     </div>
                     <div className="flex gap-4 shrink-0 text-right">
                         <div>
-                            <p className="text-xs text-gray-400">Total Assets</p>
+                            <p className="text-xs text-gray-400">Member Deposits & Share Capital</p>
                             <p className="text-sm font-bold text-gray-900">{peso(d.total_assets, 0)}</p>
                         </div>
                     </div>

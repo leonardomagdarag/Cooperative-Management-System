@@ -79,6 +79,7 @@ class Loan extends Model
                 // Get the latest loan_number including soft deleted records
                 $latest = static::withTrashed()
                     ->orderByRaw('CAST(SUBSTRING(loan_number, 5) AS UNSIGNED) DESC')
+                    ->lockForUpdate()
                     ->first();
 
                 if ($latest && preg_match('/LOAN(\d+)/', $latest->loan_number, $matches)) {
@@ -210,7 +211,7 @@ class Loan extends Model
         $schedule = $this->paymentSchedule() ?? [];
         $extensionTotal = collect($schedule)->sum(fn ($installment) => $installment['interest_extension'] ?? 0);
 
-        return max(0, round($this->totalPayable() + $extensionTotal - $this->schedulePaid(), 2)) + $this->accruedPenalty();
+        return max(0, round($this->totalPayable() + $extensionTotal - $this->schedulePaid(), 2)) + $this->accruedPenalty($schedule);
     }
 
     /**
@@ -305,11 +306,16 @@ class Loan extends Model
         }
 
         // Once the original term ends, an enabled product can add interest-only
-        // amortizations at the loan's payment frequency while an amount remains
-        // unpaid. These periods are derived from the schedule date and allocation
-        // records, so recalculating the schedule cannot create duplicate charges.
+        // amortizations at the loan's payment frequency while base installments remain
+        // unpaid. Any periods already accrued before base settlement stay on the
+        // schedule until paid so paying base principal/interest never erases due
+        // extension interest.
         $baseOutstanding = round(array_sum(array_column($schedule, 'amount_due')), 2);
-        if ($this->interest_extension_penalty && $baseOutstanding > 0.001 && ($interestPerPeriod + $interestRemainder) > 0) {
+        $accrualCutoff = $baseOutstanding > 0.001
+            ? $now
+            : $this->baseSettlementCutoff($term, $now);
+
+        if ($this->interest_extension_penalty && $accrualCutoff !== null && ($interestPerPeriod + $interestRemainder) > 0) {
             $lastDueDate = $startDate->copy()->addMonths($term)->startOfDay();
             $frequency = match ($this->payment_frequency) {
                 'weekly' => ['addWeeks', 1],
@@ -321,7 +327,6 @@ class Loan extends Model
             $extensionInterestCents = $interestPerPeriod + $interestRemainder;
             $extensionInterest = $extensionInterestCents / 100;
             $period = $term + 1;
-            $extensionOutstanding = 0.0;
             $interestPaid = DB::table('loan_payment_installment_allocations as allocations')
                 ->join('transactions', 'transactions.id', '=', 'allocations.transaction_id')
                 ->where('transactions.loan_id', $this->id)
@@ -333,13 +338,12 @@ class Loan extends Model
 
             while (true) {
                 $dueDate = $lastDueDate->copy()->{$frequency[0]}($frequency[1])->startOfDay();
-                if ($dueDate->greaterThan($now) || $baseOutstanding + $extensionOutstanding <= 0.001) {
+                if ($dueDate->greaterThan($accrualCutoff)) {
                     break;
                 }
 
                 $paid = min($extensionInterest, $interestPaid);
                 $interestPaid -= $paid;
-                $extensionOutstanding += $extensionInterest - $paid;
                 $schedule[] = [
                     'period' => $period,
                     'due_date' => $dueDate->format('M d, Y'),
@@ -374,9 +378,9 @@ class Loan extends Model
         return $schedule;
     }
 
-    public function getCollectionMetrics(): array
+    public function getCollectionMetrics(?array $schedule = null): array
     {
-        $schedule = $this->paymentSchedule();
+        $schedule ??= $this->paymentSchedule();
         if (! $schedule) {
             return ['amount_due' => 0.0, 'days_overdue' => 0, 'accrued_penalty' => 0.0];
         }
@@ -420,9 +424,38 @@ class Loan extends Model
         ];
     }
 
-    public function accruedPenalty(): float
+    public function accruedPenalty(?array $schedule = null): float
     {
-        return (float) ($this->getCollectionMetrics()['accrued_penalty'] ?? 0);
+        return (float) ($this->getCollectionMetrics($schedule)['accrued_penalty'] ?? 0);
+    }
+
+    private function baseSettlementCutoff(int $term, Carbon $now): ?Carbon
+    {
+        $latestBasePayment = $this->completedPayments()
+            ->whereNull('reversal_of_id')
+            ->where(function ($query) use ($term) {
+                $query->whereNotExists(function ($sub) {
+                    $sub->select(DB::raw(1))
+                        ->from('loan_payment_installment_allocations')
+                        ->whereColumn('loan_payment_installment_allocations.transaction_id', 'transactions.id');
+                })->orWhereExists(function ($sub) use ($term) {
+                    $sub->select(DB::raw(1))
+                        ->from('loan_payment_installment_allocations')
+                        ->whereColumn('loan_payment_installment_allocations.transaction_id', 'transactions.id')
+                        ->where('loan_payment_installment_allocations.period', '<=', $term);
+                });
+            })
+            ->get(['transaction_date', 'created_at'])
+            ->map(fn ($tx) => ($tx->transaction_date ?? $tx->created_at)?->copy()->startOfDay())
+            ->filter()
+            ->sortDesc()
+            ->first();
+
+        if (! $latestBasePayment) {
+            return null;
+        }
+
+        return $latestBasePayment->lessThan($now) ? $latestBasePayment : $now;
     }
 
     public function employment()
@@ -476,6 +509,20 @@ class Loan extends Model
         return $this->belongsToMany(User::class, 'group_loan_members')
             ->withPivot('has_approved', 'approved_at')
             ->withTimestamps();
+    }
+
+    public function coMakerDetails(): array
+    {
+        return $this->groupMembers->map(function (User $member) {
+            $name = trim(($member->personalData?->first_name ?? '').' '.($member->personalData?->last_name ?? ''));
+
+            return [
+                'id' => $member->id,
+                'name' => $name ?: ($member->user_number ?? "Member #{$member->id}"),
+                'user_number' => $member->user_number,
+                'has_approved' => (bool) $member->pivot->has_approved,
+            ];
+        })->values()->all();
     }
 
     public function account()

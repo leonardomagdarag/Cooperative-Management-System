@@ -2,6 +2,7 @@
 
 use App\Mail\SecurityAlert;
 use App\Models\Announcement;
+use App\Models\LoginHandoff;
 use App\Models\User;
 use Database\Seeders\SpatieRolePermissionSeeder;
 use Database\Seeders\UserSeeder;
@@ -41,7 +42,7 @@ test('a sign-in on a different session waits for approval without replacing the 
     ])->assertOk()
         ->assertJsonPath('requires_approval', true);
 
-    $handoff = \App\Models\LoginHandoff::query()->where('user_id', $user->id)->firstOrFail();
+    $handoff = LoginHandoff::query()->where('user_id', $user->id)->firstOrFail();
 
     expect($handoff->status)->toBe('pending')
         ->and($handoff->current_session_id)->toBe('already-active-session')
@@ -126,6 +127,50 @@ test('public announcement api returns json visibility records', function () {
             ],
             'pagination',
         ]);
+});
+
+test('public news and event feeds each paginate their own newest visible entries', function () {
+    $creator = User::factory()->create();
+    $public = Announcement::factory()->for($creator, 'creator')->state([
+        'visibility' => [Announcement::VISIBILITY_EVERYONE],
+        'created_at' => now()->subDay(),
+    ]);
+
+    $news = [];
+    $events = [];
+    foreach (range(1, 7) as $index) {
+        $news[] = $public->create([
+            'type' => $index % 2 ? Announcement::TYPE_NEWS : Announcement::TYPE_ANNOUNCEMENT,
+        ])->id;
+        $events[] = $public->create([
+            'type' => Announcement::TYPE_EVENT,
+            'event_date' => $index === 6 ? null : today(),
+            'event_time' => '09:00',
+            'event_location' => 'Main Office',
+        ])->id;
+    }
+
+    $public->create(['type' => Announcement::TYPE_EVENT, 'visibility' => [Announcement::VISIBILITY_MEMBERS]]);
+    $public->create(['type' => Announcement::TYPE_NEWS, 'visibility' => [Announcement::VISIBILITY_OFFICERS]]);
+
+    $this->getJson('/api/announcements/public?section=news&per_page=6')
+        ->assertOk()
+        ->assertJsonPath('data.*.id', array_reverse(array_slice($news, 1)))
+        ->assertJsonPath('pagination.total', 7);
+
+    $this->getJson('/api/announcements/public?section=events&per_page=6')
+        ->assertOk()
+        ->assertJsonPath('data.*.id', array_reverse(array_slice($events, 1)))
+        ->assertJsonPath('data.0.event_date', today()->toDateString())
+        ->assertJsonPath('data.0.event_time', '09:00')
+        ->assertJsonPath('data.0.event_location', 'Main Office')
+        ->assertJsonPath('data.0.is_upcoming', true)
+        ->assertJsonPath('data.1.event_date', null)
+        ->assertJsonPath('pagination.total', 7);
+
+    $this->getJson('/api/announcements/public?section=events&per_page=6&page=2')
+        ->assertOk()
+        ->assertJsonPath('data.*.id', [$events[0]]);
 });
 
 test('seeded admin can access protected react api endpoints', function () {

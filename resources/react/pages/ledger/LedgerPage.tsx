@@ -338,16 +338,18 @@ export default function LedgerPage() {
                                                             disabled={reprintMutation.isPending}
                                                             className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
                                                             title="Reprint Receipt"
+                                                            aria-label="Reprint Receipt"
                                                         >
-                                                            <i className="fas fa-print text-xs"></i>
+                                                            <i className="fas fa-print text-xs" aria-hidden="true"></i>
                                                         </button>
                                                         {user?.permissions?.includes('receipts.reissue') && (
                                                             <button
                                                                 onClick={() => { setReissueTarget({ id: t.id, transactionNumber: t.transaction_number }); setReissueNote(''); }}
                                                                 className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
                                                                 title="Issue Certified Replacement"
+                                                                aria-label="Issue Certified Replacement"
                                                             >
-                                                                <i className="fas fa-certificate text-xs"></i>
+                                                                <i className="fas fa-certificate text-xs" aria-hidden="true"></i>
                                                             </button>
                                                         )}
                                                     </>
@@ -379,11 +381,11 @@ export default function LedgerPage() {
                                                                 confirmText: 'Delete',
                                                                 variant: 'danger',
                                                                 onConfirm: () => deleteMutation.mutate(t.id)
-                                                            })} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><i className="fas fa-trash text-xs"></i></button>
+                                                            })} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete transaction" aria-label="Delete transaction"><i className="fas fa-trash text-xs" aria-hidden="true"></i></button>
                                                         )}
                                                     </>
                                                 )}
-                                                {canReverse && t.status === 'completed' && !t.reversal_of_id && (
+                                                {canReverse && t.status === 'completed' && !t.reversal_of_id && !t.already_reversed && (
                                                     <button onClick={() => setConfirmState({
                                                         isOpen: true,
                                                         title: 'Reverse Transaction',
@@ -391,8 +393,8 @@ export default function LedgerPage() {
                                                         confirmText: 'Post reversal',
                                                         variant: 'danger',
                                                         onConfirm: () => sendReversalOtpMutation.mutate(t.id),
-                                                    })} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg" title="Post reversing entry">
-                                                        <i className="fas fa-rotate-left text-xs"></i>
+                                                    })} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg" title="Post reversing entry" aria-label="Post reversing entry">
+                                                        <i className="fas fa-rotate-left text-xs" aria-hidden="true"></i>
                                                     </button>
                                                 )}
                                             </div>

@@ -48,7 +48,7 @@ interface LoanOption {
     }>;
 }
 
-const peso = (n: number | string) => `â‚±${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+const peso = (n: number | string) => `₱${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 const padId = (n: number | string) => String(n).padStart(8, '0');
 const formatDateTime = (iso?: string) => new Date(iso ?? new Date().toISOString()).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ');
@@ -578,7 +578,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                         )}
                         {selectedSchedules.map(schedule => (
                             <div key={schedule.period} className="flex justify-between gap-4">
-                                <span className="text-gray-600">Installment {schedule.period} Â· {schedule.due_date}:</span>
+                                <span className="text-gray-600">Installment {schedule.period} · {schedule.due_date}:</span>
                                 <span className="font-semibold text-gray-900">{peso(allocationAmounts[schedule.period] || 0)}</span>
                             </div>
                         ))}
@@ -771,7 +771,7 @@ export default function LoanPaymentWizard({ onComplete, onRequestClose, selected
                         </div>
                         <div className="flex justify-between text-sm">
                             <span className="text-gray-600">Loan:</span>
-                            <span className="font-semibold text-gray-900">{selectedLoan?.loan_number ?? 'â€”'}</span>
+                            <span className="font-semibold text-gray-900">{selectedLoan?.loan_number ?? '—'}</span>
                         </div>
                         <div className="flex justify-between text-sm pt-3 border-t border-gray-300">
                             <span className="text-gray-600">Amount:</span>

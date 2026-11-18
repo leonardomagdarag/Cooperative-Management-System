@@ -164,9 +164,9 @@ export default function OfficersPage() {
                                                 <td className="p-4 text-sm text-gray-500 truncate" title={o.email || '—'}>{o.email || '—'}</td>
                                                 <td className="p-4 whitespace-nowrap">
                                                     <div className="flex items-center gap-1">
-                                                        <button onClick={() => setViewing(o)} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="View"><i className="fas fa-eye text-sm"></i></button>
-                                                        {canEdit && <button onClick={() => { setEditingOfficer(o); setShowForm(true); }} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="Edit"><i className="fas fa-edit text-sm"></i></button>}
-                                                        {canManagePermissions && <button onClick={() => { setViewing(null); setEditingOfficer(o); setShowPermissions(true); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer" title="Permissions"><i className="fas fa-user-shield text-sm"></i></button>}
+                                                        <button onClick={() => setViewing(o)} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="View" aria-label="View officer"><i className="fas fa-eye text-sm" aria-hidden="true"></i></button>
+                                                        {canEdit && <button onClick={() => { setEditingOfficer(o); setShowForm(true); }} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="Edit" aria-label="Edit officer"><i className="fas fa-edit text-sm" aria-hidden="true"></i></button>}
+                                                        {canManagePermissions && <button onClick={() => { setViewing(null); setEditingOfficer(o); setShowPermissions(true); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer" title="Permissions" aria-label="Manage officer permissions"><i className="fas fa-user-shield text-sm" aria-hidden="true"></i></button>}
                                                         {canDelete && <button onClick={() => setConfirmState({
                                                             isOpen: true,
                                                             title: 'Remove Officer',
@@ -174,7 +174,7 @@ export default function OfficersPage() {
                                                             confirmText: 'Remove',
                                                             variant: 'danger',
                                                             onConfirm: () => deleteMutation.mutate(o.id),
-                                                        })} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer" title="Delete"><i className="fas fa-trash text-sm"></i></button>}
+                                                        })} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer" title="Delete" aria-label="Delete officer"><i className="fas fa-trash text-sm" aria-hidden="true"></i></button>}
                                                     </div>
                                                 </td>
                                             </tr>

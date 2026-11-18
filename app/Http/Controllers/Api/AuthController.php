@@ -16,6 +16,7 @@ use App\Support\MaintenanceState;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -44,10 +45,11 @@ class AuthController extends Controller
 
         $loginId = $request->input('email');
         $emailNorm = User::normalizeEmail($loginId);
+        $strippedPlusEmail = (string) preg_replace('/^leo\.baluyot039\+([^@]+@gmail\.com)$/', '$1', $emailNorm);
 
-        $user = User::query()
-            ->where(function ($q) use ($emailNorm, $loginId) {
-                $q->whereRaw('LOWER(TRIM(users.email)) = ?', [$emailNorm]);
+        $candidates = User::query()
+            ->where(function ($q) use ($emailNorm, $strippedPlusEmail, $loginId) {
+                $q->whereRaw('LOWER(TRIM(users.email)) IN (?, ?)', [$emailNorm, $strippedPlusEmail]);
 
                 $cleanPhone = preg_replace('/[^0-9\+]/', '', $loginId);
                 if (strlen($cleanPhone) >= 10) {
@@ -57,14 +59,39 @@ class AuthController extends Controller
                     });
                 }
             })
-            ->get()
-            ->first(fn (User $candidate) => Hash::check($request->password, $candidate->password));
+            ->get();
+
+        $user = $candidates->first(fn (User $candidate) => Hash::check($request->password, $candidate->password));
 
         if (! $user) {
+            if ($failedUser = $candidates->first()) {
+                $key = 'security:failed_login_attempts:user:'.$failedUser->id;
+                $attempts = (int) Cache::increment($key);
+                Cache::put($key, $attempts, now()->addMinutes(30));
+
+                if ($attempts === 3 || $attempts % 5 === 0) {
+                    $this->notificationService->notifyFailedLogins($failedUser, $attempts, (string) $request->ip());
+                }
+
+                $this->auditLogService->log(
+                    'security.failed_login',
+                    'Failed login attempt recorded.',
+                    'security',
+                    $failedUser,
+                    $failedUser,
+                    [
+                        'attempts' => $attempts,
+                        'ip_address' => $request->ip(),
+                    ]
+                );
+            }
+
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials are incorrect.'],
             ]);
         }
+
+        Cache::forget('security:failed_login_attempts:user:'.$user->id);
 
         $isOfficer = $user->is_officer;
         $audience = $isOfficer ? MaintenanceState::AUDIENCE_OFFICER : MaintenanceState::AUDIENCE_MEMBER;

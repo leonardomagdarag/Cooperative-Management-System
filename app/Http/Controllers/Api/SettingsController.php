@@ -247,6 +247,7 @@ class SettingsController extends Controller
             $user,
         );
 
+        $user->clearCurrentSession($request->session()->getId());
         $user->delete();
 
         Auth::logout();
@@ -560,45 +561,43 @@ class SettingsController extends Controller
     public function notifyAffectedUsers(array $services): void
     {
         $notificationService = app(NotificationService::class);
+        $notifyQuery = function ($query, string $title, string $message) use ($notificationService): void {
+            $query->select(['id', 'personal_data_id', 'email', 'account_status', 'role'])
+                ->chunkById(200, function ($users) use ($notificationService, $title, $message): void {
+                    foreach ($users as $user) {
+                        $notificationService->notifyAccountActivity($user, $title, $message);
+                    }
+                });
+        };
 
         foreach ($services as $service => $flags) {
             if ($service === 'login') {
                 if (isset($flags['global']) && $flags['global'] === false) {
-                    $users = User::where('account_status', 'active')->get();
-                    foreach ($users as $user) {
-                        $notificationService->notifyAccountActivity(
-                            $user,
-                            'Service Unavailable',
-                            'Public login access has been disabled.'
-                        );
-                    }
+                    $notifyQuery(
+                        User::where('account_status', 'active'),
+                        'Service Unavailable',
+                        'Public login access has been disabled.'
+                    );
 
                     continue;
                 }
 
                 if (isset($flags['member']) && $flags['member'] === false) {
-                    $users = User::role('member')->where('account_status', 'active')->get();
-                    foreach ($users as $user) {
-                        $notificationService->notifyAccountActivity(
-                            $user,
-                            'Service Unavailable',
-                            'Member login is temporarily unavailable due to maintenance.'
-                        );
-                    }
+                    $notifyQuery(
+                        User::role('member')->where('account_status', 'active'),
+                        'Service Unavailable',
+                        'Member login is temporarily unavailable due to maintenance.'
+                    );
                 }
 
                 if (isset($flags['officer']) && $flags['officer'] === false) {
                     $officerRoles = ['admin', 'chairman', 'manager', 'accountant'];
-                    $users = User::whereHas('roles', fn ($q) => $q->whereIn('name', $officerRoles))
-                        ->where('account_status', 'active')
-                        ->get();
-                    foreach ($users as $user) {
-                        $notificationService->notifyAccountActivity(
-                            $user,
-                            'Service Unavailable',
-                            'Officer login is temporarily unavailable due to maintenance.'
-                        );
-                    }
+                    $notifyQuery(
+                        User::whereHas('roles', fn ($q) => $q->whereIn('name', $officerRoles))
+                            ->where('account_status', 'active'),
+                        'Service Unavailable',
+                        'Officer login is temporarily unavailable due to maintenance.'
+                    );
                 }
 
                 continue;
@@ -608,43 +607,33 @@ class SettingsController extends Controller
 
             // Global OFF - notify all active users
             if (isset($flags['global']) && $flags['global'] === false) {
-                $users = User::where('account_status', 'active')->get();
-                foreach ($users as $user) {
-                    $notificationService->notifyAccountActivity(
-                        $user,
-                        'Service Unavailable',
-                        "{$serviceLabel} is temporarily unavailable due to maintenance."
-                    );
-                }
+                $notifyQuery(
+                    User::where('account_status', 'active'),
+                    'Service Unavailable',
+                    "{$serviceLabel} is temporarily unavailable due to maintenance."
+                );
 
                 continue;
             }
 
             // Member OFF - notify active members
             if (isset($flags['member']) && $flags['member'] === false) {
-                $users = User::role('member')->where('account_status', 'active')->get();
-                foreach ($users as $user) {
-                    $notificationService->notifyAccountActivity(
-                        $user,
-                        'Service Unavailable',
-                        "{$serviceLabel} is temporarily unavailable for members due to maintenance."
-                    );
-                }
+                $notifyQuery(
+                    User::role('member')->where('account_status', 'active'),
+                    'Service Unavailable',
+                    "{$serviceLabel} is temporarily unavailable for members due to maintenance."
+                );
             }
 
             // Officer OFF - notify active officers
             if (isset($flags['officer']) && $flags['officer'] === false) {
                 $officerRoles = ['admin', 'chairman', 'manager', 'accountant'];
-                $users = User::whereHas('roles', fn ($q) => $q->whereIn('name', $officerRoles))
-                    ->where('account_status', 'active')
-                    ->get();
-                foreach ($users as $user) {
-                    $notificationService->notifyAccountActivity(
-                        $user,
-                        'Service Unavailable',
-                        "{$serviceLabel} is temporarily unavailable for officers due to maintenance."
-                    );
-                }
+                $notifyQuery(
+                    User::whereHas('roles', fn ($q) => $q->whereIn('name', $officerRoles))
+                        ->where('account_status', 'active'),
+                    'Service Unavailable',
+                    "{$serviceLabel} is temporarily unavailable for officers due to maintenance."
+                );
             }
 
             // Transaction mode specific notifications
@@ -664,14 +653,11 @@ class SettingsController extends Controller
                     }
 
                     $modeLabel = $modeLabels[$mode] ?? $mode;
-                    $users = User::where('account_status', 'active')->get();
-                    foreach ($users as $user) {
-                        $notificationService->notifyAccountActivity(
-                            $user,
-                            'Service Unavailable',
-                            "{$serviceLabel} - {$modeLabel} is temporarily unavailable due to maintenance."
-                        );
-                    }
+                    $notifyQuery(
+                        User::where('account_status', 'active'),
+                        'Service Unavailable',
+                        "{$serviceLabel} - {$modeLabel} is temporarily unavailable due to maintenance."
+                    );
                 }
             }
         }

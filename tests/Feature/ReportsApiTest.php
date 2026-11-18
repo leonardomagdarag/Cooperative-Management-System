@@ -162,7 +162,7 @@ test('financial report nets completed transaction reversals from aggregate total
         ->and((float) $response->json('net'))->toBe(1200.0);
 });
 
-test('financial report counts credited interest as cash separately from collected loan interest', function () {
+test('financial report excludes credited interest from cash net while reporting it separately', function () {
     $this->seed(SpatieRolePermissionSeeder::class);
     $this->seed(UserSeeder::class);
 
@@ -187,7 +187,7 @@ test('financial report counts credited interest as cash separately from collecte
 
     expect((float) $response->json('total_interest_credits'))->toBe(55.0)
         ->and((float) $response->json('total_interest_earned'))->toBe(0.0)
-        ->and((float) $response->json('net'))->toBe(55.0)
+        ->and((float) $response->json('net'))->toBe(0.0)
         ->and((float) $response->json('monthly_series.5.interest_credits'))->toBe(55.0);
 
     $this->actingAs($admin)

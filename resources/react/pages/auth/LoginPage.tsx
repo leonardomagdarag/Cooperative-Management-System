@@ -8,7 +8,7 @@ import { api } from '../../api/client';
 import FallbackImage from '../../components/FallbackImage';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import TurnstileWidget from '../../components/TurnstileWidget';
+import TurnstileWidget, { TurnstileWidgetRef } from '../../components/TurnstileWidget';
 import { useLanguage } from '../../contexts/LanguageContext';
 
 const loginSchema = z.object({
@@ -24,7 +24,7 @@ export default function LoginPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [loginError, setLoginError] = useState('');
-    const turnstileRef = useRef<TurnstileWidget>(null);
+    const turnstileRef = useRef<TurnstileWidgetRef>(null);
     const { login } = useAuth();
     const { addToast } = useToast();
     const navigate = useNavigate();
@@ -56,6 +56,7 @@ export default function LoginPage() {
             }
             navigate(result.redirect || '/dashboard');
         } catch (err: any) {
+            turnstileRef.current?.reset();
             const message = err.response?.data?.message || t('Login failed. Please try again.');
             setLoginError(message);
             addToast(message, 'error');

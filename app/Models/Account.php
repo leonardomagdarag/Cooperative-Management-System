@@ -31,6 +31,7 @@ class Account extends Model
                 // Get the latest account_number including soft deleted records
                 $latest = static::withTrashed()
                     ->orderByRaw('CAST(SUBSTRING(account_number, 5) AS UNSIGNED) DESC')
+                    ->lockForUpdate()
                     ->first();
 
                 if ($latest && preg_match('/ACNT(\d+)/', $latest->account_number, $matches)) {

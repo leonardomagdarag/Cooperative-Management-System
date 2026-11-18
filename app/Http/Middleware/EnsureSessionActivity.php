@@ -22,6 +22,10 @@ class EnsureSessionActivity
         $lifetime = (int) config('session.lifetime') * 60;
 
         if ($lastActivity !== null && $now - (int) $lastActivity >= $lifetime) {
+            $user = Auth::guard('web')->user();
+            $sessionId = $session->getId();
+            $user?->clearCurrentSession($sessionId);
+
             Auth::guard('web')->logout();
             $session->invalidate();
             $session->regenerateToken();
@@ -45,5 +49,4 @@ class EnsureSessionActivity
 
         return $next($request);
     }
-
 }

@@ -60,7 +60,7 @@ test('the api login endpoint honours the global switch', function () {
     // never ran for it and the global switch used to be advisory.
     $this->postJson('/api/login', [
         'email' => 'leo.baluyot039+admin@gmail.com',
-        'password' => 'password',
+        'password' => '135#Admin',
     ])
         ->assertStatus(403)
         ->assertJsonPath('maintenance', true)
@@ -74,8 +74,8 @@ test('a member-only block names the audience and points at the page', function (
     SystemSetting::set('service_login_member_enabled', false);
 
     $this->postJson('/api/login', [
-        'email' => 'leo.baluyot039+arjay.ramos@gmail.com',
-        'password' => 'password',
+        'email' => 'arjay.ramos@gmail.com',
+        'password' => '135#Members',
     ])
         ->assertStatus(403)
         ->assertJsonPath('maintenance', true)
@@ -93,7 +93,7 @@ test('officers are unaffected when only member login is disabled', function () {
 
     $this->postJson('/api/login', [
         'email' => 'leo.baluyot039+admin@gmail.com',
-        'password' => 'password',
+        'password' => '135#Admin',
     ])->assertOk();
 
     expect(MaintenanceState::isActive())->toBeFalse();

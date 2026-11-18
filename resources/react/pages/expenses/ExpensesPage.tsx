@@ -206,7 +206,7 @@ export default function ExpensesPage() {
                                                     </div>
                                                 ) : (
                                                     <div className="flex gap-1">
-                                                        <button onClick={() => openEdit(e)} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="Edit"><i className="fas fa-edit text-xs"></i></button>
+                                                        <button onClick={() => openEdit(e)} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="Edit" aria-label="Edit expense"><i className="fas fa-edit text-xs" aria-hidden="true"></i></button>
                                                         <button onClick={() => setConfirmState({
                                                             isOpen: true,
                                                             title: 'Request Expense Deletion',
@@ -217,7 +217,7 @@ export default function ExpensesPage() {
                                                                 setConfirmState(s => ({ ...s, isOpen: false }));
                                                                 deleteMutation.mutate(e.id);
                                                             },
-                                                        })} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer" title="Delete"><i className="fas fa-trash text-xs"></i></button>
+                                                        })} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer" title="Delete" aria-label="Delete expense"><i className="fas fa-trash text-xs" aria-hidden="true"></i></button>
                                                     </div>
                                                 )}
                                             </td>

@@ -62,8 +62,12 @@ Route::get('/public-content', [PublicContentController::class, 'index'])->middle
 
 // Public announcements (no auth — returns only publicly visible announcements)
 Route::get('/announcements/public', function (Request $request) {
+    $section = $request->validate(['section' => 'sometimes|required|in:news,events'])['section'] ?? null;
+
     $announcements = Announcement::query()
         ->with('creator.personalData')
+        ->when($section === 'news', fn ($query) => $query->whereIn('type', [Announcement::TYPE_NEWS, Announcement::TYPE_ANNOUNCEMENT]))
+        ->when($section === 'events', fn ($query) => $query->where('type', Announcement::TYPE_EVENT))
         ->where(function ($query) {
             $query->whereIn('visibility', ['cooperative', 'public'])
                 ->orWhere(function ($jsonBuilder) {
@@ -75,17 +79,24 @@ Route::get('/announcements/public', function (Request $request) {
                 });
         })
         ->latest()
+        ->orderByDesc('id')
         ->paginate($request->integer('per_page', 9));
 
     return response()->json([
         'data' => $announcements->getCollection()->map(fn ($a) => [
             'id' => $a->id,
             'title' => $a->title,
-            'content' => substr($a->content, 0, 200),
+            'content' => $section ? $a->content : mb_substr($a->content, 0, 200),
             'type' => $a->type,
+            'type_label' => $a->type_label,
+            'category' => $a->category,
             'image_url' => $a->image_path ? asset('storage/'.$a->image_path) : null,
             'created_at' => $a->created_at->toISOString(),
             'creator_name' => trim(($a->creator->personalData->first_name ?? '').' '.($a->creator->personalData->last_name ?? '')) ?: 'Unknown',
+            'event_date' => $a->event_date?->toDateString(),
+            'event_time' => $a->event_time,
+            'event_location' => $a->event_location,
+            'is_upcoming' => $a->is_upcoming,
         ]),
         'pagination' => [
             'current_page' => $announcements->currentPage(),

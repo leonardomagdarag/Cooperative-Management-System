@@ -23,7 +23,7 @@ beforeEach(function () {
 
 test('officer counter deposit returns success after crediting exactly once', function () {
     $officer = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
-    $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $member = User::where('email', 'arjay.ramos@gmail.com')->firstOrFail();
     $account = Account::where('user_id', $member->id)->where('account_type', 'savings')->firstOrFail();
     $balance = (float) $account->balance;
     $payload = [
@@ -45,7 +45,7 @@ test('officer counter deposit returns success after crediting exactly once', fun
 
 test('officer counter loan payment validates allocations before completing payment', function () {
     $officer = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
-    $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $member = User::where('email', 'arjay.ramos@gmail.com')->firstOrFail();
     $account = Account::where('user_id', $member->id)->where('account_type', 'savings')->firstOrFail();
     $balance = (float) $account->balance;
     $loan = Loan::factory()->create([
@@ -89,7 +89,7 @@ test('officer counter loan payment validates allocations before completing payme
 });
 
 test("a member's own counter deposit remains pending without changing the account balance", function () {
-    $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $member = User::where('email', 'arjay.ramos@gmail.com')->firstOrFail();
     $account = Account::where('user_id', $member->id)->where('account_type', 'savings')->firstOrFail();
     $initialBalance = (float) $account->balance;
 
@@ -110,7 +110,7 @@ test("a member's own counter deposit remains pending without changing the accoun
 });
 
 test('member dashboard marks an unpaid loan with past instalments as overdue', function () {
-    $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $member = User::where('email', 'arjay.ramos@gmail.com')->firstOrFail();
     Loan::factory()->create([
         'user_id' => $member->id,
         'loan_amount' => 12000,
@@ -130,7 +130,7 @@ test('member dashboard marks an unpaid loan with past instalments as overdue', f
 });
 
 test('approved loans have no repayment schedule before disbursement', function () {
-    $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $member = User::where('email', 'arjay.ramos@gmail.com')->firstOrFail();
     $loan = Loan::factory()->create([
         'user_id' => $member->id,
         'loan_amount' => 12000,
@@ -149,7 +149,7 @@ test('approved loans have no repayment schedule before disbursement', function (
 });
 
 test('selected installment allocations reduce only the installment selected', function () {
-    $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $member = User::where('email', 'arjay.ramos@gmail.com')->firstOrFail();
     $loan = Loan::factory()->create([
         'user_id' => $member->id,
         'loan_amount' => 12000,
@@ -184,7 +184,7 @@ test('selected installment allocations reduce only the installment selected', fu
 });
 
 test('pending payment allocations reserve an installment for concurrent checkouts', function () {
-    $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $member = User::where('email', 'arjay.ramos@gmail.com')->firstOrFail();
     $loan = Loan::factory()->create([
         'user_id' => $member->id,
         'loan_amount' => 12000,
@@ -233,7 +233,7 @@ test('pending payment allocations reserve an installment for concurrent checkout
 });
 
 test('rejected Xendit sessions no longer reserve installment allocations', function () {
-    $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $member = User::where('email', 'arjay.ramos@gmail.com')->firstOrFail();
     $loan = Loan::factory()->create([
         'user_id' => $member->id,
         'loan_amount' => 12000,
@@ -285,7 +285,7 @@ test('rejected Xendit sessions no longer reserve installment allocations', funct
 });
 
 test('a provider-confirmed Xendit transaction cannot be retried or expired locally', function () {
-    $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $member = User::where('email', 'arjay.ramos@gmail.com')->firstOrFail();
     $loan = Loan::factory()->create([
         'user_id' => $member->id,
         'loan_amount' => 12000,
@@ -344,7 +344,7 @@ test('a provider-confirmed Xendit transaction cannot be retried or expired local
 
 test('daily penalties continue while an installment remains partially unpaid and stop when settled', function () {
     $this->travelTo(Carbon::parse('2026-10-22 12:00:00'));
-    $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $member = User::where('email', 'arjay.ramos@gmail.com')->firstOrFail();
     $loan = Loan::factory()->create([
         'user_id' => $member->id,
         'loan_amount' => 12000,
@@ -407,7 +407,7 @@ test('daily penalties continue while an installment remains partially unpaid and
 
 test('enabled weekly interest extension adds an interest-only installment for each overdue week', function () {
     $this->travelTo(Carbon::parse('2026-10-22 12:00:00'));
-    $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $member = User::where('email', 'arjay.ramos@gmail.com')->firstOrFail();
     $loan = Loan::factory()->create([
         'user_id' => $member->id,
         'loan_amount' => 12000,
@@ -453,7 +453,7 @@ test('enabled weekly interest extension adds an interest-only installment for ea
 
 test('ledger marks payments allocated to post-term interest installments', function () {
     $this->travelTo(Carbon::parse('2026-10-22 12:00:00'));
-    $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $member = User::where('email', 'arjay.ramos@gmail.com')->firstOrFail();
     $loan = Loan::factory()->create([
         'user_id' => $member->id,
         'loan_amount' => 12000,
@@ -492,7 +492,7 @@ test('ledger marks payments allocated to post-term interest installments', funct
 });
 
 test('member can submit a partial external payment for a selected installment without savings debit', function () {
-    $member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $member = User::where('email', 'arjay.ramos@gmail.com')->firstOrFail();
     $account = Account::where('user_id', $member->id)->where('account_type', 'savings')->firstOrFail();
     $startingBalance = (float) $account->balance;
     $loan = Loan::factory()->create([

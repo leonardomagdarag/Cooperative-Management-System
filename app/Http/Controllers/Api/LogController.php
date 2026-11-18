@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\CsvHelper;
 use App\Support\SearchFilter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
@@ -179,7 +180,7 @@ class LogController extends Controller
                     ? $payload['properties']->toArray()
                     : ($payload['properties']?->toArray() ?? []);
 
-                fputcsv($out, array_map($this->csvSafe(...), [
+                fputcsv($out, CsvHelper::safeRow([
                     $log->created_at?->toISOString(),
                     $log->log_name,
                     $log->event,
@@ -260,16 +261,5 @@ class LogController extends Controller
         }
 
         return $query;
-    }
-
-    private function csvSafe(mixed $value): string
-    {
-        if (is_array($value) || is_object($value)) {
-            $value = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        }
-
-        $value = (string) ($value ?? '');
-
-        return preg_match('/^[\s\x00-\x1F]*[=+\-@]/u', $value) === 1 ? "'{$value}" : $value;
     }
 }

@@ -14,9 +14,9 @@ type Intensity = 'routine' | 'important' | 'sensitive';
 
 const areaLabels: Record<string, string> = {
     announcement: 'Announcements', auth: 'Sign in & security', backup: 'Backups', branch: 'Branches',
-    collection_run: 'Collections', expense: 'Expenses', loan: 'Loans', member: 'Members',
+    collection_run: 'Collections', expense: 'Expenses', loan: 'Loans', loans: 'Loan reviews & approvals', member: 'Members',
     notification: 'Notifications', officer: 'Officers', receipt: 'Receipts', settings: 'Settings',
-    system: 'System', system_setting: 'Settings', ticket: 'Support', transaction: 'Transactions',
+    system: 'System', system_setting: 'System settings', ticket: 'Support', transaction: 'Transactions',
 };
 
 function readableLabel(value?: string | null): string {
@@ -206,7 +206,7 @@ export default function LogsPage() {
         <>
             <div className="p-4 sm:p-6"><PageHeader title="Activity history" description="A readable record of actions taken across the cooperative system." icon="fas fa-clock-rotate-left" /></div>
 
-            <main className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6">
+            <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6">
                 <section aria-label="Action intensity guide" className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3">
                     <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Action intensity</span>
                     {(Object.keys(intensityStyles) as Intensity[]).map(level => {
@@ -301,7 +301,7 @@ export default function LogsPage() {
                 )}
 
                 {pagination && pagination.last_page > 1 && <Pagination page={page} lastPage={pagination.last_page} onChange={setPage} total={pagination.total} perPage={pagination.per_page} />}
-            </main>
+            </div>
 
             <Modal open={!!selectedLog} onClose={() => setSelectedLog(null)} title="Activity details" size="xl">
                 {selectedLog && (() => {

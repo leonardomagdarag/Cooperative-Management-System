@@ -23,6 +23,7 @@ use InvalidArgumentException;
 use RuntimeException;
 use Spatie\Backup\Config\Config;
 use Spatie\Backup\Tasks\Cleanup\CleanupStrategy;
+use Spatie\Permission\PermissionRegistrar;
 use Throwable;
 
 class BackupService
@@ -1085,6 +1086,7 @@ class BackupService
     private function clearCaches(): void
     {
         try {
+            app(PermissionRegistrar::class)->forgetCachedPermissions();
             Artisan::call('cache:clear');
             Artisan::call('config:clear');
             Artisan::call('view:clear');

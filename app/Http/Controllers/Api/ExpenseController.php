@@ -137,7 +137,9 @@ class ExpenseController extends Controller
 
     public function update(Request $request, Expense $expense): JsonResponse
     {
-        abort_unless(Auth::user()?->can('transactions.update'), 403);
+        $actor = Auth::user();
+        abort_unless($actor?->can('transactions.update'), 403);
+        abort_unless(BranchScope::canAccessBranch($actor, $expense->branch_id), 403, 'You can only manage expenses in your branch.');
 
         $validated = $request->validate([
             'category' => 'required|string|max:100',
@@ -146,6 +148,10 @@ class ExpenseController extends Controller
             'expense_date' => 'required|date',
             'branch_id' => 'nullable|exists:branches,id',
         ]);
+
+        if (isset($validated['branch_id'])) {
+            abort_unless(BranchScope::canAccessBranch($actor, (int) $validated['branch_id']), 403, 'You can only assign expenses to your branch.');
+        }
 
         // Expense edits are privileged, mirroring ledger transaction edits
         // (see LedgerController::update). They never mutate directly: a
@@ -164,7 +170,7 @@ class ExpenseController extends Controller
                     'branch_id' => $validated['branch_id'] ?? $expense->branch_id,
                 ],
             ],
-            Auth::user()
+            $actor
         );
 
         app(AuditLogService::class)->log(
@@ -172,7 +178,7 @@ class ExpenseController extends Controller
             'Expense edit submitted for chairman approval.',
             'expense',
             $expense,
-            Auth::user(),
+            $actor,
             ['request_id' => $pending->id]
         );
 
@@ -185,7 +191,9 @@ class ExpenseController extends Controller
 
     public function destroy(Expense $expense): JsonResponse
     {
-        abort_unless(Auth::user()?->can('transactions.update'), 403);
+        $actor = Auth::user();
+        abort_unless($actor?->can('transactions.update'), 403);
+        abort_unless(BranchScope::canAccessBranch($actor, $expense->branch_id), 403, 'You can only manage expenses in your branch.');
 
         // Expense deletions are privileged, mirroring expense updates.
         // They never mutate directly: a countersign request is recorded
@@ -202,7 +210,7 @@ class ExpenseController extends Controller
                 'expense_date' => $expense->expense_date?->format('Y-m-d'),
                 'branch_id' => $expense->branch_id,
             ],
-            Auth::user()
+            $actor
         );
 
         app(AuditLogService::class)->log(
@@ -210,7 +218,7 @@ class ExpenseController extends Controller
             'Expense deletion submitted for chairman approval.',
             'expense',
             $expense,
-            Auth::user(),
+            $actor,
             ['request_id' => $pending->id]
         );
 

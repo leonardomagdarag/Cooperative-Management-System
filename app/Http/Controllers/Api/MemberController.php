@@ -867,6 +867,7 @@ class MemberController extends Controller
 
     public function destroy(User $user, bool $bypassCountersign = false): JsonResponse
     {
+        $this->authorizeMemberBranch($user);
         $isOfficer = (bool) ($user->is_officer || $user->hasAnyRole(PermissionCatalog::officerRoles()) || $user->hasAnyRole(['admin', 'chairman', 'developer']));
 
         if (! $bypassCountersign && $user->hasAnyRole(['admin', 'chairman'])) {
@@ -907,6 +908,7 @@ class MemberController extends Controller
     public function restore(int $user, bool $bypassCountersign = false): JsonResponse
     {
         $member = User::onlyTrashed()->with(['memberApplication', 'personalData.contact'])->findOrFail($user);
+        $this->authorizeMemberBranch($member);
         $isOfficer = (bool) ($member->is_officer || $member->hasAnyRole(PermissionCatalog::officerRoles()) || $member->hasAnyRole(['admin', 'chairman', 'developer']));
 
         if (! $bypassCountersign && $member->hasAnyRole(['admin', 'chairman'])) {
@@ -978,6 +980,7 @@ class MemberController extends Controller
     public function forceDestroy(int $user, bool $bypassCountersign = false): JsonResponse
     {
         $member = User::onlyTrashed()->with('personalData')->findOrFail($user);
+        $this->authorizeMemberBranch($member);
         $isOfficer = (bool) ($member->is_officer || $member->hasAnyRole(PermissionCatalog::officerRoles()) || $member->hasAnyRole(['admin', 'chairman', 'developer']));
 
         if (! $bypassCountersign && $member->hasAnyRole(['admin', 'chairman'])) {
@@ -1097,12 +1100,12 @@ class MemberController extends Controller
     public function approve(User $user): JsonResponse
     {
         abort_unless(Auth::user()?->can('members.approve'), 403);
+        $application = $user->memberApplication()->where('status', 'pending')->first();
+        $this->authorizeMemberBranch($user, $application?->branch_id);
 
         if ($user->account_status === 'active') {
             return response()->json(['message' => 'Member is already active.'], 422);
         }
-
-        $application = $user->memberApplication()->where('status', 'pending')->first();
 
         DB::transaction(function () use ($user, $application) {
             if ($application) {
@@ -1150,6 +1153,8 @@ class MemberController extends Controller
     public function decline(Request $request, User $user): JsonResponse
     {
         abort_unless(Auth::user()?->can('members.approve'), 403);
+        $application = $user->memberApplication()->where('status', 'pending')->first();
+        $this->authorizeMemberBranch($user, $application?->branch_id);
 
         if ($user->account_status === 'active') {
             return response()->json(['message' => 'Member is already active.'], 422);
@@ -1159,7 +1164,6 @@ class MemberController extends Controller
             'reason' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $application = $user->memberApplication()->where('status', 'pending')->first();
         if (! $application) {
             return response()->json(['message' => 'No pending application found for this member.'], 422);
         }
@@ -1213,6 +1217,7 @@ class MemberController extends Controller
     public function toggleSpecialLoanEligibility(User $user): JsonResponse
     {
         abort_unless(Auth::user()?->can('members.update'), 403);
+        $this->authorizeMemberBranch($user);
 
         $user->update([
             'special_loan_eligible' => ! ($user->special_loan_eligible ?? false),
@@ -1233,6 +1238,20 @@ class MemberController extends Controller
         return response()->json([
             'special_loan_eligible' => (bool) $user->special_loan_eligible,
         ]);
+    }
+
+    private function authorizeMemberBranch(User $member, ?int $fallbackBranchId = null): void
+    {
+        if (! $actor = Auth::user()) {
+            return;
+        }
+
+        $branchId = $member->branch_id ?? $fallbackBranchId;
+        abort_unless(
+            BranchScope::canAccessBranch($actor, $branchId),
+            403,
+            'You can only manage members in your branch.'
+        );
     }
 
     private function scrambleArchivedEmail(User $user, ?string $email): ?string

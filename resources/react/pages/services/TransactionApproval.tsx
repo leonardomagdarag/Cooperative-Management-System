@@ -237,7 +237,7 @@ export default function TransactionApproval({ onComplete, onRequestClose }: { on
                                 <span>Exclude my recorded</span>
                             </label>
                             <p className="text-xs text-slate-700 mt-1 ml-6">
-                                Hide transactions you recorded (you cannot approve them).
+                                Filter out transactions you submitted or recorded.
                             </p>
                         </div>
                     </div>
@@ -246,7 +246,7 @@ export default function TransactionApproval({ onComplete, onRequestClose }: { on
                 {/* Main Content */}
                 <div className="flex-1 overflow-y-auto p-6 relative bg-slate-50">
                     <div className="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-                        <strong>Approval workflow:</strong> Staff-recorded member counter cash posts immediately. Member requests and online or bank transfers stay pending for a manager or chairman. Managers can approve only their branch when branch bypass is off; when bypass is on, only the chairman can approve. Xendit must verify payment before approval.
+                        <strong>Approval workflow:</strong> Staff-recorded member counter cash posts immediately (except high-value withdrawals at or above the OTP threshold, which require approval with an OTP). Member requests and online or bank transfers stay pending for a manager or chairman. Managers approve within their assigned branch (or across branches when branch bypass is enabled), and Xendit must verify online payments before approval.
                     </div>
                     {isFetching && (
                         <div className="absolute top-4 right-4">

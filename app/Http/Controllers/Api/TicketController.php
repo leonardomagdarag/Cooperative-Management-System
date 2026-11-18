@@ -364,6 +364,15 @@ class TicketController extends Controller
             'assigned_to' => 'nullable|exists:users,id',
         ]);
 
+        if (! empty($validated['assigned_to'])) {
+            $assignee = User::find($validated['assigned_to']);
+            abort_unless(
+                $assignee && $assignee->account_status === 'active' && $assignee->isSupportStaff(),
+                422,
+                'Tickets can only be assigned to active support staff.'
+            );
+        }
+
         $ticket->assigned_to = $validated['assigned_to'] ?? null;
         $ticket->save();
 

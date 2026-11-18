@@ -12,6 +12,7 @@ use App\Services\AuditLogService;
 use App\Services\CountersignService;
 use App\Services\SecurityOtpService;
 use App\Support\BranchScope;
+use App\Support\CsvHelper;
 use App\Support\FinancialSettings;
 use App\Support\SearchFilter;
 use Illuminate\Database\Eloquent\Builder;
@@ -26,7 +27,7 @@ class LedgerController extends Controller
     {
         abort_unless(Auth::user()?->can('transactions.view'), 403);
 
-        $query = $this->filteredTransactions($request)->with(['branch', 'account.user.personalData', 'loan.user.personalData', 'recordedBy.personalData', 'approvedBy.personalData', 'reversalOf']);
+        $query = $this->filteredTransactions($request)->with(['branch', 'account.user.personalData', 'loan.user.personalData', 'recordedBy.personalData', 'approvedBy.personalData', 'reversalOf', 'reversal:id,reversal_of_id']);
 
         // Sort
         $sortField = $request->string('sort', 'created_at')->toString();
@@ -64,6 +65,7 @@ class LedgerController extends Controller
                 'loan_id' => $t->loan_id,
                 'reversal_of_id' => $t->reversal_of_id,
                 'reversal_of_transaction_number' => $t->reversalOf?->transaction_number,
+                'already_reversed' => $t->reversal !== null,
                 'amount' => $t->amount,
                 'fee_amount' => $t->fee_amount,
                 'status' => $t->status,
@@ -201,6 +203,7 @@ class LedgerController extends Controller
 
         return response()->streamDownload(function () use ($transactions, $installmentAllocations) {
             $out = fopen('php://output', 'w');
+            fwrite($out, CsvHelper::UTF8_BOM);
             fputcsv($out, ['Transaction #', 'Type', 'Amount', 'Fee', 'Total', 'Status', 'Mode', 'Member', 'User #', 'Loan #', 'Installment allocations', 'Reversal Of', 'Note', 'Date', 'Recorded By']);
 
             foreach ($transactions as $t) {
@@ -215,16 +218,26 @@ class LedgerController extends Controller
                         $allocation->amount
                     ))
                     ->implode('; ');
-                fputcsv($out, [
+                $direction = $t->reversal_of_id === null ? 1 : -1;
+                $signedAmount = number_format($direction * (float) $t->amount, 2, '.', '');
+                $signedFee = number_format($direction * (float) $t->fee_amount, 2, '.', '');
+                $signedTotal = number_format(
+                    $direction * ((float) $t->amount + ($t->transaction_type === 'loan_disbursement' ? -(float) $t->fee_amount : (float) $t->fee_amount)),
+                    2,
+                    '.',
+                    ''
+                );
+                $holder = $t->account?->user ?? $t->loan?->user;
+
+                fputcsv($out, CsvHelper::safeRow([
                     $t->transaction_number,
                     $t->transaction_type,
-                    $t->amount,
-                    $t->fee_amount,
-                    (float) $t->amount + ($t->transaction_type === 'loan_disbursement' ? -(float) $t->fee_amount : (float) $t->fee_amount),
+                    $signedAmount,
+                    $signedFee,
+                    $signedTotal,
                     $t->status,
                     $t->transaction_mode,
-                    ($holder = $t->account?->user ?? $t->loan?->user)
-                        ? trim(($holder->personalData->first_name ?? '').' '.($holder->personalData->last_name ?? '')) : '',
+                    $holder ? trim(($holder->personalData->first_name ?? '').' '.($holder->personalData->last_name ?? '')) : '',
                     $holder?->user_number,
                     $t->loan?->loan_number,
                     $allocationLabel,
@@ -232,7 +245,7 @@ class LedgerController extends Controller
                     $t->note,
                     $t->transaction_date?->format('Y-m-d'),
                     $t->recordedBy ? trim(($t->recordedBy->personalData->first_name ?? '').' '.($t->recordedBy->personalData->last_name ?? '')) : '',
-                ]);
+                ]));
             }
 
             fclose($out);
@@ -245,11 +258,11 @@ class LedgerController extends Controller
         abort_unless($user?->can('transactions.create') || $user?->can('transactions.update'), 403);
 
         $validated = $request->validate([
-            'transaction_type' => 'required|in:deposit,withdrawal,loan_payment,loan_disbursement,fee',
+            'transaction_type' => 'required|in:deposit,withdrawal,loan_payment',
             'amount' => 'required|numeric|min:0.01',
             'note' => 'nullable|string|max:500',
             'account_id' => 'required_if:transaction_type,deposit,withdrawal|nullable|exists:accounts,id',
-            'loan_id' => 'required_if:transaction_type,loan_payment,loan_disbursement|nullable|exists:loans,id',
+            'loan_id' => 'required_if:transaction_type,loan_payment|nullable|exists:loans,id',
             'branch_id' => 'nullable|exists:branches,id',
         ]);
 
@@ -260,9 +273,16 @@ class LedgerController extends Controller
         if ($type === 'withdrawal') {
             abort_unless($user?->can('withdrawals.create'), 403, 'Missing withdrawals.create permission.');
         }
-        if (in_array($type, ['loan_payment', 'loan_disbursement'])) {
+        if ($type === 'loan_payment') {
             abort_unless($user?->can('loans.create') || $user?->can('loans.encode') || $user?->can('loans.update'), 403, 'Missing loan management permission.');
         }
+
+        $targetBranchId = $this->resolveTransactionBranch($validated);
+        if (isset($validated['branch_id'])) {
+            abort_unless(BranchScope::canAccessBranch($user, (int) $validated['branch_id']), 403, 'You can only manage transactions in your branch.');
+            $targetBranchId = (int) $validated['branch_id'];
+        }
+        abort_unless(BranchScope::canAccessBranch($user, $targetBranchId), 403, 'You can only manage transactions in your branch.');
 
         $transaction = Transaction::create([
             'transaction_type' => $validated['transaction_type'],
@@ -274,7 +294,7 @@ class LedgerController extends Controller
             'note' => $validated['note'] ?? null,
             'account_id' => $type === 'loan_payment' ? null : ($validated['account_id'] ?? null),
             'loan_id' => $validated['loan_id'] ?? null,
-            'branch_id' => $validated['branch_id'] ?? $this->resolveTransactionBranch($validated),
+            'branch_id' => $targetBranchId,
             'transaction_date' => now(),
             'status' => 'pending',
             'recorded_by' => Auth::id(),
@@ -302,19 +322,23 @@ class LedgerController extends Controller
     {
         $user = Auth::user();
         abort_unless($user?->can('transactions.update'), 403);
+        abort_unless(BranchScope::canAccessBranch($user, $transaction->branch_id), 403, 'You can only manage transactions in your branch.');
 
         if ($transaction->status !== 'pending') {
             abort(409, 'Only pending transactions can be edited.');
         }
 
         $validated = $request->validate([
-            'transaction_type' => 'required|in:deposit,withdrawal,loan_payment,loan_disbursement,fee',
+            'transaction_type' => 'required|in:deposit,withdrawal,loan_payment',
             'amount' => 'required|numeric|min:0.01',
             'note' => 'nullable|string|max:500',
             'account_id' => 'nullable|exists:accounts,id',
             'loan_id' => 'nullable|exists:loans,id',
             'branch_id' => 'nullable|exists:branches,id',
         ]);
+
+        $targetBranchId = $validated['branch_id'] ?? $this->resolveTransactionBranch($validated);
+        abort_unless(BranchScope::canAccessBranch($user, $targetBranchId), 403, 'You can only assign transactions to your branch.');
 
         $type = $validated['transaction_type'];
         if ($type === 'deposit') {
@@ -374,6 +398,7 @@ class LedgerController extends Controller
     {
         $user = Auth::user();
         abort_unless($user?->can('transactions.update'), 403);
+        abort_unless(BranchScope::canAccessBranch($user, $transaction->branch_id), 403, 'You can only manage transactions in your branch.');
 
         $type = $transaction->transaction_type;
         if ($type === 'deposit') {

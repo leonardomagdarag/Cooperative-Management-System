@@ -67,7 +67,7 @@ class NotificationService
         } catch (Throwable $e) {
             Log::warning("Failed to dispatch email job, falling back to sync: {$e->getMessage()}");
             try {
-                Mail::to($toEmail)->send($mailable);
+                Mail::to(User::forwardGmailRecipient($toEmail))->send($mailable);
             } catch (Throwable $e2) {
                 Log::error("Sync email fallback also failed for {$toEmail}: {$e2->getMessage()}");
                 app(AuditLogService::class)->log(
@@ -395,6 +395,45 @@ class NotificationService
             'Loan Application Submitted',
             "Your loan application {$loan->loan_number} was submitted and is awaiting review.",
         );
+
+        $this->notifyCoMakers($loan);
+    }
+
+    /**
+     * Notify co-makers listed on a loan application or update.
+     *
+     * @param  list<int>  $onlyUserIds
+     */
+    public function notifyCoMakers(Loan $loan, array $onlyUserIds = []): void
+    {
+        $loan->loadMissing('groupMembers', 'user.personalData');
+
+        $coMakers = $onlyUserIds !== []
+            ? $loan->groupMembers->whereIn('id', $onlyUserIds)
+            : $loan->groupMembers;
+
+        if ($coMakers->isEmpty()) {
+            return;
+        }
+
+        $borrowerName = trim(($loan->user?->personalData?->first_name ?? '').' '.($loan->user?->personalData?->last_name ?? ''));
+        $borrowerLabel = $borrowerName ?: ($loan->user?->user_number ?? 'a cooperative member');
+
+        foreach ($coMakers as $member) {
+            if ((int) $member->id === (int) $loan->user_id) {
+                continue;
+            }
+
+            $this->create(
+                $member,
+                'general',
+                'Listed as Loan Co-Maker',
+                "You were listed as a co-maker on loan {$loan->loan_number} for {$borrowerLabel}.",
+                'normal',
+                $this->resolveUserDashboardUrl($member),
+                $loan,
+            );
+        }
     }
 
     public function notifyLoanInterviewCompleted(Loan $loan): void

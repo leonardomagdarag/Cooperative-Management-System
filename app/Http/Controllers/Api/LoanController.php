@@ -15,15 +15,16 @@ use App\Services\CountersignService;
 use App\Services\NotificationService;
 use App\Support\BranchScope;
 use App\Support\FinancialSettings;
+use App\Support\LoanCoMakers;
 use App\Support\SearchFilter;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -134,9 +135,11 @@ class LoanController extends Controller
                 'amount_due' => $l->getAttribute('overdue_metrics')['amount_due'] ?? null,
                 'days_overdue' => $l->getAttribute('overdue_metrics')['days_overdue'] ?? null,
                 'borrower' => $l->user?->personalData ? [
+                    'id' => $l->user_id,
                     'name' => trim($l->user->personalData->first_name.' '.$l->user->personalData->last_name),
                     'user_number' => $l->user->user_number,
                 ] : null,
+                'user_id' => $l->user_id,
                 'branch_id' => $l->branch_id,
                 'branch_name' => $l->branch?->name,
                 'review_status' => $l->review_status,
@@ -147,11 +150,7 @@ class LoanController extends Controller
                 'review_notes' => $l->review_notes,
                 'can_delete' => $l->deletionBlockReason() === null,
                 'reviewer' => $l->reviewer?->personalData ? trim($l->reviewer->personalData->first_name.' '.$l->reviewer->personalData->last_name) : null,
-                'co_makers' => $l->groupMembers->map(fn ($m) => [
-                    'name' => $m->personalData ? trim($m->personalData->first_name.' '.$m->personalData->last_name) : ($m->user_number ?? "Member #{$m->id}"),
-                    'user_number' => $m->user_number,
-                    'has_approved' => (bool) $m->pivot->has_approved,
-                ])->values(),
+                'co_makers' => $l->coMakerDetails(),
             ]),
             'pagination' => [
                 'current_page' => $paginator->currentPage(),
@@ -317,18 +316,23 @@ class LoanController extends Controller
                 'file_size' => $d->file_size,
                 'url' => route('loans.documents.download', ['loan' => $loan->id, 'document' => $d->id]),
             ]),
-            'group_members' => $loan->groupMembers->map(fn ($gm) => [
-                'id' => $gm->id,
-                'name' => trim(($gm->personalData->first_name ?? '').' '.($gm->personalData->last_name ?? '')),
-                'user_number' => $gm->user_number,
-                'has_approved' => (bool) $gm->pivot?->has_approved,
-            ]),
+            'group_members' => $coMakerDetails = $loan->coMakerDetails(),
+            'co_makers' => $coMakerDetails,
         ]);
     }
 
     public function searchMembers(Request $request): JsonResponse
     {
-        $search = SearchFilter::escapeLike($request->string('q')->toString());
+        $actor = Auth::user();
+        $validated = $request->validate(['co_maker_for' => 'sometimes|required|integer|min:1']);
+        $borrowerId = isset($validated['co_maker_for']) ? (int) $validated['co_maker_for'] : null;
+        if ($borrowerId !== null) {
+            abort_unless($actor->can('loans.create') || $actor->can('services.create') || Gate::allows('encode', Loan::class), 403);
+        } else {
+            abort_unless($actor->can('loans.view') || Gate::allows('encode', Loan::class), 403);
+        }
+
+        $search = SearchFilter::escapeLike(trim($request->string('q')->toString()));
 
         if ($search === '') {
             return response()->json(['data' => []]);
@@ -336,8 +340,9 @@ class LoanController extends Controller
 
         $tokens = array_filter(preg_split('/\s+/', $search));
 
-        $members = User::query()
-            ->memberUsers()
+        $members = ($borrowerId === null
+            ? BranchScope::applyToUsers(User::query()->memberUsers(), $actor)
+            : LoanCoMakers::eligibleMembers($actor, $borrowerId))
             ->with(['personalData', 'branch'])
             ->where(function ($query) use ($search, $tokens) {
                 $query->where('user_number', 'like', "%{$search}%")
@@ -360,8 +365,6 @@ class LoanController extends Controller
                         }
                     });
             });
-
-        BranchScope::applyToUsers($members, Auth::user());
 
         $members = $members->orderBy('user_number')
             ->limit(8)
@@ -387,14 +390,15 @@ class LoanController extends Controller
                     'base_type' => $product->base_type,
                     'interest_rate' => (float) $product->interest_rate,
                     'max_term' => (int) $product->max_term,
+                    'required_co_makers' => (int) $product->required_co_makers,
                 ],
             ]);
 
         if ($products->isEmpty()) {
             $products = collect([
-                'business' => ['code' => 'business', 'name' => 'Business Loan', 'base_type' => 'business', 'interest_rate' => 3.0, 'max_term' => 12],
-                'group' => ['code' => 'group', 'name' => 'Group Loan', 'base_type' => 'group', 'interest_rate' => 1.5, 'max_term' => 6],
-                'special' => ['code' => 'special', 'name' => 'Special Loan', 'base_type' => 'special', 'interest_rate' => 2.0, 'max_term' => 12],
+                'business' => ['code' => 'business', 'name' => 'Business Loan', 'base_type' => 'business', 'interest_rate' => 3.0, 'max_term' => 12, 'required_co_makers' => 0],
+                'group' => ['code' => 'group', 'name' => 'Group Loan', 'base_type' => 'group', 'interest_rate' => 1.5, 'max_term' => 6, 'required_co_makers' => 4],
+                'special' => ['code' => 'special', 'name' => 'Special Loan', 'base_type' => 'special', 'interest_rate' => 2.0, 'max_term' => 12, 'required_co_makers' => 0],
             ]);
         }
 
@@ -433,6 +437,7 @@ class LoanController extends Controller
             'payment_frequency' => 'required|in:weekly,bi-weekly,monthly,quarterly,annually',
             'applied_at' => 'required|date|before_or_equal:today',
             'branch_id' => 'nullable|exists:branches,id',
+            ...LoanCoMakers::RULES,
         ]);
 
         $product = LoanProduct::where('code', $validated['loan_product'])->first();
@@ -449,7 +454,7 @@ class LoanController extends Controller
 
         $appliedAt = Carbon::parse($validated['applied_at'])->startOfDay();
 
-        $loan = Loan::create([
+        $loanData = [
             'user_id' => $validated['user_id'],
             'branch_id' => $loanBranchId,
             'loan_type' => $baseType,
@@ -468,7 +473,16 @@ class LoanController extends Controller
             'approved_at' => null,
             'approved_by' => null,
             'due_date' => null,
-        ]);
+        ];
+
+        $actor = Auth::user();
+        $loan = DB::transaction(function () use ($validated, $actor, $borrower, $product, $loanData) {
+            $coMakers = LoanCoMakers::validate($validated['co_makers'] ?? [], $actor, $borrower->id, $product?->required_co_makers ?? 0);
+            $loan = Loan::create($loanData);
+            $loan->groupMembers()->attach($coMakers);
+
+            return $loan;
+        });
 
         app(NotificationService::class)->notifyLoanSubmitted($loan);
 
@@ -508,6 +522,7 @@ class LoanController extends Controller
             'term_months' => 'required|integer|min:1|max:360',
             'payment_frequency' => 'required|in:weekly,bi-weekly,monthly,quarterly,annually',
             'due_date' => 'nullable|date',
+            ...LoanCoMakers::RULES,
         ]);
 
         $updateData = [
@@ -518,24 +533,54 @@ class LoanController extends Controller
             'due_date' => $loan->disbursed_at ? ($validated['due_date'] ?? $loan->due_date) : null,
         ];
 
+        $effectiveProduct = null;
         if (! empty($validated['loan_product'])) {
-            $product = LoanProduct::where('code', $validated['loan_product'])->first();
-            $updateData['loan_product'] = $product?->code ?? $validated['loan_product'];
-            $updateData['loan_type'] = $product?->base_type ?? ($validated['loan_type'] ?? $loan->loan_type);
-            if ($product) {
-                $updateData['penalty_type'] = $product->penalty_type;
-                $updateData['penalty_amount'] = $product->penalty_amount;
-                $updateData['penalty_frequency'] = $product->penalty_frequency;
-                $updateData['interest_extension_penalty'] = $product->interest_extension_penalty;
+            $effectiveProduct = LoanProduct::where('code', $validated['loan_product'])->first();
+            $updateData['loan_product'] = $effectiveProduct?->code ?? $validated['loan_product'];
+            $updateData['loan_type'] = $effectiveProduct?->base_type ?? ($validated['loan_type'] ?? $loan->loan_type);
+            if ($effectiveProduct) {
+                $updateData['penalty_type'] = $effectiveProduct->penalty_type;
+                $updateData['penalty_amount'] = $effectiveProduct->penalty_amount;
+                $updateData['penalty_frequency'] = $effectiveProduct->penalty_frequency;
+                $updateData['interest_extension_penalty'] = $effectiveProduct->interest_extension_penalty;
             }
         } elseif (! empty($validated['loan_type'])) {
             $updateData['loan_type'] = $validated['loan_type'];
         }
 
-        $loan->update($updateData);
+        $actor = Auth::user();
+        $addedCoMakerIds = [];
+        if (array_key_exists('co_makers', $validated)) {
+            abort_unless(
+                $loan->loan_status === 'pending' && $loan->approved_at === null && $loan->disbursed_at === null,
+                422,
+                'Co-makers can only be updated while the loan is pending approval.'
+            );
 
-        app(AuditLogService::class)->log('loan.updated', 'Loan record updated.', 'loan', $loan, Auth::user());
-        app(NotificationService::class)->notifyLoanDetailsUpdated($loan);
+            $effectiveProduct ??= $loan->loan_product ? LoanProduct::where('code', $loan->loan_product)->first() : null;
+            $coMakers = LoanCoMakers::validate(
+                $validated['co_makers'] ?? [],
+                $actor,
+                (int) $loan->user_id,
+                (int) ($effectiveProduct?->required_co_makers ?? 0)
+            );
+            $existingIds = $loan->groupMembers()->pluck('users.id')->map(fn ($id) => (int) $id)->all();
+            $addedCoMakerIds = array_values(array_diff($coMakers, $existingIds));
+
+            DB::transaction(function () use ($loan, $updateData, $coMakers) {
+                $loan->update($updateData);
+                $loan->groupMembers()->sync($coMakers);
+            });
+        } else {
+            $loan->update($updateData);
+        }
+
+        $notifications = app(NotificationService::class);
+        app(AuditLogService::class)->log('loan.updated', 'Loan record updated.', 'loan', $loan, $actor);
+        $notifications->notifyLoanDetailsUpdated($loan);
+        if ($addedCoMakerIds !== []) {
+            $notifications->notifyCoMakers($loan, $addedCoMakerIds);
+        }
 
         return response()->json(['message' => 'Loan updated.', 'data' => $loan->fresh()]);
     }

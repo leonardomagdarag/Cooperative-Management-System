@@ -172,8 +172,9 @@ function ArchiveTierCard({
                                         download
                                         className="rounded border border-gray-200 p-1.5 text-xs text-gray-600 hover:bg-gray-50 transition"
                                         title="Download archive"
+                                        aria-label={`Download archive ${item.name}`}
                                     >
-                                        <i className="fas fa-download"></i>
+                                        <i className="fas fa-download" aria-hidden="true"></i>
                                     </a>
                                 )}
                             </div>

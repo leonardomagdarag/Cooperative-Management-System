@@ -521,7 +521,10 @@ class CountersignService
                     MaintenanceState::syncLoginAvailability();
                 }
                 if (($payload['notify_affected'] ?? false) && isset($payload['services'])) {
-                    app(SettingsController::class)->notifyAffectedUsers($payload['services']);
+                    $services = $payload['services'];
+                    dispatch(function () use ($services): void {
+                        app(SettingsController::class)->notifyAffectedUsers($services);
+                    })->afterCommit();
                 }
 
                 return ['status' => 'success', 'updated_keys' => array_keys($payload['settings'])];
@@ -540,7 +543,10 @@ class CountersignService
                 }
 
                 if (($payload['notify_affected'] ?? false) && isset($payload['services'])) {
-                    app(SettingsController::class)->notifyAffectedUsers($payload['services']);
+                    $services = $payload['services'];
+                    dispatch(function () use ($services): void {
+                        app(SettingsController::class)->notifyAffectedUsers($services);
+                    })->afterCommit();
                 }
 
                 return ['status' => 'success', 'updated_keys' => $updated];
@@ -649,7 +655,7 @@ class CountersignService
                     'transaction_type' => $changes['transaction_type'],
                     'amount' => $changes['amount'],
                     'penalty_amount' => $penaltyAmount,
-                    'fee_amount' => (float) ($changes['fee_amount'] ?? \App\Support\FinancialSettings::feeAmount(
+                    'fee_amount' => (float) ($changes['fee_amount'] ?? FinancialSettings::feeAmount(
                         $changes['transaction_type'],
                         (float) $changes['amount']
                     )),
@@ -715,12 +721,10 @@ class CountersignService
         $seq = 1;
 
         if (Storage::disk('local')->exists($logPath)) {
-            $contents = Storage::disk('local')->get($logPath);
-            $lines = array_filter(explode("\n", $contents));
-            if (count($lines) > 0) {
-                $lastLine = end($lines);
+            $lastLine = $this->readLastNonEmptyLine(Storage::disk('local')->path($logPath));
+            if ($lastLine !== null) {
                 $lastEntry = json_decode($lastLine, true);
-                if ($lastEntry) {
+                if (is_array($lastEntry)) {
                     $seq = ($lastEntry['seq'] ?? 0) + 1;
                     $prevHash = hash('sha256', $lastLine);
                 }
@@ -784,6 +788,50 @@ class CountersignService
             } catch (\Throwable $e) {
                 Log::warning('Failed to sync privileged-actions.jsonl to B2', ['error' => $e->getMessage()]);
             }
+        }
+    }
+
+    private function readLastNonEmptyLine(string $path): ?string
+    {
+        $handle = @fopen($path, 'rb');
+        if (! $handle) {
+            return null;
+        }
+
+        try {
+            if (fseek($handle, 0, SEEK_END) !== 0) {
+                return null;
+            }
+            $pos = ftell($handle);
+            if ($pos === false || $pos <= 0) {
+                return null;
+            }
+
+            $buffer = '';
+            $chunkSize = 4096;
+            while ($pos > 0) {
+                $read = min($chunkSize, $pos);
+                $pos -= $read;
+                fseek($handle, $pos, SEEK_SET);
+                $chunk = fread($handle, $read);
+                if ($chunk === false) {
+                    break;
+                }
+                $buffer = $chunk.$buffer;
+                $trimmed = rtrim($buffer, "\r\n");
+                $newlinePos = strrpos($trimmed, "\n");
+                if ($newlinePos !== false) {
+                    $line = trim(substr($trimmed, $newlinePos + 1));
+
+                    return $line !== '' ? $line : null;
+                }
+            }
+
+            $trimmed = trim($buffer);
+
+            return $trimmed !== '' ? $trimmed : null;
+        } finally {
+            fclose($handle);
         }
     }
 }
