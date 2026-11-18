@@ -12,7 +12,7 @@ beforeEach(function () {
     $this->seed(UserSeeder::class);
     $this->seed(SystemSettingSeeder::class);
 
-    $this->member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $this->member = User::where('email', 'arjay.ramos@gmail.com')->firstOrFail();
     $this->actingAs($this->member);
 });
 
@@ -97,7 +97,7 @@ test('member loan modal payload lists only the borrowers own documents', functio
         'uploaded_by' => $this->member->id,
     ]);
 
-    $otherMember = User::where('email', 'leo.baluyot039+crisdavid.jarabejo@gmail.com')->firstOrFail();
+    $otherMember = User::where('email', 'crisdavid.jarabejo@gmail.com')->firstOrFail();
     $otherLoan = makeMemberLoan($otherMember);
     $otherLoan->documents()->create([
         'original_name' => 'Other Member Agreement.pdf',

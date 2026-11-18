@@ -1,3 +1,4 @@
+import CoMakerList from '../../components/loans/CoMakerList';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
@@ -247,23 +248,10 @@ export default function LoanReviewModal({ onComplete, onRequestClose }: { onComp
                                 </div>
                             )}
 
-                            {(selectedLoan.co_makers ?? []).length > 0 && (
-                                <div className="mt-4 pt-4 border-t border-slate-100">
-                                    <p className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
-                                        Co-makers ({selectedLoan.co_makers.length})
-                                    </p>
-                                    <div className="flex flex-wrap gap-2">
-                                        {selectedLoan.co_makers.map((m: any) => (
-                                            <span key={m.user_number} className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-full text-[11px] uppercase tracking-wide font-semibold text-slate-700">
-                                                {m.name}
-                                                {m.has_approved
-                                                    ? <i className="fas fa-check-circle text-brand-500 ml-1.5"></i>
-                                                    : <i className="fas fa-clock text-slate-600 ml-1.5"></i>}
-                                            </span>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
+                            <section className="mt-4 border-t border-slate-100 pt-4">
+                                <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-700">Co-makers</h4>
+                                <CoMakerList members={selectedLoan.co_makers ?? selectedLoan.group_members} />
+                            </section>
 
                             {selectedLoan.review_notes && (
                                 <div className="mt-4 pt-4 border-t border-slate-100">

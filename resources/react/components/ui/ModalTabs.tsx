@@ -29,7 +29,7 @@ export default function ModalTabs({ tabs, activeTab, onChange, activeClassName, 
                             activeTab === tab.key ? (activeClassName ?? defaultActiveClassName) : (inactiveClassName ?? defaultInactiveClassName)
                         }`}
                     >
-                        {tab.icon && <i className={tab.icon}></i>}
+                        {tab.icon && <i className={tab.icon} aria-hidden="true" />}
                         {tab.label}
                     </button>
                 ))}

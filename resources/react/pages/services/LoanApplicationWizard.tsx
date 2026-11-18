@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useToast } from '../../contexts/ToastContext';
@@ -7,8 +7,8 @@ import { validate, loanApplicationSchema, loanApplicationStep2Schema, type Field
 import ServiceModal from './ServiceModal';
 import HelpTip from '../../components/ui/HelpTip';
 import { useLanguage } from '../../contexts/LanguageContext';
-
-interface CoMaker { id: number; name: string; user_number: string }
+import CoMakerPicker from '../../components/loans/CoMakerPicker';
+import CoMakerList, { type CoMaker } from '../../components/loans/CoMakerList';
 
 const peso = (n: number | string) => `₱${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -43,20 +43,14 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
         loan_product_code: '', amount: '', term_months: '', payment_frequency: 'monthly', purpose: '', interview_schedule: '',
     });
     const [coMakers, setCoMakers] = useState<CoMaker[]>([]);
-    const [coMakerSearch, setCoMakerSearch] = useState('');
-    const [coMakerResults, setCoMakerResults] = useState<CoMaker[]>([]);
     const [errors, setErrors] = useState<FieldErrors>({});
     const { addToast } = useToast();
 
-    const coMakersRef = useRef(coMakers);
-    coMakersRef.current = coMakers;
-    const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const borrowerId = Number(selectedMember?.id ?? user?.id ?? 0);
 
     useEffect(() => {
         onDirtyChange?.(form.loan_product_code !== '' || form.amount !== '' || form.purpose !== '' || form.interview_schedule !== '' || coMakers.length > 0);
     }, [form, coMakers, onDirtyChange]);
-
-    useEffect(() => () => { if (searchTimer.current) clearTimeout(searchTimer.current); }, []);
 
     const { data: productsData } = useQuery({
         queryKey: ['loan-products-full'],
@@ -64,6 +58,7 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
     });
     const products: any[] = productsData?.data?.data ?? [];
     const selectedProduct = products.find((p: any) => p.code === form.loan_product_code);
+    const requiredCoMakers = Number(selectedProduct?.required_co_makers ?? 0);
 
     const { data: profileData } = useQuery({
         queryKey: ['profile'],
@@ -94,6 +89,9 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
         return out;
     };
 
+    const coMakerRequirementMessage = (count: number) =>
+        count === 1 ? t('Add exactly 1 co-maker.') : t('Add exactly {count} co-makers.').replace('{count}', String(count));
+
     const enterDetails = () => {
         // Only validate step-2 fields — purpose is entered on step 3
         const errs = validate(loanApplicationStep2Schema, form);
@@ -103,8 +101,8 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
         if (selectedProduct && Number(form.term_months ?? 0) > Number(selectedProduct.max_term)) {
             errs.term_months = t('Term cannot exceed {count} months').replace('{count}', String(selectedProduct.max_term));
         }
-        if (selectedProduct && Number(selectedProduct.required_co_makers) > 0 && coMakers.length !== Number(selectedProduct.required_co_makers)) {
-            errs.co_makers = t('Add exactly {count} co-members').replace('{count}', String(selectedProduct.required_co_makers));
+        if (requiredCoMakers > 0 && coMakers.length !== requiredCoMakers) {
+            errs.co_makers = coMakerRequirementMessage(requiredCoMakers);
         }
         if (selectedProduct?.requires_interview && !form.interview_schedule) {
             errs.interview_schedule = t('An interview schedule is required for this loan product');
@@ -132,8 +130,8 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
 
     const handleSubmit = () => {
         const errs = validate(loanApplicationSchema, form);
-        if (selectedProduct && Number(selectedProduct.required_co_makers) > 0 && coMakers.length !== Number(selectedProduct.required_co_makers)) {
-            errs.co_makers = t('Add exactly {count} co-members').replace('{count}', String(selectedProduct.required_co_makers));
+        if (requiredCoMakers > 0 && coMakers.length !== requiredCoMakers) {
+            errs.co_makers = coMakerRequirementMessage(requiredCoMakers);
         }
         if (selectedProduct?.requires_interview && !form.interview_schedule) {
             errs.interview_schedule = t('An interview schedule is required for this loan product');
@@ -161,29 +159,6 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
         onError: (err: any) => addToast(t(err.response?.data?.message || 'Failed'), 'error'),
     });
 
-    const handleCoMakerSearch = (val: string) => {
-        setCoMakerSearch(val);
-        if (searchTimer.current) clearTimeout(searchTimer.current);
-        searchTimer.current = setTimeout(async () => {
-            if (!val.trim()) { setCoMakerResults([]); return; }
-            const res = await api.get(`/api/loans/search-members?q=${encodeURIComponent(val.trim())}`);
-            const selfId = selectedMember?.id ?? user?.id;
-            const results = (res.data?.data ?? []).filter((m: CoMaker) => m.id !== selfId && !coMakersRef.current.some(cm => cm.id === m.id));
-            setCoMakerResults(results);
-        }, 300);
-    };
-
-    const addCoMaker = (m: CoMaker) => {
-        const required = Number(selectedProduct?.required_co_makers ?? 0);
-        if (coMakers.length >= required) { addToast(`This loan only requires ${required} co-maker(s)`, 'error'); return; }
-        setCoMakers(prev => [...prev, m]);
-        setCoMakerSearch('');
-        setCoMakerResults([]);
-    };
-
-    const removeCoMaker = (id: number) => setCoMakers(prev => prev.filter(cm => cm.id !== id));
-
-    const requiredCoMakers = Number(selectedProduct?.required_co_makers ?? 0);
     const needsInterview = !!selectedProduct?.requires_interview;
 
     return (
@@ -298,63 +273,15 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
                             </div>
                         </div>
 
-                        {requiredCoMakers > 0 && (
-                            <div className="border-t pt-6">
-                                <h5 className="font-bold text-gray-900 mb-2">Group Members (Co-makers)</h5>
-                                <p className="text-sm text-gray-600 mb-4">{t('Select {count} members to form your loan group. Each member must approve the loan.').replace('{count}', String(requiredCoMakers))}</p>
-
-                                <div className="mb-4">
-                                    <input
-                                        type="text"
-                                        value={coMakerSearch}
-                                        onChange={e => handleCoMakerSearch(e.target.value)}
-                                        placeholder="Search members by name..."
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                                    />
-                                    {coMakerSearch.length >= 2 && coMakerResults.length > 0 && (
-                                        <div className="mt-2 border rounded-lg divide-y max-h-48 overflow-y-auto">
-                                            {coMakerResults.map(m => (
-                                                <button
-                                                    key={m.id}
-                                                    type="button"
-                                                    onClick={() => addCoMaker(m)}
-                                                    className="w-full px-4 py-2 hover:bg-gray-50 text-left"
-                                                >
-                                                    <div className="font-medium text-gray-900">{m.name}</div>
-                                                    <div className="text-sm text-gray-700">ID: {m.user_number}</div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="space-y-2">
-                                    {coMakers.length === 0 ? (
-                                        <div className="text-center py-8 text-gray-700">
-                                            <p>{t('No members added yet')}</p>
-                                            <p className="text-sm">{t('Add {count} members to continue').replace('{count}', String(requiredCoMakers))}</p>
-                                        </div>
-                                    ) : coMakers.map(cm => (
-                                        <div key={cm.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
-                                            <div>
-                                                <div className="font-medium text-gray-900">{cm.name}</div>
-                                                <div className="text-sm text-gray-700">ID: {cm.user_number}</div>
-                                            </div>
-                                            <button type="button" onClick={() => removeCoMaker(cm.id)} className="text-red-600 hover:text-red-800">
-                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                                </svg>
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                <div className={`mt-2 text-sm ${coMakers.length === requiredCoMakers ? 'text-green-600' : 'text-gray-600'}`}>
-                                    {coMakers.length} / {requiredCoMakers} members added
-                                </div>
-                                {errors.co_makers && <span className="text-red-500 text-xs">{errors.co_makers}</span>}
-                            </div>
-                        )}
+                        <div className="border-t pt-6">
+                            <CoMakerPicker
+                                borrowerId={borrowerId}
+                                requiredCount={requiredCoMakers}
+                                members={coMakers}
+                                onChange={setCoMakers}
+                                error={errors.co_makers}
+                            />
+                        </div>
 
                         {needsInterview && (
                             <div className="border-t pt-6">
@@ -465,16 +392,10 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
                                 <p className="font-semibold text-gray-900">{form.purpose}</p>
                             </div>
 
-                            {requiredCoMakers > 0 && (
-                                <div>
-                                    <p className="text-sm text-gray-600 mb-2">Group Members ({coMakers.length})</p>
-                                    {coMakers.map(cm => (
-                                        <p key={cm.id} className="text-sm font-medium text-gray-900">
-                                            • {cm.name} ({cm.user_number})
-                                        </p>
-                                    ))}
-                                </div>
-                            )}
+                            <div className="sm:col-span-2">
+                                <p className="mb-2 text-sm text-gray-600">{t('Co-makers')}</p>
+                                <CoMakerList members={coMakers} />
+                            </div>
 
                             {needsInterview && form.interview_schedule && (
                                 <div>
@@ -487,11 +408,9 @@ export default function LoanApplicationWizard({ onComplete, onRequestClose, sele
                         <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
                             <p className="text-sm text-blue-700">
                                 <strong>Important:</strong>{' '}
-                                {t(requiredCoMakers > 0
-                                    ? 'After submission, all group members must approve this loan. Once approved by all members, the application will be reviewed by cooperative staff.'
-                                    : needsInterview
-                                        ? 'After submission, you must attend the scheduled interview. Your application will be reviewed after the interview is completed.'
-                                        : 'After submission, your application will be reviewed by cooperative staff based on your member profile and account standing.')}
+                                {t(needsInterview
+                                    ? 'After submission, you must attend the scheduled interview. Your application will be reviewed after the interview is completed.'
+                                    : 'After submission, your application will be reviewed by cooperative staff based on your member profile and account standing.')}
                             </p>
                         </div>
 
