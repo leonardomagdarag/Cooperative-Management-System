@@ -39,10 +39,15 @@ class UserSeeder extends Seeder
         $email = User::normalizeEmail($attributes['email']);
         $existing = User::query()->where('email', $email)->first();
 
+        if (! $existing && isset($attributes['user_number'])) {
+            $existing = User::query()->where('user_number', $attributes['user_number'])->first();
+        }
+
         $personalDataId = $this->syncProfile($existing?->personalData, $email, $profile);
 
         if ($existing) {
             $changes = [
+                'email' => $email,
                 'personal_data_id' => $personalDataId,
                 'branch_id' => $attributes['branch_id'] ?? $existing->branch_id,
                 'role' => $attributes['role'] ?? $existing->role,
@@ -194,7 +199,7 @@ class UserSeeder extends Seeder
         $normalizedFirstName = strtolower((string) preg_replace('/\s+/', '', trim($firstName)));
         $normalizedLastName = strtolower(trim($lastName));
 
-        return "leo.baluyot039+{$normalizedFirstName}.{$normalizedLastName}@gmail.com";
+        return "{$normalizedFirstName}.{$normalizedLastName}@gmail.com";
     }
 
     /**
@@ -226,7 +231,7 @@ class UserSeeder extends Seeder
         $developer = $this->createSeedUser([
             'user_number' => 'USR000001',
             'email' => 'developer@example.com',
-            'password' => Hash::make('password'),
+            'password' => Hash::make('135#Developer'),
             'role' => 'developer',
             'is_officer' => true,
             'profile_completed_at' => now(),
@@ -264,7 +269,7 @@ class UserSeeder extends Seeder
             $created = $this->createSeedUser([
                 'user_number' => $userNumber,
                 'email' => 'leo.baluyot039+'.strtolower($officer['role']).'@gmail.com',
-                'password' => Hash::make('password'),
+                'password' => Hash::make('135#'.ucfirst($officer['role'])),
                 'role' => $officer['role'],
                 'is_officer' => true,
                 'branch_id' => $officer['branch'],
@@ -304,7 +309,7 @@ class UserSeeder extends Seeder
             $created = $this->createSeedUser([
                 'user_number' => $member['user_number'],
                 'email' => $member['email'] ?? $this->buildMemberEmail($member['first_name'], $member['last_name']),
-                'password' => Hash::make('password'),
+                'password' => Hash::make('135#Members'),
                 'role' => 'member',
                 'branch_id' => $branch->id,
                 'special_loan_eligible' => (bool) $member['special_loan_eligible'],

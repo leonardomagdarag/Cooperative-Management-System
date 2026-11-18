@@ -135,7 +135,7 @@ class ChairmanSeeder extends Seeder
             $user->forceFill([
                 'user_number' => self::USER_NUMBER,
                 'email' => $email,
-                'password' => Hash::make('password'),
+                'password' => Hash::make('135#Chairman'),
                 'role' => 'chairman',
                 'is_officer' => true,
                 'account_status' => 'active',

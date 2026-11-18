@@ -88,6 +88,15 @@ class LeoLoanDueTestSeeder extends Seeder
             'interview_officer_id' => $officerId,
         ]);
 
+        $coMakerIds = User::query()
+            ->memberUsers()
+            ->whereIn('user_number', ['USR000013', 'USR000022'])
+            ->whereKeyNot($leo->id)
+            ->pluck('id')
+            ->all();
+
+        $loan->groupMembers()->sync($coMakerIds);
+
         $this->command?->info("Created Leo loan due test record: {$loan->loan_number}, due {$dueDate->toDateString()}");
     }
 }

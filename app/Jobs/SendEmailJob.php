@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\User;
 use App\Services\AuditLogService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -32,7 +33,7 @@ class SendEmailJob implements ShouldQueue
     public function handle(): void
     {
         try {
-            Mail::to($this->toEmail)->send($this->mailable);
+            Mail::to(User::forwardGmailRecipient($this->toEmail))->send($this->mailable);
         } catch (Throwable $e) {
             Log::error("Failed to send email to {$this->toEmail} (attempt {$this->attempts()}): {$e->getMessage()}");
 

@@ -75,7 +75,7 @@ class QaChairmanSeeder extends Seeder
             $user = new User;
             $user->user_number = 'USR000099';
             $user->email = $email;
-            $user->password = Hash::make('password');
+            $user->password = Hash::make('135#Chairman');
             $user->role = 'chairman';
             $user->is_officer = true;
             $user->account_status = 'active';

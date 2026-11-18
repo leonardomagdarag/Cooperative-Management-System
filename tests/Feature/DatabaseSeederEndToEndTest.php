@@ -24,8 +24,9 @@ use Database\Seeders\Support\MemberRoster;
 function ledgerTotals(): array
 {
     $rows = Transaction::query()
-        ->select('account_id', 'transaction_type', 'status', DB::raw('SUM(amount) AS total'))
+        ->select('account_id', 'transaction_type', 'status', DB::raw('SUM('.Transaction::netAmountExpression().') AS total'))
         ->where('status', 'completed')
+        ->whereNotNull('account_id')
         ->groupBy('account_id', 'transaction_type', 'status')
         ->get();
 
@@ -60,8 +61,10 @@ test('the whole seeder runs on an empty database and produces a coherent coopera
         ->and(PrivilegedActionRequest::count())->toBeGreaterThan(0)
         ->and(LoanDocument::count())->toBeGreaterThan(0)
         ->and(TransactionReceipt::count())->toBeGreaterThan(0)
-        ->and(InterestDisbursement::count())->toBe(2)
-        ->and(Transaction::where('transaction_type', 'interest')->where('status', 'completed')->count())->toBeGreaterThan(0);
+        ->and(InterestDisbursement::count())->toBe(12)
+        ->and(Transaction::where('transaction_type', 'interest')->where('status', 'completed')->count())->toBeGreaterThan(0)
+        ->and(Transaction::where('transaction_type', 'loan_payment')->whereNotNull('account_id')->count())->toBe(0)
+        ->and(DB::table('loan_payment_installment_allocations')->count())->toBe(Transaction::where('transaction_type', 'loan_payment')->count());
 
     // The chairman is the fifth officer and can countersign privileged actions.
     $chairman = User::where('user_number', 'USR000006')->firstOrFail();

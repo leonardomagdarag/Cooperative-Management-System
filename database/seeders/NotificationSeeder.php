@@ -78,7 +78,7 @@ class NotificationSeeder extends Seeder
                     number_format((float) $next['payment'], 2),
                     $loan->loan_number,
                     $dueDate->format('F j, Y')
-                ), 'urgent', $loan);
+                ), 'urgent', $loan, read: false, at: $dueDate->copy()->addDay()->setTime(8, 30));
 
                 $created++;
 
@@ -104,7 +104,7 @@ class NotificationSeeder extends Seeder
                     1 => 'urgent',
                     3 => 'high',
                     default => 'normal',
-                }, $loan);
+                }, $loan, read: false, at: $now);
 
                 $created++;
             }
@@ -140,7 +140,7 @@ class NotificationSeeder extends Seeder
                 strtolower($loan->loan_type_label),
                 number_format((float) $loan->loan_amount, 2),
                 $loan->loan_number
-            ), 'high', $loan, read: true);
+            ), 'high', $loan, read: true, at: $loan->approved_at ?? $loan->reviewed_at ?? $loan->applied_at);
 
             $created++;
         }
@@ -160,8 +160,8 @@ class NotificationSeeder extends Seeder
                 strtolower($loan->loan_type_label),
                 number_format((float) $loan->loan_amount, 2),
                 $loan->loan_number,
-                $loan->reviewer_note ?: 'Please discuss the requirements with cooperative staff.'
-            ), 'normal', $loan, read: true);
+                $loan->review_notes ?: 'Please discuss the requirements with cooperative staff.'
+            ), 'normal', $loan, read: true, at: $loan->reviewed_at ?? $loan->applied_at);
 
             $created++;
         }
@@ -199,7 +199,7 @@ class NotificationSeeder extends Seeder
                 number_format((float) $payment->amount, 2),
                 $loan->loan_number,
                 number_format(max(0.0, $remaining), 2)
-            ), 'normal', $loan, read: true);
+            ), 'normal', $loan, read: true, at: $payment->transaction_date ?? $payment->created_at);
 
             $created++;
         }
@@ -231,11 +231,13 @@ class NotificationSeeder extends Seeder
                 continue;
             }
 
+            $at = $withdrawal->transaction_date ?? $withdrawal->created_at;
+
             $this->put($user, 'general', 'Withdrawal Awaiting Approval', sprintf(
                 'Your withdrawal request of ₱%s submitted on %s is awaiting the manager\'s approval.',
                 number_format((float) $withdrawal->amount, 2),
-                Carbon::parse($withdrawal->created_at)->format('F j, Y')
-            ), 'normal', $withdrawal);
+                Carbon::parse($at)->format('F j, Y')
+            ), 'normal', $withdrawal, read: false, at: $at);
 
             $created++;
         }
@@ -332,19 +334,31 @@ class NotificationSeeder extends Seeder
         string $message,
         string $priority,
         object $related,
-        bool $read = false
+        bool $read = false,
+        ?Carbon $at = null
     ): void {
-        Notification::create([
-            'user_id' => $user->id,
-            'type' => $type,
-            'title' => $title,
-            'message' => $message,
-            'priority' => $priority,
-            'action_url' => $related instanceof Loan ? '/loans' : '/transactions',
-            'related_id' => $related->id,
-            'related_type' => $related instanceof Loan ? Loan::class : Transaction::class,
-            'is_read' => $read,
-            'read_at' => $read ? Carbon::now() : null,
-        ]);
+        $sent = ($at && ! $at->greaterThan(Carbon::now())) ? $at : Carbon::now();
+        $readAt = $read ? $sent->copy()->addHours(2) : null;
+        if ($readAt && $readAt->greaterThan(Carbon::now())) {
+            $readAt = Carbon::now();
+        }
+
+        Notification::withoutTimestamps(function () use ($user, $type, $title, $message, $priority, $related, $read, $sent, $readAt) {
+            $notification = new Notification([
+                'user_id' => $user->id,
+                'type' => $type,
+                'title' => $title,
+                'message' => $message,
+                'priority' => $priority,
+                'action_url' => $related instanceof Loan ? '/loans' : '/transactions',
+                'related_id' => $related->id,
+                'related_type' => $related instanceof Loan ? Loan::class : Transaction::class,
+                'is_read' => $read,
+                'read_at' => $readAt,
+            ]);
+            $notification->created_at = $sent;
+            $notification->updated_at = $readAt ?? $sent;
+            $notification->save();
+        });
     }
 }

@@ -43,7 +43,7 @@ class SendAnnouncementEmailJob implements ShouldQueue
         }
 
         try {
-            Mail::to($user->email)->send(new AnnouncementMail($this->announcement));
+            Mail::to($user->deliveryEmail())->send(new AnnouncementMail($this->announcement));
         } catch (Throwable $e) {
             app(AuditLogService::class)->log(
                 'email.failed',

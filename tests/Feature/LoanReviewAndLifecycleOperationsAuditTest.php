@@ -25,7 +25,7 @@ beforeEach(function () {
     $this->accountant->givePermissionTo('loans.update');
     $this->chairman = User::factory()->create(['role' => 'chairman', 'is_officer' => true]);
     $this->chairman->assignRole('chairman');
-    $this->borrower = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $this->borrower = User::where('email', 'arjay.ramos@gmail.com')->firstOrFail();
 
     $this->mainBranch = Branch::where('code', 'BR000001')->firstOrFail();
     $this->savingsAccount = Account::where('user_id', $this->borrower->id)->where('account_type', 'savings')->firstOrFail();

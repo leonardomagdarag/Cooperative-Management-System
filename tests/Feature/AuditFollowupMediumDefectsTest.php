@@ -15,7 +15,7 @@ beforeEach(function () {
     $this->seed(UserSeeder::class);
     $this->seed(AccountSeeder::class);
 
-    $this->member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $this->member = User::where('email', 'arjay.ramos@gmail.com')->firstOrFail();
     $this->otherMember = User::role('member')->whereKeyNot($this->member->id)->firstOrFail();
     $this->manager = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
     $this->account = Account::where('user_id', $this->member->id)->firstOrFail();

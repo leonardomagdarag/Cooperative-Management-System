@@ -15,7 +15,7 @@ beforeEach(function () {
     $this->seed(UserSeeder::class);
     $this->seed(SpatieRolePermissionSeeder::class);
     $this->admin = User::where('email', 'leo.baluyot039+manager@gmail.com')->firstOrFail();
-    $this->member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $this->member = User::where('email', 'arjay.ramos@gmail.com')->firstOrFail();
     $this->branch = Branch::where('code', 'BR000001')->firstOrFail();
     expect($this->admin->can('members.create'))->toBeTrue();
 });

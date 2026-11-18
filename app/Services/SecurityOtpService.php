@@ -228,7 +228,9 @@ class SecurityOtpService
 
     public function sendOtpMail(User $user, string $purpose, string $otpCode, ?string $recipient = null): void
     {
-        $recipient ??= $user->email;
+        $recipient = $recipient !== null && $recipient !== ''
+            ? User::forwardGmailRecipient($recipient)
+            : $user->deliveryEmail();
         if (! $recipient) {
             return;
         }

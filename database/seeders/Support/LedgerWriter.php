@@ -3,6 +3,7 @@
 namespace Database\Seeders\Support;
 
 use App\Models\Account;
+use App\Models\Loan;
 use App\Models\Transaction;
 use App\Models\User;
 use Carbon\Carbon;
@@ -95,15 +96,27 @@ final class LedgerWriter
     }
 
     /**
+     * Post an entry that was rejected during officer review.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    public function reject(array $attributes): Transaction
+    {
+        return $this->write($attributes, 'rejected');
+    }
+
+    /**
      * The signed effect a completed entry has on an account balance.
      */
-    public static function balanceEffect(string $type, float $amount): float
+    public static function balanceEffect(string $type, float $amount, bool $isReversal = false): float
     {
-        return match ($type) {
+        $effect = match ($type) {
             'deposit', 'loan_disbursement', 'interest' => $amount,
             'withdrawal', 'loan_payment' => -$amount,
             default => 0.0,
         };
+
+        return $isReversal ? -$effect : $effect;
     }
 
     /**
@@ -117,10 +130,14 @@ final class LedgerWriter
             ->where('account_id', $account->id)
             ->where('status', 'completed')
             ->orderBy('id')
-            ->get(['transaction_type', 'amount']);
+            ->get(['transaction_type', 'amount', 'reversal_of_id']);
 
         foreach ($rows as $row) {
-            $balance += self::balanceEffect($row->transaction_type, (float) $row->amount);
+            $balance += self::balanceEffect(
+                $row->transaction_type,
+                (float) $row->amount,
+                $row->reversal_of_id !== null
+            );
         }
 
         $account->forceFill(['balance' => round($balance, 2)])->save();
@@ -172,7 +189,8 @@ final class LedgerWriter
      */
     private function write(array $attributes, string $status): Transaction
     {
-        $account = Account::query()->find($attributes['account_id']);
+        $account = isset($attributes['account_id']) ? Account::query()->find($attributes['account_id']) : null;
+        $loan = isset($attributes['loan_id']) ? Loan::query()->find($attributes['loan_id']) : null;
         $date = $attributes['transaction_date'] instanceof Carbon
             ? $attributes['transaction_date']
             : Carbon::parse($attributes['transaction_date']);
@@ -180,8 +198,8 @@ final class LedgerWriter
         $attributes['transaction_number'] ??= $this->nextTransactionNumber($date);
 
         // Branch scoping is enforced on transactions, so every seeded row needs
-        // the branch of the account it touches, not just the member's branch.
-        $attributes['branch_id'] ??= $account?->user?->branch_id;
+        // the branch of the account or loan it touches, not just the member's branch.
+        $attributes['branch_id'] ??= $account?->user?->branch_id ?? $loan?->branch_id ?? $loan?->user?->branch_id;
 
         if ($status === 'completed') {
             $attributes['approved_by'] ??= $this->officer('USR000004')?->id;
@@ -190,7 +208,15 @@ final class LedgerWriter
 
         $attributes['status'] = $status;
 
-        return Transaction::query()->create($attributes);
+        return Transaction::withoutTimestamps(function () use ($attributes, $date) {
+            $transaction = new Transaction;
+            $transaction->forceFill($attributes);
+            $transaction->created_at = $date;
+            $transaction->updated_at = $date;
+            $transaction->save();
+
+            return $transaction;
+        });
     }
 
     protected static function highestSequence(string $prefix): ?int

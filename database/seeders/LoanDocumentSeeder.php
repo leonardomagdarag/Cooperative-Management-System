@@ -39,15 +39,25 @@ class LoanDocumentSeeder extends Seeder
         $uploader = User::query()->where('user_number', 'USR000004')->first();
 
         $loans = Loan::query()
-            ->whereIn('loan_status', ['active', 'paid_off'])
+            ->whereIn('loan_status', ['approved', 'active', 'paid_off'])
             ->orderBy('id')
-            ->limit(4)
             ->get();
 
         $created = 0;
 
         foreach ($loans as $loan) {
-            foreach (self::DOCUMENTS as $original) {
+            $documents = self::DOCUMENTS;
+            if ($loan->loan_type === 'business') {
+                $documents[] = 'Barangay-Business-Permit.png';
+            } elseif ($loan->loan_type === 'group') {
+                $documents[] = 'Co-Makers-Undertaking.png';
+            } else {
+                $documents[] = 'Supporting-Statement.png';
+            }
+
+            $uploadedAt = $loan->approved_at ?? $loan->reviewed_at ?? $loan->applied_at ?? now();
+
+            foreach ($documents as $original) {
                 $exists = LoanDocument::query()
                     ->where('loan_id', $loan->id)
                     ->where('original_name', $original)
@@ -62,14 +72,19 @@ class LoanDocumentSeeder extends Seeder
 
                 Storage::disk('local')->put($path, $bytes);
 
-                LoanDocument::create([
-                    'loan_id' => $loan->id,
-                    'original_name' => $original,
-                    'storage_path' => $path,
-                    'mime_type' => 'image/png',
-                    'file_size' => strlen($bytes),
-                    'uploaded_by' => $uploader?->id,
-                ]);
+                LoanDocument::withoutTimestamps(function () use ($loan, $original, $path, $bytes, $uploader, $uploadedAt) {
+                    $doc = new LoanDocument([
+                        'loan_id' => $loan->id,
+                        'original_name' => $original,
+                        'storage_path' => $path,
+                        'mime_type' => 'image/png',
+                        'file_size' => strlen($bytes),
+                        'uploaded_by' => $uploader?->id,
+                    ]);
+                    $doc->created_at = $uploadedAt;
+                    $doc->updated_at = $uploadedAt;
+                    $doc->save();
+                });
 
                 $created++;
             }

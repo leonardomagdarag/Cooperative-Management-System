@@ -124,7 +124,7 @@ class LogSeeder extends Seeder
         $teller = $this->officer('accountant');
 
         $recent = Transaction::query()
-            ->with('account.user')
+            ->with(['account.user', 'loan.user'])
             ->where('status', 'completed')
             ->orderByDesc('transaction_date')
             ->orderByDesc('id')
@@ -132,22 +132,27 @@ class LogSeeder extends Seeder
             ->get();
 
         foreach ($recent as $transaction) {
+            $holderName = $transaction->account?->user?->name
+                ?? $transaction->loan?->user?->name
+                ?? 'a member';
+
             $created += $this->entry($audit, 'ledger.'.$transaction->transaction_type, sprintf(
                 '%s of ₱%s recorded for %s (%s).',
                 ucfirst(str_replace('_', ' ', (string) $transaction->transaction_type)),
                 number_format((float) $transaction->amount, 2),
-                $transaction->account?->user?->name ?? 'a member',
+                $holderName,
                 $transaction->transaction_number
             ), 'finance', $transaction, $teller, $transaction->transaction_date);
         }
 
-        foreach (Transaction::query()->with('account.user')->where('status', 'pending')->get() as $transaction) {
+        foreach (Transaction::query()->with(['account.user', 'loan.user'])->where('status', 'pending')->get() as $transaction) {
+            $holder = $transaction->account?->user ?? $transaction->loan?->user;
             $created += $this->entry($audit, 'ledger.queued', sprintf(
                 '%s request of ₱%s from %s is awaiting approval.',
-                ucfirst((string) $transaction->transaction_type),
+                ucfirst(str_replace('_', ' ', (string) $transaction->transaction_type)),
                 number_format((float) $transaction->amount, 2),
-                $transaction->account?->user?->name ?? 'a member'
-            ), 'finance', $transaction, $this->officer('accountant'), $transaction->created_at);
+                $holder?->name ?? 'a member'
+            ), 'finance', $transaction, $holder ?? $this->officer('accountant'), $transaction->created_at);
         }
 
         return $created;

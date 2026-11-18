@@ -11,6 +11,8 @@ use Database\Seeders\Support\LedgerWriter;
 use Database\Seeders\Support\MemberRoster;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Writes the ledger that sits underneath the accounts and loans.
@@ -70,7 +72,7 @@ class TransactionSeeder extends Seeder
             $loan = Loan::query()->where('user_id', $user->id)->first();
             $installments = $loan ? $this->installments($loan, (int) ($member['loan']['missed_payments'] ?? 0)) : [];
 
-            $this->savingsHistory($ledger, $savings, $member, $installments, $this->disbursedAmount($loan), $teller?->id);
+            $this->savingsHistory($ledger, $savings, $member, $this->disbursedSavingsAmount($loan), $teller?->id);
 
             if ($loan) {
                 $this->loanActivity($ledger, $savings, $loan, $installments, $teller?->id, $loanReviewer?->id);
@@ -78,6 +80,8 @@ class TransactionSeeder extends Seeder
         }
 
         $this->pendingQueue($ledger, $members, $teller?->id);
+        $this->rejectedHistory($ledger, $members, $teller?->id);
+        $this->reversalHistory($ledger, $members, $teller?->id);
         $this->recomputeAll();
 
         $this->assertBalances();
@@ -169,15 +173,16 @@ class TransactionSeeder extends Seeder
     }
 
     /**
-     * Whether a loan has actually been released, and for how much.
+     * Whether a loan has actually been released to the member's savings account,
+     * and for how much.
      *
-     * A signed-off loan that is still waiting at the counter has not been
-     * disbursed, so no money has entered the member's account and none of the
-     * portfolio should be treated as savings.
+     * Cash loan disbursements leave `account_id = null` and hand physical cash
+     * to the borrower, so only a loan explicitly released to savings credits
+     * the member's savings ledger.
      */
-    private function disbursedAmount(?Loan $loan): float
+    private function disbursedSavingsAmount(?Loan $loan): float
     {
-        if (! $loan || ! in_array($loan->loan_status, ['active', 'paid_off'], true)) {
+        if (! $loan || ! in_array($loan->loan_status, ['active', 'paid_off'], true) || ! $loan->account_id) {
             return 0.0;
         }
 
@@ -191,18 +196,17 @@ class TransactionSeeder extends Seeder
      * Only `net` — the target balance, less what the account already held on the
      * day the member joined and less any loan released into it — is genuinely
      * retained each month. The contribution is then grossed up to cover the
-     * withdrawals and loan instalments falling due before the *next* one, so
-     * the balance never dips below zero on its way to the target.
+     * withdrawals falling due before the *next* one, so the balance never dips
+     * below zero on its way to the target. Loan repayments are funded externally
+     * and never debit a member's savings account.
      *
      * @param  array<string, mixed>  $member
-     * @param  list<array{period: int, date: Carbon, amount: float}>  $installments
      */
     private function savingsHistory(
         LedgerWriter $ledger,
         Account $savings,
         array $member,
-        array $installments,
-        float $disbursed,
+        float $disbursedToSavings,
         ?int $teller
     ): void {
         $joinedAt = MemberRoster::joinedAt($member);
@@ -232,7 +236,7 @@ class TransactionSeeder extends Seeder
         }
 
         $opening = $this->openingBalance($savings, $joinedAt);
-        $netPerMonth = ($target - $opening - $disbursed) / $monthsContributed;
+        $netPerMonth = ($target - $opening - $disbursedToSavings) / $monthsContributed;
 
         if ($netPerMonth <= 0) {
             throw new \RuntimeException(sprintf(
@@ -240,26 +244,13 @@ class TransactionSeeder extends Seeder
                 $target,
                 $member['user_number'],
                 $opening,
-                $disbursed
+                $disbursedToSavings
             ));
         }
 
         $this->assertAffordable($member, $netPerMonth + $monthlySpend, $monthlySpend);
 
-        $periodStart = $joinedAt;
-
         foreach ($dates as $index => $contributionDate) {
-            $isLast = $index === $monthsContributed - 1;
-
-            // The contribution settles everything that fell due since the
-            // previous one; the windows are contiguous, so nothing is counted
-            // twice and nothing falls between two of them.
-            $periodEnd = $isLast
-                ? $now->copy()
-                : $dates[$index + 1];
-
-            $due = $this->paymentsBetween($installments, $periodStart, $periodEnd);
-
             $withdrawalDate = $contributionDate->copy()->addDays(4)->setTime(14, 0);
             $withdrawal = 0.0;
 
@@ -271,7 +262,7 @@ class TransactionSeeder extends Seeder
 
             $this->postOnce($ledger, $savings, [
                 'transaction_type' => 'deposit',
-                'amount' => round($netPerMonth + $withdrawal + $due, 2),
+                'amount' => round($netPerMonth + $withdrawal, 2),
                 'transaction_date' => $contributionDate,
                 'recorded_by' => $teller,
                 'transaction_mode' => 'counter',
@@ -288,8 +279,6 @@ class TransactionSeeder extends Seeder
                     'note' => $this->withdrawalNote($index + 1),
                 ]);
             }
-
-            $periodStart = $periodEnd;
         }
     }
 
@@ -377,9 +366,14 @@ class TransactionSeeder extends Seeder
     /**
      * Disbursement and the instalments the member has actually settled.
      *
-     * Only a loan that reached the member's account is posted. A loan that is
-     * still pending review, or that has been signed off but is still waiting
-     * for release, leaves no trace on the ledger.
+     * Only a loan that has been released is posted. A loan that is still
+     * pending review, or that has been signed off but is still waiting for
+     * release, leaves no trace on the ledger.
+     *
+     * Loan disbursements default to physical cash (`account_id = null`) unless
+     * the loan was explicitly released to the member's savings ledger. Loan
+     * repayments are always funded externally (`account_id = null`) and carry
+     * their corresponding `loan_payment_installment_allocations` row.
      *
      * @param  list<array{period: int, date: Carbon, amount: float}>  $installments
      */
@@ -395,43 +389,68 @@ class TransactionSeeder extends Seeder
             return;
         }
 
-        $this->postOnce($ledger, $savings, [
+        $disbursedToSavings = $loan->account_id !== null;
+        $disbursementAccount = $disbursedToSavings ? $savings : null;
+        $disbursementNote = $disbursedToSavings
+            ? 'Loan disbursed to savings account.'
+            : 'Loan disbursed as physical cash.';
+
+        $this->postOnce($ledger, $disbursementAccount, [
             'transaction_type' => 'loan_disbursement',
             'loan_id' => $loan->id,
+            'branch_id' => $loan->branch_id,
             'amount' => (float) $loan->loan_amount,
-            'transaction_date' => $loan->approved_at,
+            'transaction_date' => $loan->disbursed_at ?? $loan->approved_at,
             'recorded_by' => $loanOfficer,
             'transaction_mode' => 'counter',
-            'note' => 'Loan disbursement - '.$loan->loan_type_label.' loan',
+            'note' => $disbursementNote,
         ]);
 
         foreach ($installments as $instalment) {
-            $this->postOnce($ledger, $savings, [
+            $payment = $this->postOnce($ledger, null, [
                 'transaction_type' => 'loan_payment',
                 'loan_id' => $loan->id,
+                'branch_id' => $loan->branch_id,
                 'amount' => $instalment['amount'],
+                'penalty_amount' => 0.0,
                 'transaction_date' => $instalment['date'],
                 'recorded_by' => $teller,
                 'transaction_mode' => 'counter',
                 'note' => 'Instalment '.$instalment['period'].' of '.$loan->term_months,
             ]);
+
+            if ($payment) {
+                DB::table('loan_payment_installment_allocations')->updateOrInsert(
+                    [
+                        'transaction_id' => $payment->id,
+                        'period' => $instalment['period'],
+                    ],
+                    [
+                        'amount' => $instalment['amount'],
+                        'created_at' => $instalment['date'],
+                        'updated_at' => $instalment['date'],
+                    ]
+                );
+            }
         }
     }
 
     /**
      * A handful of requests waiting in the approval queue.
      *
-     * Counter transactions are booked as completed the moment they are made, so
-     * anything still pending has to have arrived online or by bank transfer.
+     * Counter transactions made by an officer are booked as completed the moment
+     * they are made, whereas online or bank-transfer requests wait for approval.
      *
      * @param  Collection<string, User>  $members
      */
     private function pendingQueue(LedgerWriter $ledger, $members, ?int $teller): void
     {
+        $proofPath = $this->ensureProofPlaceholder();
+
         $queue = [
-            ['user' => 'USR000009', 'type' => 'deposit', 'amount' => 5000, 'ago_days' => 2, 'mode' => 'bank_transfer', 'note' => 'Additional savings deposit via bank transfer'],
-            ['user' => 'USR000015', 'type' => 'deposit', 'amount' => 2000, 'ago_days' => 1, 'mode' => 'online', 'note' => 'Savings top-up paid online'],
-            ['user' => 'USR000011', 'type' => 'withdrawal', 'amount' => 15000, 'ago_days' => 4, 'mode' => 'bank_transfer', 'note' => 'Withdrawal request for school fees'],
+            ['user' => 'USR000009', 'type' => 'deposit', 'amount' => 5000, 'ago_days' => 2, 'mode' => 'bank_transfer', 'note' => 'Additional savings deposit via bank transfer', 'proof' => $proofPath],
+            ['user' => 'USR000015', 'type' => 'deposit', 'amount' => 2000, 'ago_days' => 1, 'mode' => 'online', 'note' => 'Savings top-up paid online', 'proof' => $proofPath],
+            ['user' => 'USR000011', 'type' => 'withdrawal', 'amount' => 15000, 'ago_days' => 4, 'mode' => 'bank_transfer', 'note' => 'Withdrawal request for school fees | Bank: Land Bank of the Philippines · 1892-0441-29 (Jean Leslie Velasco)'],
         ];
 
         foreach ($queue as $item) {
@@ -450,47 +469,215 @@ class TransactionSeeder extends Seeder
                 continue;
             }
 
+            $date = Carbon::now()->subDays($item['ago_days'])->setTime(16, 45);
+
             $this->postOnce($ledger, $savings, [
                 'transaction_type' => $item['type'],
                 'amount' => $item['amount'],
-                'transaction_date' => Carbon::now()->subDays($item['ago_days'])->setTime(16, 45),
-                'recorded_by' => $teller,
+                'transaction_date' => $date,
+                'recorded_by' => $user->id,
                 'transaction_mode' => $item['mode'],
+                'proof_of_payment_path' => $item['proof'] ?? null,
+                'proof_of_payment_uploaded_at' => isset($item['proof']) ? $date : null,
                 'note' => $item['note'],
             ], 'pending');
         }
+
+        // One external loan payment submitted via bank transfer and awaiting verification.
+        $arjay = $members['USR000007'] ?? null;
+        $arjayLoan = $arjay ? Loan::query()->where('user_id', $arjay->id)->where('loan_status', 'active')->first() : null;
+
+        if ($arjay && $arjayLoan) {
+            $schedule = $arjayLoan->paymentSchedule() ?? [];
+            $nextUnpaid = collect($schedule)->first(fn (array $row) => (float) $row['amount_due'] > 0.01);
+
+            if ($nextUnpaid) {
+                $date = Carbon::now()->subDay()->setTime(15, 20);
+                $installmentAmount = round((float) $nextUnpaid['amount_due'], 2);
+                $penaltyAmount = round((float) $arjayLoan->accruedPenalty(), 2);
+                $totalAmount = round($installmentAmount + $penaltyAmount, 2);
+
+                $pendingPayment = $this->postOnce($ledger, null, [
+                    'transaction_type' => 'loan_payment',
+                    'loan_id' => $arjayLoan->id,
+                    'branch_id' => $arjayLoan->branch_id,
+                    'amount' => $totalAmount,
+                    'penalty_amount' => $penaltyAmount,
+                    'transaction_date' => $date,
+                    'recorded_by' => $arjay->id,
+                    'transaction_mode' => 'bank_transfer',
+                    'proof_of_payment_path' => $proofPath,
+                    'proof_of_payment_uploaded_at' => $date,
+                    'note' => 'Bank transfer payment for overdue instalment #'.$nextUnpaid['period'],
+                ], 'pending');
+
+                if ($pendingPayment) {
+                    DB::table('loan_payment_installment_allocations')->updateOrInsert(
+                        [
+                            'transaction_id' => $pendingPayment->id,
+                            'period' => (int) $nextUnpaid['period'],
+                        ],
+                        [
+                            'amount' => $installmentAmount,
+                            'created_at' => $date,
+                            'updated_at' => $date,
+                        ]
+                    );
+                }
+            }
+        }
+    }
+
+    /**
+     * Historical requests that were turned down during officer review over the
+     * past six months. Rejected rows never move an account balance.
+     *
+     * @param  Collection<string, User>  $members
+     */
+    private function rejectedHistory(LedgerWriter $ledger, $members, ?int $reviewer): void
+    {
+        $proofPath = $this->ensureProofPlaceholder();
+
+        $rejected = [
+            [
+                'user' => 'USR000018',
+                'type' => 'deposit',
+                'amount' => 3500,
+                'ago_days' => 95,
+                'mode' => 'bank_transfer',
+                'proof' => $proofPath,
+                'note' => 'Bank transfer savings deposit',
+                'rejection_reason' => 'Uploaded transfer slip was blurred and reference number could not be matched against the bank statement.',
+            ],
+            [
+                'user' => 'USR000024',
+                'type' => 'withdrawal',
+                'amount' => 8000,
+                'ago_days' => 52,
+                'mode' => 'bank_transfer',
+                'proof' => null,
+                'note' => 'Withdrawal request | Bank: BDO Unibank · 0041-2890-11 (Kevin Paul Navarro)',
+                'rejection_reason' => 'Destination bank account number returned an invalid beneficiary name during verification.',
+            ],
+        ];
+
+        foreach ($rejected as $item) {
+            $user = $members[$item['user']] ?? null;
+            $savings = $user ? Account::query()->where('user_id', $user->id)->where('account_type', 'savings')->first() : null;
+
+            if (! $user || ! $savings) {
+                continue;
+            }
+
+            $date = Carbon::now()->subDays($item['ago_days'])->setTime(11, 15);
+
+            $this->postOnce($ledger, $savings, [
+                'transaction_type' => $item['type'],
+                'amount' => $item['amount'],
+                'transaction_date' => $date,
+                'recorded_by' => $user->id,
+                'transaction_mode' => $item['mode'],
+                'proof_of_payment_path' => $item['proof'],
+                'proof_of_payment_uploaded_at' => $item['proof'] ? $date : null,
+                'note' => $item['note'],
+                'rejection_reason' => $item['rejection_reason'],
+            ], 'rejected');
+        }
+    }
+
+    /**
+     * A historical mistyped counter entry that was reversed the same afternoon
+     * through the cooperative's reversal workflow, so the Corrections filter on
+     * the ledger shows a realistic audit trail while leaving net balances unchanged.
+     *
+     * @param  Collection<string, User>  $members
+     */
+    private function reversalHistory(LedgerWriter $ledger, $members, ?int $teller): void
+    {
+        $user = $members['USR000008'] ?? null;
+        $savings = $user ? Account::query()->where('user_id', $user->id)->where('account_type', 'savings')->first() : null;
+
+        if (! $user || ! $savings) {
+            return;
+        }
+
+        $mistypedDate = Carbon::now()->subMonths(3)->startOfMonth()->day(18)->setTime(10, 20);
+        $reversalDate = $mistypedDate->copy()->addMinutes(25);
+
+        $original = $this->postOnce($ledger, $savings, [
+            'transaction_type' => 'deposit',
+            'amount' => 4500.00,
+            'transaction_date' => $mistypedDate,
+            'recorded_by' => $teller,
+            'transaction_mode' => 'counter',
+            'note' => 'Counter deposit (encoded under wrong passbook number)',
+        ]);
+
+        if (! $original) {
+            return;
+        }
+
+        $this->postOnce($ledger, $savings, [
+            'transaction_type' => 'deposit',
+            'amount' => 4500.00,
+            'transaction_date' => $reversalDate,
+            'recorded_by' => $teller,
+            'transaction_mode' => 'counter',
+            'reversal_of_id' => $original->id,
+            'note' => 'Reversal of '.$original->transaction_number,
+        ]);
+    }
+
+    private function ensureProofPlaceholder(): string
+    {
+        $path = 'transaction-proofs/sample-transfer-slip.png';
+
+        if (! Storage::disk('public')->exists($path)) {
+            $bytes = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+            Storage::disk('public')->put($path, $bytes);
+        }
+
+        return $path;
     }
 
     /**
      * Post a row unless the same row is already on the ledger.
      *
-     * Identity is the account, the type, the business date and the note — not
-     * the amount. A member makes one savings contribution per month, so a
-     * re-seed has to recognise that row even though the derived amount could
-     * differ, while a withdrawal queued for today must not be mistaken for the
-     * one the pattern already put there.
+     * Identity is the account (or loan when account_id is null), the type, the
+     * business date and the note — not the amount. A member makes one savings
+     * contribution per month, so a re-seed has to recognise that row even
+     * though the derived amount could differ, while a withdrawal queued for
+     * today must not be mistaken for the one the pattern already put there.
      *
      * @param  array<string, mixed>  $attributes
      */
-    private function postOnce(LedgerWriter $ledger, Account $account, array $attributes, string $status = 'completed'): void
+    private function postOnce(LedgerWriter $ledger, ?Account $account, array $attributes, string $status = 'completed'): ?Transaction
     {
         $date = $attributes['transaction_date'];
 
-        $exists = Transaction::query()
-            ->where('account_id', $account->id)
+        $existing = Transaction::query()
+            ->when(
+                $account !== null,
+                fn ($q) => $q->where('account_id', $account->id),
+                fn ($q) => $q->whereNull('account_id')->where('loan_id', $attributes['loan_id'] ?? null)
+            )
             ->where('transaction_type', $attributes['transaction_type'])
             ->where('note', $attributes['note'] ?? null)
             ->whereDate('transaction_date', $date->toDateString())
-            ->exists();
+            ->first();
 
-        if ($exists) {
-            return;
+        if ($existing) {
+            return $existing;
         }
 
-        $attributes['account_id'] = $account->id;
+        $attributes['account_id'] = $account?->id;
         $attributes['transaction_date'] = $date;
 
-        $status === 'pending' ? $ledger->queue($attributes) : $ledger->post($attributes);
+        return match ($status) {
+            'pending' => $ledger->queue($attributes),
+            'rejected' => $ledger->reject($attributes),
+            default => $ledger->post($attributes),
+        };
     }
 
     private function recomputeAll(): void
@@ -522,10 +709,14 @@ class TransactionSeeder extends Seeder
                 ->where('status', 'completed')
                 ->orderBy('transaction_date')
                 ->orderBy('id')
-                ->get(['transaction_type', 'amount', 'transaction_date']);
+                ->get(['transaction_type', 'amount', 'transaction_date', 'reversal_of_id']);
 
             foreach ($rows as $row) {
-                $running += LedgerWriter::balanceEffect($row->transaction_type, (float) $row->amount);
+                $running += LedgerWriter::balanceEffect(
+                    $row->transaction_type,
+                    (float) $row->amount,
+                    $row->reversal_of_id !== null
+                );
 
                 if ($running < -0.005) {
                     throw new \RuntimeException(sprintf(

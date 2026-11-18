@@ -76,23 +76,47 @@ class LoanSeeder extends Seeder
 
             $this->assertEligible($user, $product, $plan, $appliedAt, $ledger, $existing?->id);
 
-            $loan = Loan::query()->updateOrCreate(
-                [
-                    'user_id' => $user->id,
-                    'applied_at' => $appliedAt,
-                ],
-                array_merge(
-                    $this->lifecycle($plan, $product, $user, $savings, $appliedAt, $ledger),
-                    [
-                        'branch_id' => $user->branch_id,
-                        'account_id' => $savings?->id,
-                    ]
-                )
-            );
+            $lifecycle = $this->lifecycle($plan, $product, $user, $savings, $appliedAt, $ledger);
+            $disbursementDestination = $plan['disbursement_destination'] ?? 'cash';
 
-            $loan->groupMembers()->sync(
-                $this->coMakers($plan, $users)
-            );
+            $loan = Loan::withoutTimestamps(function () use ($user, $appliedAt, $lifecycle, $savings, $disbursementDestination) {
+                $loan = Loan::query()->updateOrCreate(
+                    [
+                        'user_id' => $user->id,
+                        'applied_at' => $appliedAt,
+                    ],
+                    array_merge(
+                        $lifecycle,
+                        [
+                            'branch_id' => $user->branch_id,
+                            'account_id' => $disbursementDestination === 'savings' ? $savings?->id : null,
+                        ]
+                    )
+                );
+
+                $latestAt = $loan->disbursed_at ?? $loan->approved_at ?? $loan->reviewed_at ?? $appliedAt;
+                $loan->forceFill([
+                    'created_at' => $appliedAt,
+                    'updated_at' => $latestAt,
+                ])->save();
+
+                return $loan;
+            });
+
+            $coMakerIds = $this->coMakers($plan, $users, $user);
+            $coMakerSync = [];
+            $coMakerApproved = in_array($loan->loan_status, ['approved', 'active', 'paid_off'], true)
+                || $loan->review_status === 'endorsed_for_approval';
+            $coMakerApprovedAt = ($loan->reviewed_at ?? $loan->approved_at ?? $appliedAt->copy()->addDay());
+
+            foreach ($coMakerIds as $coMakerId) {
+                $coMakerSync[$coMakerId] = [
+                    'has_approved' => $coMakerApproved,
+                    'approved_at' => $coMakerApproved ? $coMakerApprovedAt : null,
+                ];
+            }
+
+            $loan->groupMembers()->sync($coMakerSync);
         }
 
         $this->command?->info('Loan portfolio: '.Loan::count().' loans.');
@@ -301,18 +325,19 @@ class LoanSeeder extends Seeder
     }
 
     /**
-     * Co-maker user ids for a group loan.
+     * Co-maker user ids for a loan.
      *
      * @param  array<string, mixed>  $plan
      * @param  Collection<string, User>  $users
      * @return list<int>
      */
-    private function coMakers(array $plan, $users): array
+    private function coMakers(array $plan, $users, ?User $borrower = null): array
     {
         return collect($plan['co_maker_user_numbers'] ?? [])
             ->map(fn (string $userNumber) => $users[$userNumber] ?? null)
-            ->filter()
+            ->filter(fn ($member) => $member instanceof User && ($borrower === null || (int) $member->id !== (int) $borrower->id))
             ->map(fn (User $user) => (int) $user->id)
+            ->unique()
             ->values()
             ->all();
     }

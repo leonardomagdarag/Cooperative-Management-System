@@ -36,6 +36,7 @@ class MemberApplicationSeeder extends Seeder
                 'membership_type' => 'Regular',
                 'status' => 'pending',
                 'branch_id' => $mainBranch?->id,
+                'created_at' => now()->subDays(4)->setTime(11, 20),
             ],
             [
                 'original_email' => 'rodel.santos@example.com',
@@ -45,6 +46,7 @@ class MemberApplicationSeeder extends Seeder
                 'membership_type' => 'Associate',
                 'status' => 'pending',
                 'branch_id' => $satellite?->id,
+                'created_at' => now()->subDays(2)->setTime(15, 10),
             ],
             [
                 'original_email' => 'jomar.aquino@example.com',
@@ -57,24 +59,43 @@ class MemberApplicationSeeder extends Seeder
                 'branch_id' => $mainBranch?->id,
                 'reviewed_by' => $reviewer?->id,
                 'reviewed_at' => now()->subMonths(3)->setTime(14, 30),
+                'created_at' => now()->subMonths(3)->subDays(2)->setTime(9, 45),
+            ],
+            [
+                'original_email' => 'reynaldo.castillo@example.com',
+                'first_name' => 'Reynaldo',
+                'last_name' => 'Castillo',
+                'phone' => '09467781209',
+                'membership_type' => 'Regular',
+                'status' => 'declined',
+                'decline_reason' => 'Applicant resides outside the Calauan service area and does not work or farm in the municipality.',
+                'branch_id' => $satellite?->id,
+                'reviewed_by' => $reviewer?->id,
+                'reviewed_at' => now()->subMonths(5)->setTime(16, 0),
+                'created_at' => now()->subMonths(5)->subDays(3)->setTime(10, 30),
             ],
         ];
 
-        // The newest member's own application, kept as the record of how they joined.
-        $member = User::query()->where('user_number', 'USR000015')->first();
-        if ($member) {
-            $applications[] = [
-                'original_email' => $member->email,
-                'first_name' => $member->personalData?->first_name ?? 'Member',
-                'last_name' => $member->personalData?->last_name ?? '',
-                'phone' => $member->personalData?->contact?->phone_no,
-                'membership_type' => 'Regular',
-                'status' => 'approved',
-                'user_id' => $member->id,
-                'branch_id' => $member->branch_id,
-                'reviewed_by' => $reviewer?->id,
-                'reviewed_at' => $member->created_at?->copy()->addDay()->setTime(10, 15) ?? now(),
-            ];
+        // Applications from members who joined in the past year, kept as the record of how they joined.
+        foreach (['USR000015', 'USR000026', 'USR000021'] as $userNumber) {
+            $member = User::query()->where('user_number', $userNumber)->first();
+            if ($member) {
+                $appliedAt = $member->created_at?->copy()->subDays(2)->setTime(9, 15) ?? now()->subMonths(3);
+                $reviewedAt = $member->created_at?->copy()->setTime(10, 15) ?? now();
+                $applications[] = [
+                    'original_email' => $member->email,
+                    'first_name' => $member->personalData?->first_name ?? 'Member',
+                    'last_name' => $member->personalData?->last_name ?? '',
+                    'phone' => $member->personalData?->contact?->phone_no,
+                    'membership_type' => 'Regular',
+                    'status' => 'approved',
+                    'user_id' => $member->id,
+                    'branch_id' => $member->branch_id,
+                    'reviewed_by' => $reviewer?->id,
+                    'reviewed_at' => $reviewedAt,
+                    'created_at' => $appliedAt,
+                ];
+            }
         }
 
         $created = 0;
@@ -88,7 +109,16 @@ class MemberApplicationSeeder extends Seeder
                 continue;
             }
 
-            MemberApplication::create($application);
+            $createdAt = $application['created_at'] ?? now();
+            $updatedAt = $application['reviewed_at'] ?? $createdAt;
+            unset($application['created_at']);
+
+            MemberApplication::withoutTimestamps(function () use ($application, $createdAt, $updatedAt) {
+                $model = new MemberApplication($application);
+                $model->created_at = $createdAt;
+                $model->updated_at = $updatedAt;
+                $model->save();
+            });
             $created++;
         }
 

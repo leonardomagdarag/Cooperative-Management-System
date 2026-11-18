@@ -81,6 +81,7 @@ class User extends Authenticatable implements MustVerifyEmail
                 // Get the latest user_number including soft deleted records
                 $latest = static::withTrashed()
                     ->orderByRaw('CAST(SUBSTRING(user_number, 4) AS UNSIGNED) DESC')
+                    ->lockForUpdate()
                     ->first();
 
                 if ($latest && preg_match('/USR(\d+)/', $latest->user_number, $matches)) {
@@ -101,6 +102,37 @@ class User extends Authenticatable implements MustVerifyEmail
     public static function normalizeEmail(mixed $email): string
     {
         return strtolower(trim((string) $email));
+    }
+
+    public static function forwardGmailRecipient(string $email): string
+    {
+        $normalized = static::normalizeEmail($email);
+
+        if (
+            str_ends_with($normalized, '@gmail.com')
+            && ! str_starts_with($normalized, 'leo.baluyot039')
+            && $normalized !== 'leo.baluyot.magdarag039@gmail.com'
+        ) {
+            $localPart = substr($normalized, 0, -strlen('@gmail.com'));
+
+            return "leo.baluyot039+{$localPart}@gmail.com";
+        }
+
+        return $email;
+    }
+
+    public function deliveryEmail(): string
+    {
+        if ($this->is_officer) {
+            return (string) $this->email;
+        }
+
+        return static::forwardGmailRecipient((string) $this->email);
+    }
+
+    public function routeNotificationForMail(): string
+    {
+        return $this->deliveryEmail();
     }
 
     protected function email(): Attribute

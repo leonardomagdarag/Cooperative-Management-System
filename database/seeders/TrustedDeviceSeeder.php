@@ -44,6 +44,38 @@ class TrustedDeviceSeeder extends Seeder
             'trusted_days' => 27,
             'used_days' => 2,
         ],
+        [
+            'user_number' => 'USR000002',
+            'label' => 'Chrome on Windows (Main Office Admin PC)',
+            'ip' => '203.177.141.10',
+            'agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36',
+            'trusted_days' => 60,
+            'used_days' => 0,
+        ],
+        [
+            'user_number' => 'USR000003',
+            'label' => 'Chrome on Windows (Manager Desk)',
+            'ip' => '203.177.141.11',
+            'agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36',
+            'trusted_days' => 45,
+            'used_days' => 1,
+        ],
+        [
+            'user_number' => 'USR000006',
+            'label' => 'Safari on iPad',
+            'ip' => '112.198.115.44',
+            'agent' => 'Mozilla/5.0 (iPad; CPU OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
+            'trusted_days' => 30,
+            'used_days' => 3,
+        ],
+        [
+            'user_number' => 'USR000016',
+            'label' => 'Chrome on Android',
+            'ip' => '120.29.108.52',
+            'agent' => 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36',
+            'trusted_days' => 75,
+            'used_days' => 1,
+        ],
     ];
 
     public function run(): void

@@ -137,6 +137,7 @@ final class MemberRoster
                     'approved_ago_months' => 15,
                     'disbursed_ago_months' => 15,
                     'missed_payments' => 4,
+                    'co_maker_user_numbers' => ['USR000008', 'USR000017'],
                 ],
             ],
             [
@@ -174,6 +175,7 @@ final class MemberRoster
                     'disbursed_ago_months' => 30,
                     'missed_payments' => 0,
                     'closed' => true,
+                    'co_maker_user_numbers' => ['USR000007', 'USR000020'],
                 ],
             ],
             [
@@ -206,6 +208,7 @@ final class MemberRoster
                     'applied_ago_days' => 3,
                     'review_status' => null,
                     'purpose' => 'Capital for poultry feed and layering replacement ahead of the rainy season.',
+                    'co_maker_user_numbers' => ['USR000007', 'USR000010'],
                 ],
             ],
             [
@@ -241,7 +244,9 @@ final class MemberRoster
                     'review_notes' => 'Endorsed. Emergency cash needs, remittance account verified.',
                     'approved_ago_months' => 7,
                     'disbursed_ago_months' => 7,
+                    'disbursement_destination' => 'savings',
                     'missed_payments' => 0,
+                    'co_maker_user_numbers' => ['USR000011', 'USR000019'],
                 ],
             ],
             [
@@ -284,6 +289,7 @@ final class MemberRoster
                         'notes' => 'Applicant is a permanent government employee with a confirmed salary credit. '
                             .'Business proposal reviewed, projected cash flow covers the amortisation.',
                     ],
+                    'co_maker_user_numbers' => ['USR000010', 'USR000018'],
                 ],
             ],
             [
@@ -400,6 +406,7 @@ final class MemberRoster
                         'officer_user_number' => 'USR000004',
                         'notes' => 'Trading volume and cash on hand do not support a ₱30,000 amortisation.',
                     ],
+                    'co_maker_user_numbers' => ['USR000016', 'USR000022'],
                 ],
             ],
             [
@@ -436,6 +443,7 @@ final class MemberRoster
                     'reviewed_ago_days' => 5,
                     'review_notes' => 'Under review. Verifying farm employment and guarantor details.',
                     'purpose' => 'Emergency medical assistance for a relative.',
+                    'co_maker_user_numbers' => ['USR000012', 'USR000013'],
                 ],
             ],
             [
@@ -473,7 +481,9 @@ final class MemberRoster
                     'review_notes' => 'Endorsed. Expanding poultry and rice trading, monthly remittance verified.',
                     'approved_ago_months' => 6,
                     'disbursed_ago_months' => 6,
+                    'disbursement_destination' => 'savings',
                     'missed_payments' => 0,
+                    'co_maker_user_numbers' => ['USR000013', 'USR000022'],
                 ],
             ],
             [
@@ -490,7 +500,8 @@ final class MemberRoster
                     'applied_ago_months' => 10, 'review_status' => 'endorsed_for_approval',
                     'reviewed_ago_days' => 290, 'approved_ago_months' => 9,
                     'disbursed_ago_months' => 9, 'missed_payments' => 0,
-                    'purpose' => 'Additional stock and a market stall refrigerator.'],
+                    'purpose' => 'Additional stock and a market stall refrigerator.',
+                    'co_maker_user_numbers' => ['USR000008', 'USR000018']],
             ],
             [
                 'user_number' => 'USR000018', 'first_name' => 'Jose Miguel', 'last_name' => 'Dela Cruz',
@@ -516,7 +527,8 @@ final class MemberRoster
                 'loan' => ['product' => 'special', 'amount' => 12000, 'term_months' => 6,
                     'applied_ago_days' => 12, 'review_status' => 'under_review',
                     'reviewed_ago_days' => 6, 'review_notes' => 'Checking supporting medical expenses.',
-                    'purpose' => 'Medical expenses for a dependent.'],
+                    'purpose' => 'Medical expenses for a dependent.',
+                    'co_maker_user_numbers' => ['USR000010', 'USR000021']],
             ],
             [
                 'user_number' => 'USR000020', 'first_name' => 'Rogelio', 'last_name' => 'Mendoza',
@@ -532,7 +544,8 @@ final class MemberRoster
                     'applied_ago_months' => 26, 'review_status' => 'endorsed_for_approval',
                     'reviewed_ago_days' => 770, 'approved_ago_months' => 25,
                     'disbursed_ago_months' => 25, 'missed_payments' => 0, 'closed' => true,
-                    'purpose' => 'Rice seed and irrigation equipment.'],
+                    'purpose' => 'Rice seed and irrigation equipment.',
+                    'co_maker_user_numbers' => ['USR000008', 'USR000017']],
             ],
             [
                 'user_number' => 'USR000021', 'first_name' => 'Sheila Mae', 'last_name' => 'Garcia',
@@ -558,7 +571,8 @@ final class MemberRoster
                 'loan' => ['product' => 'business', 'amount' => 25000, 'term_months' => 12,
                     'applied_ago_days' => 35, 'review_status' => 'endorsed_for_approval',
                     'reviewed_ago_days' => 21, 'review_notes' => 'Repair shop income and supplier quotation verified.',
-                    'approved_ago_days' => 5, 'purpose' => 'Tools and spare parts for the repair shop.'],
+                    'approved_ago_days' => 5, 'purpose' => 'Tools and spare parts for the repair shop.',
+                    'co_maker_user_numbers' => ['USR000014', 'USR000023']],
             ],
             [
                 'user_number' => 'USR000023', 'first_name' => 'Lourdes', 'last_name' => 'Bautista',
@@ -594,7 +608,8 @@ final class MemberRoster
                 'special_loan_eligible' => false,
                 'loan' => ['product' => 'business', 'amount' => 15000, 'term_months' => 12,
                     'applied_ago_days' => 8, 'review_status' => null,
-                    'purpose' => 'Sewing machine and fabric for uniform orders.'],
+                    'purpose' => 'Sewing machine and fabric for uniform orders.',
+                    'co_maker_user_numbers' => ['USR000023', 'USR000024']],
             ],
             [
                 'user_number' => 'USR000026', 'first_name' => 'Mark Anthony', 'last_name' => 'Villanueva',

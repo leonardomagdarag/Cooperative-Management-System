@@ -38,7 +38,7 @@ class SendSecurityAlertJob implements ShouldQueue
         }
 
         try {
-            Mail::to($user->email)->send(new SecurityAlert($user, $this->alertType, $this->data));
+            Mail::to($user->deliveryEmail())->send(new SecurityAlert($user, $this->alertType, $this->data));
         } catch (Throwable $e) {
             app(AuditLogService::class)->log(
                 'email.failed',

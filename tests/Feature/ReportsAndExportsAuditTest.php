@@ -15,7 +15,7 @@ beforeEach(function () {
 
     $this->admin = User::where('email', 'leo.baluyot039+admin@gmail.com')->firstOrFail();
     $this->accountant = User::where('email', 'leo.baluyot039+accountant@gmail.com')->firstOrFail();
-    $this->member = User::where('email', 'leo.baluyot039+arjay.ramos@gmail.com')->firstOrFail();
+    $this->member = User::where('email', 'arjay.ramos@gmail.com')->firstOrFail();
 
     $this->mainBranch = Branch::where('code', 'BR000001')->firstOrFail();
     $this->officeBranch = Branch::where('code', 'BR000002')->firstOrFail();
