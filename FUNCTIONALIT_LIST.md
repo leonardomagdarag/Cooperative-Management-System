@@ -1,10 +1,10 @@
 # Settlers Credit Cooperative — System Functionality
 
-**Document:** `SYSTEM_FUNCTIONALITY(2026-10-12)`
-**Date:** 2026-10-12
+**Document:** `SYSTEM_FUNCTIONALITY(2026-11-16)`
+**Date:** 2026-11-16
 **System:** Cooperative Management System (Laravel 12 + React 19 SPA, Vite, TailwindCSS v4, Sanctum session auth, Spatie Permissions)
-**Source of truth verified from:** `routes/web.php`, `routes/api.php`, `resources/react/App.tsx`, `PermissionCatalog.php`, `SpatieRolePermissionSeeder.php`, `ServiceAvailabilitySeeder.php`, `SystemSettingSeeder.php`, `SettingsPage.tsx`, `ServicesPage.tsx`, `HelpSupportTab.tsx`
-**QA status:** This is the behavior and access reference for QA planning. A listed capability is not thereby confirmed by a current browser run; record observed results in [`docs/QA/QA_LOG.md`](docs/QA/QA_LOG.md).
+**Source of truth verified from:** `routes/web.php`, `routes/api.php`, `resources/react/App.tsx`, `resources/react/components/Sidebar.tsx`, `PermissionCatalog.php`, `SpatieRolePermissionSeeder.php`, `ServiceAvailabilitySeeder.php`, `FinancialSettingSeeder.php`, `SystemSettingSeeder.php`, `SettingsPage.tsx`, `ServicesPage.tsx`, `HelpSupportTab.tsx`, and API controllers/services.
+**Reference note:** Authoritative technical details live in `docs/system details/UNIFIED_SYSTEM_DESCRIPTION.md` and live source code.
 
 ---
 
@@ -14,25 +14,24 @@
 |---|---|---|---|
 | Guest (unauthenticated) | — | No | Public website visitor |
 | Member | `member` | No | Regular cooperative member, self-service only |
-| Administrator | `admin` | Yes | Full system access, all permissions |
-| Chairman | `chairman` | Yes | Countersign approval, officer and branch management, ledger, logs, reports, expenses, and tickets |
-| Manager | `manager` | Yes | Broad operational oversight |
-| Accountant (Treasurer) | `accountant` | Yes | Transactions, services, financial reporting |
-| Developer (testing) | `developer` | Yes | All catalog permissions except chairman-only countersign, granted through the normal permission matrix |
-| Inactive / Terminated | `inactive`, `terminated` | No | Lifecycle states with no active permissions |
+| Administrator | `admin` | Yes | System administration, backups, logs, integrations, officer/role management |
+| Chairman | `chairman` | Yes | Countersign approval (`oversight.approve`), officer and branch management, ledger, logs, reports, expenses, loans, and tickets |
+| Manager | `manager` | Yes | Broad operational oversight (members, loans, services, transactions, financial settings, reports, tickets) |
+| Accountant (Treasurer) | `accountant` | Yes | Transactions, services, ledger, expenses, announcements, financial reporting, tickets |
+| Developer (testing) | `developer` | Yes | Local testing role: all catalog permissions except `oversight.approve` and `transactions.approve-own` |
+| Inactive / Terminated / Unassigned Officer | `inactive`, `terminated`, `unassigned_officer` | No / Pending | Lifecycle or unassigned states with no active role permissions |
 
 Access is enforced by:
-- Auth (`auth:web`), email verification (`verified`), OTP verification (`otp.verified`), profile completion (`profile.completed`), service toggles (`service.availability:*`).
-- Frontend `PermissionGate` in `App.tsx` (e.g. `members.view`, `loans.view`, `reports.view`, `services.view`, `transactions.view`, `announcements.view`, `officers.view`, `branches.view`, `logs.view`, `settings.update`, `officers.manage-permissions`, `oversight.approve`).
-- Backend permission checks (`can(...)` / `abort_unless(...can(...))`).
+- Auth (`auth:web`), single-session concurrency (`EnsureCurrentSession`), idle expiry (`EnsureSessionActivity`), email verification (`verified`), OTP verification (`otp.verified`), profile completion (`profile.completed`), service toggles (`service.availability:*`).
+- Frontend `PermissionGate` in `App.tsx` and `Sidebar.tsx` (UX only; backend `$user->can(...)` and Policies are authoritative).
+- Backend permission checks (`can(...)` / `abort_unless(...can(...))` / Policies).
 
-Role dashboards (`/dashboard` with no section routes by role):
+Role dashboards (`/dashboard` with no section routes by role, via `DefaultOverview` in `App.tsx` and `DashboardController::index`):
 - `admin` → `AdminOverview`
-- `chairman` and other unlisted officer roles → `OfficerOverview` only when the SPA user payload exposes `is_officer`; current payload alignment is a QA check (see `docs/QA/CODE_DOCUMENT_ALIGNMENT.md`).
+- `chairman` → `ChairmanOverview`
 - `manager` → `ManagerOverview`
 - `accountant`/`treasurer` → `TreasurerOverview`
-- `loan` → `LoanOverview`
-- other officers → `OfficerOverview`
+- other officers (`is_officer === true`) → `OfficerOverview`
 - members → `MemberOverview`
 
 ---
@@ -170,27 +169,27 @@ All officers are `is_officer=true` with `dashboard.view, settings.view, notifica
 ## 5. Officer — Role-Specific Functionalities
 
 ### 5.1 Administrator (`admin`) — System administration
-The admin preset is limited to system configuration, backups, security logs, troubleshooting tickets, officer account administration, and creating or updating announcements. It does not grant routine member, loan, service, transaction, branch management, or financial account workflows; those remain with operational officers and the manager. It grants `branches.bypass` for cross-branch scope where the admin has access to an operational workflow. Admin can also access explicitly admin-owned configuration such as roles, backups, public content, loan products, service availability, SMS/email, and payment gateway settings.
-- **Monitoring:** dashboard and security logs (view/export).
-- **Troubleshooting:** tickets and support configuration.
-- **System administration:** officer account and permission management, settings, backups, and oversight requests.
-- **Roles & Permissions** (`Settings → Roles & Permissions`, `/dashboard/role-permissions`, `role:admin` only):
+The admin preset is limited to system configuration, backups, security logs, troubleshooting tickets, officer account administration, financial account settings/interest runs, and creating or updating announcements. It does not grant routine member, loan, service, transaction, or branch management workflows; those remain with operational officers and the manager. It grants `branches.bypass` for cross-branch scope where the admin has access to an operational workflow. Admin can also access explicitly admin-owned configuration such as roles, backups, public content, loan products, service availability, SMS/email, and payment gateway settings.
+- **Monitoring:** dashboard and security logs (`GET /api/logs`, `GET /api/logs/export`).
+- **Troubleshooting:** tickets (`TicketsPage`) and support configuration (`PUT /api/faqs`).
+- **System administration:** officer account and permission management, settings, backups, and oversight requests (`oversight.request`).
+- **Roles & Permissions** (`/dashboard/role-permissions`, `officers.manage-permissions`):
   - `GET /api/roles` — list roles + permissions.
-  - `POST /api/roles` — create custom role.
-  - `PUT /api/roles/{role}/rename` — rename role.
-  - `PUT /api/roles/{role}/permissions` — update permission set.
-  - `GET /api/roles/{role}/restore-preset` — restore default preset.
-  - `DELETE /api/roles/{role}` — delete role.
+  - `POST /api/roles` — request custom role creation (countersigned `role.create`).
+  - `PUT /api/roles/{role}/rename` — request role rename (countersigned `role.rename`).
+  - `PUT /api/roles/{role}/permissions` — request permission set update (countersigned `permissions.update`).
+  - `GET /api/roles/{role}/restore-preset` — fetch default preset permissions.
+  - `DELETE /api/roles/{role}` — request role deletion (countersigned `role.delete`).
 - **Officer permission overrides:**
-  - `GET /api/officers/{user}/permissions`, `PUT /api/officers/{user}/permissions` (`officers.manage-permissions`).
-- **Backups** (`Settings → Backup & Restore`):
-  - `GET /api/backups`, `GET /api/backups/runs` — list tiers/runs.
-  - `PUT /api/backups/settings` — schedules, scope (db/files/both), retention, encryption.
+  - `GET /api/officers/{user}/permissions`, `PUT /api/officers/{user}/permissions` (`officers.manage-permissions`; updates are countersigned via `officer.permissions.update`).
+- **Backups** (`/dashboard/backups`, `backups.view` / `backups.manage` / `backups.restore`):
+  - `GET /api/backups`, `GET /api/backups/runs` — list `daily` and `offsite` tiers/runs.
+  - `PUT /api/backups/settings` — request daily schedule time or archive encryption password update (countersigned).
   - `POST /api/backups/offsite/test` — test the configured Backblaze B2 off-site connection.
-  - `POST /api/backups/{tier}/run`, `POST /api/backups/{tier}/cleanup`, `GET /api/backups/{tier}/download`, `POST /api/backups/restore` (manual `DELETE /api/backups/{tier}/backup` is permanently disabled for security).
+  - `POST /api/backups/{tier}/run`, `POST /api/backups/{tier}/cleanup`, `GET /api/backups/{tier}/download`, `POST /api/backups/restore` (countersigned `backup.restore`; manual `DELETE /api/backups/{tier}/backup` is permanently disabled with 403).
   - Cron fallback: `GET /backup/ping?token=BACKUP_PING_TOKEN` → `backup:ping`.
 - **System settings & toggles:**
-- `GET /api/settings/service-availability`, `PUT /api/settings/service-availability` (`settings.update`) — service and login controls (see §8).
+  - `GET /api/settings/service-availability`, `PUT /api/settings/service-availability` (`settings.update`, countersigned) — service and login controls (see §8).
   - `PUT /api/public-content` — edit public website CMS (`PublicContentPage`).
   - `POST/PUT/DELETE /api/loan-products*` — manage loan products (`LoanProductsPage`).
 - **Admin-owned system actions:** officer management, logs, backups, role/permission configuration, service availability, and system integrations. Operational member, branch, transaction, loan, and financial account work belongs to the manager and other assigned officers.
@@ -203,15 +202,15 @@ Preset: oversight approval, officer and branch management, ledger and expense ac
 The `developer` role is a local testing role, not a production officer preset. It receives every catalog permission except `oversight.approve` and `transactions.approve-own`, so it exercises the same `can(...)` checks as any other role. Remove the account (and optionally the role preset) when testing is finished.
 
 ### 5.2 Manager (`manager`)
-Preset: members (view/create/update/approve plus detail facets), services (view/create/update), loans (view/create/encode/update/approve/reject/disburse), transactions (view/view-all/create/update/approve/reversal/export), deposits & withdrawals (view/create/approve/reject), reports (view/export/financial), announcements (view), `branches.bypass`, logs (view), settings (view), tickets, notifications, and profile. The default manager preset does not grant member deletion, announcement writes, officer management, or `settings.update`. Managers have cross-branch access through `branches.bypass`.
+Preset: members (view/create/update/approve plus detail facets), services (view/create/update), loans (view/create/encode/update/approve/reject/disburse), transactions (view/view-all/create/update/approve/approve-own/reversal/export), deposits & withdrawals (view/create/approve/reject), reports (view/export/financial), announcements (view), `branches.bypass`, settings (view), financial accounts (`financial_settings.view/update`, `interest.view/run`), `receipts.reissue`, tickets (view/reply/manage), notifications, and profile. The default manager preset does not grant member deletion, announcement writes, officer management, logs, or `settings.update`. Managers have cross-branch access through `branches.bypass`.
 - Approve member applications (`POST /api/members/{user}/approve`, `POST /api/members/{user}/decline`).
 - Approve transactions (`POST /api/services/approve/{transaction}`, withdrawal OTP `POST /api/services/transactions/{transaction}/send-otp`, `GET /api/services/pending`).
 - Review/endorse/approve/reject/disburse/close loans (`POST /api/loans/{loan}/review|disburse|close`, `PUT /api/loans/{loan}`). Loan deletion is available only for untouched pending applications and always requires countersign by a different active chairman; reviewed or financially linked loans stay in the borrower's history.
-- Manage permitted member, transaction, loan, ledger/expense, report, and collection workflows. Announcement writes, officer management, and settings changes require separately granted effective permissions.
-- Tickets: view/edit/close/assign (the SPA direct ticket route recognizes admin/manager/accountant; the backend's support-staff predicate also recognizes a user with `tickets.manage`, so this UI/API difference must be audited rather than assumed consistent).
+- Manage permitted member, transaction, loan, ledger/expense, financial settings, and report workflows. Announcement writes, officer management, and general settings changes require separately granted effective permissions.
+- Tickets: view/edit/close/assign (`App.tsx` checks `tickets.view` for `/dashboard/tickets`; backend `TicketPolicy` checks `isSupportStaff()` [`admin`, `chairman`, `manager`, `accountant`] or `tickets.manage`).
 
 ### 5.3 Accountant / Treasurer (`accountant`)
-Preset: members (view/create/update/approve plus detail facets), services (view/create/update), loans (view), transactions (view/view-all/create/update/export — no `approve` in preset), deposits/withdrawals (view/create), announcements (CRUD), reports (view/export/financial), `branches.bypass`, settings (view), tickets, notifications, and profile. Accountants can access records across branches; branch CRUD still requires its separate `branches.create`, `branches.update`, or `branches.delete` permission.
+Preset: members (view/create/update/approve plus detail facets), services (view/create/update), loans (view), transactions (view/view-all/create/update/export — no `approve` in preset), deposits/withdrawals (view/create), announcements (CRUD), reports (view/export/financial), `interest.view`, `branches.bypass`, settings (view), tickets (view/reply/manage), notifications, and profile. Accountants can access records across branches; branch CRUD still requires its separate `branches.create`, `branches.update`, or `branches.delete` permission.
 - **Ledger** (`/dashboard/ledger`, `transactions.view`): `GET /api/ledger`, `POST /api/ledger`, `PUT /api/ledger/{transaction}`, `DELETE /api/ledger/{transaction}`, `GET /api/ledger/export`, `GET /api/ledger/summary`.
 - **Expenses** (`/dashboard/expenses`): `GET/POST/PUT/DELETE /api/expenses`.
 - **Reports:** financial, expenses, member activity/savings, loans, payments, balance sheet + download (`GET /api/reports/*`).
@@ -321,8 +320,8 @@ do not treat old secretary-specific behavior as a separate role contract.
 - `GET /api/history` — self transaction history (member) / permission-scoped history; consumed by `HistoryPage` and Services pending-requests card.
 
 ### 6.14 Audit Logs (`LogsPage`, `logs.*`)
-- `GET /api/logs` (`logs.view`) — filterable audit trail via `AuditLogService` (auth, member, loan, transaction, settings, security events).
-- `logs.export` exists in the permission catalog, but the current route list and `LogsPage` expose no log-export action. Treat this as an implementation/catalog mismatch to inspect, not as an implemented export feature.
+- `GET /api/logs` (`logs.view` or `admin`) — filterable audit trail via `AuditLogService` (auth, member, loan, transaction, settings, security events).
+- `GET /api/logs/export` (`logs.export` or `admin`) — streams UTF-8 BOM CSV export with CSV-injection escaping and sanitized error summaries (`LogController::export`).
 
 ### 6.15 Global Search
 - `GET /api/search` — permission-scoped cross-entity search (members, loans, transactions, announcements, tickets per grants).
@@ -334,7 +333,7 @@ do not treat old secretary-specific behavior as a separate role contract.
 - `GET /api/public-content` (public read) / `PUT /api/public-content` (admin edit) — sections from `SiteContentCatalog`/`SiteContentSeeder`: home/hero, stats, services, about, news, stories, board members, contact info, footer, legal/privacy.
 
 ### 6.18 Backup & Restore (`BackupPage`, `backups.*`, admin)
-- Tiers: hourly and daily local archives plus an off-site Backblaze B2 replica; fixed schedules, retention, and optional archive encryption (`BACKUP_ARCHIVE_PASSWORD`). The UI can view runs, manage settings, test off-site connectivity, run/clean/download archives (manual deletion is permanently disabled for security), and request restore through the countersigned workflow. `backup:ping` + `/backup/ping` remain the scheduler fallback. See `docs/BACKUPS.md`.
+- Tiers: `daily` (`local_backups` disk) and `offsite` (Backblaze B2 `b2` disk); scopes: `db`, `files`, `both`; GFS retention (14 daily, 5 weekly, 12 monthly); encrypted level-9 DEFLATE ZIP archives (`BACKUP_ARCHIVE_PASSWORD` / `system_settings`). The UI can view runs, update daily time and archive password (countersigned), test off-site connectivity, run/clean/download archives (manual deletion is permanently disabled with 403), and request restore through the countersigned workflow. `backup:ping` + `/backup/ping` remain the scheduler fallback. See `docs/system details/BACKUPS.md`.
 
 ### 6.19 Xendit Payment Gateway (`XenditPage`, Deposit/Loan Payment wizards)
 - **Settings:** administrators manage test/live mode, encrypted secret API keys, callback tokens, and connection tests through `GET/PUT /api/settings/xendit`, `PUT/DELETE /api/settings/xendit/credentials`, and `POST /api/settings/xendit/test`.
@@ -351,23 +350,21 @@ do not treat old secretary-specific behavior as a separate role contract.
 
 ---
 
-## 7. Settings Tabs Matrix (`SettingsPage`)
+## 7. Settings & Configuration Map (`SettingsPage` & Dedicated Dashboard Sections)
 
-| Tab | Key | Visible To | Function |
+`SettingsPage` (`/dashboard/settings`) contains only **My Account** and **Help & Support** tabs. Administrative and system settings live in dedicated `/dashboard/*` sections (legacy `?tab=` URLs redirect to the corresponding section via `SettingsPageRoute` in `App.tsx`).
+
+| Section / Tab | Route / Key | Visible To | Function |
 |---|---|---|---|
-| My Account | `account` | Everyone | Edit profile, change password (OTP), trusted devices, deactivate/delete, privacy notice |
-| Help & Support | `help-support` | Everyone | FAQs & Guides + Tickets & Messages (see §3.6) |
-| Public Page | `public-content` | Admin | Edit public website CMS |
-| Loan Products | `loan-products` | Non-members with `settings.view` or `loans.view` | CRUD + enable/disable loan products |
-| Roles & Permissions | `role-permissions` | Non-members, admin or `officers.manage-permissions` | Manage roles + permission sets + restore presets |
-| Service Availability | `service-availability` | Admin | Toggle services/channels/audiences through a countersigned request (see §8) |
-| Financial Accounts | `financial-accounts` | Non-members with `financial_settings.update` (admin, manager) | Interest rates/intervals/min balance, withdrawal limits and account toggles, manual interest run; all countersigned (see §8.1) |
-| SMS Service | `sms` | Admin | Configure and test SMS settings |
-| Email Service | `email` | Non-members with `settings.update` | Configure and test email settings |
-| Payment Gateway | `xendit` | Admin | Configure Xendit test/live credentials, connection test, and webhook guidance |
-| Backup & Restore | `backups` | Non-members, admin or `backups.view`/`backups.manage` | Schedules, scopes, retention, cloud creds, run/restore/download |
-
-The Settings tab accepts admins and users with `officers.manage-permissions` for Roles & Permissions, but direct navigation to `/dashboard/role-permissions` is currently admin-gated by `App.tsx` and the API controller is also admin-only. Audit this discrepancy as observed behavior.
+| My Account | `/dashboard/settings?tab=account` | Everyone | Edit profile, change password (OTP), trusted devices, deactivate/delete, privacy notice |
+| Help & Support | `/dashboard/settings?tab=help-support` | Everyone | FAQs & Guides + Tickets & Messages (see §3.6) |
+| Public Page | `/dashboard/public-content` | `settings.update` | Edit public website CMS |
+| Loan Products | `/dashboard/loan-products` | `settings.update` | CRUD + enable/disable loan products |
+| Roles & Permissions | `/dashboard/role-permissions` | `officers.manage-permissions` | Manage roles + permission sets + restore presets (countersigned) |
+| Service Availability | `/dashboard/service-availability` | `settings.update` | Toggle services/channels/audiences (countersigned, see §8) |
+| Financial Accounts | `/dashboard/financial-accounts` | `financial_settings.update` | Interest rates/intervals/min balance, withdrawal limits/toggles, fees, manual interest run (countersigned, see §8.1) |
+| Integrations | `/dashboard/integrations` | `settings.update` or `admin` (admin sidebar) | Sub-tabs: `sms`, `email`, `xendit` (`paymongo` aliases to `xendit`) |
+| Backup & Restore | `/dashboard/backups` | `backups.view` / `backups.manage` or `admin` (admin sidebar) | Daily/offsite backups, schedule, archive password, restore (countersigned) |
 
 ---
 
@@ -433,20 +430,20 @@ Other system settings (seeded, `SystemSettingSeeder`): site name/tagline, mainte
 
 ## 10. Permission Catalog (Summary)
 
-`PermissionCatalog::groups()` is the canonical list. It includes dashboard; member detail facets (`members.view-loans`, `members.view-ids`, `members.view-activity`, `members.view-financial`); services; loan lifecycle; transaction approval, including the separate self-approval grant (`transactions.approve-own`); transaction reversal; deposits; withdrawals; announcements; reports; officers; branches; logs; settings; financial accounts (`financial_settings.view`, `financial_settings.update`, `interest.view`, `interest.run`); backups; tickets; notifications; profile; oversight; and receipt reissue permissions. `logs.export` remains a declared permission without a current log-export route or UI.
+`PermissionCatalog::groups()` is the canonical list across 20 groups. It includes dashboard; member detail facets (`members.view-loans`, `members.view-ids`, `members.view-activity`, `members.view-financial`); services; loan lifecycle; transaction approval, including the separate self-approval grant (`transactions.approve-own`); transaction reversal; deposits; withdrawals; announcements; reports; officers; branches; logs (`logs.view`, `logs.export`); settings; financial accounts (`financial_settings.view`, `financial_settings.update`, `interest.view`, `interest.run`); backups; tickets; notifications; profile; oversight; and receipt reissue permissions.
 
-Current officer presets are `admin`, `chairman`, `manager`, `accountant`, and `loan`; the effective permission returned to the SPA also includes permitted officer overrides. Member, inactive, and terminated behavior is established by the user/role seeders and authorization code. Use `PermissionCatalog::rolePresets()` and `$user->can(...)` as the authority instead of this summary when testing access.
+Current built-in officer presets are `admin`, `chairman`, `manager`, and `accountant` (`developer` is a local testing preset; `loan` is retired). Effective permissions returned to the SPA also include permitted per-officer overrides. Member, inactive, and terminated behavior is established by the user/role seeders and authorization code. Use `PermissionCatalog::rolePresets()` and `$user->can(...)` as the authority instead of this summary when testing access.
 
 ---
 
 ## 11. Cross-Cutting / Technical Notes
 
 - SPA entry `resources/react/main.tsx` → `routes/web.php` catch-all serves `react` view; Vite proxies `/api`, `/sanctum`, auth routes to Laravel. The catch-all **must stay last** in `routes/web.php`; `/maintenance` is declared before it and is itself in the Vite proxy list.
-- Session + Sanctum auth; DB drivers for session/cache/queue (`php artisan queue:listen` required for emails/notifications).
-- Queued jobs: `SendEmailJob` (contact, OTP, notifications, reminders); artisan commands: cleanup/archive/notifications/loan reminders.
-- File uploads: `php artisan storage:link` (loan docs, announcement images, profile).
+- Session + Sanctum auth; DB drivers for session/cache/queue (`php artisan queue:listen --queue=backups,emails,payments,default` or scheduled `queue:work` required for async emails/payments/backups).
+- Queued jobs: `SendEmailJob`, `VerifyXenditPaymentJob`, `DisburseInterestJob`, `RunBackupJob`, `RestoreBackupJob`; artisan commands: loan due reminders, notifications/activitylog cleanup, interest accrual, Xendit reconciliation, backups.
+- File uploads: `php artisan storage:link` (announcement images, profile, proofs); loan documents live on `local` private storage (with legacy `public` fallback) and stream via `LoanController::downloadDocument`.
 - Commands: `composer dev` (PHP+queue+logs+Vite), `composer test` (Pest), `./vendor/bin/pint`, `npm run build|dev`, `php artisan migrate --seed`, `php artisan optimize:clear`.
 
 ---
 
-*End of SYSTEM_FUNCTIONALITY(2026-10-12). Reconciled against the active route, SPA, middleware, and permission sources on 2026-10-12; browser verification is tracked separately in `docs/QA/QA_LOG.md`.*
+*End of SYSTEM_FUNCTIONALITY(2026-11-16). Reconciled against active routes, SPA, middleware, policies, services, and permission sources on 2026-11-16.*
