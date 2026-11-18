@@ -55,7 +55,7 @@ test('public content exposes a null metrics payload while live metrics are disab
         ->assertOk()
         ->assertJsonPath('metrics', null)
         ->assertJsonPath('form.home.stats_use_cooperative', false)
-        ->assertJsonPath('form.home.stats_visible', true);
+        ->assertJsonPath('form.home.stats_visible', false);
 });
 
 test('admin can toggle metrics visibility and live mode through the api', function () {

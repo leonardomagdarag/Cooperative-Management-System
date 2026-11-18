@@ -11,7 +11,7 @@ export default function HomePage() {
             <AboutPreview />
             <MissionVision />
             <MembershipSection />
-            <NewsSection />
+            <PublicUpdates preview />
             <ContactSection />
             <div className="public-section bg-white"></div>
         </div>
@@ -59,7 +59,7 @@ function AboutPreview() {
     const { data: pc } = useQuery({ queryKey: ['public-content'], queryFn: () => api.get('/api/public-content') });
     const about = pc?.data?.form?.about || {};
     const home = pc?.data?.form?.home || {};
-    const statsVisible = home.stats_visible !== false;
+    const statsVisible = home.stats_visible === true;
     const live = home.stats_use_cooperative === true ? (pc?.data?.metrics || {}) : {};
 
     return (
@@ -188,78 +188,6 @@ function MembershipSection() {
     );
 }
 
-function NewsSection() {
-    const { t } = useLanguage();
-    const { data } = useQuery({ queryKey: ['announcements-public'], queryFn: () => api.get('/api/announcements/public', { params: { per_page: 6 } }) });
-    const announcements = data?.data?.data || [];
-
-    if (announcements.length === 0) return null;
-
-    return (
-        <section className="public-section public-section-soft">
-            <div className="public-shell">
-                <div className="text-center mb-12">
-                    <span className="public-eyebrow mb-4">{t('Updates')}</span>
-                    <h2 className="public-heading mb-4 text-3xl md:text-5xl">{t('News & Announcements')}</h2>
-                    <p className="public-copy text-lg">{t('Stay updated with our latest news and updates')}</p>
-                </div>
-
-                <div className="grid md:grid-cols-3 gap-6 mb-12">
-                    {announcements.slice(0, 6).map((a: any) => {
-                        const iconMap: Record<string, string> = { Achievement: 'trophy', Update: 'mobile-alt' };
-                        const category = a.type || a.category;
-                        const isAchievement = category === 'Achievement';
-                        const isUpdate = category === 'Update';
-                        const bannerBg = a.image_url ? 'bg-gray-200' : isAchievement ? 'bg-emerald-700' : isUpdate ? 'bg-blue-700' : 'bg-slate-700';
-                        const badgeBg = isAchievement ? 'bg-emerald-100 text-emerald-700' : isUpdate ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700';
-
-                        return (
-                            <Link key={a.id} to="/news" className="group public-card public-card-hover overflow-hidden flex flex-col">
-                                <div className={`h-40 w-full shrink-0 overflow-hidden relative ${bannerBg}`}>
-                                    {a.image_url ? (
-                                        <FallbackImage src={a.image_url} alt={a.title} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <div className="absolute inset-0 flex items-center justify-center">
-                                            <i className={`fas fa-${iconMap[category] || 'bullhorn'} text-5xl text-white opacity-20`}></i>
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="p-6 flex flex-col flex-1">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${badgeBg}`}>
-                                            {category || a.type_label || 'News'}
-                                        </span>
-                                        <span className="text-xs text-gray-500">
-                                            <i className="fas fa-calendar mr-1"></i>{new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}
-                                        </span>
-                                    </div>
-                                    <h3 className="text-xl font-bold text-gray-900 mb-3 line-clamp-2 group-hover:text-slate-700 transition-colors">
-                                        {a.title}
-                                    </h3>
-                                    <p className="text-sm text-gray-600 leading-relaxed line-clamp-3 mb-4 flex-1">
-                                        {a.content}
-                                    </p>
-                                    <div className="flex items-center text-slate-700 font-semibold text-sm group-hover:text-slate-800">
-                                        {t('Read more')}
-                                        <i className="fas fa-arrow-right ml-2 transform group-hover:translate-x-1 transition-transform"></i>
-                                    </div>
-                                </div>
-                            </Link>
-                        );
-                    })}
-                </div>
-
-                <div className="text-center">
-                    <Link to="/news" className="public-btn public-btn-primary">
-                        {t('View All News & Events')}
-                        <i className="fas fa-newspaper ml-2"></i>
-                    </Link>
-                </div>
-            </div>
-        </section>
-    );
-}
-
 function ContactSection() {
     const { t } = useLanguage();
     const { data: pc } = useQuery({ queryKey: ['public-content'], queryFn: () => api.get('/api/public-content') });
@@ -375,4 +303,4 @@ function ContactSection() {
 }
 import FallbackImage from '../../components/FallbackImage';
 
-import Button from '../../components/ui/Button';
+import PublicUpdates from './PublicUpdates';

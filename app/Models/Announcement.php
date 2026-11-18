@@ -73,7 +73,7 @@ class Announcement extends Model
 
     public function getIsUpcomingAttribute(): bool
     {
-        return $this->event_date !== null && $this->event_date->isFuture();
+        return $this->event_date !== null && $this->event_date->gte(today());
     }
 
     public function getTypeLabelAttribute(): string

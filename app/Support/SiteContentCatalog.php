@@ -50,7 +50,7 @@ class SiteContentCatalog
                                 'description' => 'Turn this off to hide the metrics cards on the public home page.',
                                 'control' => 'toggle',
                                 'storage' => 'boolean',
-                                'default' => true,
+                                'default' => false,
                             ],
                             [
                                 'path' => 'stats_use_cooperative',
@@ -557,7 +557,7 @@ class SiteContentCatalog
             'home' => [
                 'hero_subtitle' => 'Homing Strength in members through financial excellence and community partnership',
                 'hero_image' => '/images/hero_banner.jpg',
-                'stats_visible' => true,
+                'stats_visible' => false,
                 'stats_use_cooperative' => false,
                 'founding_year' => '2016',
                 'active_members' => '567',
